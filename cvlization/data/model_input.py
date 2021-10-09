@@ -1,5 +1,8 @@
-from pydantic import BaseModel
+from dataclasses import dataclass
+
+from .data_column import DataColumn
 
 
-class ModelInput(BaseModel):
+@dataclass
+class ModelInput(DataColumn):
     pass

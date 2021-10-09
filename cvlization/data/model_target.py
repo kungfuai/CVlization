@@ -1,24 +1,12 @@
-from pydantic import BaseModel
+from dataclasses import dataclass
+from typing import Optional, List
+
+from .data_column import DataColumn
+from ..losses.loss_type import LossType
 
 
-class DataColumn(BaseModel):
-    """To use multiple targets: create List[DataColumn].
-
-    Can cross check with the Dataset to make sure it generates the connect
-    number, type and shape of targets.
-
-    Similar to tensorflow feature column.
-
-    Want to use this for both tf and torch.
-    """
-
-    name: str
-    shape: None
-    dtype: None
-    transforms: list
-
-    def get_value(self, example):
-        v = example[self.name]
-        for t in self.transforms or []:
-            v = t(v)
-        return v
+@dataclass
+class ModelTarget(DataColumn):
+    loss: Optional[LossType] = None
+    loss_weight: Optional[float] = 1
+    metrics: Optional[List] = None
