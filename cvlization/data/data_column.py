@@ -50,9 +50,3 @@ class DataColumn:
         # infer from transforms
         if len(self.transforms or []) == 0:
             return self.raw_shape
-
-    def get_value(self, example):
-        v = example[self.name]
-        for t in self.transforms or []:
-            v = t(v)
-        return v

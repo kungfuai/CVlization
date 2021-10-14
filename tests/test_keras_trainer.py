@@ -3,6 +3,7 @@ from tensorflow import keras
 import numpy as np
 import logging
 from cvlization.data.ml_dataset import (
+    DataRows,
     ModelInput,
     ModelTarget,
     MLDataset,
@@ -22,7 +23,7 @@ LOGGER.setLevel(logging.INFO)
 (x_train, y_train), (x_test, y_test) = datasets.mnist.load_data()
 
 
-class MNISTDataset(MLDataset):
+class MNISTDataRows(DataRows):
     # TODO: move to lib
     def __init__(self, *args, is_train=True, **kwargs):
         super().__init__(*args, **kwargs)
@@ -33,7 +34,7 @@ class MNISTDataset(MLDataset):
         self.y_test = y_test[:limit]
         self.is_train = is_train
 
-    def get_row(self, i: int):
+    def __getitem__(self, i: int):
         if self.is_train:
             x, y = self.x_train, self.y_train
         else:
@@ -44,8 +45,6 @@ class MNISTDataset(MLDataset):
             "digit_is_larger_than_2": y[i] > 2,
             "digit_is_even": y[i] % 2 == 0,
         }
-        # print(row)
-        # raise
         return row
 
     def __len__(self):
@@ -91,14 +90,14 @@ def test_mnist_multiclass():
             metrics=[keras.metrics.AUC(), TopMistakes()],
         ),
     ]
-    train_data = MNISTDataset(
-        is_train=True,
+    train_data = MLDataset(
+        data_rows=MNISTDataRows(is_train=True),
         model_inputs=model_inputs,
         model_targets=model_targets,
         batch_size=16,
     )
-    val_data = MNISTDataset(
-        is_train=False,
+    val_data = MLDataset(
+        data_rows=MNISTDataRows(is_train=False),
         model_inputs=model_inputs,
         model_targets=model_targets,
         batch_size=16,

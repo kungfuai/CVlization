@@ -7,6 +7,7 @@ from ..data.utils import one_hot
 from .data_column import DataColumnType
 from .model_input import ModelInput
 from .model_target import ModelTarget
+from .data_rows import DataRows
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
@@ -27,19 +28,16 @@ class MLDataset:
         transforms, and arbitrary neural net architecture options.
     """
 
+    data_rows: DataRows
     model_inputs: List[ModelInput]
     model_targets: List[ModelTarget]
     batch_size: Optional[int] = 2
 
     def get_row(self, i: int):
-        raise NotImplementedError(
-            f"Please inherit {type(self)} and implement this method."
-        )
+        return self.data_rows[i]
 
     def __len__(self):
-        raise NotImplementedError(
-            f"Please inherit {type(self)} and implement this method."
-        )
+        return len(self.data_rows)
 
     def __getitem__(self, i):
         """Want to return transformed inputs."""
@@ -49,18 +47,17 @@ class MLDataset:
             raw_value = row_dict[model_input.key]
             x = raw_value
             for t in model_input.transforms or []:
-                x = t.transform(x)
+                x = t.transform([x])[0]
             inputs.append(x)
-            # transform
             # TODO: consider if we should cache the transformed value
-            # The transformation class should handle caching.
+            # The transformation class could handle caching.
             # Fixed transform should have caching, but not random augmentations.
         targets = []
         for model_target in self.model_targets:
             raw_value = row_dict[model_target.key]
             x = raw_value
             for t in model_target.transforms or []:
-                x = t.transform(x)
+                x = t.transform([x])[0]
             targets.append(x)
         return inputs, targets
 
