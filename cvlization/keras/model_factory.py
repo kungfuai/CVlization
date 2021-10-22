@@ -1,12 +1,9 @@
-from typing import List, Callable, Optional, Union, Dict, Any
-from dataclasses import dataclass, field as dataclass_field
+from typing import List, Callable, Optional, Union, Dict
+from dataclasses import dataclass
 import logging
 
 from tensorflow import keras
-from tensorflow.keras import layers, losses, optimizers, models
-from sklearn.pipeline import Pipeline
-from keras.applications.mobilenet_v2 import MobileNetV2
-from tensorflow.python.keras.losses import Loss
+from tensorflow.keras import layers, losses
 
 from ..keras.eager_model import EagerModel
 from ..data.data_column import DataColumnType
@@ -17,6 +14,7 @@ from .encoder.keras_image_encoder import KerasImageEncoder
 from .encoder.keras_mlp_encoder import KerasMLPEncoder
 from .aggregator.keras_aggregator import KerasAggregator
 
+
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 
@@ -25,13 +23,26 @@ LOGGER.setLevel(logging.INFO)
 class KerasModelFactory:
     """Create customized keras functional API models."""
 
+    # TODO: where is the triplet model path ???
+    # TripletDataRowsFactory(data_rows, model): handle hard example mining here or in the trainer?
+    # TripletDataRowsFactory[i] -> Tuple[Row, Row, Row]
+    # def generate_mined_hard_examples()
+    #
+    # Model target: example-level target
+    # batch x hidden_dim, batch x n_refs x hidden_dim
+    # head 1: adjusted_prices: batch x n_refs
+    # head 2: similarities: batch x n_refs, compared to abs(true prices - adjusted prices)
+    #
+    # TODO: allow intermediate encoding outputs in the "model spec". e.g. Just want image encoding.
+
     # TODO: implement task specific defaults for model_fn.
 
     model_inputs: List[ModelInput]
     model_targets: List[ModelTarget]
     model_fn: Optional[Callable] = None
     eager: Optional[bool] = True
-    optimizer: Optional[Any] = optimizers.Adam()
+    optimizer_name: Optional[str] = "Adam"
+    lr: Optional[float] = 0.001
 
     # image_encoder is by default shared by all image inputs.
     image_encoder: Optional[
@@ -45,21 +56,22 @@ class KerasModelFactory:
     aggregator: Optional[KerasAggregator] = None
     aggregator_kwargs: Optional[Dict] = None
 
-    class Config:
-        arbitrary_types_allowed = True
-
     def __call__(self) -> keras.Model:
         LOGGER.info("Creating model ...")
         inputs = self.create_keras_inputs()
+        LOGGER.info(f"Model inputs: {inputs}")
         outputs = self.model_fn(inputs)
         if self.eager:
             model = EagerModel(inputs=inputs, outputs=outputs)
         else:
+            # Lazy model.
             model = keras.Model(inputs=inputs, outputs=outputs)
 
         loss_functions = []
+        loss_weights = []
         metric_functions = []
         for j, model_target in enumerate(self.model_targets):
+            loss_weights.append(model_target.loss_weight)
             if model_target.loss == LossType.CATEGORICAL_CROSSENTROPY:
                 loss_fn = losses.CategoricalCrossentropy()
             elif model_target.loss == LossType.BINARY_CROSSENTROPY:
@@ -80,15 +92,18 @@ class KerasModelFactory:
             else:
                 metric_functions.append(None)
 
-        LOGGER.info(f"losses: {loss_functions}")
+        LOGGER.info("losses and weights:")
+        for loss_function, loss_weight in zip(loss_functions, loss_weights):
+            LOGGER.info(f"{loss_weight}: {loss_function}")
         # metric_functions = {"digit_classifier": ["accuracy", "categorical_accuracy"]}
         model.compile(
             loss=loss_functions,
+            loss_weights=loss_weights,
             metrics=metric_functions,
-            optimizer=self.optimizer,
+            optimizer=self._create_optimizer(),
             run_eagerly=self.eager,
         )
-        LOGGER.info(model.summary())
+        model.summary()
         return model
 
     def __post_init__(self):
@@ -99,7 +114,6 @@ class KerasModelFactory:
 
     def create_keras_inputs(self):
         # Use ModelInput.shape
-        LOGGER.info(f"********* shape={self.model_inputs[0].shape}")
         return [
             layers.Input(shape=model_input.shape, name=model_input.key)
             for model_input in self.model_inputs
@@ -130,6 +144,7 @@ class KerasModelFactory:
         encoded_agg = self.aggregator(tensors_encoded)
 
         target_tensors = []
+        # TODO: allow passing in custom heads?
         for model_target in self.model_targets:
             if model_target.column_type == DataColumnType.BOOLEAN:
                 binary_classifier = self._create_binary_classifier(
@@ -148,6 +163,10 @@ class KerasModelFactory:
                 target_tensor = classifier(encoded_agg)
                 target_tensors.append(target_tensor)
         return target_tensors
+
+    def _create_optimizer(self) -> keras.optimizers.Optimizer:
+        optimizer_class = getattr(keras.optimizers, self.optimizer_name)
+        return optimizer_class(learning_rate=self.lr)
 
     def _create_image_encoder_if_needed(self):
         if self.image_encoder is None:

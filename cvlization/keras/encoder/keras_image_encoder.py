@@ -19,8 +19,10 @@ class KerasImageEncoder:
     The output of an encoder shouldn't directly be the model targets.
     """
 
+    name: str = "image_encoder"
     trunk: keras.Model = LeNet()  # MobileNetV2(include_top=False, pooling=None)
     pool_name: str = "avg"
+    activation: str = "relu"
     dropout: float = 0
     # TODO: dense_layer_sizes is used for both dense layers and conv layers.
     dense_layer_sizes: List[int] = dataclass_field(default_factory=list)
@@ -45,15 +47,19 @@ class KerasImageEncoder:
                 x = self._max_pool(x)
             else:
                 raise NotImplementedError
-            for l in self._dense_layers:
-                x = l(x)
+            for d in self._dense_layers:
+                x = d(x)
             x = self._dropout(x)
         return x
+
+    def _layer_name(self, i):
+        parts = filter(lambda x: x is not None, [self.name, str(i + 1)])
+        return "_".join(parts)
 
     def _prepare_dense_layers(self):
         self._dense_layers = [
             layers.Dense(s, activation=self.activation, name=self._layer_name(i))
-            for i, s in enumerate(self.dense_layer_sizes)
+            for i, s in enumerate(self.dense_layer_sizes or [])
         ]
 
     def _prepare_dropout_layers(self):
@@ -63,10 +69,7 @@ class KerasImageEncoder:
         if self.pool_name is None:
             self._convs = [
                 layers.Conv2D(
-                    filters=s,
-                    kernel_size=(3, 3),
-                    padding="same",
-                    activation="relu",
+                    filters=s, kernel_size=(3, 3), padding="same", activation="relu"
                 )
                 for s in self.dense_layer_sizes
             ]

@@ -10,3 +10,4 @@ class ModelTarget(DataColumn):
     loss: Optional[LossType] = None
     loss_weight: Optional[float] = 1
     metrics: Optional[List] = None
+    neg_class_weight: Optional[float] = 1

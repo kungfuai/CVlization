@@ -1,5 +1,7 @@
 from typing import List, Optional
-from dataclasses import dataclass, field as dataclass_field
+import random
+import sys
+from dataclasses import dataclass
 import logging
 import numpy as np
 
@@ -32,9 +34,31 @@ class MLDataset:
     model_inputs: List[ModelInput]
     model_targets: List[ModelTarget]
     batch_size: Optional[int] = 2
+    shuffle: Optional[bool] = False
+
+    def __post_init__(self):
+        self._index_map = range(len(self.data_rows))
+        if self.shuffle:
+            random.shuffle(self._index_map)
 
     def get_row(self, i: int):
-        return self.data_rows[i]
+        j = self._index_map[i]
+        try:
+            data_row = self.data_rows[j]
+            for model_target in self.model_targets:
+                val = data_row.get(model_target.key)
+                LOGGER.debug(
+                    f"key={model_target.key}, val={val}, {type(val)}, neg_class_weight={model_target.neg_class_weight}"
+                )
+                if int(val) == 0:
+                    sample_weight = model_target.neg_class_weight
+                    if data_row.get("sample_weight") is None:
+                        data_row["sample_weight"] = sample_weight
+            return data_row
+        except KeyboardInterrupt:
+            sys.exit(1)
+        except Exception:
+            raise
 
     def __len__(self):
         return len(self.data_rows)
@@ -49,6 +73,10 @@ class MLDataset:
             for t in model_input.transforms or []:
                 x = t.transform([x])[0]
             inputs.append(x)
+            if model_input.column_type == DataColumnType.IMAGE:
+                assert (
+                    len(x.shape) >= 3
+                ), f"Expect image shape to be at least 3. Got {len(x.shape)}"
             # TODO: consider if we should cache the transformed value
             # The transformation class could handle caching.
             # Fixed transform should have caching, but not random augmentations.
@@ -59,13 +87,15 @@ class MLDataset:
             for t in model_target.transforms or []:
                 x = t.transform([x])[0]
             targets.append(x)
-        return inputs, targets
+        return inputs, targets, row_dict.get("sample_weight", 1)
 
     def get_batch_from_range(self, begin_idx: int, end_idx: int):
         inputs_batch = [list() for _ in range(len(self.model_inputs))]
         targets_batch = [list() for _ in range(len(self.model_targets))]
+        sample_weight_batch = []
         for j in range(begin_idx, end_idx):
-            inputs_one_example, targets_one_example = self[j]
+            inputs_one_example, targets_one_example, sample_weight = self[j]
+            sample_weight_batch.append(sample_weight)
             assert len(inputs_one_example) == len(self.model_inputs)
             assert len(targets_one_example) == len(self.model_targets)
 
@@ -97,7 +127,8 @@ class MLDataset:
         assert len(inputs_batch) == len(self.model_inputs)
         inputs_batch = [np.stack(arrays) for arrays in inputs_batch]
         targets_batch = [np.stack(arrays) for arrays in targets_batch]
-        return inputs_batch, targets_batch
+        sample_weight_batch = np.array(sample_weight_batch).reshape((-1, 1))
+        return inputs_batch, targets_batch, sample_weight_batch
 
     def fit(
         self,

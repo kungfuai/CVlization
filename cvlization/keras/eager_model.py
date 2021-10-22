@@ -3,7 +3,6 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.python.framework.ops import EagerTensor
 from tensorflow.python.keras.engine import data_adapter
-from tensorflow.python.eager import backprop
 
 
 LOGGER = logging.getLogger(__name__)
@@ -83,8 +82,3 @@ class EagerModel(keras.Model):
             else:
                 return_metrics[metric.name] = result
         return return_metrics
-        #     if False and hasattr(metric, "update_state_with_inputs_and_outputs"):
-        #         metric.update_state_with_inputs_and_outputs(y, y_pred, train_example=x)
-        #     elif isinstance(metric, tf.keras.metrics.Metric):
-        #         metric.update_state(y, y_pred)
-        # return {m.name: m.result() for m in self.metrics}

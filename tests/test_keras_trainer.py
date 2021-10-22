@@ -2,6 +2,8 @@ from tensorflow.keras import datasets
 from tensorflow import keras
 import numpy as np
 import logging
+
+from tensorflow.python import eager
 from cvlization.data.ml_dataset import (
     DataRows,
     ModelInput,
@@ -76,6 +78,7 @@ def test_mnist_multiclass():
             column_type=DataColumnType.CATEGORICAL,
             n_categories=10,
             loss=LossType.CATEGORICAL_CROSSENTROPY,
+            # TODO: metric should be not concerned about particular ml framework
             metrics=[keras.metrics.CategoricalAccuracy()],
             # loss_weight=
             #
@@ -104,7 +107,7 @@ def test_mnist_multiclass():
     )
     keras_seq = sequence.from_ml_dataset(train_data)
     first_batch = keras_seq[0]
-    x, y = first_batch
+    x, y, _ = first_batch
     # print([i.shape for i in x])
     # print(y)
     # print([i.shape for i in y])
@@ -112,7 +115,7 @@ def test_mnist_multiclass():
     create_model = KerasModelFactory(
         model_inputs=model_inputs,
         model_targets=model_targets,
-        eager=True,
+        eager=False,
         image_encoder=KerasImageEncoder(
             trunk=SimpleConvNet((28, 28, 1)),
             pool_name=None,
@@ -132,5 +135,4 @@ def test_mnist_multiclass():
 
 
 if __name__ == "__main__":
-
     test_mnist_multiclass()
