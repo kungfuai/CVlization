@@ -13,6 +13,7 @@ from ..losses.loss_type import LossType
 from .encoder.keras_image_encoder import KerasImageEncoder
 from .encoder.keras_mlp_encoder import KerasMLPEncoder
 from .aggregator.keras_aggregator import KerasAggregator
+from ..keras.model import Model
 
 
 LOGGER = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class KerasModelFactory:
     eager: Optional[bool] = True
     optimizer_name: Optional[str] = "Adam"
     lr: Optional[float] = 0.001
+    n_gradients: Optional[int] = 5
 
     # image_encoder is by default shared by all image inputs.
     image_encoder: Optional[
@@ -62,10 +64,12 @@ class KerasModelFactory:
         LOGGER.info(f"Model inputs: {inputs}")
         outputs = self.model_fn(inputs)
         if self.eager:
-            model = EagerModel(inputs=inputs, outputs=outputs)
+            model = EagerModel(
+                inputs=inputs, outputs=outputs, n_gradients=self.n_gradients
+            )
         else:
             # Lazy model.
-            model = keras.Model(inputs=inputs, outputs=outputs)
+            model = Model(inputs=inputs, outputs=outputs, n_gradients=self.n_gradients)
 
         loss_functions = []
         loss_weights = []

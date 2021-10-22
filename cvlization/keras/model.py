@@ -1,10 +1,15 @@
+from cvlization.data.data_column import LOGGER
 from tensorflow import keras
 import tensorflow as tf
+from tensorflow.python.keras.engine import data_adapter
 
 
-class LazyModel(keras.Model):
+class Model(keras.Model):
     def __init__(self, *args, n_gradients: int = None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.setup_gradient_accumulation(n_gradients)
+
+    def setup_gradient_accumulation(self, n_gradients):
         if n_gradients is None:
             self._use_gradient_accumulation = False
         else:
@@ -19,7 +24,8 @@ class LazyModel(keras.Model):
     def train_step(self, data):
         self.n_acum_step.assign_add(1)
 
-        x, y = data
+        data = data_adapter.expand_1d(data)
+        x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
         # Gradient Tape
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)
@@ -28,6 +34,7 @@ class LazyModel(keras.Model):
         gradients = tape.gradient(loss, self.trainable_variables)
 
         if self._use_gradient_accumulation:
+            # tf.print(f"Gradient accumulation is active")
             # Accumulate batch gradients
             for i in range(len(self.gradient_accumulation)):
                 self.gradient_accumulation[i].assign_add(gradients[i])
@@ -50,6 +57,8 @@ class LazyModel(keras.Model):
 
     def apply_accu_gradients(self):
         # apply accumulated gradients
+        tf.print("Applying gradient")
+
         self.optimizer.apply_gradients(
             zip(self.gradient_accumulation, self.trainable_variables)
         )
