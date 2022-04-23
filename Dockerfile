@@ -13,6 +13,7 @@ ENV PYTHONUNBUFFERED=1
 RUN rm -rf /etc/apt/apt.conf.d/docker-clean
 
 RUN --mount=type=cache,mode=0777,target=/var/cache/apt apt-get update \
+    && apt-get install -y libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 # for imgaug \ 
     && rm -rf /var/lib/apt/lists/*
 
 # Install pip packages

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class FeatureTransform:
-    """Wraps a sklearn transformer, imgaug step, etc."""
+    """Abstract class. Wraps a sklearn transformer, imgaug step, etc."""
 
     to_cache: bool
 
