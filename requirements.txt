@@ -1,0 +1,14 @@
+# Make denpendencies optional.
+pytorch-lightning==1.5.9
+torchmetrics==0.7.0
+torch==1.10.2
+torchvision==0.11.3
+timm==0.5.4
+tensorflow>=2
+coloredlogs>=15
+scikit-image>=0.16.2
+pandas
+mlflow
+tensorflow-addons
+tensorflow_datasets
+wandb # seems to be required by torch-lightning

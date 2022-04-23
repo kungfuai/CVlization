@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  # The general app which we've instrumented
+  app:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - .:/workspace
+  
+  ci:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all

@@ -1,0 +1,16 @@
+.vscode
+**/__pycache__
+**/.DS_Store
+**/*.pyc
+.pytest_cache
+# experiment tracking
+mlruns
+wandb
+lightning_logs
+checkpoints/*
+# temporary files
+tmp*
+# data files
+data/*
+doc/tmp_notes
+
