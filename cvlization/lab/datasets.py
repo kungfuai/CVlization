@@ -4,8 +4,19 @@ from typing import Dict, List
 
 from cvlization.lab.model_specs import ImageClassification
 from ..data.splitted_dataset import SplittedDataset
-from ..specs import ModelInput, ModelTarget, ModelSpec as PredictionTask, DataColumnType
-from ..keras.transforms.image_transforms import normalize, ImageAugmentation
+from ..specs import (
+    ModelInput,
+    ModelTarget,
+    ModelSpec as PredictionTask,
+    DataColumnType,
+    ImageAugmentation,
+    ImageAugmentationProvider,
+)
+from ..keras.transforms.image_transforms import (
+    normalize,
+    ImageAugmentation as KerasImageAugmentation,
+)
+from ..transforms.image_augmentation_builder import ImageAugmentationBuilder
 
 # TODO: explore https://cgarciae.github.io/dataget/
 
@@ -17,7 +28,7 @@ def datasets() -> Dict[str, SplittedDataset]:
             TFDSImageDataset(
                 dataset_key="cifar10_tfds",
                 shuffle_size=20000,
-                image_augmentation=ImageAugmentation(
+                image_augmentation=KerasImageAugmentation(
                     image_height=32,
                     image_width=32,
                     flip_left_right=True,
@@ -30,7 +41,29 @@ def datasets() -> Dict[str, SplittedDataset]:
                     scale_before_crop=1.25,
                 ),
             ),
-            TorchVisionDataset(dataset_key="cifar10_torchvision"),
+            TorchVisionDataset(
+                dataset_key="cifar10_torchvision",
+                image_augmentation=ImageAugmentation(
+                    provider=ImageAugmentationProvider.TORCHVISION,
+                    config={
+                        "transformers": [
+                            {
+                                "type": "RandomCrop",
+                                "kwargs": {"size": 32, "padding": 4},
+                            },
+                            {"type": "RandomHorizontalFlip"},
+                            {"type": "ToTensor"},
+                            {
+                                "type": "Normalize",
+                                "kwargs": {
+                                    "mean": (0.4914, 0.4822, 0.4465),
+                                    "std": (0.2023, 0.1994, 0.2010),
+                                },
+                            },
+                        ]
+                    },
+                ),
+            ),
         ]
     }
 
@@ -223,6 +256,10 @@ class TorchVisionDataset(SplittedDataset):
     dataset_key: str = "cifar10_torchvision"
     dataset_type = None  # TODO: deal with obj det etc
     data_dir: str = "./data"
+    # image augmentation for training data
+    image_augmentation: ImageAugmentation = None
+    image_mean: tuple = None
+    image_std: tuple = None
 
     def __post_init__(self):
         self.model_inputs = [
@@ -237,60 +274,39 @@ class TorchVisionDataset(SplittedDataset):
                 column_type=DataColumnType.NUMERICAL,
             )
         ]
+        val_augmentation_steps = [{"type": "ToTensor"}]
+        if image_mean is None or image_std is None:
+            image_mean, image_std = self.get_image_dataset_mean_std()
+        if image_mean is not None and image_std is not None:
+            val_augmentation_steps.append(
+                {
+                    "type": "Normalize",
+                    "kwargs": {"mean": image_mean, "std": image_std},
+                },
+            )
+        self.val_image_augmentation = ImageAugmentation(
+            provider=ImageAugmentationProvider.TORCHVISION,
+            config={
+                "transformers": val_augmentation_steps,
+            },
+        )
+        if self.image_augmentation is None:
+            self.image_augmentation = self.val_image_augmentation
+
+    def get_image_dataset_mean_std(self):
+        if self.dataset_key.startswith("cifar"):
+            return (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+        else:
+            return None, None
 
     def get_transform_for_training_data(self):
-        """Returns transform and target_transform."""
-        import torchvision.transforms as transforms
-
-        if self.dataset_key.startswith("cifar"):
-            return (
-                transforms.Compose(
-                    [
-                        transforms.RandomCrop(32, padding=4),
-                        transforms.RandomHorizontalFlip(),
-                        transforms.ToTensor(),
-                        transforms.Normalize(
-                            (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
-                        ),
-                    ]
-                ),
-                None,
-            )
-        else:
-            return (
-                transforms.Compose(
-                    [
-                        transforms.ToTensor(),
-                    ]
-                ),
-                None,
-            )
+        return ImageAugmentationBuilder(spec=self.image_augmentation).run(), None
 
     def get_transform_for_validation_data(self):
-        """Returns transform and target_transform."""
-        import torchvision.transforms as transforms
-
-        if self.dataset_key.startswith("cifar"):
-            return (
-                transforms.Compose(
-                    [
-                        transforms.ToTensor(),
-                        transforms.Normalize(
-                            (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
-                        ),
-                    ]
-                ),
-                None,
-            )
-        else:
-            return (
-                transforms.Compose(
-                    [
-                        transforms.ToTensor(),
-                    ]
-                ),
-                None,
-            )
+        return (
+            ImageAugmentationBuilder(spec=self.val_image_augmentation).run(),
+            None,
+        )
 
     def get_dataset_classname(self):
         dataset_classname = self.dataset_key.replace("_torchvision", "").upper()

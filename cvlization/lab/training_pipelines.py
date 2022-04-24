@@ -51,7 +51,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
                 lr=0.01,
                 n_gradients=1,
                 dropout=0,
-                experiment_tracker="wandb",
+                experiment_tracker=None,
             ),
         ),
         "resnet18_smallimage_tf": TrainingPipeline(
@@ -68,7 +68,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
                 lr=0.01,
                 n_gradients=1,
                 dropout=0,
-                experiment_tracker="wandb",
+                experiment_tracker=None,
             ),
         ),
         "simple_tf": TrainingPipeline(
@@ -85,7 +85,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
                 lr=0.01,
                 n_gradients=1,
                 dropout=0,
-                experiment_tracker="wandb",
+                experiment_tracker=None,
             ),
             # TODO: https://www.tensorflow.org/addons/tutorials/optimizers_cyclicallearningrate
         ),
@@ -154,7 +154,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
                 permute_image=False,
                 customize_conv1=True,
                 # num_workers=0,
-                experiment_tracker="wandb",
+                experiment_tracker=None,
                 precision="fp16",
             ),
         ),
@@ -183,7 +183,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
                 permute_image=False,
                 customize_conv1=True,
                 # num_workers=0,
-                experiment_tracker="wandb",
+                experiment_tracker=None,
             ),
         ),
     }

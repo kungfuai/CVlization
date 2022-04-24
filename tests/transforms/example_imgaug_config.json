@@ -1,6 +1,7 @@
 {
     "deterministic": true,
     "norm": false,
+    "cv_task": "detection",
     "transformers": [
         {
             "type": "crop",

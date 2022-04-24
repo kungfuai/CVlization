@@ -27,16 +27,18 @@ TRANSFORM_MENU = {
 
 
 class ImgAugTransforms(object):
-    def __init__(self, cv_task, config_file=None):
-        assert cv_task.lower() in ["classification", "detection", "semseg"]
-        self.cv_task = cv_task
-
+    def __init__(self, cv_task=None, config_file=None):
         if config_file:
             self.aug = self.build_transform_from_config(config_file)
         else:
             self.aug = iaa.Sequential(
                 [iaa.Sometimes(0.5, iaa.Fliplr()), iaa.Crop(percent=(0, 0.2))]
             )
+
+        if cv_task is None:
+            cv_task = self.config.get("cv_task")
+        assert cv_task.lower() in ["classification", "detection", "semseg"]
+        self.cv_task = cv_task
 
     def transform_tuple(self, x):
         """
@@ -73,6 +75,8 @@ class ImgAugTransforms(object):
             raise TypeError(
                 f"transform_config_json must be a str or dict, not {type(transform_config_json)}"
             )
+
+        self.config = config
 
         t_list = []
         for t in config["transformers"]:

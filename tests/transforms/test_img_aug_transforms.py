@@ -29,8 +29,9 @@ def bbox():
 
 
 def test_imgaug_transform_creation_from_config_path():
-    image_aug_object = ImgAugTransforms(cv_task="detection", config_file=config_path)
+    image_aug_object = ImgAugTransforms(cv_task=None, config_file=config_path)
     assert image_aug_object is not None
+    assert image_aug_object.config["cv_task"] == "detection"
     assert len(image_aug_object.aug) == 5
 
 
@@ -84,7 +85,8 @@ def test_img_aug_classification():
 
 
 def test_img_aug_objdet():
-    image_aug_object = ImgAugTransforms(cv_task="detection", config_file=config_path)
+    image_aug_object = ImgAugTransforms(cv_task=None, config_file=config_path)
+    assert image_aug_object.config["cv_task"] == "detection"
     img = read_image(test_image_path)
     target = {}
     target["boxes"] = bbox()
