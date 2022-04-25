@@ -4,6 +4,7 @@ from typing import Dict, List
 
 from cvlization.lab.model_specs import ImageClassification
 from ..data.splitted_dataset import SplittedDataset
+from .dataset_utils import torchvision_dataset_classnames
 from ..specs import (
     ModelInput,
     ModelTarget,
@@ -17,12 +18,13 @@ from ..keras.transforms.image_transforms import (
     ImageAugmentation as KerasImageAugmentation,
 )
 from ..transforms.image_augmentation_builder import ImageAugmentationBuilder
+from . import dataset_adaptors
 
 # TODO: explore https://cgarciae.github.io/dataget/
 
 
 def datasets() -> Dict[str, SplittedDataset]:
-    return {
+    example_datasets = {
         ds.dataset_key: ds
         for ds in [
             TFDSImageDataset(
@@ -66,6 +68,14 @@ def datasets() -> Dict[str, SplittedDataset]:
             ),
         ]
     }
+    for torchvision_dataset_classname in torchvision_dataset_classnames():
+        dataset_key = f"{torchvision_dataset_classname.lower()}_torchvision"
+        if dataset_key in example_datasets:
+            continue
+        example_datasets[dataset_key] = TorchVisionDataset(
+            dataset_key=f"{torchvision_dataset_classname}_torchvision",
+        )
+    return example_datasets
 
 
 @dataclass
@@ -275,6 +285,7 @@ class TorchVisionDataset(SplittedDataset):
             )
         ]
         val_augmentation_steps = [{"type": "ToTensor"}]
+        image_mean, image_std = self.image_mean, self.image_std
         if image_mean is None or image_std is None:
             image_mean, image_std = self.get_image_dataset_mean_std()
         if image_mean is not None and image_std is not None:
@@ -300,17 +311,62 @@ class TorchVisionDataset(SplittedDataset):
             return None, None
 
     def get_transform_for_training_data(self):
-        return ImageAugmentationBuilder(spec=self.image_augmentation).run(), None
-
-    def get_transform_for_validation_data(self):
+        target_transform = None
+        if self.dataset_key.lower().startswith("vocdetection"):
+            target_transform = dataset_adaptors.VOCDetectionAdapter.target_transform
         return (
-            ImageAugmentationBuilder(spec=self.val_image_augmentation).run(),
-            None,
+            ImageAugmentationBuilder(spec=self.image_augmentation).run(),
+            target_transform,
         )
 
+    def get_transform_for_validation_data(self):
+        target_transform = None
+        if self.dataset_key.lower().startswith("vocdetection"):
+            target_transform = dataset_adaptors.VOCDetectionAdapter.target_transform
+        elif self.dataset_key.lower().startswith("vocsegmentation"):
+            target_transform = dataset_adaptors.VOCSegmentationAdapter.target_transform
+        return (
+            ImageAugmentationBuilder(spec=self.val_image_augmentation).run(),
+            target_transform,
+        )
+
+    def apply_augmentation(self, dataset):
+        """
+        args:
+            dataset (torch.utils.data.Dataset)): dataset to apply augmentation to
+
+        returns:
+            augmented_dataset (torch.utils.data.Dataset): dataset with augmentation applied
+
+        """
+        import torch
+
+        augment = ImageAugmentationBuilder(spec=self.image_augmentation).run()
+
+        class AugmentedDataset(torch.utils.data.Dataset):
+            def __init__(self):
+                self.dataset = dataset
+
+            def __getitem__(self, index):
+                example = self.dataset[index]
+                augmented_example = augment(example)
+                return augmented_example
+
+            def __len__(self):
+                return len(self.dataset)
+
+        return AugmentedDataset()
+
     def get_dataset_classname(self):
-        dataset_classname = self.dataset_key.replace("_torchvision", "").upper()
-        return dataset_classname
+        dataset_classname_lowercase = self.dataset_key.replace(
+            "_torchvision", ""
+        ).lower()
+        for dataset_classname in torchvision_dataset_classnames():
+            if dataset_classname.lower() == dataset_classname_lowercase:
+                return dataset_classname
+        raise ValueError(
+            f"Cannot find dataset in torchvision: {dataset_classname_lowercase} (case insensitive)"
+        )
 
     def training_dataset(self, batch_size: int = 32):
         # TODO: consider moving DataLoader out of this function, and keep the dataset
@@ -319,18 +375,41 @@ class TorchVisionDataset(SplittedDataset):
         import torchvision
 
         transform, target_transform = self.get_transform_for_training_data()
+        val_transform, _ = self.get_transform_for_validation_data()
         dataset_classname = self.get_dataset_classname()
+        should_augment_image_and_target_together = False
+        if self.dataset_key.lower().startswith("voc"):
+            if (
+                self.image_augmentation.provider
+                != ImageAugmentationProvider.TORCHVISION
+            ):
+                # torchvision.transforms apply on images but not together with targets.
+                should_augment_image_and_target_together = True
         if hasattr(torchvision.datasets, dataset_classname):
             dataset_class = getattr(torchvision.datasets, dataset_classname)
-            train_data = dataset_class(
-                root=self.data_dir,
-                train=True,
-                download=True,
-                transform=transform,
-                target_transform=target_transform,
-            )
+            try:
+                train_data = dataset_class(
+                    root=self.data_dir,
+                    train=True,
+                    download=True,
+                    transform=transform,
+                    target_transform=target_transform,
+                )
+            except:
+                train_data = dataset_class(
+                    root=self.data_dir,
+                    image_set="train",  # applys to VOC datasets
+                    download=True,
+                    # VOC datasets should use val_transform for training data. Augmentation is applied separately.
+                    transform=val_transform,
+                    target_transform=target_transform,
+                )
         else:
             raise ValueError(f"Unknown torchvision dataset {dataset_classname}")
+
+        if should_augment_image_and_target_together:
+            assert False
+            train_data = self.apply_augmentation(train_data)
 
         train_data_loader = torch.utils.data.DataLoader(
             train_data, batch_size=batch_size, shuffle=True, num_workers=8
@@ -345,13 +424,22 @@ class TorchVisionDataset(SplittedDataset):
         dataset_classname = self.get_dataset_classname()
         if hasattr(torchvision.datasets, dataset_classname):
             dataset_class = getattr(torchvision.datasets, dataset_classname)
-            val_data = dataset_class(
-                root="./data",
-                train=False,
-                download=True,
-                transform=transform,
-                target_transform=target_transform,
-            )
+            try:
+                val_data = dataset_class(
+                    root="./data",
+                    train=False,
+                    download=True,
+                    transform=transform,
+                    target_transform=target_transform,
+                )
+            except:
+                val_data = dataset_class(
+                    root=self.data_dir,
+                    image_set="val",
+                    download=True,
+                    transform=transform,
+                    target_transform=target_transform,
+                )
         else:
             raise ValueError(f"Unknown torchvision dataset {dataset_classname}")
         val_data_loader = torch.utils.data.DataLoader(

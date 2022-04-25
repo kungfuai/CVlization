@@ -119,7 +119,7 @@ if __name__ == "__main__":
             n_classes=10, num_channels=3, image_height=32, image_width=32
         ),
         # Dataset and transforms.
-        dataset=Experiment.datasets()[args.data],
+        dataset=Experiment.datasets()[args.data.lower()],
         # Model, optimizer and hyperparams.
         training_pipeline=Experiment.training_pipelines()[args.model_recipe],
     ).run()

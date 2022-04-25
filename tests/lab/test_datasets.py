@@ -3,8 +3,10 @@ from cvlization.lab.datasets import TorchVisionDataset, TFDSImageDataset
 
 
 def test_torchvision_dataset_can_get_correct_classname():
+    ds = TorchVisionDataset("vocdetection_torchvision")
+    assert ds.get_dataset_classname() == "VOCDetection"
+
     ds = TorchVisionDataset("random_torchvision")
-    assert ds.get_dataset_classname() == "RANDOM"
     with pytest.raises(ValueError):
         ds.training_dataset()
 
@@ -16,7 +18,8 @@ def test_torchvision_dataset_can_get_correct_classname():
     ds = TorchVisionDataset("cifar10_torchvision")
     assert ds.get_dataset_classname() == "CIFAR10"
     ds = TorchVisionDataset("cifar10_data")
-    assert ds.get_dataset_classname() == "CIFAR10_DATA"
+    with pytest.raises(ValueError):
+        ds.get_dataset_classname()
 
 
 def test_torchvision_dataset_tensor_shape():

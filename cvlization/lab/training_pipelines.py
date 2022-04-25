@@ -7,6 +7,18 @@ from ..specs import MLFramework
 
 def training_pipelines() -> Dict[str, TrainingPipeline]:
     return {
+        "noop": TrainingPipeline(
+            framework=MLFramework.PYTORCH,
+            config=TrainingPipelineConfig(
+                data_only=True,
+            ),
+        ),
+        "noop_torch": TrainingPipeline(
+            framework=MLFramework.PYTORCH,
+            config=TrainingPipelineConfig(
+                data_only=True,
+            ),
+        ),
         "noop_tf": TrainingPipeline(
             framework=MLFramework.TENSORFLOW,
             config=TrainingPipelineConfig(

@@ -66,6 +66,8 @@ class TrainingPipeline:
         # TODO: rename ModelSpec to PredictionSpec ?
         self.framework = framework
         self.config = config
+        if self.config.data_only:
+            self.config.train_batch_size = 1
 
     def create_model(self, model_spec: ModelSpec):
         self.model_inputs = model_spec.get_model_inputs()
@@ -139,21 +141,59 @@ class TrainingPipeline:
 
     def run(self):
         if self.config.data_only:
-            self._run_through_data()
-        self.trainer.run()
+            self._iterate_through_data()
+        else:
+            self.trainer.run()
 
-    def _run_through_data(self):
+    def _iterate_through_data(self):
         LOGGER.info("Running through data without model training.")
+
+        def display_dict_or_list_of_tensors(tensors):
+            if isinstance(tensors, dict):
+                for k, v in tensors.items():
+                    LOGGER.info(f"item {k}:")
+                    display_dict_or_list_of_tensors(v)
+            for j, tensor in enumerate(tensors):
+                if hasattr(tensor, "shape"):
+                    LOGGER.info(
+                        f"  item {j} ({type(tensor)}) has shape: {tensor.shape}"
+                    )
+                else:
+                    LOGGER.info(f"  item {j} ({type(tensor)}) has no shape.")
+
+        prefix = "training"
+        for i, batch in enumerate(self.train_data):
+            if i >= 10:
+                LOGGER.info("Showing first 10 examples.")
+                break
+            LOGGER.info(f"{prefix} example {i}: {len(batch)} items.")
+            if isinstance(batch, dict) or hasattr(batch, "keys"):
+                for k, v in batch.items():
+                    LOGGER.info(f"  item {k}:")
+                    display_dict_or_list_of_tensors(v)
+            elif hasattr(batch, "shape"):
+                LOGGER.info(f"  shape: {batch.shape}")
+            elif isinstance(batch, list) or isinstance(batch, tuple):
+                for j, item in enumerate(batch):
+                    if hasattr(item, "shape"):
+                        LOGGER.info(
+                            f"  example {i} part {j} ({type(item)}) has shape: {item.shape}"
+                        )
+                    else:
+                        LOGGER.info(f"  example {i} part {j}:")
+                        display_dict_or_list_of_tensors(item)
 
     def _create_keras_model(self):
         from tensorflow import keras
 
-        if self.model is not None and callable(self.model):
-            if not isinstance(self.model, keras.Model):
-                raise ValueError(f"model must be a keras.Model, got {type(self.model)}")
-            return self.model
-        elif self.model is not None:
-            raise ValueError(f"model must be callable, got {type(self.model)} instead")
+        if self.config.model is not None and callable(self.config.model):
+            if not isinstance(self.config.model, keras.Model):
+                raise ValueError(
+                    f"model must be a keras.Model, got {type(self.config.model)}"
+                )
+            return self.config.model
+        elif self.config.model is not None:
+            raise ValueError(f"model must be callable, got {type(self.config.model)}")
 
         from .keras.keras_model_factory import KerasModelFactory
         from .keras.encoder.keras_image_encoder import KerasImageEncoder

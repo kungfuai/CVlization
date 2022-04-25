@@ -14,5 +14,5 @@ class ModelSpec:
     def get_model_inputs(self) -> List[ModelInput]:
         raise NotImplementedError
 
-    def get_model_outputs(self) -> List[ModelTarget]:
+    def get_model_targets(self) -> List[ModelTarget]:
         raise NotImplementedError
