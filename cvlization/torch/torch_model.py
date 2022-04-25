@@ -30,6 +30,7 @@ class TorchModel(LightningModule):
         share_image_encoder: bool = True
         mlp_encoder: TorchMlpEncoder = None
         aggregator: TorchAggregator = None
+        model: nn.Module = None  # If specified, the above model specs will be ignored.
 
         # ## Losses and metrics.
         loss_function: nn.Module = None
@@ -87,12 +88,20 @@ class TorchModel(LightningModule):
             )
         self._metrics = nn.ModuleDict(self._metrics)
         # TODO: should the following creation of actual layers wait for the first forward pass?
-        self._create_mlp_encoder_if_needed()
-        self._create_aggregator_if_needed()
-        self._prepare_encoder_models()
-        self._create_heads()
+        if isinstance(self.config.model, nn.Module):
+            LOGGER.warning(
+                "Model is already provided by the user. Ignoring model components and model spec."
+            )
+            self.model = self.config.model
+        else:
+            self._create_mlp_encoder_if_needed()
+            self._create_aggregator_if_needed()
+            self._prepare_encoder_models()
+            self._create_heads()
 
     def forward(self, inputs):
+        if isinstance(self.config.model, nn.Module):
+            return self.model.forward(inputs)
         tensors_encoded = []
         tensors_not_encoded = []
         for input_layer, encoder_model in zip(inputs, self._encoder_models):

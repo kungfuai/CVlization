@@ -1,10 +1,18 @@
 from typing import Dict
+
+from cvlization import data
 from ..training_pipeline import TrainingPipeline, TrainingPipelineConfig
 from ..specs import MLFramework
 
 
 def training_pipelines() -> Dict[str, TrainingPipeline]:
     return {
+        "noop_tf": TrainingPipeline(
+            framework=MLFramework.TENSORFLOW,
+            config=TrainingPipelineConfig(
+                data_only=True,
+            ),
+        ),
         "resnet50_tf": TrainingPipeline(
             framework=MLFramework.TENSORFLOW,
             config=TrainingPipelineConfig(

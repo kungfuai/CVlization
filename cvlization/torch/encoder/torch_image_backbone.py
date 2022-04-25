@@ -1,7 +1,11 @@
+import logging
 from torch import nn
 import torch
 from ..net.davidnet.dawn_utils import net, Network
 from ..net.simple_conv import SimpleConv
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def load_dino_model(name):
@@ -59,4 +63,21 @@ def create_image_backbone(
 
 
 def image_backbone_names():
-    raise NotImplementedError
+    LOGGER.info(
+        f"Listing models in CVlization and timm. Additional models available. Please check https://pytorch.org/hub/ for additional models."
+    )
+    model_names = ["simple_conv", "davidnet"]
+
+    try:
+        import timm
+
+        model_names += timm.list_models()
+    except Exception as e:
+        LOGGER.warning(f"Failed to list timm models: {e}")
+
+    try:
+        model_names += torch.hub.list("facebookresearch/dino:main")
+    except Exception as e:
+        LOGGER.warning(f"Failed to list dino models: {e}")
+
+    return model_names

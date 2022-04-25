@@ -1,14 +1,19 @@
 from dataclasses import dataclass, field
-from typing import List
+import logging
+from typing import List, Callable
 
 from .data.splitted_dataset import SplittedDataset
 from .keras.aggregator.keras_aggregator import KerasAggregator
 from .specs import ModelSpec, MLFramework
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 @dataclass
 class TrainingPipelineConfig:
     # Model
+    model: Callable = None  # If specified, the following parameters will be ignored.
     image_backbone: str = None  # e.g. "resnet50"
     image_pool: str = "avg"  # "avg", "max", "flatten"
     dense_layer_sizes: List[int] = field(default_factory=list)
@@ -46,6 +51,9 @@ class TrainingPipelineConfig:
     experiment_name: str = "cvlab"
     run_name: str = None
 
+    # Debugging
+    data_only: bool = False  # No training, only run through data.
+
 
 class TrainingPipeline:
     # TODO: perhaps make it friendly for parameter sweep.
@@ -62,6 +70,8 @@ class TrainingPipeline:
     def create_model(self, model_spec: ModelSpec):
         self.model_inputs = model_spec.get_model_inputs()
         self.model_targets = model_spec.get_model_targets()
+        if self.config.data_only:
+            return self
         if self.framework == MLFramework.TENSORFLOW:
             self.model = self._create_keras_model()
         elif self.framework == MLFramework.PYTORCH:
@@ -115,6 +125,8 @@ class TrainingPipeline:
         return self
 
     def create_trainer(self):
+        if self.config.data_only:
+            return self
         if self.framework == MLFramework.TENSORFLOW:
             self.trainer = self._create_keras_trainer(
                 self.model, self.train_data, self.val_data
@@ -126,9 +138,23 @@ class TrainingPipeline:
         return self
 
     def run(self):
+        if self.config.data_only:
+            self._run_through_data()
         self.trainer.run()
 
+    def _run_through_data(self):
+        LOGGER.info("Running through data without model training.")
+
     def _create_keras_model(self):
+        from tensorflow import keras
+
+        if self.model is not None and callable(self.model):
+            if not isinstance(self.model, keras.Model):
+                raise ValueError(f"model must be a keras.Model, got {type(self.model)}")
+            return self.model
+        elif self.model is not None:
+            raise ValueError(f"model must be callable, got {type(self.model)} instead")
+
         from .keras.keras_model_factory import KerasModelFactory
         from .keras.encoder.keras_image_encoder import KerasImageEncoder
         from .keras.encoder.keras_image_backbone import create_image_backbone
@@ -273,6 +299,35 @@ class TrainingPipeline:
         return trainer
 
     def _create_torch_model(self):
+        from pytorch_lightning.core.lightning import LightningModule
+        from torch import nn
+        from .torch.torch_model import TorchModel
+
+        if self.model is not None and callable(self.model):
+            if isinstance(self.model, LightningModule):
+                return self.model
+            elif isinstance(self.model, nn.Module):
+                return TorchModel(
+                    config=TorchModel.TorchModelConfig(
+                        model_inputs=self.model_inputs,
+                        model_targets=self.model_targets,
+                        model=self.model,
+                        optimizer_name=self.config.optimizer_name,
+                        optimizer_kwargs=self.config.optimizer_kwargs,
+                        n_gradients=self.config.n_gradients,
+                        lr=self.config.lr,
+                        epochs=self.config.epochs,
+                        lr_scheduler_name=self.config.lr_scheduler_name,
+                        lr_scheduler_kwargs=self.config.lr_scheduler_kwargs,
+                    ),
+                )
+            else:
+                raise ValueError(
+                    f"model must be a LightningModule or torch.nn.Module, got {type(self.model)}"
+                )
+        elif self.model is not None:
+            raise ValueError(f"model must be callable, got {type(self.model)}")
+
         from .torch.torch_model_factory import TorchModelFactory
         from .torch.encoder.torch_image_encoder import TorchImageEncoder
         from .torch.encoder.torch_image_backbone import create_image_backbone
