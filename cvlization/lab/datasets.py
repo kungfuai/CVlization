@@ -242,8 +242,6 @@ class TorchVisionDataset(SplittedDataset):
         """Returns transform and target_transform."""
         import torchvision.transforms as transforms
 
-        additional_transforms = []
-
         if self.dataset_key.startswith("cifar"):
             return (
                 transforms.Compose(

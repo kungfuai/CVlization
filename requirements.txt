@@ -7,6 +7,7 @@ timm==0.5.4
 tensorflow>=2
 coloredlogs>=15
 scikit-image>=0.16.2
+imgaug>=0.3.0
 pandas
 mlflow
 tensorflow-addons
