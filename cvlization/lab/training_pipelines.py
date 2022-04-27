@@ -179,6 +179,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
             ),
         ),
         "resnet18_torch_gc": TrainingPipeline(
+            # with gradient accumulation (gc)
             framework=MLFramework.PYTORCH,
             config=TrainingPipelineConfig(
                 image_backbone="resnet18",
