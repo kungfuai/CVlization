@@ -13,7 +13,7 @@ class ImageAugmentationProvider(str, enum.Enum):
 
 
 @dataclass
-class ImageAugmentation:
+class ImageAugmentationSpec:
     provider: ImageAugmentationProvider = ImageAugmentationProvider.IMGAUG
     # Using weak typing here for flexibility. Different providers can use
     # very different sets of configs. However, if we can find regular patterns

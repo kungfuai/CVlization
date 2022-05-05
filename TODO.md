@@ -3,6 +3,7 @@
 - `bin/train.sh -m noop -d vocsegmentation_torchvision` does not work.
 - [refactor] `TrainingPipeline` has an unfamiliar interface `assemble`, `feed_data`. Consider conforming to the convention of a heavy keras style model with `fit(dataset)`, or `create_model()`, `prepare_datasets()`, `train()`.
 - [minor] `torchvision.datasets.VOCDetection` extracts the data file repeatedly. This step should be checkpointed.
+- [test] Add test on data loader where individual training examples are missing or corrupted (simulating a flaky remote data store).
 - (need discussion) Possibly rewrite model components (e.g. KerasImageEncoder) as framework specific models (keras.Layer, nn.Module).
     - Reason 1: keras.Model and nn.Module is well understood. We want users to easily drop in their implementations of the model components to replace the default ones in our library.
     - Reason 2: Saving of keras.Layer/Model and nn.Module is also well understood. Additional info about the custom model (e.g. which layers to extract features from) can be saved in the custom model. Our library does not need to worry about that.

@@ -10,10 +10,10 @@ from ..specs import (
     ModelTarget,
     ModelSpec as PredictionTask,
     DataColumnType,
-    ImageAugmentation,
+    ImageAugmentationSpec,
     ImageAugmentationProvider,
 )
-from ..keras.transforms.image_transforms import (
+from ..keras.transforms.image_augmentation import (
     normalize,
     ImageAugmentation as KerasImageAugmentation,
 )
@@ -45,7 +45,7 @@ def datasets() -> Dict[str, SplittedDataset]:
             ),
             TorchVisionDataset(
                 dataset_key="cifar10_torchvision",
-                image_augmentation=ImageAugmentation(
+                image_augmentation=ImageAugmentationSpec(
                     provider=ImageAugmentationProvider.TORCHVISION,
                     config={
                         "transformers": [
@@ -82,7 +82,7 @@ def datasets() -> Dict[str, SplittedDataset]:
 class TFDSImageDataset(SplittedDataset):
     dataset_key: str = "cifar10_tfds"
     as_numpy: bool = False
-    image_augmentation: ImageAugmentation = None
+    image_augmentation: ImageAugmentationSpec = None
     shuffle_size: int = 3072
 
     def __post_init__(self):
@@ -267,7 +267,7 @@ class TorchVisionDataset(SplittedDataset):
     dataset_type = None  # TODO: deal with obj det etc
     data_dir: str = "./data"
     # image augmentation for training data
-    image_augmentation: ImageAugmentation = None
+    image_augmentation: ImageAugmentationSpec = None
     image_mean: tuple = None
     image_std: tuple = None
 
@@ -295,7 +295,7 @@ class TorchVisionDataset(SplittedDataset):
                     "kwargs": {"mean": image_mean, "std": image_std},
                 },
             )
-        self.val_image_augmentation = ImageAugmentation(
+        self.val_image_augmentation = ImageAugmentationSpec(
             provider=ImageAugmentationProvider.TORCHVISION,
             config={
                 "transformers": val_augmentation_steps,
