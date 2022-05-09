@@ -13,7 +13,4 @@ mlflow
 tensorflow-addons
 tensorflow_datasets
 wandb # seems to be required by torch-lightning
-# !pip install --quiet "torchvision" "torchmetrics>=0.3" "pandas" "matplotlib" "torchmetrics" "kornia"
 kornia
-kornia_moons
-# !pip install pydegensac
