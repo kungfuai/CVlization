@@ -1,10 +1,15 @@
 from dataclasses import dataclass, field
 import logging
-from typing import List, Callable
+import numpy as np
+from typing import List, Callable, Union
+
+from cvlization.specs.data_column import DataColumnType
 
 from .data.splitted_dataset import SplittedDataset
-from .keras.aggregator.keras_aggregator import KerasAggregator
+from .data.dataset_builder import DatasetBuilder, DatasetProvider
+from .tensorflow.aggregator.keras_aggregator import KerasAggregator
 from .specs import ModelSpec, MLFramework
+from .specs import ensure_dataset_shapes_and_types
 
 
 LOGGER = logging.getLogger(__name__)
@@ -56,7 +61,8 @@ class TrainingPipelineConfig:
 
 
 class TrainingPipeline:
-    # TODO: perhaps make it friendly for parameter sweep.
+    # TODO: Consider folding TrainingPipeline into Trainer.
+    # TODO: Consider using Experiment to create_model, create_trainer, and TrainingSession to handle hyperparameter sweep on Experiments.
     def __init__(
         self,
         framework: MLFramework,
@@ -80,27 +86,159 @@ class TrainingPipeline:
             self.model = self._create_torch_model()
         return self
 
-    def prepare_datasets(self, dataset: SplittedDataset):
-        train_data = dataset.training_dataset(batch_size=self.config.train_batch_size)
-        # TODO: the dataset need to know about model inputs and model targets.
-        # if isinstance(train_data, RichDataFrame):
-        #     train_data = MLDataset(
-        #         model_inputs=model_inputs,
-        #         model_targets=model_targets,
-        #         data_rows=train_data,
-        #     )
-        val_data = dataset.validation_dataset(batch_size=self.config.val_batch_size)
-        # if isinstance(val_data, RichDataFrame):
-        #     val_data = MLDataset(
-        #         model_inputs=model_inputs,
-        #         model_targets=model_targets,
-        #         data_rows=val_data,
-        #     )
+    def convert_tuple_iterator_to_tf_dataset(self, tuple_iterator, channel_first=True):
+        # TODO: move this method to a data adaptor class under `cvlization.keras`.
+        import tensorflow as tf
+
+        def gen():
+            for example in tuple_iterator:
+                image = example[0]
+                label = example[1]
+                if hasattr(image, "numpy"):
+                    image = image.numpy()
+                if hasattr(label, "numpy"):
+                    label = label.numpy()
+                label = np.array(label).astype(np.float32)
+                if channel_first:
+                    image = image.transpose(1, 2, 0)
+                yield (
+                    tuple([tf.convert_to_tensor(image)]),
+                    tuple([tf.convert_to_tensor(label)]),
+                )
+
+        output_signature = (
+            tuple([tf.TensorSpec(shape=None, dtype=tf.float32)]),
+            tuple([tf.TensorSpec(shape=None, dtype=tf.float32)]),
+        )
+
+        ds = tf.data.Dataset.from_generator(gen, output_signature=output_signature)
+        return ds
+
+    def create_tf_training_dataloader(self, dataset_builder: DatasetBuilder):
+        import tensorflow as tf
+        from .tensorflow.transforms.image_augmentation import normalize
+
+        training_dataset = dataset_builder.training_dataset()
+        if dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
+            # Dataset is already batched.
+            # TODO: we should expect an already augmented dataset when calling DatasetBuilder.training_dataset().
+            # TODO: dataset builder should handle shuffling.
+            if dataset_builder.shuffle_size:
+                training_dataset = training_dataset.shuffle(
+                    dataset_builder.shuffle_size
+                )
+            training_dataset = training_dataset.map(
+                normalize, num_parallel_calls=tf.data.experimental.AUTOTUNE
+            )
+            return training_dataset
+        elif dataset_builder.dataset_provider in [DatasetProvider.TORCHVISION, None]:
+            ds = self.convert_tuple_iterator_to_tf_dataset(training_dataset)
+            return ds.batch(self.config.train_batch_size)
+        else:
+            raise ValueError(
+                "Unknown dataset provider: {}".format(dataset_builder.dataset_provider)
+            )
+
+    def create_tf_validation_dataloader(self, dataset_builder: DatasetBuilder):
+        ds = dataset_builder.validation_dataset()
+        if dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
+            return ds.batch(self.config.val_batch_size)
+        elif dataset_builder.dataset_provider in [DatasetProvider.TORCHVISION, None]:
+            return self.convert_tuple_iterator_to_tf_dataset(ds).batch(
+                self.config.val_batch_size
+            )
+        else:
+            raise ValueError(
+                "Unknown dataset provider: {}".format(dataset_builder.dataset_provider)
+            )
+
+    def convert_tf_dataset_to_iterable_dataset(self, tf_dataset):
+        # TODO: allow using imgaug as a default
+        # TODO: transforms should be in a separate class
+        # https://github.com/kungfuai/mtrx_2/blob/1b5ff963f4b732883e95e1f86dfbecbb95a7a9ff/src/data/transforms.py#L31
+        import torch
+
+        class IterableImageDataset(torch.utils.data.IterableDataset):
+            def __iter__(self):
+                for image, label in tf_dataset:
+                    image = image.numpy() / 255
+                    label = label.numpy()
+                    image = torch.cat(
+                        [torch.unsqueeze(image[i], 0) for i in range(len(image))]
+                    )
+                    yield image, label
+
+        return IterableImageDataset()
+
+    def create_training_dataloader(self, dataset_builder: DatasetBuilder):
+        """
+        Dataloader is more closely coupled with the trainer than the dataset, and is dependent on
+        the ML framework.
+        """
+        if (
+            self.framework == MLFramework.TENSORFLOW
+        ):  # This is the framework of the trainer, not the dataset.
+            return self.create_tf_training_dataloader(dataset_builder)
+        elif self.framework == MLFramework.PYTORCH:
+            if dataset_builder.dataset_provider == DatasetProvider.TORCHVISION:
+                import torch
+
+                return torch.utils.data.DataLoader(
+                    dataset_builder.training_dataset(),
+                    batch_size=self.config.train_batch_size,
+                    shuffle=True,
+                    num_workers=self.config.num_workers,
+                )
+            elif (
+                dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS
+            ):
+                training_dataset = dataset_builder.training_dataset()
+                training_dataset = self.convert_tf_dataset_to_iterable_dataset(
+                    training_dataset
+                )
+                return torch.utils.data.DataLoader(
+                    training_dataset,
+                    batch_size=self.config.train_batch_size,
+                    shuffle=True,
+                    num_workers=self.config.num_workers,
+                )
+            else:
+                raise ValueError(
+                    f"Unknown dataset provider: {dataset_builder.dataset_provider}"
+                )
+
+        raise ValueError(f"Unknown ML framework: {self.framework}")
+
+    def create_validation_dataloader(self, dataset_builder: DatasetBuilder):
+        if self.framework == MLFramework.TENSORFLOW:
+            return self.create_tf_validation_dataloader(dataset_builder)
+        elif self.framework == MLFramework.PYTORCH:
+            if dataset_builder.dataset_provider == DatasetProvider.TORCHVISION:
+                import torch
+
+                return torch.utils.data.DataLoader(
+                    dataset_builder.validation_dataset(),
+                    batch_size=self.config.val_batch_size,
+                )
+            elif (
+                dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS
+            ):
+                validation_dataset = dataset_builder.validation_dataset()
+                validation_dataset = self.convert_tf_dataset_to_iterable_dataset(
+                    validation_dataset
+                )
+                return torch.utils.data.DataLoader(
+                    dataset_builder.validation_dataset(),
+                    batch_size=self.config.val_batch_size,
+                )
+
+    def prepare_datasets(self, dataset_builder: Union[SplittedDataset, DatasetBuilder]):
+
+        train_data = self.create_training_dataloader(dataset_builder)
+        val_data = self.create_validation_dataloader(dataset_builder)
 
         if self.framework == MLFramework.TENSORFLOW:
-            # Use tf.data API.
-            train_data = dataset.transform_training_dataset_tf(train_data)
-            val_data = dataset.transform_validation_dataset_tf(val_data)
+
             # batch = next(iter(train_data))
             # raise ValueError(str(batch[0][0].shape))
             if self.config.train_steps_per_epoch is not None:
@@ -116,14 +254,34 @@ class TrainingPipeline:
             if self.config.val_steps_per_epoch is not None:
                 if hasattr(val_data, "repeat"):
                     val_data = val_data.repeat()
-            if dataset.dataset_key.endswith("tfds") and hasattr(
-                dataset, "transform_training_dataset_tf"
+            if dataset_builder.dataset_key.endswith("tfds") and hasattr(
+                dataset_builder, "transform_training_dataset_tf"
             ):
-                train_data = dataset.transform_training_dataset_tf(train_data)
-                val_data = dataset.transform_validation_dataset_tf(val_data)
+                train_data = dataset_builder.transform_training_dataset_tf(train_data)
+                val_data = dataset_builder.transform_validation_dataset_tf(val_data)
 
         self.train_data = train_data
         self.val_data = val_data
+
+        # Data type and shape checks.
+        batch = next(iter(train_data))
+        assert len(self.model_inputs) == len(
+            batch[0]
+        ), f"{len(self.model_inputs)} model inputs expected, {len(batch[0])} actual arrays"
+        for model_input, array in zip(self.model_inputs, batch[0]):
+            if model_input.column_type == DataColumnType.IMAGE:
+                assert len(array.shape) == 4, f"image batch has shape {array.shape}"
+                if dataset_builder.dataset_provider == None:
+                    assert array.shape[1] in [
+                        1,
+                        3,
+                    ], f"image batch has shape {array.shape}. Expect channel_first format when dataset_provider is None"
+
+        model_spec = ModelSpec(
+            model_inputs=self.model_inputs, model_targets=self.model_targets
+        )
+        ensure_dataset_shapes_and_types(model_spec=model_spec, dataset=train_data)
+
         return self
 
     def create_trainer(self):
@@ -195,9 +353,9 @@ class TrainingPipeline:
         elif self.config.model is not None:
             raise ValueError(f"model must be callable, got {type(self.config.model)}")
 
-        from .keras.keras_model_factory import KerasModelFactory
-        from .keras.encoder.keras_image_encoder import KerasImageEncoder
-        from .keras.encoder.keras_image_backbone import create_image_backbone
+        from .tensorflow.keras_model_factory import KerasModelFactory
+        from .tensorflow.encoder.keras_image_encoder import KerasImageEncoder
+        from .tensorflow.encoder.keras_image_backbone import create_image_backbone
 
         model_inputs = self.model_inputs
         model_targets = self.model_targets
@@ -241,7 +399,7 @@ class TrainingPipeline:
         return model
 
     def _create_keras_trainer(self, model, train_dataset, val_dataset):
-        from .keras.keras_trainer import KerasTrainer
+        from .tensorflow.keras_trainer import KerasTrainer
         from tensorflow.keras import callbacks
 
         callbacks = [

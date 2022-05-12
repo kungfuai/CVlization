@@ -35,15 +35,6 @@ class ModelTarget(DataColumn):
     loss_weight: Optional[float] = 1
     metrics: Optional[List] = None
 
-    # For when the tensor is variable sized sequence, e.g. bounding boxes.
-    # Usually it is enough to set sequence to True when you have such target variables.
-    # But if you have multilple groups of such sequences, each one with a different length,
-    # you can set `sequence` to a unique str value for each group of sequences.
-    # For a goup of sequences, the size of their "sequence" axis are expected to match.
-    # For example, two sequence targets bbox_labels (of shape [n, 1]) and bboxes (of shape [n, 4])
-    # are expected to have the same sequence length n.
-    sequence: Optional[Union[bool, str]] = False
-
     # For imbalanced label distribution.
     negative_class_weight: Optional[float] = 1
 

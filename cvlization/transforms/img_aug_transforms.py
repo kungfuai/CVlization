@@ -79,7 +79,7 @@ class ImgAugTransforms(object):
         self.config = config
 
         t_list = []
-        for t in config["transformers"]:
+        for t in config["steps"]:
             t_list.append(self.get_tf(t))
 
         seq = iaa.Sequential(t_list)

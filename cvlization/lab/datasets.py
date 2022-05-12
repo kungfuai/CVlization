@@ -4,7 +4,7 @@ from typing import Dict, List
 
 from cvlization.lab.model_specs import ImageClassification
 from ..data.splitted_dataset import SplittedDataset
-from .dataset_utils import torchvision_dataset_classnames
+from ..data.dataset_builder import DatasetBuilder
 from ..specs import (
     ModelInput,
     ModelTarget,
@@ -13,14 +13,31 @@ from ..specs import (
     ImageAugmentationSpec,
     ImageAugmentationProvider,
 )
-from ..keras.transforms.image_augmentation import (
+from ..tensorflow.transforms.image_augmentation import (
     normalize,
     ImageAugmentation as KerasImageAugmentation,
 )
 from ..transforms.image_augmentation_builder import ImageAugmentationBuilder
-from . import dataset_adaptors
+from ..torch.data import (
+    dataset_adaptors,
+    TorchvisionDatasetBuilder,
+    torchvision_dataset_classnames,
+)
 
 # TODO: explore https://cgarciae.github.io/dataget/
+# TODO: explore https://petastorm.readthedocs.io/en/latest/readme_include.html
+
+
+def get_dataset_builder_registry() -> Dict[str, DatasetBuilder]:
+    dataset_builder_registry = {}
+    for torchvision_dataset_classname in torchvision_dataset_classnames():
+        dataset_key = torchvision_dataset_classname + "_torchvision"
+        if dataset_key in dataset_builder_registry:
+            continue
+        dataset_builder_registry[dataset_key] = TorchvisionDatasetBuilder(
+            dataset_classname=torchvision_dataset_classname,
+        )
+    return dataset_builder_registry
 
 
 def datasets() -> Dict[str, SplittedDataset]:
@@ -48,7 +65,7 @@ def datasets() -> Dict[str, SplittedDataset]:
                 image_augmentation=ImageAugmentationSpec(
                     provider=ImageAugmentationProvider.TORCHVISION,
                     config={
-                        "transformers": [
+                        "steps": [
                             {
                                 "type": "RandomCrop",
                                 "kwargs": {"size": 32, "padding": 4},
@@ -261,6 +278,7 @@ class TFDSImageDataset(SplittedDataset):
         return IterableImageDataset()
 
 
+# TODO: to remove
 @dataclass
 class TorchVisionDataset(SplittedDataset):
     dataset_key: str = "cifar10_torchvision"
@@ -298,7 +316,7 @@ class TorchVisionDataset(SplittedDataset):
         self.val_image_augmentation = ImageAugmentationSpec(
             provider=ImageAugmentationProvider.TORCHVISION,
             config={
-                "transformers": val_augmentation_steps,
+                "steps": val_augmentation_steps,
             },
         )
         if self.image_augmentation is None:

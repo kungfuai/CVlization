@@ -1,4 +1,5 @@
 from collections.abc import Iterable, Sequence
+import logging
 import numpy as np
 from typing import List, Optional, Union, Dict, Tuple
 from cvlization.specs import ModelSpec, ModelInput, ModelTarget
@@ -8,6 +9,9 @@ try:
     from typing import Protocol, runtime_checkable
 except ImportError:
     from typing_extensions import Protocol, runtime_checkable
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -43,18 +47,29 @@ def ensure_array_shape_and_type(array, data_column: DataColumn):
             ), f"Expected boolean array to have size 1, but got {array.size}"
         return
 
-    for expected_size, actual_size in zip(
-        data_column.raw_shape[::-1], array.shape[::-1]
-    ):
-        if (
-            expected_size is not None
-            and expected_size > 0
-            and expected_size != actual_size
+    if len(data_column.raw_shape) == len(array.shape):
+        LOGGER.warning(
+            f"Shape of array is {array.shape}, raw_shape of data column {data_column.key} is {data_column.raw_shape} (not including batch axis)"
+        )
+    else:
+        assert len(data_column.raw_shape) == len(array.shape) - 1
+        for expected_size, actual_size in zip(
+            data_column.raw_shape[::-1], array.shape[::-1]
         ):
-            raise TypeError(
-                f"Data column: {data_column.key}. Expected {expected_size} but got {actual_size}. "
-                "Expected shape (ignoring the batch axis): {data_column.raw_shape}, actual shape: {array.shape}"
-            )
+            if (
+                expected_size is not None
+                and expected_size > 0
+                and expected_size != actual_size
+            ):
+                if actual_size is None and expected_size == 1:
+                    # (batch, 1) vs. (batch,)
+                    # TODO: is this really the right thing to do?
+                    pass
+                else:
+                    raise TypeError(
+                        f"Data column: {data_column.key}. Expected {expected_size} but got {actual_size}. "
+                        f"Expected shape (ignoring batch axis): {data_column.raw_shape}, actual shape (with batch axis): {array.shape}"
+                    )
 
 
 def _gather_sequence_groups(
@@ -116,9 +131,9 @@ def ensure_dataset_shapes_and_types(
         idx = 0
         example = dataset[idx]
     elif isinstance(dataset, Iterable):
-        example = next(dataset)
+        example = next(iter(dataset))
     else:
         raise TypeError(
-            f"Expected dataset to be an Iterable or a MapStyleDataset, but got {type(dataset)}"
+            f"Expected dataset to be an Iterable or a MapStyleDataset, but got {type(dataset)}. dir: {dir(dataset)}"
         )
     ensure_example_shapes_and_types(example, model_spec)

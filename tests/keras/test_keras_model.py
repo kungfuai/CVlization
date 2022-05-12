@@ -1,8 +1,8 @@
 import numpy as np
 import tensorflow as tf
 from keras.engine.functional import Functional
-from cvlization.keras.model import Model
-from cvlization.keras import image_backbone_names, create_image_backbone
+from cvlization.tensorflow.model import Model
+from cvlization.tensorflow import image_backbone_names, create_image_backbone
 
 
 def test_custom_keras_model_can_save_and_load(tmpdir):

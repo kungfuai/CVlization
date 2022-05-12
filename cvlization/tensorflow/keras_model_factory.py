@@ -15,10 +15,10 @@ try:
 except ImportError:
     pass
 
-from ..keras.eager_model import EagerModel
-from ..keras.model import Model
+from ..tensorflow.eager_model import EagerModel
+from ..tensorflow.model import Model
 from ..specs import DataColumnType, ModelInput, ModelTarget, EnsembleModelTarget
-from ..keras.metrics.multiclass_auc import MulticlassAUC
+from ..tensorflow.metrics.multiclass_auc import MulticlassAUC
 from .encoder.keras_image_encoder import KerasImageEncoder
 from .encoder.keras_mlp_encoder import KerasMLPEncoder
 from .aggregator.keras_aggregator import KerasAggregator

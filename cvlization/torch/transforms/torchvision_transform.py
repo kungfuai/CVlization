@@ -1,4 +1,5 @@
 import json
+from PIL import Image
 from typing import Union
 from torchvision import transforms
 
@@ -13,7 +14,7 @@ class TorchvisionTransform:
             raise TypeError(f"config must be a str or dict, not {type(config)}")
 
         self.transforms = []
-        for t in self.config["transformers"]:
+        for t in self.config["steps"]:
             self.transforms.append(self.get_tf(t))
         self.aug = transforms.Compose(self.transforms)
 
@@ -25,7 +26,25 @@ class TorchvisionTransform:
     def __call__(self, *args, **kwargs):
         return self.transform(*args, **kwargs)
 
-    def transform(self, image, target=None):
-        if target is None:
-            return self.aug(image)
-        return self.aug(image), target
+    def transform(self, example: Union[tuple, list, dict]) -> Union[tuple, list, dict]:
+        if isinstance(example, tuple) or isinstance(example, list):
+            assert len(example) >= 2
+            image = example[0]
+            image = self.aug(image)
+            if isinstance(example, tuple):
+                return (image,) + example[1:]
+            elif isinstance(example, list):
+                return [image] + example[1:]
+        elif isinstance(example, dict):
+            image = example["image"]
+            target = example.get("label")
+            return {
+                "image": self.aug(image),
+                "label": target,
+            }
+        elif isinstance(example, Image.Image):
+            return self.aug(example)
+        else:
+            raise TypeError(
+                f"example must be a tuple, list, or dict, not {type(example)}"
+            )

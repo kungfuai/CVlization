@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import numpy as np
 from unittest.mock import patch
 from cvlization.lab.experiment import Experiment, SplittedDataset
 from cvlization.lab.model_specs import ImageClassification
@@ -13,11 +14,21 @@ from cvlization.training_pipeline import (
 class MockDataset(SplittedDataset):
     field1: str = ""
 
+    @property
+    def dataset_provider(self):
+        return None
+
     def training_dataset(self, **kwargs):
-        return []
+        # TODO: note that image is in channel-first format when dataset_provider is None.
+        #  Need to be explicit that this is the default.
+        image = np.random.random((3, 10, 10))
+        label = 1
+        return [(image, label)]
 
     def validation_dataset(self, **kwargs):
-        return []
+        image = np.random.random((3, 10, 10))
+        label = 1
+        return [(image, label)]
 
     def transform_training_dataset_tf(self, dataset, **kwargs):
         return dataset
