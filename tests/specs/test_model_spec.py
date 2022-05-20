@@ -125,6 +125,7 @@ def test_model_spec_can_typecheck_a_dataset(
             dataset=object_detection_dataset_wrong_sequence_size,
             model_spec=object_detection_model_spec,
         )
-    assert "Sequences do not have the same length. Shapes: [(3, 1), (11, 4)]" == str(
-        excinfo.value
+    assert (
+        """Sequences do not have the same length. Shapes: [('bbox_labels', (3, 1)), ('bboxes', (11, 4))]"""
+        == str(excinfo.value)
     )

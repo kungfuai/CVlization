@@ -52,6 +52,6 @@ class VOCDetectionAdapter:
             annots["labels"].append(target_classes.index(t["name"]))
             annots["hr_labels"].append(t["name"])
 
-        annots["labels"] = torch.tensor(annots["labels"])
-        annots["boxes"] = torch.tensor(annots["boxes"])
-        return annots
+        # annots["labels"] = torch.tensor(annots["labels"])
+        # annots["boxes"] = torch.tensor(annots["boxes"])
+        return annots["boxes"], annots["labels"]

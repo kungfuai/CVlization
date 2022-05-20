@@ -26,6 +26,14 @@ class TorchvisionTransform:
     def __call__(self, *args, **kwargs):
         return self.transform(*args, **kwargs)
 
+    def transform_image_and_targets(self, image, **kwargs):
+        if image.shape[0] <= 3 and len(image.shape) == 3:
+            image = image.transpose(1, 2, 0)
+        return {
+            "image": self.aug(image),
+            **kwargs,
+        }
+
     def transform(self, example: Union[tuple, list, dict]) -> Union[tuple, list, dict]:
         if isinstance(example, tuple) or isinstance(example, list):
             assert len(example) >= 2

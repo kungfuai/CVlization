@@ -1,5 +1,5 @@
 ## Backlog
-- Move `DataLoader` out of `datasets.py`. `DataLoader` should be constructed during training.
+- `raw_shape` for image columns: be more explicit whether it is before or after transform. In `type_checks.py`, make sure the expected shape is correct.
 - `bin/train.sh -m noop -d vocsegmentation_torchvision` does not work.
 - Rename cvlization.keras to tensorflow.
 - [refactor] `TrainingPipeline` has an unfamiliar interface `assemble`, `feed_data`. Consider conforming to the convention of a heavy keras style model with `fit(dataset)`, or `create_model()`, `prepare_datasets()`, `train()`.

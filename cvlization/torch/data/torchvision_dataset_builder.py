@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 import torchvision
 from typing import List, Tuple, Union, Optional
+import numpy as np
+
+from cvlization.specs.model_spec.model_spec import ModelSpec
 from ...data.dataset_builder import BaseDatasetBuilder, Dataset, DatasetProvider
 from ...specs import (
     ImageAugmentationSpec,
@@ -12,6 +15,8 @@ from ...specs import (
 from . import dataset_adaptors
 from ...data.dataset_builder import TransformedMapStyleDataset
 from ...transforms.image_augmentation_builder import ImageAugmentationBuilder
+from ...transforms.example_transform import ExampleTransform
+from ...specs.prediction_tasks import ImageClassification, ObjectDetection
 
 
 @dataclass
@@ -40,27 +45,13 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
         self.validation_transform = (
             self.validation_transform or self.get_default_validation_transform()
         )
+        self._model_spec = self.get_model_spec()
 
     def get_default_image_dataset_mean_std(self):
         if self.dataset_classname.lower().startswith("cifar"):
             return (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
         else:
             return None, None
-
-    def _prepare_model_spec(self):
-        # TODO: is it needed in this class?
-        self.model_inputs = [
-            ModelInput(
-                key="image",
-                column_type=DataColumnType.IMAGE,
-            )
-        ]
-        self.model_targets = [
-            ModelTarget(
-                key="label",
-                column_type=DataColumnType.NUMERICAL,
-            )
-        ]
 
     def get_default_training_transform(self):
         if self.dataset_classname.lower().startswith("voc"):
@@ -141,11 +132,18 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
         if hasattr(torchvision.datasets, dataset_classname):
             dataset_class = getattr(torchvision.datasets, dataset_classname)
             # Torchvision datasets can be constructed using one of the following two ways:
+            to_tensor_numpy_list = lambda x: [
+                torchvision.transforms.ToTensor()(x).numpy()
+            ]
+            to_tensor_numpy = lambda x: torchvision.transforms.ToTensor()(x).numpy()
+            to_numpy_list = lambda x: [np.array(x)]
             try:
                 ds = dataset_class(
                     root=self.data_dir,
                     train=train,
                     download=True,
+                    transform=to_tensor_numpy_list,
+                    target_transform=to_numpy_list,
                 )
             except:
                 target_transform = None
@@ -157,6 +155,7 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
                     root=self.data_dir,
                     image_set="train" if train else "val",  # applys to VOC datasets
                     download=True,
+                    transform=to_tensor_numpy,
                     # VOC datasets should use val_transform for training data. Augmentation is applied separately.
                     target_transform=target_transform,
                 )
@@ -164,18 +163,49 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
             raise ValueError(f"Unknown torchvision dataset {dataset_classname}")
         return ds
 
+    def get_model_spec(self) -> ModelSpec:
+        if self.dataset_classname.lower()[:3] in ["cif", "cal", "cel", "emn", "mni"]:
+            return ImageClassification()
+        elif self.dataset_classname.lower()[:4] in ["vocd", "city", "coco"]:
+            return ObjectDetection()
+        else:
+            # TODO: support more datasets. This is temporary.
+            return ImageClassification()
+        # else:
+        #     raise ValueError(
+        #         f"Unknown dataset classname {self.dataset_classname} for dataset provider {self.dataset_provider}"
+        #     )
+
     def training_dataset(self):
         dataset_classname = self.verify_dataset_classname()
         ds = self.construct_torchvision_dataset(dataset_classname, train=True)
-        transform_fn = ImageAugmentationBuilder(spec=self.training_transform).run()
-        ds = TransformedMapStyleDataset(ds, transform=transform_fn)
+        image_augmentation = ImageAugmentationBuilder(
+            spec=self.training_transform
+        ).run()
+        example_transform = ExampleTransform(
+            image_augmentation=image_augmentation,
+            model_inputs=self._model_spec.get_model_inputs(),
+            model_targets=self._model_spec.get_model_targets(),
+        )
+        ds = TransformedMapStyleDataset(
+            ds, transform=example_transform.transform_example
+        )
         return ds
 
     def validation_dataset(self):
         dataset_classname = self.verify_dataset_classname()
         ds = self.construct_torchvision_dataset(dataset_classname, train=True)
-        transform_fn = ImageAugmentationBuilder(spec=self.training_transform).run()
-        ds = TransformedMapStyleDataset(ds, transform=transform_fn)
+        image_augmentation = ImageAugmentationBuilder(
+            spec=self.training_transform
+        ).run()
+        example_transform = ExampleTransform(
+            image_augmentation=image_augmentation,
+            model_inputs=self._model_spec.get_model_inputs(),
+            model_targets=self._model_spec.get_model_targets(),
+        )
+        ds = TransformedMapStyleDataset(
+            ds, transform=example_transform.transform_example
+        )
         return ds
 
 

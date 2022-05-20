@@ -99,9 +99,11 @@ class TorchModel(LightningModule):
             self._prepare_encoder_models()
             self._create_heads()
 
-    def forward(self, inputs):
+    def forward(self, inputs, *args, **kwargs):
         if isinstance(self.config.model, nn.Module):
             return self.model.forward(inputs)
+        if isinstance(inputs, torch.Tensor):
+            inputs = [inputs]
         tensors_encoded = []
         tensors_not_encoded = []
         for input_layer, encoder_model in zip(inputs, self._encoder_models):
@@ -223,8 +225,6 @@ class TorchModel(LightningModule):
     def _get_optimizer_class(self):
         optimizer_name = self.config.optimizer_name
         if optimizer_name == "SGD_david":
-            # from .net.davidnet.torch_backend import SGD
-            # return SGD
             return optim.SGD
         if isinstance(optimizer_name, str) and hasattr(optim, optimizer_name):
             return getattr(optim, optimizer_name)

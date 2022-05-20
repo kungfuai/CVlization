@@ -34,7 +34,7 @@ def get_dataset_builder_registry() -> Dict[str, DatasetBuilder]:
         dataset_key = torchvision_dataset_classname + "_torchvision"
         if dataset_key in dataset_builder_registry:
             continue
-        dataset_builder_registry[dataset_key] = TorchvisionDatasetBuilder(
+        dataset_builder_registry[dataset_key.lower()] = TorchvisionDatasetBuilder(
             dataset_classname=torchvision_dataset_classname,
         )
     return dataset_builder_registry

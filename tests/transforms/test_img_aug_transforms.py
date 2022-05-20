@@ -6,7 +6,10 @@ import torchvision
 from torchvision.io import read_image
 from torchvision.utils import draw_bounding_boxes
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
-from cvlization.transforms.img_aug_transforms import ImgAugTransforms, TRANSFORM_MENU
+from cvlization.transforms.example_transform import ExampleTransform
+from cvlization.specs import ModelInput, ModelTarget, DataColumnType
+from cvlization.transforms.img_aug_transforms import ImgAugTransform, TRANSFORM_MENU
+from cvlization.specs.prediction_tasks import ObjectDetection
 
 config_path = "tests/transforms/example_imgaug_config.json"
 test_image_path = "tests/transforms/example_image.jpeg"
@@ -29,7 +32,7 @@ def bbox():
 
 
 def test_imgaug_transform_creation_from_config_path():
-    image_aug_object = ImgAugTransforms(cv_task=None, config_file=config_path)
+    image_aug_object = ImgAugTransform(cv_task=None, config_file_or_dict=config_path)
     assert image_aug_object is not None
     assert image_aug_object.config["cv_task"] == "detection"
     assert len(image_aug_object.aug) == 5
@@ -60,8 +63,8 @@ def test_draw_bbox():
 
 def test_img_aug_classification():
     img = read_image(test_image_path)
-    image_aug_object = ImgAugTransforms(
-        cv_task="classification", config_file=config_path
+    image_aug_object = ImgAugTransform(
+        cv_task="classification", config_file_or_dict=config_path
     )
     image_aug_object.aug.seed_(1)
     with patch.object(image_aug_object.aug, "to_deterministic") as mock_fn:
@@ -85,7 +88,7 @@ def test_img_aug_classification():
 
 
 def test_img_aug_objdet():
-    image_aug_object = ImgAugTransforms(cv_task=None, config_file=config_path)
+    image_aug_object = ImgAugTransform(cv_task=None, config_file_or_dict=config_path)
     assert image_aug_object.config["cv_task"] == "detection"
     img = read_image(test_image_path)
     target = {}
@@ -115,6 +118,48 @@ def test_img_aug_objdet():
     )
 
 
+def test_transform_example_with_imgaug_bbox():
+    task = ObjectDetection()
+    image_aug_object = ImgAugTransform(
+        cv_task=None,
+        config_file_or_dict=config_path,
+    )
+    example_transform = ExampleTransform(
+        image_augmentation=image_aug_object,
+        model_inputs=task.get_model_inputs(),
+        model_targets=task.get_model_targets(),
+    )
+    assert image_aug_object.config["cv_task"] == "detection"
+    img = read_image(test_image_path).numpy()
+    target = {}
+    target["boxes"] = bbox().numpy()
+    target["labels"] = np.ones(1)
+    image_aug_object.aug.seed_(1)
+    assert isinstance(img, np.ndarray)
+    input_arrays = [img]
+    target_arrays = [target["boxes"], target["labels"]]
+    example = (input_arrays, target_arrays)
+    aug_inputs, aug_targets = example_transform.transform_example(example)
+    assert isinstance(aug_inputs, list)
+    assert isinstance(aug_targets, list)
+    image_aug = aug_inputs[0]
+    assert image_aug.shape == (818, 645, 3)
+    aug_bbox = aug_targets[0]
+    image_aug = draw_bounding_boxes(
+        image=torch.tensor(image_aug.transpose(2, 0, 1)),
+        boxes=torch.tensor(aug_bbox.to_xyxy_array()),
+        width=3,
+    )
+    image_aug = image_aug.numpy().transpose(1, 2, 0)
+    expected_img = np.array(
+        Image.open(test_image_path.replace(".jpeg", "_objdet_aug.png"))
+    )
+    np.testing.assert_array_equal(
+        expected_img,
+        image_aug,
+    )
+
+
 def test_draw_semseg_map():
     img = read_image(test_image_path)
     img = np.moveaxis(img.numpy(), 0, -1)
@@ -133,13 +178,63 @@ def test_draw_semseg_map():
 
 
 def test_img_aug_segmentation():
-    image_aug_object = ImgAugTransforms(cv_task="semseg", config_file=config_path)
+    image_aug_object = ImgAugTransform(
+        cv_task="semseg", config_file_or_dict=config_path
+    )
     img = read_image(test_image_path)
     segmap = return_segmap(image=img)
     image_aug_object.aug.seed_(1)
     image_aug, segmap = image_aug_object(image=img, segmap=segmap)
     image_aug = np.moveaxis(image_aug, 0, -1)
     image_aug = segmap.draw_on_image(image=image_aug)[0]
+    # Uncomment the following line to produce expected test case.
+    # If a new image is generated, please visually inspect it.
+    # Image.fromarray(image_aug).save(test_image_path.replace(".jpeg", "_segmap_aug.png"))
+    expected_img = np.array(
+        Image.open(test_image_path.replace(".jpeg", "_segmap_aug.png"))
+    )
+    np.testing.assert_array_equal(
+        expected_img,
+        image_aug,
+    )
+
+
+def test_transform_example_with_imgaug_segmap():
+    image_aug_object = ImgAugTransform(
+        config_file_or_dict=config_path,
+    )
+    example_transform = ExampleTransform(
+        image_augmentation=image_aug_object,
+        model_inputs=[
+            ModelInput(
+                key="image", column_type=DataColumnType.IMAGE, raw_shape=(None, None, 3)
+            )
+        ],
+        model_targets=[
+            ModelTarget(
+                key="label",
+                column_type=DataColumnType.CATEGORICAL,
+                n_categories=10,
+                raw_shape=[1],
+            ),
+            ModelTarget(
+                key="segmaps",
+                column_type=DataColumnType.MASKS,
+                n_categories=10,
+                raw_shape=[None, None],
+            ),
+        ],
+    )
+    img = read_image(test_image_path).numpy()
+    segmap = return_segmap(image=img)
+    image_aug_object.aug.seed_(1)
+    input_arrays = [img]
+    target_arrays = [np.zeros(1), segmap]
+    example = (input_arrays, target_arrays)
+    aug_inputs, aug_targets = example_transform.transform_example(example)
+    image_aug = aug_inputs[0]
+    aug_segmap = aug_targets[1]
+    image_aug = aug_segmap.draw_on_image(image=image_aug)[0]
     # Uncomment the following line to produce expected test case.
     # If a new image is generated, please visually inspect it.
     # Image.fromarray(image_aug).save(test_image_path.replace(".jpeg", "_segmap_aug.png"))

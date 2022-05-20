@@ -12,10 +12,9 @@ class ImageAugmentationBuilder:
         if self.spec.provider == ImageAugmentationProvider.IMGAUG:
             from ..transforms.img_aug_transforms import ImgAugTransform
 
-            img_aug_object = ImgAugTransform(self.spec.config)
+            img_aug_object = ImgAugTransform(config_file_or_dict=self.spec.config)
             return img_aug_object
         elif self.spec.provider == ImageAugmentationProvider.TORCHVISION:
-            # TODO
             from ..torch.transforms.torchvision_transform import TorchvisionTransform
 
             torchvision_object = TorchvisionTransform(self.spec.config)

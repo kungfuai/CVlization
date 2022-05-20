@@ -1,7 +1,8 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 import enum
-from typing import Union
+from typing import Union, List
+from ...specs import ModelInput, ModelTarget
 
 
 class ImageAugmentationProvider(str, enum.Enum):

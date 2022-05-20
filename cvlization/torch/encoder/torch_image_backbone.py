@@ -1,7 +1,7 @@
 import logging
 from torch import nn
 import torch
-from ..net.davidnet.dawn_utils import net, Network
+from ..net.image_classification.davidnet.dawn_utils import net, Network
 from ..net.simple_conv import SimpleConv
 
 

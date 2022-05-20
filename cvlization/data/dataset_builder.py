@@ -40,6 +40,7 @@ class DatasetProvider(str, enum.Enum):
     TENSORFLOW_DATASETS = "tensorflow_datasets"
     HUGGINGFACE = "huggingface"
     KAGGLE = "kaggle"
+    CVLIZATION = "cvlization"
 
 
 # TODO: include an example of writing a custom dataset for
@@ -94,7 +95,7 @@ class TransformedMapStyleDataset:
         ), f"{base_dataset} is not a MapStyleDataset: {type(base_dataset)}"
 
     def __len__(self) -> int:
-        return len(self.dataset)
+        return len(self.base_dataset)
 
     def __getitem__(self, index: int):
         return self.transform(self.base_dataset[index])

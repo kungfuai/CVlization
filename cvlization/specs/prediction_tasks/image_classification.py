@@ -1,5 +1,5 @@
-
-from ..model_spec import ModelSpec
+from ..model_spec import ModelSpec, ModelInput, ModelTarget
+from ...specs import LossType, MetricType, DataColumnType
 
 
 def ImageClassification(
@@ -7,14 +7,13 @@ def ImageClassification(
     num_channels: int = 3,
     image_height: int = None,
     image_width: int = None,
-    channels_first: bool = False
+    channels_first: bool = False,
 ) -> ModelSpec:
-
-    def get_model_inputs(self):
-        if self.channels_first:
-            raw_shape = [self.num_channels, self.image_height, self.image_width]
+    def get_model_inputs():
+        if channels_first:
+            raw_shape = [num_channels, image_height, image_width]
         else:
-            raw_shape = [self.image_height, self.image_width, self.num_channels]
+            raw_shape = [image_height, image_width, num_channels]
         return [
             ModelInput(
                 key="image",
@@ -24,8 +23,8 @@ def ImageClassification(
             ),
         ]
 
-    def get_model_targets(self):
-        if self.n_classes == 2:
+    def get_model_targets():
+        if n_classes == 2:
             return [
                 ModelTarget(
                     key="label",
@@ -41,11 +40,11 @@ def ImageClassification(
                     key="label",
                     raw_shape=[1],
                     column_type=DataColumnType.CATEGORICAL,
-                    n_categories=self.n_classes,
+                    n_categories=n_classes,
                     loss=LossType.SPARSE_CATEGORICAL_CROSSENTROPY,
                     metrics=[MetricType.ACCURACY],
                     prefer_logits=True,
                 )
             ]
 
-    return ModelSpec(model_inputs=get_model_inputs(), model_targets=)
+    return ModelSpec(model_inputs=get_model_inputs(), model_targets=get_model_targets())

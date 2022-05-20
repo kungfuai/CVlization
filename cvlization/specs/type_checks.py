@@ -80,7 +80,9 @@ def _gather_sequence_groups(
     for target_array, model_target in zip(target_arrays, model_spec.model_targets):
         if model_target.sequence:
             group_key = str(model_target.sequence)
-            sequence_groups.setdefault(group_key, []).append(target_array)
+            sequence_groups.setdefault(group_key, []).append(
+                {"array": target_array, "model_target": model_target}
+            )
     return sequence_groups
 
 
@@ -88,22 +90,50 @@ def ensure_sequence_arrays_have_the_same_length(example: tuple, model_spec: Mode
     sequence_groups = _gather_sequence_groups(example, model_spec)
     for sequence_key, sequence_group in sequence_groups.items():
         # -2 is the sequence axis
-        sequence_lengths = [array.shape[-2] for array in sequence_group]
+        sequence_lengths = [item["array"].shape[-2] for item in sequence_group]
         for l in sequence_lengths:
             assert (
                 l == sequence_lengths[0]
-            ), f"Sequences do not have the same length. Shapes: {[array.shape for array in sequence_group]}"
+            ), f"Sequences do not have the same length. Shapes: {[(item['model_target'].key, item['array'].shape) for item in sequence_group]}"
+
+
+def _cast_list(x):
+    if isinstance(x, list):
+        return x
+    if isinstance(x, tuple):
+        return list(x)
+    if isinstance(x, np.ndarray):
+        return [x]
+    if hasattr(x, "numpy"):
+        return [x]
+    raise TypeError(
+        f"Expected list, tuple, numpy array, or tensor (numpy-able), but got {type(x)}"
+    )
 
 
 def ensure_example_shapes_and_types(example: tuple, model_spec: ModelSpec):
-    assert isinstance(example, tuple)
+    """Ensure a training example or mini-batch has correct shapes and types."""
+    if isinstance(example, list):
+        example = tuple(example)
+    assert isinstance(
+        example, tuple
+    ), f"Expected example to be a tuple, but got {type(example)}."
     # Either (inputs, targets) or (inputs, targets, sample_weights)
     assert len(example) == 2 or len(example) == 3
     if len(example) == 2:
         inputs, targets = example
+        inputs, targets = (
+            _cast_list(inputs),
+            _cast_list(targets),
+        )
         sample_weights = None
     else:
         inputs, targets, sample_weights = example
+        inputs, targets, sample_weights = (
+            _cast_list(inputs),
+            _cast_list(targets),
+            _cast_list(sample_weights),
+        )
     assert len(inputs) == len(
         model_spec.model_inputs
     ), f"Expected {len(model_spec.model_inputs)} inputs, but got {len(inputs)}"

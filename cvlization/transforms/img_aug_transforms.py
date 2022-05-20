@@ -1,9 +1,12 @@
 import json
-from typing import Union
+from typing import Union, Callable
+from PIL import Image
 import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 import numpy as np
+
+from .example_transform import ExampleTransform
 
 
 TRANSFORM_MENU = {
@@ -26,10 +29,10 @@ TRANSFORM_MENU = {
 }
 
 
-class ImgAugTransforms(object):
-    def __init__(self, cv_task=None, config_file=None):
-        if config_file:
-            self.aug = self.build_transform_from_config(config_file)
+class ImgAugTransform:
+    def __init__(self, cv_task=None, config_file_or_dict=None, **kwargs):
+        if config_file_or_dict:
+            self.aug = self.build_transform_from_config(config_file_or_dict)
         else:
             self.aug = iaa.Sequential(
                 [iaa.Sometimes(0.5, iaa.Fliplr()), iaa.Crop(percent=(0, 0.2))]
@@ -37,7 +40,12 @@ class ImgAugTransforms(object):
 
         if cv_task is None:
             cv_task = self.config.get("cv_task")
-        assert cv_task.lower() in ["classification", "detection", "semseg"]
+        assert isinstance(cv_task, str), f"cv_task must be a str, got {cv_task}"
+        assert cv_task.lower() in [
+            "classification",
+            "detection",
+            "semseg",
+        ], f"{cv_task} is not a valid cv task"
         self.cv_task = cv_task
 
     def transform_tuple(self, x):
@@ -105,6 +113,8 @@ class ImgAugTransforms(object):
         return image_aug, segmap
 
     def _prepare_for_aug(self, image):
+        if isinstance(image, np.ndarray):
+            return image
         return np.moveaxis(image.numpy(), 0, -1)
 
     def _unprepare_after_aug(self, image_aug):
@@ -112,17 +122,62 @@ class ImgAugTransforms(object):
         # torch.from_numpy to be applied outside of this function.
         return np.moveaxis(image_aug.copy(), -1, 0)
 
+    def transform_image_and_targets(
+        self,
+        image,
+        bboxes=None,
+        mask=None,
+        keypoints=None,
+    ) -> dict:
+        assert image is not None, "image is None"
+        image = np.moveaxis(image, 0, -1)
+        aug_det = self.aug.to_deterministic()
+        input_dict = dict(
+            image=image,
+            bounding_boxes=bboxes,
+            segmentation_maps=mask,
+            keypoints=keypoints,
+        )
+        input_dict = {k: v for k, v in input_dict.items() if v is not None}
+        if "bounding_boxes" in input_dict:
+            bboxes = [
+                BoundingBox(x[0], x[1], x[2], x[3])
+                for x in input_dict["bounding_boxes"]
+            ]
+            bboxes = BoundingBoxesOnImage(bboxes, image.shape)
+            input_dict["bounding_boxes"] = bboxes
+        if "segmentation_maps" in input_dict:
+            segmap = SegmentationMapsOnImage(
+                input_dict["segmentation_maps"], image.shape
+            )
+            input_dict["segmentation_maps"] = segmap
+
+        keys = [k for k in input_dict]
+        output: tuple = aug_det(**input_dict)
+        assert len(output) == len(
+            keys
+        ), f"output length {len(output)} != keys length {len(keys)}"
+        key_mapping = self.get_key_mapping()
+        return {key_mapping[k]: v for k, v in zip(keys, output)}
+
+    def get_key_mapping(self) -> dict:
+        return {
+            "image": "image",
+            "bounding_boxes": "bboxes",
+            "segmentation_maps": "mask",
+            "keypoints": "keypoints",
+        }
+
     def transform(self, image, target=None, segmap=None):
         """
         Expects a 3 dimensional image with dim_0 = channels
         """
-        assert target == None or type(target) == dict
+        assert target == None or type(target) in [dict, list, tuple]
 
         image = self._prepare_for_aug(image=image)
         aug_det = self.aug.to_deterministic()
 
         if self.cv_task.lower() == "classification":
-            # if isinstance(target, type(None)) and isinstance(segmap, type(None)):
             image_aug = self._classification_augment(image=image, aug_det=aug_det)
             return image_aug
         elif self.cv_task.lower() == "detection":

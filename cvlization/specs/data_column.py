@@ -1,9 +1,7 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Callable
 import enum
 from dataclasses import dataclass, field as dataclass_field
 import logging
-
-from ..transforms.feature_transform import FeatureTransform
 
 
 LOGGER = logging.getLogger(__name__)
@@ -18,8 +16,8 @@ class DataColumnType(str, enum.Enum):
     CATEGORICAL = "categorical"
     BOOLEAN = "boolean"
     # Structured outputs:
-    BOUNDING_BOXES = "bbox"
-    LABAL_MAP = "label_map"
+    BOUNDING_BOXES = "bboxes"
+    MASKS = "masks"
     KEYPOINTS = "keypoints"
 
 
@@ -49,12 +47,7 @@ class DataColumn:
     # For example, two sequence targets bbox_labels (of shape [n, 1]) and bboxes (of shape [n, 4])
     # are expected to have the same sequence length n.
     sequence: Optional[Union[bool, str]] = False
-
-    # TODO: transforms should track the shape
-    # transforms include fixed transforms and random augmentation
-    # TODO: should allow user to easily
-    #   implement data fetching, and transforms
-    transforms: List[FeatureTransform] = None
+    transforms: Optional[List[Callable]] = None
 
     def __post_init__(self):
         if self.raw_shape is None:

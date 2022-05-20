@@ -1,7 +1,5 @@
 import json
 from typing import Union
-import matplotlib.pyplot as plt
-import cv2
 import kornia as K
 
 # import kornia.feature as KF

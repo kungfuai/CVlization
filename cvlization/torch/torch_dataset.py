@@ -34,19 +34,19 @@ class GeneratorDataset(IterableDataset):
 
     def _iter(self):
         for k, batch in enumerate(self._iterable):
-            LOGGER.info(f" .. loading batch {k}")
+            LOGGER.debug(f" .. loading batch {k}")
             result_batch = []
             for i, part in enumerate(batch):
-                LOGGER.info(f" .. loading part {i}")
+                LOGGER.debug(f" .. loading part {i}")
 
                 if hasattr(part, "numpy"):
-                    LOGGER.info(f"{part.shape}")
+                    LOGGER.debug(f"{part.shape}")
                     result_batch.append(part.numpy())
                 elif isinstance(part, list) or isinstance(part, tuple):
                     result_part = []
                     for j, tensor in enumerate(part):
                         if hasattr(tensor, "numpy"):
-                            LOGGER.info(f"{i}.{j}: {tensor.shape}")
+                            LOGGER.debug(f"{i}.{j}: {tensor.shape}")
                             result_part.append(tensor.numpy())
                         elif isinstance(tensor, np.ndarray):
                             result_part.append(tensor)
@@ -64,7 +64,7 @@ class GeneratorDataset(IterableDataset):
                         f"Unsupported type in part {i} of a batch: {type(part)}"
                     )
 
-            LOGGER.info(f"result batch: {len(result_batch)}")
+            LOGGER.debug(f"result batch: {len(result_batch)}")
             if isinstance(batch, tuple):
                 result_batch = tuple(result_batch)
             yield result_batch

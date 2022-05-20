@@ -51,7 +51,7 @@ def test_experiment_can_get_config_dict():
     training_pipeline_config = TrainingPipelineConfig()
     e = Experiment(
         prediction_task=prediction_task,
-        dataset=MockDataset(),
+        dataset_builder=MockDataset(),
         training_pipeline=TrainingPipeline(
             config=training_pipeline_config, framework=MLFramework.TENSORFLOW
         ),
@@ -74,7 +74,7 @@ def test_experiment_can_run():
     )
     e = Experiment(
         prediction_task=prediction_task,
-        dataset=MockDataset(),
+        dataset_builder=MockDataset(),
         training_pipeline=training_pipeline,
     )
     with patch.object(training_pipeline, "run") as mock_run_func:
@@ -91,7 +91,7 @@ def test_experiment_can_log_params():
     )
     e = Experiment(
         prediction_task=prediction_task,
-        dataset=MockDataset(),
+        dataset_builder=MockDataset(),
         training_pipeline=training_pipeline,
         experiment_tracker=tracker,
     )

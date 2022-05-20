@@ -169,6 +169,8 @@ class TorchModelFactory:
 
         class CombinedLoss(nn.Module):
             def forward(self, outputs, labels):
+                if not isinstance(labels, list):
+                    labels = [labels]
                 loss_values = []
                 for loss_fn, weight, output, label, model_target in zip(
                     losses, weights, outputs, labels, model_targets
@@ -180,7 +182,9 @@ class TorchModelFactory:
                     LOGGER.debug(
                         f"output: {type(output)}, {output.shape}, {output.dtype}"
                     )
-                    LOGGER.debug(f"label: {type(label)}, {label.shape}, {label.dtype}")
+                    LOGGER.debug(
+                        f"label: {type(label)}, {label.shape}, {label.dtype}, {label}"
+                    )
                     LOGGER.debug(f"weight: {type(weight)}")
 
                     loss_values.append(loss_fn(output, label) * float(weight))

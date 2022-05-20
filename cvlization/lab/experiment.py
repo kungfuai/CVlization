@@ -2,6 +2,8 @@
 """
 from typing import Dict
 
+from cvlization.data.dataset_builder import DatasetBuilder
+
 
 # https://stackoverflow.com/questions/34199233/how-to-prevent-tensorflow-from-allocating-the-totality-of-a-gpu-memory
 try:
@@ -15,7 +17,7 @@ except:
 
 from .. import Trainer, RichDataFrame, ModelSpec
 from .model_specs import ImageClassification
-from .datasets import datasets, SplittedDataset
+from .datasets import datasets, SplittedDataset, get_dataset_builder_registry
 from .training_pipelines import training_pipelines
 from ..training_pipeline import TrainingPipeline
 from .experiment_tracker import ExperimentTracker
@@ -53,13 +55,13 @@ class Experiment:
     def __init__(
         self,
         prediction_task: ModelSpec,
-        dataset: SplittedDataset,
+        dataset_builder: DatasetBuilder,
         training_pipeline: TrainingPipeline,
         experiment_tracker: ExperimentTracker = None,
     ):
         # model_inputs = prediction_task.get_model_inputs()
         # model_targets = prediction_task.get_model_targets()
-        self.dataset = dataset
+        self.dataset_builder = dataset_builder
         self.prediction_task = prediction_task
         self.training_pipeline = training_pipeline
         self.experiment_tracker = experiment_tracker
@@ -70,14 +72,14 @@ class Experiment:
         if self.experiment_tracker is not None:
             self.experiment_tracker.setup().log_params(self.get_config_dict())
         self.training_pipeline.create_model(self.prediction_task).prepare_datasets(
-            self.dataset
+            self.dataset_builder
         ).create_trainer().run()
 
     def get_config_dict(self):
         # TODO: flatten the dict if needed.
         return {
             **self.prediction_task.__dict__,
-            **self.dataset.__dict__,
+            **self.dataset_builder.__dict__,
             **self.training_pipeline.config.__dict__,
             "framework": self.training_pipeline.framework.value,
         }
@@ -85,7 +87,8 @@ class Experiment:
     # The catalog of available components are attached to this class, for your convenience.
     @classmethod
     def datasets(cls) -> Dict[str, RichDataFrame]:
-        return datasets()
+        # return datasets()
+        return get_dataset_builder_registry()
 
     @classmethod
     def training_pipelines(cls) -> Dict[str, Trainer]:
@@ -119,7 +122,7 @@ if __name__ == "__main__":
             n_classes=10, num_channels=3, image_height=32, image_width=32
         ),
         # Dataset and transforms.
-        dataset=Experiment.datasets()[args.data.lower()],
+        dataset_builder=Experiment.datasets()[args.data.lower()],
         # Model, optimizer and hyperparams.
         training_pipeline=Experiment.training_pipelines()[args.model_recipe],
     ).run()
