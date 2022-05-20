@@ -59,51 +59,61 @@ class TrainingPipeline:
     # Debugging
     data_only: bool = False  # No training, only run through data.
 
-    # TODO: Consider folding TrainingPipeline into Trainer.
     # TODO: Consider using Experiment to create_model, create_trainer, and TrainingSession to handle hyperparameter sweep on Experiments.
     def __post_init__(self):
         # add more input args: model config, optimizer config, training_loop_config, validation_config, etc.
-        # TODO: rename ModelSpec to PredictionSpec ?
-        if self.data_only:
-            self.train_batch_size = 1
-        if isinstance(self.model, ModelSpec):
-            self.model_spec = self.model
-        else:
-            self.model_spec = None
-
-    def get_model_inputs(self):
-        if self.model_spec:
-            return self.model_spec.get_model_inputs()
-
-    def get_model_targets(self):
-        if self.model_spec:
-            return self.model_spec.get_model_targets()
+        self._adjust_batch_size_if_doing_data_only_debugging()
+        self._populate_model_spec_based_on_user_provided_model()
 
     def create_model(self):
-        if isinstance(self.model, ModelSpec):
-            LOGGER.info("Creating model from spec.")
-            LOGGER.info(str(self.model_spec))
-            self.model = self.create_model_from_spec(self.model_spec)
-            LOGGER.info(f"Model created: {self.model}")
+        if self.data_only:
+            # Do nothing.
             return self
-        elif callable(self.model):
-            if self.ml_framework == MLFramework.TENSORFLOW:
-                LOGGER.info(f"Using the tensorflow model passed in: {self.model}")
-                self.model = self._ensure_keras_model()
-            elif self.ml_framework == MLFramework.PYTORCH:
-                LOGGER.info(f"Using the torch model passed in: {self.model}")
-                self.model = self._ensure_torch_model()
+        if self._model_spec_is_provided():
+            self.model = self.create_model_from_spec()
+            LOGGER.info(f"Model created from spec: {type(self.model)}")
+            return self
+        elif self._model_is_provided():
+            self._check_the_user_providered_model()
+            LOGGER.info(f"Using the model provided by the user: {type(self.model)}")
             return self
         else:
             raise ValueError(
                 f"model must be a ModelSpec or a Callable object, but got {self.model}"
             )
 
-    def create_model_from_spec(self, model_spec: ModelSpec):
-        self._model_inputs = model_spec.get_model_inputs()
-        self._model_targets = model_spec.get_model_targets()
+    def _model_spec_is_provided(self):
+        return isinstance(self.model, ModelSpec)
+
+    def _model_is_provided(self):
+        return callable(self.model)
+
+    def _check_the_user_providered_model(self):
+        if self.ml_framework == MLFramework.TENSORFLOW:
+            LOGGER.info(f"Using the tensorflow model passed in: {self.model}")
+            self.model = self._ensure_keras_model()
+        elif self.ml_framework == MLFramework.PYTORCH:
+            LOGGER.info(f"Using the torch model passed in: {self.model}")
+            self.model = self._ensure_torch_model()
+        return self
+
+    def _adjust_batch_size_if_doing_data_only_debugging(self):
         if self.data_only:
-            return
+            self.train_batch_size = 1
+
+    def _populate_model_spec_based_on_user_provided_model(self):
+        if isinstance(self.model, ModelSpec):
+            self.model_spec = self.model
+        else:
+            self.model_spec = None
+
+    def create_model_from_spec(self):
+        """
+        Build the neural network model architecture and initialize the weights,
+        according to model_spec.
+        """
+        LOGGER.info("Creating model from spec.")
+        LOGGER.info(str(self.model_spec))
 
         if self.ml_framework == MLFramework.TENSORFLOW:
             self.model = self._create_keras_model_from_spec()
@@ -201,8 +211,10 @@ class TrainingPipeline:
 
     def run(self):
         if self.data_only:
+            LOGGER.info("Running in data-only mode for debugging.")
             self._iterate_through_data()
         else:
+            LOGGER.info(f"Running the trainer: {self.trainer}")
             self.trainer.run()
 
     def convert_tuple_iterator_to_tf_dataset(
@@ -666,3 +678,11 @@ class TrainingPipeline:
                 return tuple(zip(*batch))
 
             return collate_fn
+
+    def get_model_inputs(self):
+        if self.model_spec:
+            return self.model_spec.get_model_inputs()
+
+    def get_model_targets(self):
+        if self.model_spec:
+            return self.model_spec.get_model_targets()
