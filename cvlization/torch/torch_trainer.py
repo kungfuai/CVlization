@@ -15,7 +15,7 @@ from pytorch_lightning.callbacks import (
 
 from ..data.dataset_builder import MapStyleDataset, Iterable, Dataset
 from ..data.ml_dataset import MLDataset, ModelInput, ModelTarget
-from .torch_model import TorchModel
+from .torch_model import TorchLitModel
 from .torch_dataset import MapDataset, GeneratorDataset
 from .torch_model_factory import TorchModelFactory
 from ..base_trainer import BaseTrainer
@@ -28,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 class TorchTrainer(BaseTrainer):
 
     # ## Model (a trainable)
-    model: Union[TorchModel, nn.Module]
+    model: Union[TorchLitModel, nn.Module]
     model_inputs: List[ModelInput]
     model_targets: List[ModelTarget]
 
@@ -290,7 +290,7 @@ class TorchTrainer(BaseTrainer):
     def _get_current_epoch(self, checkpoint_dir: str) -> int:
         raise NotImplementedError("Read epoch info from checkpoint_dir")
 
-    def _get_or_create_loss_function(self, model: TorchModel):
+    def _get_or_create_loss_function(self, model: TorchLitModel):
         if hasattr(model, "loss_function"):
             return model.loss_function
         else:

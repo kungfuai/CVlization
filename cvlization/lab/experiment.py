@@ -70,7 +70,7 @@ class Experiment:
         # Assemble training pipeline and feed the data.
         if self.experiment_tracker is not None:
             self.experiment_tracker.setup().log_params(self.get_config_dict())
-        self.training_pipeline.create_model(self.prediction_task).prepare_datasets(
+        self.training_pipeline.create_model().prepare_datasets(
             self.dataset_builder
         ).create_trainer().run()
 

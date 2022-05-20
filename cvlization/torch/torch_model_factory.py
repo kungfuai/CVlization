@@ -5,7 +5,7 @@ from torch import nn
 import torchmetrics
 
 from ..torch.encoder.torch_mlp_encoder import TorchMlpEncoder
-from ..torch.torch_model import TorchModel
+from ..torch.torch_model import TorchLitModel
 from .encoder.torch_image_encoder import TorchImageEncoder
 from .aggregator.torch_aggregator import TorchAggregator
 from ..specs import LossType, DataColumnType, ModelInput, ModelTarget
@@ -66,8 +66,8 @@ class TorchModelFactory:
             raise ValueError("Image encoder not set")
         if self.aggregator is None:
             self.aggregator = TorchAggregator()
-        model = TorchModel(
-            TorchModel.TorchModelConfig(
+        model = TorchLitModel(
+            TorchLitModel.TorchModelConfig(
                 model_inputs=self.model_inputs,
                 model_targets=self.model_targets,
                 image_encoder=self.image_encoder,

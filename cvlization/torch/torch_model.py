@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 # eq=False prevents overiding the hash function of nn.Module.
 
 
-class TorchModel(LightningModule):
+class TorchLitModel(LightningModule):
     """Default multitask torch model."""
 
     @dataclass

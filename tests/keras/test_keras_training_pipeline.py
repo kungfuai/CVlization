@@ -25,6 +25,7 @@ def test_training_pipeline_can_use_customized_keras_model():
     # Model, optimizer and hyperparams.
     p = TrainingPipeline(
         ml_framework=MLFramework.TENSORFLOW,
+        model=model_spec,
         image_backbone=my_model,
         permute_image=False,
         train_batch_size=128,
@@ -33,7 +34,7 @@ def test_training_pipeline_can_use_customized_keras_model():
         val_steps_per_epoch=2,
         lr=0.001,
     )
-    p.create_model(model_spec)
+    p.create_model()
 
     # For debugging. --------------------------------
     debug = False

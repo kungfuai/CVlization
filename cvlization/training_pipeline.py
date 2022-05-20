@@ -23,18 +23,21 @@ class TrainingPipeline:
     ml_framework: MLFramework = MLFramework.PYTORCH
 
     # Model
-    model: Callable = None  # If specified, the following parameters will be ignored.
+    #   Can be a ModelSpec, nn.Module/LightningModule, keras.Model, a python function to transform tensors (for keras)
+    model: Union[
+        ModelSpec, Callable
+    ] = None  # If specified, the following parameters will be ignored.
     loss_function_included_in_model: bool = False
-    image_backbone: str = None  # e.g. "resnet50"
-    image_pool: str = "avg"  # "avg", "max", "flatten"
-    dense_layer_sizes: List[int] = field(default_factory=list)
-    input_shape: List[int] = field(
-        default_factory=lambda: [None, None, 3]
-    )  # e.g. [224, 224, 3]
-    dropout: float = 0
-    pretrained: bool = False
-    permute_image: bool = False
-    customize_conv1: bool = False
+    # image_backbone: str = None  # e.g. "resnet50"
+    # image_pool: str = "avg"  # "avg", "max", "flatten"
+    # dense_layer_sizes: List[int] = field(default_factory=list)
+    # input_shape: List[int] = field(
+    #     default_factory=lambda: [None, None, 3]
+    # )  # e.g. [224, 224, 3]
+    # dropout: float = 0
+    # pretrained: bool = False
+    # permute_image: bool = False
+    # customize_conv1: bool = False
 
     # Precision
     precision: str = "fp32"  # "fp16", "fp32"
@@ -73,36 +76,51 @@ class TrainingPipeline:
         # TODO: rename ModelSpec to PredictionSpec ?
         if self.data_only:
             self.train_batch_size = 1
-        self._model_inputs = self._model_targets = None
+        if isinstance(self.model, ModelSpec):
+            self.model_spec = self.model
+        else:
+            self.model_spec = None
 
     def get_model_inputs(self):
-        return self._model_inputs
+        if self.model_spec:
+            return self.model_spec.get_model_inputs()
 
     def get_model_targets(self):
-        return self._model_targets
+        if self.model_spec:
+            return self.model_spec.get_model_targets()
 
-    def create_model(self, model_spec: ModelSpec):
-        self._model_inputs = model_spec.get_model_inputs()
-        self._model_targets = model_spec.get_model_targets()
-        if self.model is not None:
+    def create_model(self):
+        if isinstance(self.model, ModelSpec):
+            LOGGER.info("Creating model from spec.")
+            LOGGER.info(str(self.model_spec))
+            self.model = self.create_model_from_spec(self.model_spec)
+            LOGGER.info(f"Model created: {self.model}")
+            return self
+        elif callable(self.model):
             if self.ml_framework == MLFramework.TENSORFLOW:
                 from tensorflow import keras
 
                 assert isinstance(self.model, keras.Model)
             elif self.ml_framework == MLFramework.PYTORCH:
-                from torch import nn
+                LOGGER.info(f"Using the torch model passed in: {self.model}")
+                self.model = self._ensure_torch_model()
+            return self
+        else:
+            raise ValueError(
+                f"model must be a ModelSpec or a Callable object, but got {self.model}"
+            )
 
-                assert isinstance(self.model, nn.Module)
-            self.model = self.model
-            return self
+    def create_model_from_spec(self, model_spec: ModelSpec):
+        self._model_inputs = model_spec.get_model_inputs()
+        self._model_targets = model_spec.get_model_targets()
         if self.data_only:
-            return self
+            return
 
         if self.ml_framework == MLFramework.TENSORFLOW:
             self.model = self._create_keras_model()
         elif self.ml_framework == MLFramework.PYTORCH:
-            self.model = self._create_torch_model()
-        return self
+            self.model = self._create_torch_model_from_spec()
+        return self.model
 
     def prepare_datasets(self, dataset_builder: Union[SplittedDataset, DatasetBuilder]):
         train_data = self.create_training_dataloader(dataset_builder)
@@ -182,6 +200,9 @@ class TrainingPipeline:
                 self.model, self.train_data, self.val_data
             )
         elif self.ml_framework == MLFramework.PYTORCH:
+            from pytorch_lightning.core import LightningModule
+
+            assert isinstance(self.model, LightningModule)
             self.trainer = self._create_torch_trainer(
                 self.model,
                 self.train_data,
@@ -565,17 +586,17 @@ class TrainingPipeline:
 
         return trainer
 
-    def _create_torch_model(self):
+    def _ensure_torch_model(self):
         from pytorch_lightning.core.lightning import LightningModule
         from torch import nn
-        from .torch.torch_model import TorchModel
+        from .torch.torch_model import TorchLitModel
 
         if self.model is not None and callable(self.model):
             if isinstance(self.model, LightningModule):
                 return self.model
             elif isinstance(self.model, nn.Module):
-                return TorchModel(
-                    config=TorchModel.TorchModelConfig(
+                return TorchLitModel(
+                    config=TorchLitModel.TorchModelConfig(
                         model_inputs=self.get_model_inputs(),
                         model_targets=self.get_model_targets(),
                         model=self.model,
@@ -594,22 +615,26 @@ class TrainingPipeline:
                 )
         elif self.model is not None:
             raise ValueError(f"model must be callable, got {type(self.model)}")
+        return self.model
 
+    def _create_torch_model_from_spec(self):
         from .torch.torch_model_factory import TorchModelFactory
         from .torch.encoder.torch_image_encoder import TorchImageEncoder
         from .torch.encoder.torch_image_backbone import create_image_backbone
+        from pytorch_lightning.core import LightningModule
+        from .torch.torch_model import TorchLitModel
 
         model_inputs = self.get_model_inputs()
         model_targets = self.get_model_targets()
         image_encoder = TorchImageEncoder(
             backbone=create_image_backbone(
-                self.image_backbone,
-                pretrained=self.pretrained,
-                in_chans=self.input_shape[-1],
+                self.model_spec.image_backbone,
+                pretrained=self.model_spec.pretrained,
+                in_chans=self.model_spec.input_shape[-1],
             ),
-            permute_image=self.permute_image,
-            customize_conv1=self.customize_conv1,
-            dense_layer_sizes=self.dense_layer_sizes,
+            permute_image=self.model_spec.permute_image,
+            customize_conv1=self.model_spec.customize_conv1,
+            dense_layer_sizes=self.model_spec.dense_layer_sizes,
         )
         ckpt = TorchModelFactory(
             model_inputs=model_inputs,
@@ -624,6 +649,23 @@ class TrainingPipeline:
             lr_scheduler_kwargs=self.lr_scheduler_kwargs,
         ).create_model()
         model = ckpt.model
+
+        if not isinstance(model, LightningModule):
+            model = TorchLitModel(
+                config=TorchLitModel.TorchModelConfig(
+                    model_inputs=self.get_model_inputs(),
+                    model_targets=self.get_model_targets(),
+                    model=self.model,
+                    optimizer_name=self.optimizer_name,
+                    optimizer_kwargs=self.optimizer_kwargs,
+                    n_gradients=self.n_gradients,
+                    lr=self.lr,
+                    epochs=self.epochs,
+                    lr_scheduler_name=self.lr_scheduler_name,
+                    lr_scheduler_kwargs=self.lr_scheduler_kwargs,
+                ),
+            )
+        assert isinstance(model, LightningModule)
         return model
 
     def create_collate_fn(self):

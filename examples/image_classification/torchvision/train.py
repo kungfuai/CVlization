@@ -8,9 +8,10 @@ from torchvision.models import detection
 from torchvision.models.detection.rpn import AnchorGenerator
 
 from cvlization.specs.ml_framework import MLFramework
+from cvlization.specs import ModelSpec
 from cvlization.torch.data.torchvision_dataset_builder import TorchvisionDatasetBuilder
 from cvlization.specs.prediction_tasks import ImageClassification
-from cvlization.training_pipeline import TrainingPipeline, TrainingPipelineConfig
+from cvlization.training_pipeline import TrainingPipeline
 from cvlization.torch.encoder.torch_image_backbone import create_image_backbone
 from cvlization.lab.experiment import Experiment
 
@@ -179,12 +180,23 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    prediction_task = ImageClassification(
+        n_classes=10,
+        num_channels=3,
+        image_height=32,
+        image_width=32,
+        channels_first=True,
+    )
+
     training_pipeline = TrainingPipeline(
         ml_framework=MLFramework.PYTORCH,
-        image_backbone="resnet18",
+        model=ModelSpec(
+            image_backbone="resnet18",
+            model_inputs=prediction_task.get_model_inputs(),
+            model_targets=prediction_task.get_model_targets(),
+        ),
         loss_function_included_in_model=False,
         collate_method=None,
-        pretrained=False,
         epochs=50,
         train_batch_size=8,
         val_batch_size=2,
@@ -193,7 +205,6 @@ if __name__ == "__main__":
         optimizer_name="Adam",
         lr=0.0001,
         n_gradients=1,
-        dropout=0,
         experiment_tracker=None,
     )
 
