@@ -180,23 +180,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     training_pipeline = TrainingPipeline(
-        framework=MLFramework.PYTORCH,
-        config=TrainingPipelineConfig(
-            image_backbone="resnet18",
-            loss_function_included_in_model=False,
-            collate_method=None,
-            pretrained=False,
-            epochs=50,
-            train_batch_size=8,
-            val_batch_size=2,
-            train_steps_per_epoch=500,
-            val_steps_per_epoch=200,
-            optimizer_name="Adam",
-            lr=0.0001,
-            n_gradients=1,
-            dropout=0,
-            experiment_tracker=None,
-        ),
+        ml_framework=MLFramework.PYTORCH,
+        image_backbone="resnet18",
+        loss_function_included_in_model=False,
+        collate_method=None,
+        pretrained=False,
+        epochs=50,
+        train_batch_size=8,
+        val_batch_size=2,
+        train_steps_per_epoch=500,
+        val_steps_per_epoch=200,
+        optimizer_name="Adam",
+        lr=0.0001,
+        n_gradients=1,
+        dropout=0,
+        experiment_tracker=None,
     )
 
     Experiment(

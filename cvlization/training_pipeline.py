@@ -1,11 +1,9 @@
 from dataclasses import dataclass, field
-from ipaddress import collapse_addresses
 import logging
 import numpy as np
 from typing import List, Callable, Union
 
-from cvlization.specs.data_column import DataColumnType
-
+from .specs.data_column import DataColumnType
 from .data.splitted_dataset import SplittedDataset
 from .data.dataset_builder import DatasetBuilder, DatasetProvider
 from .tensorflow.aggregator.keras_aggregator import KerasAggregator
@@ -17,7 +15,13 @@ LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class TrainingPipelineConfig:
+class TrainingPipeline:
+    """
+    A TrainingPipeline object manages the model and trainer.
+    """
+
+    ml_framework: MLFramework = MLFramework.PYTORCH
+
     # Model
     model: Callable = None  # If specified, the following parameters will be ignored.
     loss_function_included_in_model: bool = False
@@ -62,21 +66,13 @@ class TrainingPipelineConfig:
     # Debugging
     data_only: bool = False  # No training, only run through data.
 
-
-class TrainingPipeline:
     # TODO: Consider folding TrainingPipeline into Trainer.
     # TODO: Consider using Experiment to create_model, create_trainer, and TrainingSession to handle hyperparameter sweep on Experiments.
-    def __init__(
-        self,
-        framework: MLFramework,
-        config: TrainingPipelineConfig,
-    ):
+    def __post_init__(self):
         # add more input args: model config, optimizer config, training_loop_config, validation_config, etc.
         # TODO: rename ModelSpec to PredictionSpec ?
-        self.framework = framework
-        self.config = config
-        if self.config.data_only:
-            self.config.train_batch_size = 1
+        if self.data_only:
+            self.train_batch_size = 1
         self._model_inputs = self._model_targets = None
 
     def get_model_inputs(self):
@@ -88,23 +84,23 @@ class TrainingPipeline:
     def create_model(self, model_spec: ModelSpec):
         self._model_inputs = model_spec.get_model_inputs()
         self._model_targets = model_spec.get_model_targets()
-        if self.config.model is not None:
-            if self.framework == MLFramework.TENSORFLOW:
+        if self.model is not None:
+            if self.ml_framework == MLFramework.TENSORFLOW:
                 from tensorflow import keras
 
-                assert isinstance(self.config.model, keras.Model)
-            elif self.framework == MLFramework.PYTORCH:
+                assert isinstance(self.model, keras.Model)
+            elif self.ml_framework == MLFramework.PYTORCH:
                 from torch import nn
 
-                assert isinstance(self.config.model, nn.Module)
-            self.model = self.config.model
+                assert isinstance(self.model, nn.Module)
+            self.model = self.model
             return self
-        if self.config.data_only:
+        if self.data_only:
             return self
 
-        if self.framework == MLFramework.TENSORFLOW:
+        if self.ml_framework == MLFramework.TENSORFLOW:
             self.model = self._create_keras_model()
-        elif self.framework == MLFramework.PYTORCH:
+        elif self.ml_framework == MLFramework.PYTORCH:
             self.model = self._create_torch_model()
         return self
 
@@ -112,18 +108,18 @@ class TrainingPipeline:
         train_data = self.create_training_dataloader(dataset_builder)
         val_data = self.create_validation_dataloader(dataset_builder)
 
-        if self.framework == MLFramework.TENSORFLOW:
-            if self.config.train_steps_per_epoch is not None:
+        if self.ml_framework == MLFramework.TENSORFLOW:
+            if self.train_steps_per_epoch is not None:
                 if hasattr(train_data, "repeat"):
                     train_data = train_data.repeat()
-            if self.config.val_steps_per_epoch is not None:
+            if self.val_steps_per_epoch is not None:
                 if hasattr(val_data, "repeat"):
                     val_data = val_data.repeat()
-        elif self.framework == MLFramework.PYTORCH:
-            if self.config.train_steps_per_epoch is not None:
+        elif self.ml_framework == MLFramework.PYTORCH:
+            if self.train_steps_per_epoch is not None:
                 if hasattr(train_data, "repeat"):
                     train_data = train_data.repeat()
-            if self.config.val_steps_per_epoch is not None:
+            if self.val_steps_per_epoch is not None:
                 if hasattr(val_data, "repeat"):
                     val_data = val_data.repeat()
             # TODO: remove
@@ -147,7 +143,7 @@ class TrainingPipeline:
                 return list(x)
             return [x]
 
-        if self.config.collate_method != "zip":
+        if self.collate_method != "zip":
             batch = tuple([ensure_list(x) for x in batch])
 
             if isinstance(batch[0], list):
@@ -164,7 +160,7 @@ class TrainingPipeline:
                         len(array.shape) == 4
                     ), f"Image batch has shape {array.shape}. Training dataset is {self.train_data} with batch size {self.train_data.batch_size}"
                     if dataset_builder.dataset_provider == None:
-                        if self.framework == MLFramework.PYTORCH:
+                        if self.ml_framework == MLFramework.PYTORCH:
                             assert array.shape[1] in [
                                 1,
                                 3,
@@ -179,13 +175,13 @@ class TrainingPipeline:
         return self
 
     def create_trainer(self):
-        if self.config.data_only:
+        if self.data_only:
             return self
-        if self.framework == MLFramework.TENSORFLOW:
+        if self.ml_framework == MLFramework.TENSORFLOW:
             self.trainer = self._create_keras_trainer(
                 self.model, self.train_data, self.val_data
             )
-        elif self.framework == MLFramework.PYTORCH:
+        elif self.ml_framework == MLFramework.PYTORCH:
             self.trainer = self._create_torch_trainer(
                 self.model,
                 self.train_data,
@@ -194,7 +190,7 @@ class TrainingPipeline:
         return self
 
     def run(self):
-        if self.config.data_only:
+        if self.data_only:
             self._iterate_through_data()
         else:
             self.trainer.run()
@@ -206,13 +202,18 @@ class TrainingPipeline:
         import tensorflow as tf
 
         def gen():
+            # TODO: the output of gen() is not flexible.
             for example in tuple_iterator:
                 inputs = example[0]
                 if isinstance(inputs, list):
                     image = inputs[0]
+                else:
+                    image = inputs
                 targets = example[1]
                 if isinstance(targets, list):
                     label = targets[0]
+                else:
+                    label = targets
                 if hasattr(image, "numpy"):
                     image = image.numpy()
                 if hasattr(label, "numpy"):
@@ -254,7 +255,7 @@ class TrainingPipeline:
             ds = self.convert_tuple_iterator_to_tf_dataset(
                 training_dataset, source_image_is_channels_first=True
             )
-            return ds.batch(self.config.train_batch_size)
+            return ds.batch(self.train_batch_size)
         else:
             raise ValueError(
                 "Unknown dataset provider: {}".format(dataset_builder.dataset_provider)
@@ -263,10 +264,10 @@ class TrainingPipeline:
     def create_tf_validation_dataloader(self, dataset_builder: DatasetBuilder):
         ds = dataset_builder.validation_dataset()
         if dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
-            return ds.batch(self.config.val_batch_size)
+            return ds.batch(self.val_batch_size)
         elif dataset_builder.dataset_provider in [DatasetProvider.TORCHVISION, None]:
             return self.convert_tuple_iterator_to_tf_dataset(ds).batch(
-                self.config.val_batch_size
+                self.val_batch_size
             )
         else:
             raise ValueError(
@@ -297,10 +298,10 @@ class TrainingPipeline:
         the ML framework.
         """
         if (
-            self.framework == MLFramework.TENSORFLOW
+            self.ml_framework == MLFramework.TENSORFLOW
         ):  # This is the framework of the trainer, not the dataset.
             return self.create_tf_training_dataloader(dataset_builder)
-        elif self.framework == MLFramework.PYTORCH:
+        elif self.ml_framework == MLFramework.PYTORCH:
             import torch
 
             if dataset_builder.dataset_provider in [
@@ -310,9 +311,9 @@ class TrainingPipeline:
             ]:
                 dl = torch.utils.data.DataLoader(
                     dataset_builder.training_dataset(),
-                    batch_size=self.config.train_batch_size,
+                    batch_size=self.train_batch_size,
                     shuffle=True,
-                    num_workers=self.config.num_workers,
+                    num_workers=self.num_workers,
                     collate_fn=self.create_collate_fn(),
                 )
                 return dl
@@ -325,9 +326,9 @@ class TrainingPipeline:
                 )
                 return torch.utils.data.DataLoader(
                     training_dataset,
-                    batch_size=self.config.train_batch_size,
+                    batch_size=self.train_batch_size,
                     shuffle=True,
-                    num_workers=self.config.num_workers,
+                    num_workers=self.num_workers,
                     collate_fn=self.create_collate_fn(),
                 )
             else:
@@ -335,12 +336,12 @@ class TrainingPipeline:
                     f"Unknown dataset provider: {dataset_builder.dataset_provider}"
                 )
 
-        raise ValueError(f"Unknown ML framework: {self.framework}")
+        raise ValueError(f"Unknown ML framework: {self.ml_framework}")
 
     def create_validation_dataloader(self, dataset_builder: DatasetBuilder):
-        if self.framework == MLFramework.TENSORFLOW:
+        if self.ml_framework == MLFramework.TENSORFLOW:
             return self.create_tf_validation_dataloader(dataset_builder)
-        elif self.framework == MLFramework.PYTORCH:
+        elif self.ml_framework == MLFramework.PYTORCH:
             if dataset_builder.dataset_provider in [
                 DatasetProvider.TORCHVISION,
                 DatasetProvider.CVLIZATION,
@@ -350,9 +351,9 @@ class TrainingPipeline:
 
                 dl = torch.utils.data.DataLoader(
                     dataset_builder.validation_dataset(),
-                    batch_size=self.config.val_batch_size,
+                    batch_size=self.val_batch_size,
                     shuffle=False,
-                    num_workers=self.config.num_workers,
+                    num_workers=self.num_workers,
                     collate_fn=self.create_collate_fn(),
                 )
                 return dl
@@ -365,7 +366,7 @@ class TrainingPipeline:
                 )
                 return torch.utils.data.DataLoader(
                     dataset_builder.validation_dataset(),
-                    batch_size=self.config.val_batch_size,
+                    batch_size=self.val_batch_size,
                 )
             else:
                 raise ValueError(
@@ -413,14 +414,12 @@ class TrainingPipeline:
     def _create_keras_model(self):
         from tensorflow import keras
 
-        if self.config.model is not None and callable(self.config.model):
-            if not isinstance(self.config.model, keras.Model):
-                raise ValueError(
-                    f"model must be a keras.Model, got {type(self.config.model)}"
-                )
-            return self.config.model
-        elif self.config.model is not None:
-            raise ValueError(f"model must be callable, got {type(self.config.model)}")
+        if self.model is not None and callable(self.model):
+            if not isinstance(self.model, keras.Model):
+                raise ValueError(f"model must be a keras.Model, got {type(self.model)}")
+            return self.model
+        elif self.model is not None:
+            raise ValueError(f"model must be callable, got {type(self.model)}")
 
         from .tensorflow.keras_model_factory import KerasModelFactory
         from .tensorflow.encoder.keras_image_encoder import KerasImageEncoder
@@ -429,7 +428,7 @@ class TrainingPipeline:
         model_inputs = self.get_model_inputs()
         model_targets = self.get_model_targets()
         # TODO: use model_config that is passed in during init.
-        config = self.config
+        config = self
 
         if callable(config.image_backbone):
             backbone = config.image_backbone
@@ -443,7 +442,7 @@ class TrainingPipeline:
         image_encoder = (
             KerasImageEncoder(
                 backbone=backbone,
-                dropout=self.config.dropout,
+                dropout=self.dropout,
                 pool_name=config.image_pool,
                 dense_layer_sizes=config.dense_layer_sizes,
                 permute_image=config.permute_image,
@@ -472,17 +471,17 @@ class TrainingPipeline:
         from tensorflow.keras import callbacks
 
         callbacks = [
-            callbacks.ReduceLROnPlateau(patience=self.config.reduce_lr_patience),
-            callbacks.EarlyStopping(patience=self.config.early_stop_patience),
+            callbacks.ReduceLROnPlateau(patience=self.reduce_lr_patience),
+            callbacks.EarlyStopping(patience=self.early_stop_patience),
         ]
-        if self.config.experiment_tracker == "wandb":
+        if self.experiment_tracker == "wandb":
             import wandb
             from wandb.keras import WandbCallback
 
             # TODO: move this out to experiment level.
             wandb.init(project="cvlab")
-            if self.config.run_name:
-                wandb.run.name = self.config.run_name
+            if self.run_name:
+                wandb.run.name = self.run_name
             callbacks.append(
                 WandbCallback(
                     log_gradients=True,
@@ -493,7 +492,7 @@ class TrainingPipeline:
                 )
             )
 
-        config = self.config
+        config = self
         trainer = KerasTrainer(
             model=model,
             train_dataset=train_dataset,
@@ -508,7 +507,7 @@ class TrainingPipeline:
     def _create_torch_trainer(self, model, train_dataset, val_dataset):
         from .torch.net.image_classification.davidnet.dawn_utils import net, Network
 
-        if self.config.optimizer_name == "SGD_david":
+        if self.optimizer_name == "SGD_david":
             import torch
             from .torch.torch_trainer import DavidTrainer
 
@@ -534,7 +533,7 @@ class TrainingPipeline:
             # model = WrappedModel().to(device).half()
             trainer = DavidTrainer(
                 model=model,
-                epochs=self.config.epochs,
+                epochs=self.epochs,
                 train_dataset=train_dataset,
                 val_dataset=val_dataset,
             )
@@ -542,7 +541,7 @@ class TrainingPipeline:
 
         from .torch.torch_trainer import TorchTrainer
 
-        config = self.config
+        config = self
         trainer = TorchTrainer(
             model=model,
             model_inputs=self.get_model_inputs(),
@@ -563,7 +562,6 @@ class TrainingPipeline:
         )
         # TODO: experiment tracker should be an experiment-level object.
         trainer.log_params(config.__dict__)
-        trainer.log_params({"framework": self.framework.value})
 
         return trainer
 
@@ -572,30 +570,30 @@ class TrainingPipeline:
         from torch import nn
         from .torch.torch_model import TorchModel
 
-        if self.config.model is not None and callable(self.config.model):
-            if isinstance(self.config.model, LightningModule):
-                return self.config.model
-            elif isinstance(self.config.model, nn.Module):
+        if self.model is not None and callable(self.model):
+            if isinstance(self.model, LightningModule):
+                return self.model
+            elif isinstance(self.model, nn.Module):
                 return TorchModel(
                     config=TorchModel.TorchModelConfig(
                         model_inputs=self.get_model_inputs(),
                         model_targets=self.get_model_targets(),
-                        model=self.config.model,
-                        optimizer_name=self.config.optimizer_name,
-                        optimizer_kwargs=self.config.optimizer_kwargs,
-                        n_gradients=self.config.n_gradients,
-                        lr=self.config.lr,
-                        epochs=self.config.epochs,
-                        lr_scheduler_name=self.config.lr_scheduler_name,
-                        lr_scheduler_kwargs=self.config.lr_scheduler_kwargs,
+                        model=self.model,
+                        optimizer_name=self.optimizer_name,
+                        optimizer_kwargs=self.optimizer_kwargs,
+                        n_gradients=self.n_gradients,
+                        lr=self.lr,
+                        epochs=self.epochs,
+                        lr_scheduler_name=self.lr_scheduler_name,
+                        lr_scheduler_kwargs=self.lr_scheduler_kwargs,
                     ),
                 )
             else:
                 raise ValueError(
-                    f"model must be a LightningModule or torch.nn.Module, got {type(self.config.model)}"
+                    f"model must be a LightningModule or torch.nn.Module, got {type(self.model)}"
                 )
-        elif self.config.model is not None:
-            raise ValueError(f"model must be callable, got {type(self.config.model)}")
+        elif self.model is not None:
+            raise ValueError(f"model must be callable, got {type(self.model)}")
 
         from .torch.torch_model_factory import TorchModelFactory
         from .torch.encoder.torch_image_encoder import TorchImageEncoder
@@ -605,31 +603,31 @@ class TrainingPipeline:
         model_targets = self.get_model_targets()
         image_encoder = TorchImageEncoder(
             backbone=create_image_backbone(
-                self.config.image_backbone,
-                pretrained=self.config.pretrained,
-                in_chans=self.config.input_shape[-1],
+                self.image_backbone,
+                pretrained=self.pretrained,
+                in_chans=self.input_shape[-1],
             ),
-            permute_image=self.config.permute_image,
-            customize_conv1=self.config.customize_conv1,
-            dense_layer_sizes=self.config.dense_layer_sizes,
+            permute_image=self.permute_image,
+            customize_conv1=self.customize_conv1,
+            dense_layer_sizes=self.dense_layer_sizes,
         )
         ckpt = TorchModelFactory(
             model_inputs=model_inputs,
             model_targets=model_targets,
             image_encoder=image_encoder,
-            optimizer_name=self.config.optimizer_name,
-            optimizer_kwargs=self.config.optimizer_kwargs,
-            n_gradients=self.config.n_gradients,
-            lr=self.config.lr,
-            epochs=self.config.epochs,
-            lr_scheduler_name=self.config.lr_scheduler_name,
-            lr_scheduler_kwargs=self.config.lr_scheduler_kwargs,
+            optimizer_name=self.optimizer_name,
+            optimizer_kwargs=self.optimizer_kwargs,
+            n_gradients=self.n_gradients,
+            lr=self.lr,
+            epochs=self.epochs,
+            lr_scheduler_name=self.lr_scheduler_name,
+            lr_scheduler_kwargs=self.lr_scheduler_kwargs,
         ).create_model()
         model = ckpt.model
         return model
 
     def create_collate_fn(self):
-        if self.config.collate_method == "zip":
+        if self.collate_method == "zip":
 
             def collate_fn(batch):
                 return tuple(zip(*batch))

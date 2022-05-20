@@ -1,7 +1,7 @@
 from tensorflow import keras
-from cvlization.training_pipeline import TrainingPipeline, TrainingPipelineConfig
+from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.model_specs import ImageClassification
-from cvlization.lab.datasets import TorchVisionDataset, get_dataset_builder_registry
+from cvlization.lab.datasets import get_dataset_builder_registry
 from cvlization.specs import MLFramework
 
 
@@ -24,16 +24,14 @@ def test_training_pipeline_can_use_customized_keras_model():
     # dsb = TorchVisionDataset("mnist_torchvision")
     # Model, optimizer and hyperparams.
     p = TrainingPipeline(
-        framework=MLFramework.TENSORFLOW,
-        config=TrainingPipelineConfig(
-            image_backbone=my_model,
-            permute_image=False,
-            train_batch_size=128,
-            val_batch_size=16,
-            train_steps_per_epoch=10,
-            val_steps_per_epoch=2,
-            lr=0.001,
-        ),
+        ml_framework=MLFramework.TENSORFLOW,
+        image_backbone=my_model,
+        permute_image=False,
+        train_batch_size=128,
+        val_batch_size=16,
+        train_steps_per_epoch=10,
+        val_steps_per_epoch=2,
+        lr=0.001,
     )
     p.create_model(model_spec)
 

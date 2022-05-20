@@ -9,8 +9,8 @@ from torchvision.models.detection.rpn import AnchorGenerator
 
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
-from cvlization.specs.prediction_tasks import ImageClassification, ObjectDetection
-from cvlization.training_pipeline import TrainingPipeline, TrainingPipelineConfig
+from cvlization.specs.prediction_tasks import ObjectDetection
+from cvlization.training_pipeline import TrainingPipeline
 from cvlization.torch.encoder.torch_image_backbone import create_image_backbone
 from cvlization.lab.experiment import Experiment
 
@@ -180,37 +180,27 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     training_pipeline = TrainingPipeline(
-        framework=MLFramework.PYTORCH,
-        config=TrainingPipelineConfig(
-            # image_backbone="resnet18",
-            model=DetectorModel(
-                model=create_detection_model(num_classes=3, net="fcos_resnet50"),
-                lr=0.0001,
-            ),
-            loss_function_included_in_model=True,
-            collate_method="zip",
-            pretrained=False,
-            epochs=50,
-            train_batch_size=8,
-            val_batch_size=2,
-            train_steps_per_epoch=100,
-            optimizer_name="Adam",
+        ml_framework=MLFramework.PYTORCH,
+        model=DetectorModel(
+            model=create_detection_model(num_classes=3, net="fcos_resnet50"),
             lr=0.0001,
-            n_gradients=1,
-            dropout=0,
-            experiment_tracker=None,
         ),
+        loss_function_included_in_model=True,
+        collate_method="zip",
+        pretrained=False,
+        epochs=50,
+        train_batch_size=8,
+        val_batch_size=2,
+        train_steps_per_epoch=100,
+        optimizer_name="Adam",
+        lr=0.0001,
+        n_gradients=1,
+        dropout=0,
+        experiment_tracker=None,
     )
 
     Experiment(
         # The interface (inputs and outputs) of the model.
-        # prediction_task=ImageClassification(
-        #     n_classes=10,
-        #     num_channels=3,
-        #     image_height=32,
-        #     image_width=32,
-        #     channels_first=True,
-        # ),
         prediction_task=ObjectDetection(n_categories=3),
         # Dataset and transforms.
         # dataset=Experiment.datasets()[args.data.lower()],

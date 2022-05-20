@@ -5,7 +5,6 @@ from cvlization.lab.experiment import Experiment, SplittedDataset
 from cvlization.lab.model_specs import ImageClassification
 from cvlization.training_pipeline import (
     TrainingPipeline,
-    TrainingPipelineConfig,
     MLFramework,
 )
 
@@ -48,29 +47,25 @@ class MockExperimentTracker:
 
 def test_experiment_can_get_config_dict():
     prediction_task = ImageClassification()
-    training_pipeline_config = TrainingPipelineConfig()
+    training_pipeline = TrainingPipeline(ml_framework=MLFramework.TENSORFLOW)
     e = Experiment(
         prediction_task=prediction_task,
         dataset_builder=MockDataset(),
-        training_pipeline=TrainingPipeline(
-            config=training_pipeline_config, framework=MLFramework.TENSORFLOW
-        ),
+        training_pipeline=training_pipeline,
     )
     d = e.get_config_dict()
     assert d == {
         "field1": "",
         **prediction_task.__dict__,
-        **training_pipeline_config.__dict__,
-        "framework": MLFramework.TENSORFLOW.value,
+        **training_pipeline.__dict__,
     }
 
 
 def test_experiment_can_run():
     # TODO: run an mnist exp.
     prediction_task = ImageClassification()
-    training_pipeline_config = TrainingPipelineConfig(image_backbone="simple")
     training_pipeline = TrainingPipeline(
-        config=training_pipeline_config, framework=MLFramework.TENSORFLOW
+        image_backbone="simple", ml_framework=MLFramework.TENSORFLOW
     )
     e = Experiment(
         prediction_task=prediction_task,
@@ -85,10 +80,7 @@ def test_experiment_can_run():
 def test_experiment_can_log_params():
     tracker = MockExperimentTracker()
     prediction_task = ImageClassification()
-    training_pipeline_config = TrainingPipelineConfig()
-    training_pipeline = TrainingPipeline(
-        config=training_pipeline_config, framework=MLFramework.TENSORFLOW
-    )
+    training_pipeline = TrainingPipeline(ml_framework=MLFramework.TENSORFLOW)
     e = Experiment(
         prediction_task=prediction_task,
         dataset_builder=MockDataset(),

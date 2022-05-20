@@ -4,7 +4,6 @@ from typing import Dict
 
 from cvlization.data.dataset_builder import DatasetBuilder
 
-
 # https://stackoverflow.com/questions/34199233/how-to-prevent-tensorflow-from-allocating-the-totality-of-a-gpu-memory
 try:
     import tensorflow as tf
@@ -77,12 +76,13 @@ class Experiment:
 
     def get_config_dict(self):
         # TODO: flatten the dict if needed.
-        return {
+        d = {
             **self.prediction_task.__dict__,
             **self.dataset_builder.__dict__,
-            **self.training_pipeline.config.__dict__,
-            "framework": self.training_pipeline.framework.value,
+            **self.training_pipeline.__dict__,
         }
+        d = {k: v for k, v in d.items() if not callable(v)}
+        return d
 
     # The catalog of available components are attached to this class, for your convenience.
     @classmethod
