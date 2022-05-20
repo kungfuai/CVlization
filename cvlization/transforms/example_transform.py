@@ -1,6 +1,10 @@
 import numpy as np
-from PIL import Image
-from typing import Callable, List, Union, Protocol, runtime_checkable
+from typing import Callable, List, Union
+
+try:
+    from typing import Protocol, runtime_checkable
+except ImportError:
+    from typing_extensions import Protocol, runtime_checkable
 
 from ..specs.data_column import DataColumn, DataColumnType
 from ..specs import ModelInput, ModelTarget

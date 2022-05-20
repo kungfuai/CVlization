@@ -1,6 +1,11 @@
 from collections.abc import Iterable
 import enum
-from typing import Union, List, runtime_checkable, Callable
+from typing import Union, List, Callable
+
+try:
+    from typing import runtime_checkable
+except ImportError:
+    from typing_extensions import runtime_checkable
 from ..utils import Protocol
 
 
