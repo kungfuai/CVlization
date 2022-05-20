@@ -65,63 +65,20 @@ class TrainingPipeline:
         self._adjust_batch_size_if_doing_data_only_debugging()
         self._populate_model_spec_based_on_user_provided_model()
 
-    def create_model(self):
+    def run(self):
+        """Run the training pipeline.
+
+        Call this method after create_dataloaders(), create_model(), create_trainer() have been called."""
         if self.data_only:
-            # Do nothing.
-            return self
-        if self._model_spec_is_provided():
-            self.model = self.create_model_from_spec()
-            LOGGER.info(f"Model created from spec: {type(self.model)}")
-            return self
-        elif self._model_is_provided():
-            self._check_the_user_providered_model()
-            LOGGER.info(f"Using the model provided by the user: {type(self.model)}")
-            return self
+            LOGGER.info("Running in data-only mode for debugging.")
+            self._iterate_through_data()
         else:
-            raise ValueError(
-                f"model must be a ModelSpec or a Callable object, but got {self.model}"
-            )
+            LOGGER.info(f"Running the trainer: {self.trainer}")
+            self.trainer.run()
 
-    def _model_spec_is_provided(self):
-        return isinstance(self.model, ModelSpec)
-
-    def _model_is_provided(self):
-        return callable(self.model)
-
-    def _check_the_user_providered_model(self):
-        if self.ml_framework == MLFramework.TENSORFLOW:
-            LOGGER.info(f"Using the tensorflow model passed in: {self.model}")
-            self.model = self._ensure_keras_model()
-        elif self.ml_framework == MLFramework.PYTORCH:
-            LOGGER.info(f"Using the torch model passed in: {self.model}")
-            self.model = self._ensure_torch_model()
-        return self
-
-    def _adjust_batch_size_if_doing_data_only_debugging(self):
-        if self.data_only:
-            self.train_batch_size = 1
-
-    def _populate_model_spec_based_on_user_provided_model(self):
-        if isinstance(self.model, ModelSpec):
-            self.model_spec = self.model
-        else:
-            self.model_spec = None
-
-    def create_model_from_spec(self):
-        """
-        Build the neural network model architecture and initialize the weights,
-        according to model_spec.
-        """
-        LOGGER.info("Creating model from spec.")
-        LOGGER.info(str(self.model_spec))
-
-        if self.ml_framework == MLFramework.TENSORFLOW:
-            self.model = self._create_keras_model_from_spec()
-        elif self.ml_framework == MLFramework.PYTORCH:
-            self.model = self._create_torch_model_from_spec()
-        return self.model
-
-    def prepare_datasets(self, dataset_builder: Union[SplittedDataset, DatasetBuilder]):
+    def create_dataloaders(
+        self, dataset_builder: Union[SplittedDataset, DatasetBuilder]
+    ):
         train_data = self.create_training_dataloader(dataset_builder)
         val_data = self.create_validation_dataloader(dataset_builder)
 
@@ -209,13 +166,61 @@ class TrainingPipeline:
             )
         return self
 
-    def run(self):
+    def create_model(self):
         if self.data_only:
-            LOGGER.info("Running in data-only mode for debugging.")
-            self._iterate_through_data()
+            # Do nothing.
+            return self
+        if self._model_spec_is_provided():
+            self.model = self.create_model_from_spec()
+            LOGGER.info(f"Model created from spec: {type(self.model)}")
+            return self
+        elif self._model_is_provided():
+            self._check_the_user_providered_model()
+            LOGGER.info(f"Using the model provided by the user: {type(self.model)}")
+            return self
         else:
-            LOGGER.info(f"Running the trainer: {self.trainer}")
-            self.trainer.run()
+            raise ValueError(
+                f"model must be a ModelSpec or a Callable object, but got {self.model}"
+            )
+
+    def _model_spec_is_provided(self):
+        return isinstance(self.model, ModelSpec)
+
+    def _model_is_provided(self):
+        return callable(self.model)
+
+    def _check_the_user_providered_model(self):
+        if self.ml_framework == MLFramework.TENSORFLOW:
+            LOGGER.info(f"Using the tensorflow model passed in: {self.model}")
+            self.model = self._ensure_keras_model()
+        elif self.ml_framework == MLFramework.PYTORCH:
+            LOGGER.info(f"Using the torch model passed in: {self.model}")
+            self.model = self._ensure_torch_model()
+        return self
+
+    def _adjust_batch_size_if_doing_data_only_debugging(self):
+        if self.data_only:
+            self.train_batch_size = 1
+
+    def _populate_model_spec_based_on_user_provided_model(self):
+        if isinstance(self.model, ModelSpec):
+            self.model_spec = self.model
+        else:
+            self.model_spec = None
+
+    def create_model_from_spec(self):
+        """
+        Build the neural network model architecture and initialize the weights,
+        according to model_spec.
+        """
+        LOGGER.info("Creating model from spec.")
+        LOGGER.info(str(self.model_spec))
+
+        if self.ml_framework == MLFramework.TENSORFLOW:
+            self.model = self._create_keras_model_from_spec()
+        elif self.ml_framework == MLFramework.PYTORCH:
+            self.model = self._create_torch_model_from_spec()
+        return self.model
 
     def convert_tuple_iterator_to_tf_dataset(
         self, tuple_iterator, source_image_is_channels_first=True

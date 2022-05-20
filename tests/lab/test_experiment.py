@@ -90,7 +90,7 @@ def test_experiment_can_log_params():
     )
     with patch.object(training_pipeline, "create_model") as mock_fn:
         mock_fn.return_value = training_pipeline
-        with patch.object(training_pipeline, "prepare_datasets") as mock_feed_data:
+        with patch.object(training_pipeline, "create_dataloaders") as mock_feed_data:
             mock_feed_data.return_value = training_pipeline
             with patch.object(
                 training_pipeline, "create_trainer"

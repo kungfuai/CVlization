@@ -1,8 +1,8 @@
 ## Backlog
-- `raw_shape` for image columns: be more explicit whether it is before or after transform. In `type_checks.py`, make sure the expected shape is correct.
-- `bin/train.sh -m noop -d vocsegmentation_torchvision` does not work.
+- [readability] `raw_shape` for image columns: be more explicit whether it is before or after transform. In `type_checks.py`, make sure the expected shape is correct.
+- [readability] Consider separating `ModelSpec` into `ModelSignature` (inputs, outputs) from `ModelArchitectureSpec` (model internals).
+- [bug] `bin/train.sh -m noop -d vocsegmentation_torchvision` does not work.
 - Rename cvlization.keras to tensorflow.
-- [refactor] `TrainingPipeline` has an unfamiliar interface `assemble`, `feed_data`. Consider conforming to the convention of a heavy keras style model with `fit(dataset)`, or `create_model()`, `prepare_datasets()`, `train()`.
 - [minor] `torchvision.datasets.VOCDetection` extracts the data file repeatedly. This step should be checkpointed.
 - [test] Add test on data loader where individual training examples are missing or corrupted (simulating a flaky remote data store).
 - (need discussion) Possibly rewrite model components (e.g. KerasImageEncoder) as framework specific models (keras.Layer, nn.Module).

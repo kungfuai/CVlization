@@ -53,4 +53,4 @@ def test_training_pipeline_can_use_customized_keras_model():
         print(gradients)
     # End debugging. --------------------------------
 
-    p.prepare_datasets(dsb).create_trainer().run()
+    p.create_dataloaders(dsb).create_trainer().run()

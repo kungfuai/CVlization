@@ -1,7 +1,4 @@
 import logging
-import torch
-from pytorch_lightning.core import LightningModule
-from torchmetrics.detection.map import MeanAveragePrecision
 
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder

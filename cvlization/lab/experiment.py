@@ -48,7 +48,6 @@ class Experiment:
             `inputs` from Dataset should match model inputs.
             `targets` from Dataset should match model outputs, metrics and loss functions.
 
-    # TODO: rename ModelSpec to PredictionTask
     """
 
     def __init__(
@@ -58,19 +57,16 @@ class Experiment:
         training_pipeline: TrainingPipeline,
         experiment_tracker: ExperimentTracker = None,
     ):
-        # model_inputs = prediction_task.get_model_inputs()
-        # model_targets = prediction_task.get_model_targets()
         self.dataset_builder = dataset_builder
         self.prediction_task = prediction_task
         self.training_pipeline = training_pipeline
         self.experiment_tracker = experiment_tracker
-        # TODO: model_inputs and model_targets need to be passed to training_pipeline.
 
     def run(self):
         # Assemble training pipeline and feed the data.
         if self.experiment_tracker is not None:
             self.experiment_tracker.setup().log_params(self.get_config_dict())
-        self.training_pipeline.create_model().prepare_datasets(
+        self.training_pipeline.create_model().create_dataloaders(
             self.dataset_builder
         ).create_trainer().run()
 
