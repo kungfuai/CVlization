@@ -98,8 +98,11 @@ class KittiTinyDataset:
 
     def __len__(self):
         if self.annotations is None:
+            print("Loading annotations...")
             self.annotations = self.load_annotations()
 
+        if self.annotations is None:
+            raise ValueError("Annotations not loaded correctly.")
         return len(self.annotations)
 
     def download(self):
@@ -123,7 +126,7 @@ class KittiTinyDataset:
 
     def load_annotations(self):
         if not self._is_extracted():
-            return self.extract()
+            self.extract()
         cat2label = {k: i for i, k in enumerate(self.CLASSES)}
         annotations = []
         with open(self.ann_file) as f:
