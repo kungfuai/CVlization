@@ -1,17 +1,17 @@
 from typing import Dict
 
 from ..training_pipeline import TrainingPipeline
-from ..specs import MLFramework
+from ..specs import MLFramework, ModelSpec
 
 
 def training_pipelines() -> Dict[str, TrainingPipeline]:
     return {
         "noop": TrainingPipeline(
-            ml_ml_framework=MLFramework.PYTORCH,
+            ml_framework=MLFramework.PYTORCH,
             data_only=True,
         ),
         "noop_torch": TrainingPipeline(
-            ml_ml_framework=MLFramework.PYTORCH,
+            ml_framework=MLFramework.PYTORCH,
             data_only=True,
         ),
         "noop_tf": TrainingPipeline(
@@ -20,9 +20,12 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         ),
         "resnet50_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            image_backbone="ResNet50",
-            image_pool="flatten",
-            pretrained=True,
+            model=ModelSpec(
+                image_backbone="ResNet50",
+                image_pool="flatten",
+                pretrained=True,
+                dropout=0,
+            ),
             epochs=50,
             train_batch_size=256,
             val_batch_size=256,
@@ -30,14 +33,13 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
             optimizer_name="Adam",
             lr=0.0001,
             n_gradients=1,
-            dropout=0,
             # TODO: compare with https://keras.io/zh/examples/cifar10_resnet/
         ),
         "mobilenet_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            image_backbone="MobileNetV2",
-            image_pool="flatten",
-            pretrained=True,
+            model=ModelSpec(
+                image_backbone="MobileNetV2", image_pool="flatten", pretrained=True
+            ),
             epochs=50,
             train_batch_size=256,
             val_batch_size=256,
@@ -48,9 +50,12 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         ),
         "resnet18_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            image_backbone="resnet18v2",
-            input_shape=[32, 32, 3],
-            image_pool="flatten",
+            model=ModelSpec(
+                image_backbone="resnet18v2",
+                input_shape=[32, 32, 3],
+                image_pool="flatten",
+                dropout=0,
+            ),
             epochs=100,
             train_batch_size=256,
             val_batch_size=256,
@@ -58,14 +63,16 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
             optimizer_name="Adam",
             lr=0.01,
             n_gradients=1,
-            dropout=0,
             experiment_tracker=None,
         ),
         "resnet18_smallimage_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            image_backbone="resnet18v2_smallimage",
-            input_shape=[32, 32, 3],
-            image_pool="flatten",
+            model=ModelSpec(
+                image_backbone="resnet18v2_smallimage",
+                input_shape=[32, 32, 3],
+                image_pool="flatten",
+                dropout=0,
+            ),
             epochs=100,
             train_batch_size=256,
             val_batch_size=256,
@@ -73,13 +80,15 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
             optimizer_name="Adam",
             lr=0.01,
             n_gradients=1,
-            dropout=0,
             experiment_tracker=None,
         ),
         "simple_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            image_backbone="simple",
-            image_pool="flatten",
+            model=ModelSpec(
+                image_backbone="simple",
+                image_pool="flatten",
+                dropout=0,
+            ),
             epochs=100,
             train_batch_size=256,
             val_batch_size=256,
@@ -88,17 +97,19 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
             # optimizer_name="AdamW",
             lr=0.01,
             n_gradients=1,
-            dropout=0,
             experiment_tracker=None,
             # TODO: https://www.tensorflow.org/addons/tutorials/optimizers_cyclicallearningrate
         ),
         "davidnet_torch": TrainingPipeline(
             ml_framework=MLFramework.PYTORCH,
             # https://myrtle.ai/learn/how-to-train-your-resnet/
-            image_backbone="davidnet",
-            image_pool="flatten",
-            dense_layer_sizes=[10],
-            pretrained=False,
+            model=ModelSpec(
+                image_backbone="davidnet",
+                image_pool="flatten",
+                dense_layer_sizes=[10],
+                pretrained=False,
+                permute_image=False,
+            ),
             epochs=25,
             train_batch_size=512,
             val_batch_size=512,
@@ -121,16 +132,19 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
                 "steps_per_epoch": 100,
             },
             n_gradients=1,
-            permute_image=False,
             # customize_conv1=True,
             experiment_tracker=None,
             precision="fp16",
         ),
         "resnet18_torch": TrainingPipeline(
             ml_framework=MLFramework.PYTORCH,
-            image_backbone="resnet18",
-            image_pool="flatten",
-            pretrained=True,
+            model=ModelSpec(
+                image_backbone="resnet18",
+                image_pool="flatten",
+                pretrained=True,
+                permute_image=False,
+                customize_conv1=True,
+            ),
             epochs=20,
             train_batch_size=512,
             val_batch_size=256,
@@ -151,8 +165,6 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
                 "steps_per_epoch": 100,
             },
             n_gradients=1,
-            permute_image=False,
-            customize_conv1=True,
             # num_workers=0,
             experiment_tracker=None,
             precision="fp16",
@@ -160,9 +172,13 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         "resnet18_torch_gc": TrainingPipeline(
             # with gradient accumulation (gc)
             ml_framework=MLFramework.PYTORCH,
-            image_backbone="resnet18",
-            image_pool="flatten",
-            pretrained=False,
+            model=ModelSpec(
+                image_backbone="resnet18",
+                image_pool="flatten",
+                pretrained=False,
+                permute_image=False,
+                customize_conv1=True,
+            ),
             epochs=20,
             train_batch_size=int(256 / 8),
             val_batch_size=256,
@@ -179,8 +195,6 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
                 "steps_per_epoch": 200 * 8,
             },
             n_gradients=8,
-            permute_image=False,
-            customize_conv1=True,
             # num_workers=0,
             experiment_tracker=None,
         ),
