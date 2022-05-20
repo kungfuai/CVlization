@@ -2,7 +2,7 @@ from tensorflow import keras
 from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.model_specs import ImageClassification
 from cvlization.lab.datasets import get_dataset_builder_registry
-from cvlization.specs import MLFramework
+from cvlization.specs import MLFramework, ModelSpec
 
 
 def test_training_pipeline_can_use_customized_keras_model():
@@ -10,7 +10,7 @@ def test_training_pipeline_can_use_customized_keras_model():
         x = keras.layers.Conv2D(filters=32, kernel_size=3, activation="relu")(x)
         return x
 
-    model_spec = ImageClassification(
+    prediction_task = ImageClassification(
         n_classes=10,
         num_channels=1,
         image_height=28,
@@ -18,16 +18,17 @@ def test_training_pipeline_can_use_customized_keras_model():
         channels_first=False,
     )
     # Dataset and transforms.
-    # TODO: switch to dataset builders.
     dataset_builders = get_dataset_builder_registry()
     dsb = dataset_builders["mnist_torchvision"]
-    # dsb = TorchVisionDataset("mnist_torchvision")
     # Model, optimizer and hyperparams.
     p = TrainingPipeline(
         ml_framework=MLFramework.TENSORFLOW,
-        model=model_spec,
-        image_backbone=my_model,
-        permute_image=False,
+        model=ModelSpec(
+            image_backbone=my_model,
+            permute_image=False,
+            model_inputs=prediction_task.get_model_inputs(),
+            model_targets=prediction_task.get_model_targets(),
+        ),
         train_batch_size=128,
         val_batch_size=16,
         train_steps_per_epoch=10,

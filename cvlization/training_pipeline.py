@@ -28,16 +28,6 @@ class TrainingPipeline:
         ModelSpec, Callable
     ] = None  # If specified, the following parameters will be ignored.
     loss_function_included_in_model: bool = False
-    # image_backbone: str = None  # e.g. "resnet50"
-    # image_pool: str = "avg"  # "avg", "max", "flatten"
-    # dense_layer_sizes: List[int] = field(default_factory=list)
-    # input_shape: List[int] = field(
-    #     default_factory=lambda: [None, None, 3]
-    # )  # e.g. [224, 224, 3]
-    # dropout: float = 0
-    # pretrained: bool = False
-    # permute_image: bool = False
-    # customize_conv1: bool = False
 
     # Precision
     precision: str = "fp32"  # "fp16", "fp32"
@@ -98,9 +88,8 @@ class TrainingPipeline:
             return self
         elif callable(self.model):
             if self.ml_framework == MLFramework.TENSORFLOW:
-                from tensorflow import keras
-
-                assert isinstance(self.model, keras.Model)
+                LOGGER.info(f"Using the tensorflow model passed in: {self.model}")
+                self.model = self._ensure_keras_model()
             elif self.ml_framework == MLFramework.PYTORCH:
                 LOGGER.info(f"Using the torch model passed in: {self.model}")
                 self.model = self._ensure_torch_model()
@@ -117,7 +106,7 @@ class TrainingPipeline:
             return
 
         if self.ml_framework == MLFramework.TENSORFLOW:
-            self.model = self._create_keras_model()
+            self.model = self._create_keras_model_from_spec()
         elif self.ml_framework == MLFramework.PYTORCH:
             self.model = self._create_torch_model_from_spec()
         return self.model
@@ -432,7 +421,7 @@ class TrainingPipeline:
                         LOGGER.info(f"  example {i} part {j}:")
                         display_dict_or_list_of_tensors(item)
 
-    def _create_keras_model(self):
+    def _ensure_keras_model(self):
         from tensorflow import keras
 
         if self.model is not None and callable(self.model):
@@ -441,46 +430,48 @@ class TrainingPipeline:
             return self.model
         elif self.model is not None:
             raise ValueError(f"model must be callable, got {type(self.model)}")
+        return self.model
+
+    def _create_keras_model_from_spec(self):
 
         from .tensorflow.keras_model_factory import KerasModelFactory
         from .tensorflow.encoder.keras_image_encoder import KerasImageEncoder
         from .tensorflow.encoder.keras_image_backbone import create_image_backbone
 
-        model_inputs = self.get_model_inputs()
-        model_targets = self.get_model_targets()
-        # TODO: use model_config that is passed in during init.
-        config = self
+        model_spec = self.model_spec
+        model_inputs = model_spec.get_model_inputs()
+        model_targets = model_spec.get_model_targets()
 
-        if callable(config.image_backbone):
-            backbone = config.image_backbone
+        if callable(self.model_spec.image_backbone):
+            backbone = self.model_spec.image_backbone
         else:
             backbone = create_image_backbone(
-                name=config.image_backbone,
-                pretrained=config.pretrained,
-                pooling=config.image_pool,
-                input_shape=config.input_shape,
+                name=model_spec.image_backbone,
+                pretrained=model_spec.pretrained,
+                pooling=model_spec.image_pool,
+                input_shape=model_spec.input_shape,
             )
         image_encoder = (
             KerasImageEncoder(
                 backbone=backbone,
-                dropout=self.dropout,
-                pool_name=config.image_pool,
-                dense_layer_sizes=config.dense_layer_sizes,
-                permute_image=config.permute_image,
+                dropout=model_spec.dropout,
+                pool_name=model_spec.image_pool,
+                dense_layer_sizes=model_spec.dense_layer_sizes,
+                permute_image=model_spec.permute_image,
             )
-            if config.image_backbone
+            if model_spec.image_backbone
             else None
         )
-        aggregator = KerasAggregator(image_feature_pooling_method=config.image_pool)
+        aggregator = KerasAggregator(image_feature_pooling_method=model_spec.image_pool)
         model_factory = KerasModelFactory(
             model_inputs=model_inputs,
             model_targets=model_targets,
             image_encoder=image_encoder,
             aggregator=aggregator,
-            optimizer_name=config.optimizer_name,
-            n_gradients=config.n_gradients,
-            lr=config.lr,
-            epochs=config.epochs,  # TODO: both model factory and trainer have this parameter!
+            optimizer_name=self.optimizer_name,
+            n_gradients=self.n_gradients,
+            lr=self.lr,
+            epochs=self.epochs,  # TODO: both model factory and trainer have this parameter!
         )
         ckpt = model_factory.create_model()
         model = ckpt.model

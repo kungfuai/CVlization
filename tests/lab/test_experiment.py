@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import numpy as np
 from unittest.mock import patch
 from cvlization.lab.experiment import Experiment, SplittedDataset
-from cvlization.lab.model_specs import ImageClassification
+from cvlization.specs.prediction_tasks import ImageClassification
 from cvlization.training_pipeline import (
     TrainingPipeline,
     MLFramework,
@@ -63,12 +63,13 @@ def test_experiment_can_get_config_dict():
 
 def test_experiment_can_run():
     # TODO: run an mnist exp.
-    prediction_task = ImageClassification()
+    model_spec = ImageClassification()
+    model_spec.image_backbone = "simple"
     training_pipeline = TrainingPipeline(
-        image_backbone="simple", ml_framework=MLFramework.TENSORFLOW
+        model=model_spec, ml_framework=MLFramework.TENSORFLOW
     )
     e = Experiment(
-        prediction_task=prediction_task,
+        prediction_task=model_spec,
         dataset_builder=MockDataset(),
         training_pipeline=training_pipeline,
     )
