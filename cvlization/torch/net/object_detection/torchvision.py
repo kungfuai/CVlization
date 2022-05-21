@@ -29,24 +29,21 @@ class TorchvisionDetectionModelFactory:
         return model
 
     @classmethod
-    def list_models(cls):
-        model_names = (
-            [
-                "retinanet_resnet50_fpn",
-                "fasterrcnn_resnet50_fpn",
-                "retinanet_mobilenet",
+    def model_names(cls):
+        model_names = [
+            "retinanet_resnet50_fpn",
+            "fasterrcnn_resnet50_fpn",
+            "retinanet_mobilenet",
+        ] + [
+            f"retinanet_{backbone}"
+            for backbone in [
+                "resnet18",
+                "resnet34",
+                "resnet50",
+                "resnet101",
+                "resnet152",
             ]
-            + [
-                f"retinanet_{backbone}"
-                for backbone in [
-                    "resnet18",
-                    "resnet34",
-                    "resnet50",
-                    "resnet101",
-                    "resnet152",
-                ]
-            ],
-        )
+        ]
         if hasattr(detection, "fcos_resnet50_fpn"):
             model_names += [
                 "fcos_resnet50_fpn",

@@ -77,7 +77,11 @@ if __name__ == "__main__":
 
     from argparse import ArgumentParser
 
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        epilog=f"""
+            Options for net: {TorchvisionDetectionModelFactory.model_names()}
+            """
+    )
     parser.add_argument("--net", type=str, default="fcos_resnet50_fpn")
     # Alternative options:
     # net="retinanet_resnet50_fpn",
