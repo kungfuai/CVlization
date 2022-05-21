@@ -13,10 +13,16 @@ class KittiTinyDatasetBuilder:
     channels_first: bool = True
     to_torch_tensor: bool = True
     flavor: str = "torchvision"
+    data_dir: str = "./data"
+    preload: bool = False
 
     @property
     def dataset_provider(self):
         return DatasetProvider.CVLIZATION
+
+    @property
+    def image_dir(self):
+        return os.path.join(self.data_dir, "kitti_tiny")
 
     def get_totensor_transform(self):
         import torch
@@ -41,16 +47,20 @@ class KittiTinyDatasetBuilder:
         ds = KittiTinyDataset(
             ann_file="kitti_tiny/train.txt",
             channels_first=self.channels_first,
+            data_dir=self.data_dir,
         )
+        if self.preload:
+            ds.load_annotations()
         if self.flavor == "torchvision":
             ds = TransformedMapStyleDataset(
                 base_dataset=ds, transform=self.to_torchvision
             )
             return ds
 
-        ds = TransformedMapStyleDataset(
-            base_dataset=ds, transform=self.get_totensor_transform()
-        )
+        if self.to_torch_tensor:
+            ds = TransformedMapStyleDataset(
+                base_dataset=ds, transform=self.get_totensor_transform()
+            )
         return ds
 
     def validation_dataset(self) -> Union[Dataset, List[Dataset]]:
@@ -58,15 +68,20 @@ class KittiTinyDatasetBuilder:
         ds = KittiTinyDataset(
             ann_file="kitti_tiny/val.txt",
             channels_first=self.channels_first,
+            data_dir=self.data_dir,
         )
+        if self.preload:
+            ds.load_annotations()
         if self.flavor == "torchvision":
             ds = TransformedMapStyleDataset(
                 base_dataset=ds, transform=self.to_torchvision
             )
             return ds
-        ds = TransformedMapStyleDataset(
-            base_dataset=ds, transform=self.get_totensor_transform()
-        )
+
+        if self.to_torch_tensor:
+            ds = TransformedMapStyleDataset(
+                base_dataset=ds, transform=self.get_totensor_transform()
+            )
         return ds
 
 
@@ -166,6 +181,8 @@ class KittiTinyDataset:
                     labels_ignore=np.array(gt_labels_ignore, dtype=np.int32),
                 )
                 annotations.append(row)
+        
+        self.annotations = annotations
         return annotations
 
 

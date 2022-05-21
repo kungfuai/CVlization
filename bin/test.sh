@@ -20,4 +20,5 @@
 #                   (P)passed with output
 #                   (a)all except (p) and (P)
 
-docker-compose run --rm app python -m pytest -p no:warnings -vv $@
+docker-compose run --rm app python -m pytest -p no:warnings -vv \
+    --ignore=data/ --ignore=tmp/ --ignore checkpoints --ignore wandb $@

@@ -30,10 +30,8 @@ class TorchvisionDetectionModelFactory:
 
     @classmethod
     def list_models(cls):
-        return (
+        model_names = (
             [
-                "fcos_resnet50_fpn",
-                "fcos_resnet50",
                 "retinanet_resnet50_fpn",
                 "fasterrcnn_resnet50_fpn",
                 "retinanet_mobilenet",
@@ -49,6 +47,12 @@ class TorchvisionDetectionModelFactory:
                 ]
             ],
         )
+        if hasattr(detection, "fcos_resnet50_fpn"):
+            model_names += [
+                "fcos_resnet50_fpn",
+                "fcos_resnet50",
+            ]
+        return model_names
 
 
 class LitDetector(LightningModule):

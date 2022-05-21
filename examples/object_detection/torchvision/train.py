@@ -34,7 +34,7 @@ class TrainingSession:
         # Use TorchvisionDetectionModelFactory.list_models() to get a list of available models.
         model = TorchvisionDetectionModelFactory(
             num_classes=3,
-            net="fcos_resnet50_fpn",
+            net=self.args.net,
             lightning=True,
             lr=0.0001,  # TODO: lr is specified in 2 places
         ).run()
@@ -78,6 +78,10 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
+    parser.add_argument("--net", type=str, default="fcos_resnet50_fpn")
+    # Alternative options:
+    # net="retinanet_resnet50_fpn",
+    # net="fasterrcnn_resnet50_fpn",
     parser.add_argument("--track", action="store_true")
 
     args = parser.parse_args()
