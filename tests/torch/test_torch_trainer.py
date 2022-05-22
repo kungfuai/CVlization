@@ -44,6 +44,7 @@ def test_mnist_multiclass(tmpdir):
         train_dataset=train_data,
         val_dataset=val_data,
         train_steps_per_epoch=10,
+        train_batch_size=16,
         epochs=3,
         log_dir=str(tmpdir.join("lightning_logs")),
         experiment_tracker=None,

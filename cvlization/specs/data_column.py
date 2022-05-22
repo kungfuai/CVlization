@@ -1,9 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, Union, Callable
 import enum
 from dataclasses import dataclass, field as dataclass_field
 import logging
-
-from ..transforms.feature_transform import FeatureTransform
 
 
 LOGGER = logging.getLogger(__name__)
@@ -18,8 +16,8 @@ class DataColumnType(str, enum.Enum):
     CATEGORICAL = "categorical"
     BOOLEAN = "boolean"
     # Structured outputs:
-    BOUNDING_BOXES = "bbox"
-    LABAL_MAP = "label_map"
+    BOUNDING_BOXES = "bboxes"
+    MASKS = "masks"
     KEYPOINTS = "keypoints"
 
 
@@ -37,13 +35,27 @@ class DataColumn:
     key: str
     raw_shape: Optional[List] = None
     column_type: Optional[DataColumnType] = DataColumnType.NUMERICAL
+
     # For a categorical column, this is the number of levels.
     n_categories: Optional[int] = None
-    # TODO: should transforms track the shape
-    # transforms include fixed transforms and random augmentation
-    # TODO: should allow user to easily
-    #   implement data fetching, and transforms
-    transforms: List[FeatureTransform] = None
+
+    # Indicate whether the numpy array is variable sized sequence, e.g. bounding boxes.
+    # Usually it is enough to set sequence to True when you have such target variables.
+    # But if you have multilple groups of such sequences, each one with a different length,
+    # you can set `sequence` to a unique str value for each group of sequences.
+    # For a goup of sequences, the size of their "sequence" axis are expected to match.
+    # For example, two sequence targets bbox_labels (of shape [n, 1]) and bboxes (of shape [n, 4])
+    # are expected to have the same sequence length n.
+    sequence: Optional[Union[bool, str]] = False
+    transforms: Optional[List[Callable]] = None
+
+    def __post_init__(self):
+        if self.raw_shape is None:
+            self._fill_in_missing_raw_shape()
+
+    def _fill_in_missing_raw_shape(self):
+        if self.column_type == DataColumnType.BOOLEAN:
+            self.raw_shape = [1]
 
     @property
     def shape(self):

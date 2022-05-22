@@ -1,1 +1,2 @@
-docker-compose run --gpus all --rm app python -m cvlization.lab.experiment $@
+# --gpus all
+docker-compose run --rm app python -m cvlization.lab.experiment $@

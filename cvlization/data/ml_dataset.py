@@ -5,8 +5,16 @@ from dataclasses import dataclass
 import logging
 import numpy as np
 
+from cvlization.specs.type_checks import MapLike, SelfCheckable, CheckedWithModelSpec
+
 from ..data.utils import one_hot
-from ..specs import DataColumnType, ModelInput, ModelTarget
+from ..specs import (
+    DataColumnType,
+    ModelInput,
+    ModelTarget,
+    ModelSpec,
+    ensure_dataset_shapes_and_types,
+)
 from .data_rows import DataRows
 
 LOGGER = logging.getLogger(__name__)
@@ -14,7 +22,7 @@ LOGGER.setLevel(logging.INFO)
 
 
 @dataclass
-class MLDataset:
+class MLDataset(MapLike, SelfCheckable, CheckedWithModelSpec):
     """A MLDataset is a dataset that is potentially trainable.
 
     It manages the list of inputs and the list of targets.
@@ -143,6 +151,14 @@ class MLDataset:
             LOGGER.debug(f"target {j}: {t.shape}, {t.dtype}")
         return inputs, targets, row_dict.get("sample_weight", 1)
 
+    def get_model_spec(self):
+        return ModelSpec(self.model_inputs, self.model_targets)
+
+    def check(self) -> None:
+        ensure_dataset_shapes_and_types(dataset=self, model_spec=self.get_model_spec())
+
+    # TODO: get_batch_from_range() can be a helper function like collate().
+    # But it should be called in the DataLoader class or a tf.data.Dataset class.
     def get_batch_from_range(self, begin_idx: int, end_idx: int):
         inputs_batch = [list() for _ in range(len(self.model_inputs))]
         targets_batch = [list() for _ in range(len(self.model_targets))]
