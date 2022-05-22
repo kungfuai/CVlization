@@ -2,7 +2,7 @@
     "deterministic": true,
     "norm": false,
     "cv_task": "detection",
-    "transformers": [
+    "steps": [
         {
             "type": "crop",
             "probability": 1,

@@ -13,3 +13,4 @@ mlflow
 tensorflow-addons
 tensorflow_datasets
 wandb # seems to be required by torch-lightning
+kornia

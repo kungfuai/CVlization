@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import numpy as np
 from typing import Union, Optional, Any, Iterable, List
 import torch
 from torch import nn, optim
@@ -12,8 +13,9 @@ from pytorch_lightning.callbacks import (
     LearningRateMonitor,
 )
 
+from ..data.dataset_builder import MapStyleDataset, Iterable, Dataset
 from ..data.ml_dataset import MLDataset, ModelInput, ModelTarget
-from .torch_model import TorchModel
+from .torch_model import TorchLitModel
 from .torch_dataset import MapDataset, GeneratorDataset
 from .torch_model_factory import TorchModelFactory
 from ..base_trainer import BaseTrainer
@@ -26,14 +28,19 @@ LOGGER = logging.getLogger(__name__)
 class TorchTrainer(BaseTrainer):
 
     # ## Model (a trainable)
-    model: Union[TorchModel, nn.Module]
+    model: Union[TorchLitModel, nn.Module]
     model_inputs: List[ModelInput]
     model_targets: List[ModelTarget]
 
     # ## Datasets
-    train_dataset: Union[MLDataset, Iterable]
-    val_dataset: Union[MLDataset, Iterable] = None
+    train_dataset: Dataset
+    val_dataset: Dataset = None
+    train_batch_size: int = 1
+    val_batch_size: int = 1
+    collate_method: str = None  # "zip", None (None means default collate_fn)
     num_workers: int = 0
+
+    loss_function_included_in_model: bool = False
 
     # ## Precision
     precision: Optional[str] = "fp32"
@@ -72,6 +79,7 @@ class TorchTrainer(BaseTrainer):
     checkpoint_root_dir: Optional[str] = None
 
     def __post_init__(self):
+        assert isinstance(self.model, LightningModule)
         self._validate_fields()
         super().__init__(
             train_dataset=self.train_dataset,
@@ -94,11 +102,11 @@ class TorchTrainer(BaseTrainer):
 
         logger_for_experiment_tracking = self._set_up_experiment_tracker()
         callbacks = [
-            EarlyStopping(
-                patience=self.early_stopping_patience,
-                monitor="val_loss",
-                mode="min",
-            ),
+            # EarlyStopping(
+            #     patience=self.early_stopping_patience,
+            #     monitor="val_loss",
+            #     mode="min",
+            # ),
         ]
         if self.experiment_tracker is not None:
             callbacks.append(
@@ -126,10 +134,12 @@ class TorchTrainer(BaseTrainer):
             precision=16 if self.precision == "fp16" else 32,
             callbacks=callbacks,
             enable_progress_bar=True,
+            log_every_n_steps=10,
         )
-        self._loss_function = self._get_or_create_loss_function(self.model).to(
-            self.device
-        )
+        if not self.loss_function_included_in_model:
+            self._loss_function = self._get_or_create_loss_function(self.model).to(
+                self.device
+            )
 
     def log_params(self, params: dict):
         if self.experiment_tracker == "wandb":
@@ -175,38 +185,63 @@ class TorchTrainer(BaseTrainer):
                 f"Watching model for {self.experiment_tracker} not implemented yet."
             )
 
+    def create_collate_fn(self):
+        if self.collate_method == "zip":
+
+            def collate_fn(batch):
+                return tuple(zip(*batch))
+
+            return collate_fn
+        else:
+            return None
+
     def _training_loop(self):
         train_dataset = self.train_dataset
         val_dataset = self.val_dataset
+        train_batch_size = self.train_batch_size
+        val_batch_size = self.val_batch_size
         num_workers = self.num_workers
+        collate_fn = self.create_collate_fn()
 
         class DataModule(LightningDataModule):
             def train_dataloader(self):
-                if isinstance(train_dataset, MLDataset):
+                if isinstance(train_dataset, DataLoader):
+                    return train_dataset
+                # Error: "Subscripted generics cannot be used with class and instance checks."
+                elif isinstance(train_dataset, MapStyleDataset):
                     return DataLoader(
-                        MapDataset(train_dataset),
-                        batch_size=train_dataset.batch_size,
+                        train_dataset,
+                        batch_size=train_batch_size,
                         shuffle=True,
                         num_workers=num_workers,
+                        collate_fn=collate_fn,
+                    )
+                elif isinstance(train_dataset, Iterable):
+                    return DataLoader(
+                        train_dataset,
+                        batch_size=train_batch_size,
+                        shuffle=True,
+                        num_workers=num_workers,
+                        collate_fn=collate_fn,
                     )
                 else:
-                    # TODO: if the dataset is already a DataLoader, no need to wrap it.
-                    return DataLoader(
-                        GeneratorDataset(train_dataset), num_workers=num_workers
-                    )
+                    raise ValueError(f"Unknown train dataset: {train_dataset}")
 
             def val_dataloader(self):
-                if isinstance(val_dataset, MLDataset):
+                if isinstance(val_dataset, DataLoader):
+                    return val_dataset
+                elif isinstance(val_dataset, MapStyleDataset) or isinstance(
+                    val_dataset, Iterable
+                ):
                     return DataLoader(
-                        MapDataset(val_dataset),
-                        batch_size=val_dataset.batch_size,
+                        val_dataset,
+                        batch_size=val_batch_size,
                         shuffle=False,
                         num_workers=num_workers,
+                        collate_fn=collate_fn,
                     )
                 else:
-                    v = GeneratorDataset(val_dataset)
-                    # batch = next(v)
-                    return DataLoader(v, num_workers=num_workers)
+                    raise ValueError(f"Unknown val dataset: {val_dataset}")
 
             def test_dataloader(self):
                 return None
@@ -224,12 +259,23 @@ class TorchTrainer(BaseTrainer):
             for b in d:
                 print(len(b), type(b))
                 break
-        # When using LazyModules, call `forward` with a dummy batch to initialize
-        # the parameters before calling torch functions.
-        one_batch = next(iter(dm.train_dataloader()))
-        self.model.forward(one_batch[0])
+
+        # TODO: the lazymodule thing should happen during model creation.
+        if True:
+            # When using LazyModules, call `forward` with a dummy batch to initialize
+            # the parameters before calling torch functions.
+            one_batch = next(iter(dm.train_dataloader()))
+            inputs, targets = one_batch[0], one_batch[1]
+            self.model.eval()
+            # TODO: there are multiple ways to call forward(), and it is not clear
+            #   which one is intended by the model.
+            self.model.forward(inputs)
+            # self.model.forward(one_batch)
+            self.model.train()  # change back to the training mode
+
         self._watch_model()
 
+        LOGGER.info(f"optimizer: {self.model.configure_optimizers()}")
         self._lightning_trainer.fit(self.model, dm)
 
     def get_metrics(self) -> dict:
@@ -244,7 +290,7 @@ class TorchTrainer(BaseTrainer):
     def _get_current_epoch(self, checkpoint_dir: str) -> int:
         raise NotImplementedError("Read epoch info from checkpoint_dir")
 
-    def _get_or_create_loss_function(self, model: TorchModel):
+    def _get_or_create_loss_function(self, model: TorchLitModel):
         if hasattr(model, "loss_function"):
             return model.loss_function
         else:
@@ -279,7 +325,7 @@ class DavidTrainer(BaseTrainer):
     def _training_loop(self):
         from functools import partial
         import numpy as np
-        from .net.davidnet.core import (
+        from .net.image_classification.davidnet.core import (
             PiecewiseLinear,
             Const,
             union,
@@ -293,7 +339,7 @@ class DavidTrainer(BaseTrainer):
             Cutout,
             FlipLR,
         )
-        from .net.davidnet.torch_backend import (
+        from .net.image_classification.davidnet.torch_backend import (
             SGD,
             MODEL,
             LOSS,

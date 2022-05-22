@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Union
 
 from ..data_column import DataColumn, DataColumnType
 from ..losses.loss_type import LossType
@@ -34,14 +34,21 @@ class ModelTarget(DataColumn):
     loss: Optional[LossType] = None
     loss_weight: Optional[float] = 1
     metrics: Optional[List] = None
+
+    # For imbalanced label distribution.
     negative_class_weight: Optional[float] = 1
+
+    # For monotone constraints on a lattice of output values.
     monotone_constraint_key: Optional[str] = "default_monotone_constraint"
     monotone_constraint_rank: Optional[int] = None  # From small to large.
+
+    # For loss functions.
     prefer_logits: Optional[bool] = True
     learning: Optional[
         bool
     ] = True  # If False, this target is used for unlearning (adversarial loss).
 
+    # For allowing additional tweaks on the neural network architecture.
     # Allow individual feedback from this target to the group of inputs.
     target_groups: Optional[List[str]] = None
     input_group: Optional[str] = None
