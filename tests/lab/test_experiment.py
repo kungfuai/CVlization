@@ -1,10 +1,10 @@
 from dataclasses import dataclass
+import numpy as np
 from unittest.mock import patch
 from cvlization.lab.experiment import Experiment, SplittedDataset
-from cvlization.lab.model_specs import ImageClassification
+from cvlization.specs.prediction_tasks import ImageClassification
 from cvlization.training_pipeline import (
     TrainingPipeline,
-    TrainingPipelineConfig,
     MLFramework,
 )
 
@@ -13,11 +13,21 @@ from cvlization.training_pipeline import (
 class MockDataset(SplittedDataset):
     field1: str = ""
 
+    @property
+    def dataset_provider(self):
+        return None
+
     def training_dataset(self, **kwargs):
-        return []
+        # TODO: note that image is in channel-first format when dataset_provider is None.
+        #  Need to be explicit that this is the default.
+        image = np.random.random((3, 10, 10))
+        label = 1
+        return [(image, label)]
 
     def validation_dataset(self, **kwargs):
-        return []
+        image = np.random.random((3, 10, 10))
+        label = 1
+        return [(image, label)]
 
     def transform_training_dataset_tf(self, dataset, **kwargs):
         return dataset
@@ -37,33 +47,30 @@ class MockExperimentTracker:
 
 def test_experiment_can_get_config_dict():
     prediction_task = ImageClassification()
-    training_pipeline_config = TrainingPipelineConfig()
+    training_pipeline = TrainingPipeline(ml_framework=MLFramework.TENSORFLOW)
     e = Experiment(
         prediction_task=prediction_task,
-        dataset=MockDataset(),
-        training_pipeline=TrainingPipeline(
-            config=training_pipeline_config, framework=MLFramework.TENSORFLOW
-        ),
+        dataset_builder=MockDataset(),
+        training_pipeline=training_pipeline,
     )
     d = e.get_config_dict()
     assert d == {
         "field1": "",
         **prediction_task.__dict__,
-        **training_pipeline_config.__dict__,
-        "framework": MLFramework.TENSORFLOW.value,
+        **training_pipeline.__dict__,
     }
 
 
 def test_experiment_can_run():
     # TODO: run an mnist exp.
-    prediction_task = ImageClassification()
-    training_pipeline_config = TrainingPipelineConfig(image_backbone="simple")
+    model_spec = ImageClassification()
+    model_spec.image_backbone = "simple"
     training_pipeline = TrainingPipeline(
-        config=training_pipeline_config, framework=MLFramework.TENSORFLOW
+        model=model_spec, ml_framework=MLFramework.TENSORFLOW
     )
     e = Experiment(
-        prediction_task=prediction_task,
-        dataset=MockDataset(),
+        prediction_task=model_spec,
+        dataset_builder=MockDataset(),
         training_pipeline=training_pipeline,
     )
     with patch.object(training_pipeline, "run") as mock_run_func:
@@ -74,19 +81,16 @@ def test_experiment_can_run():
 def test_experiment_can_log_params():
     tracker = MockExperimentTracker()
     prediction_task = ImageClassification()
-    training_pipeline_config = TrainingPipelineConfig()
-    training_pipeline = TrainingPipeline(
-        config=training_pipeline_config, framework=MLFramework.TENSORFLOW
-    )
+    training_pipeline = TrainingPipeline(ml_framework=MLFramework.TENSORFLOW)
     e = Experiment(
         prediction_task=prediction_task,
-        dataset=MockDataset(),
+        dataset_builder=MockDataset(),
         training_pipeline=training_pipeline,
         experiment_tracker=tracker,
     )
     with patch.object(training_pipeline, "create_model") as mock_fn:
         mock_fn.return_value = training_pipeline
-        with patch.object(training_pipeline, "prepare_datasets") as mock_feed_data:
+        with patch.object(training_pipeline, "create_dataloaders") as mock_feed_data:
             mock_feed_data.return_value = training_pipeline
             with patch.object(
                 training_pipeline, "create_trainer"
