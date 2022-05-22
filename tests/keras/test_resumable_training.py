@@ -6,11 +6,11 @@ import tensorflow as tf
 import numpy as np
 from unittest.mock import patch
 
-from cvlization.keras.keras_model_factory import KerasModelFactory
-from cvlization.keras.keras_trainer import KerasTrainer
-from cvlization.keras.encoder.keras_image_encoder import KerasImageEncoder
-from cvlization.keras.net.simple_conv_net import SimpleConvNet
-from cvlization.keras import sequence
+from cvlization.tensorflow.keras_model_factory import KerasModelFactory
+from cvlization.tensorflow.keras_trainer import KerasTrainer
+from cvlization.tensorflow.encoder.keras_image_encoder import KerasImageEncoder
+from cvlization.tensorflow.net.simple_conv_net import SimpleConvNet
+from cvlization.tensorflow import sequence
 from ..ml_dataset_utils import prepare_ml_datasets
 
 

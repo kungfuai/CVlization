@@ -1,0 +1,2 @@
+from .voc_detection_adapter import VOCDetectionAdapter
+from .voc_segmentation_adapter import VOCSegmentationAdapter

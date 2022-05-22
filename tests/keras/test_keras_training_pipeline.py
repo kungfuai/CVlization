@@ -1,8 +1,8 @@
 from tensorflow import keras
-from cvlization.training_pipeline import TrainingPipeline, TrainingPipelineConfig
+from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.model_specs import ImageClassification
-from cvlization.lab.datasets import TorchVisionDataset
-from cvlization.specs import MLFramework
+from cvlization.lab.datasets import get_dataset_builder_registry
+from cvlization.specs import MLFramework, ModelSpec
 
 
 def test_training_pipeline_can_use_customized_keras_model():
@@ -10,7 +10,7 @@ def test_training_pipeline_can_use_customized_keras_model():
         x = keras.layers.Conv2D(filters=32, kernel_size=3, activation="relu")(x)
         return x
 
-    model_spec = ImageClassification(
+    prediction_task = ImageClassification(
         n_classes=10,
         num_channels=1,
         image_height=28,
@@ -18,27 +18,30 @@ def test_training_pipeline_can_use_customized_keras_model():
         channels_first=False,
     )
     # Dataset and transforms.
-    ds = TorchVisionDataset("mnist_torchvision")
+    dataset_builders = get_dataset_builder_registry()
+    dsb = dataset_builders["mnist_torchvision"]
     # Model, optimizer and hyperparams.
     p = TrainingPipeline(
-        framework=MLFramework.TENSORFLOW,
-        config=TrainingPipelineConfig(
+        ml_framework=MLFramework.TENSORFLOW,
+        model=ModelSpec(
             image_backbone=my_model,
             permute_image=False,
-            train_batch_size=128,
-            val_batch_size=16,
-            train_steps_per_epoch=10,
-            val_steps_per_epoch=2,
-            lr=0.001,
+            model_inputs=prediction_task.get_model_inputs(),
+            model_targets=prediction_task.get_model_targets(),
         ),
+        train_batch_size=128,
+        val_batch_size=16,
+        train_steps_per_epoch=10,
+        val_steps_per_epoch=2,
+        lr=0.001,
     )
-    p.create_model(model_spec)
+    p.create_model()
 
     # For debugging. --------------------------------
     debug = False
     if debug:
-        train_data = ds.training_dataset(batch_size=2)
-        train_data = ds.transform_training_dataset_tf(train_data)
+        train_data = dsb.training_dataset(batch_size=2)
+        train_data = dsb.transform_training_dataset_tf(train_data)
         batch = next(iter(train_data))
         assert batch[0][0].shape == (2, 28, 28, 1)
         import tensorflow as tf
@@ -50,4 +53,4 @@ def test_training_pipeline_can_use_customized_keras_model():
         print(gradients)
     # End debugging. --------------------------------
 
-    p.prepare_datasets(ds).create_trainer().run()
+    p.create_dataloaders(dsb).create_trainer().run()

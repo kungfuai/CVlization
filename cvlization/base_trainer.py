@@ -126,7 +126,7 @@ class BaseTrainer:
 
     def _training_data_stats_with_ml_dataset(self):
         # TODO: this is using keras sequence for now. Need a more generic implementation.
-        from .keras import sequence
+        from .tensorflow import sequence
 
         assert isinstance(self.train_dataset, MLDataset)
         train_seq = sequence.from_ml_dataset(self.train_dataset)

@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 # eq=False prevents overiding the hash function of nn.Module.
 
 
-class TorchModel(LightningModule):
+class TorchLitModel(LightningModule):
     """Default multitask torch model."""
 
     @dataclass
@@ -30,6 +30,7 @@ class TorchModel(LightningModule):
         share_image_encoder: bool = True
         mlp_encoder: TorchMlpEncoder = None
         aggregator: TorchAggregator = None
+        model: nn.Module = None  # If specified, the above model specs will be ignored.
 
         # ## Losses and metrics.
         loss_function: nn.Module = None
@@ -87,12 +88,22 @@ class TorchModel(LightningModule):
             )
         self._metrics = nn.ModuleDict(self._metrics)
         # TODO: should the following creation of actual layers wait for the first forward pass?
-        self._create_mlp_encoder_if_needed()
-        self._create_aggregator_if_needed()
-        self._prepare_encoder_models()
-        self._create_heads()
+        if isinstance(self.config.model, nn.Module):
+            LOGGER.warning(
+                "Model is already provided by the user. Ignoring model components and model spec."
+            )
+            self.model = self.config.model
+        else:
+            self._create_mlp_encoder_if_needed()
+            self._create_aggregator_if_needed()
+            self._prepare_encoder_models()
+            self._create_heads()
 
-    def forward(self, inputs):
+    def forward(self, inputs, *args, **kwargs):
+        if isinstance(self.config.model, nn.Module):
+            return self.model.forward(inputs)
+        if isinstance(inputs, torch.Tensor):
+            inputs = [inputs]
         tensors_encoded = []
         tensors_not_encoded = []
         for input_layer, encoder_model in zip(inputs, self._encoder_models):
@@ -214,8 +225,6 @@ class TorchModel(LightningModule):
     def _get_optimizer_class(self):
         optimizer_name = self.config.optimizer_name
         if optimizer_name == "SGD_david":
-            # from .net.davidnet.torch_backend import SGD
-            # return SGD
             return optim.SGD
         if isinstance(optimizer_name, str) and hasattr(optim, optimizer_name):
             return getattr(optim, optimizer_name)
