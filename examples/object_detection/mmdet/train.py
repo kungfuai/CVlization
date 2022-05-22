@@ -75,9 +75,10 @@ if __name__ == "__main__":
 
     from argparse import ArgumentParser
 
+    options = MMDetectionModels.model_names()
     parser = ArgumentParser(
         epilog=f"""
-            Options for net: {MMDetectionModels.model_names()}
+            Options for net: {options} ({len(options)} of them).
             """
     )
     parser.add_argument("--net", type=str, default="fcos")

@@ -72,11 +72,16 @@ def image_backbone_names():
         import timm
 
         model_names += timm.list_models()
+        model_names_set = set(model_names)
     except Exception as e:
         LOGGER.warning(f"Failed to list timm models: {e}")
 
     try:
-        model_names += torch.hub.list("facebookresearch/dino:main")
+        model_names += [
+            n
+            for n in torch.hub.list("facebookresearch/dino:main")
+            if n not in model_names_set
+        ]
     except Exception as e:
         LOGGER.warning(f"Failed to list dino models: {e}")
 

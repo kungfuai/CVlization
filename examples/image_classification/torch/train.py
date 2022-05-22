@@ -6,6 +6,7 @@ from cvlization.torch.data.torchvision_dataset_builder import TorchvisionDataset
 from cvlization.specs.prediction_tasks import ImageClassification
 from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.experiment import Experiment
+from cvlization.torch.encoder.torch_image_backbone import image_backbone_names
 
 
 LOGGER = logging.getLogger(__name__)
@@ -27,17 +28,17 @@ class TrainingSession:
         training_pipeline = TrainingPipeline(
             ml_framework=MLFramework.PYTORCH,
             model=ModelSpec(
-                image_backbone="resnet18",
+                image_backbone=self.args.net,
                 model_inputs=prediction_task.get_model_inputs(),
                 model_targets=prediction_task.get_model_targets(),
             ),
             loss_function_included_in_model=False,
             collate_method=None,
             epochs=50,
-            train_batch_size=8,
-            val_batch_size=2,
+            train_batch_size=128,
+            val_batch_size=128,
             train_steps_per_epoch=500,
-            val_steps_per_epoch=200,
+            val_steps_per_epoch=None,
             optimizer_name="Adam",
             lr=0.0001,
             n_gradients=1,
@@ -67,7 +68,13 @@ if __name__ == "__main__":
 
     from argparse import ArgumentParser
 
-    parser = ArgumentParser()
+    options = image_backbone_names()
+    parser = ArgumentParser(
+        epilog=f"""
+                options for net: {options} ({len(options)} of them).
+            """
+    )
     parser.add_argument("--track", action="store_true")
+    parser.add_argument("--net", default="resnet18")
     args = parser.parse_args()
     TrainingSession(args).run()
