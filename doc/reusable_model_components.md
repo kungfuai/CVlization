@@ -1,0 +1,26 @@
+Imagine a technical stack diagram:
+
+- Layer 1: generic tensor ops
+    - Conv2D
+    - Dense
+    - Dropout
+- Layer 2: blocks / layers
+    - Residual block
+    - Conv-relu block
+    - Conv-max-relu-bn block
+    - multi-headed self attention layer
+    - Positional encoding
+    - classification layer
+    - regression layer
+- Layer 3: domain specific parts
+    - neck (object detection and segmentation)
+    - FPN (object detection and segmentation)
+    - transformer
+    - image encoder
+    - text encoder
+    - image decoder
+    - text decoder
+- Layer 4: end-to-end nets
+    - resnet50 for 1000-way classification
+    - retinanet_resnet50_fpn for object detection
+    - bert-classification for text classification
