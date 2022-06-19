@@ -3,7 +3,10 @@ from ..model_spec import ModelSpec, ModelInput, ModelTarget
 
 
 def ObjectDetection(
-    n_channels: int = 3, n_categories: int = 3, sequence_key: str = "detection"
+    n_channels: int = 3,
+    n_categories: int = 3,
+    sequence_key: str = "detection",
+    **kwargs
 ) -> ModelSpec:
     """
     Example models: RetinaNet, Pix2Seq
@@ -38,4 +41,6 @@ def ObjectDetection(
             # https://colab.research.google.com/drive/17HPR0sz1iXu3wTw7b0p6BMqvRTDmfT-x?usp=sharing
         ]
 
-    return ModelSpec(model_inputs=get_model_inputs(), model_targets=get_model_targets())
+    return ModelSpec(
+        model_inputs=get_model_inputs(), model_targets=get_model_targets(), **kwargs
+    )
