@@ -1,5 +1,6 @@
 """Goal: run computer vision experiments easily.
 """
+import logging
 from typing import Dict
 
 from cvlization.data.dataset_builder import DatasetBuilder
@@ -20,6 +21,9 @@ from .datasets import datasets, SplittedDataset, get_dataset_builder_registry
 from .training_pipelines import training_pipelines
 from ..training_pipeline import TrainingPipeline
 from .experiment_tracker import ExperimentTracker
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class Experiment:
@@ -66,6 +70,7 @@ class Experiment:
         # Assemble training pipeline and feed the data.
         if self.experiment_tracker is not None:
             self.experiment_tracker.setup().log_params(self.get_config_dict())
+        LOGGER.info(f"Training pipeline: {self.training_pipeline}")
         self.training_pipeline.create_model().create_dataloaders(
             self.dataset_builder
         ).create_trainer().run()
@@ -106,7 +111,9 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument("--data", "-d", default="cifar10_torchvision")
-    parser.add_argument("--model_recipe", "-m", default="resnet18_torch")
+    parser.add_argument(
+        "--model_recipe", "-m", default="resnet18_torch"
+    )  # TODO: rename to algo?
     # parser.add_argument("--task", "-t", default="ImageClassification")
     parser.add_argument("--track", action="store_true")
 
