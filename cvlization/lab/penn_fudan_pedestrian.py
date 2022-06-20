@@ -16,9 +16,10 @@ class PennFudanPedestrianDatasetBuilder:
 
     channels_first: bool = True
     to_torch_tensor: bool = True
-    flavor: str = "torchvision"
+    flavor: str = None  # one of None, "torchvision"
     data_dir: str = "./data"
     preload: bool = False
+    include_masks: bool = True
 
     @property
     def dataset_provider(self):
@@ -27,6 +28,10 @@ class PennFudanPedestrianDatasetBuilder:
     @property
     def image_dir(self):
         return os.path.join(self.data_dir, "PennFudanPed")
+
+    @property
+    def num_classes(self):
+        return len(PennFudanPedestrianDataset.CLASSES)
 
     def get_totensor_transform(self):
         import torch
@@ -45,8 +50,11 @@ class PennFudanPedestrianDatasetBuilder:
         boxes = torch.tensor(targets[0])
         labels = torch.tensor(targets[1]).type(torch.long)
         labels = torch.squeeze(labels, -1)
-        masks = torch.tensor(targets[2])
-        return image, dict(boxes=boxes, labels=labels, masks=masks)
+        if self.include_masks:
+            masks = torch.tensor(targets[2])
+            return image, dict(boxes=boxes, labels=labels, masks=masks)
+        else:
+            return image, dict(boxes=boxes, labels=labels)
 
     def training_dataset(self) -> Dataset:
         ds = PennFudanPedestrianDataset(
@@ -94,10 +102,18 @@ class PennFudanPedestrianDatasetBuilder:
 
 class PennFudanPedestrianDataset:
 
-    CLASSES = ("Pedestrian",)
+    CLASSES = (
+        "Background",
+        "Pedestrian",
+    )
 
     def __init__(
-        self, data_dir="./data", channels_first=True, start_idx=0, end_idx=-50
+        self,
+        data_dir: str = "./data",
+        channels_first: bool = True,
+        start_idx: int = 0,
+        end_idx: int = -50,
+        include_masks: bool = True,
     ):
         """
         Data flow: download -> extract -> load_annotations
@@ -107,6 +123,7 @@ class PennFudanPedestrianDataset:
         self.channels_first = channels_first
         self.start_idx = start_idx
         self.end_idx = end_idx
+        self.include_masks = include_masks
         self.parent_dir = "PennFudanPed"
 
     def __getitem__(self, index: int):
@@ -153,8 +170,9 @@ class PennFudanPedestrianDataset:
             boxes.append([xmin, ymin, xmax, ymax])
 
         boxes = np.array(boxes, dtype=np.float32)
-        # there is only one class
-        labels = np.ones((num_objs,), dtype=np.int64)
+        # there is only one foreground class
+        labels = np.ones((num_objs, 1), dtype=np.int64)
+        labels = labels.astype(np.float32)
         masks = np.array(masks, dtype=np.uint8)
 
         image_id = np.array([index])
@@ -170,7 +188,10 @@ class PennFudanPedestrianDataset:
         target["area"] = area
         target["iscrowd"] = iscrowd
 
-        return [np_img], [target["boxes"], target["labels"], target["masks"]]
+        if self.include_masks:
+            return [np_img], [target["boxes"], target["labels"], target["masks"]]
+        else:
+            return [np_img], [target["boxes"], target["labels"]]
 
     def __len__(self):
         if self.annotations is None:
@@ -229,8 +250,8 @@ if __name__ == "__main__":
     python -m cvlization.lab.penn_fudan_pedestrian
     """
     dsb = PennFudanPedestrianDatasetBuilder(flavor=None)
-    # ds = PennFudanPedestrianDataset(start_idx=0, end_idx=12)
-    ds = dsb.training_dataset()
+    ds = PennFudanPedestrianDataset(start_idx=0, end_idx=12)
+    # ds = dsb.training_dataset()
     print(len(ds), "examples in the dataset")
     example = ds[10]
     assert isinstance(example, tuple)
@@ -251,6 +272,8 @@ if __name__ == "__main__":
         print("batch:", i, len(inputs), "images")
         print("image 0:", inputs[0][0].shape)
         print("len(targets) =", len(targets))
-        print("targets[0]:", targets[0])
-        print("targets[1]:", targets[1])
+        print("target 0:", targets[0][:2])
+        print("targets 0[0]:", targets[0][0].shape)
+        print("targets 0[1]:", targets[0][1].shape)
+        print("targets 0[2]:", targets[0][2].shape)
         break

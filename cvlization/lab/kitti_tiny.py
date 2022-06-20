@@ -12,7 +12,7 @@ from ..data.dataset_builder import TransformedMapStyleDataset
 class KittiTinyDatasetBuilder:
     channels_first: bool = True
     to_torch_tensor: bool = True
-    flavor: str = "torchvision"
+    flavor: str = None  # "torchvision"
     data_dir: str = "./data"
     preload: bool = False
 
@@ -23,6 +23,10 @@ class KittiTinyDatasetBuilder:
     @property
     def image_dir(self):
         return os.path.join(self.data_dir, "kitti_tiny")
+
+    @property
+    def num_classes(self):
+        return len(KittiTinyDataset.CLASSES)
 
     def get_totensor_transform(self):
         import torch
@@ -181,12 +185,15 @@ class KittiTinyDataset:
                     labels_ignore=np.array(gt_labels_ignore, dtype=np.int32),
                 )
                 annotations.append(row)
-        
+
         self.annotations = annotations
         return annotations
 
 
 if __name__ == "__main__":
+    """
+    python -m cvlization.lab.kitti_tiny
+    """
     kitti = KittiTinyDataset()
     print(len(kitti), "examples in the dataset")
     example = kitti[10]
@@ -208,6 +215,7 @@ if __name__ == "__main__":
         print("batch:", i, len(inputs), "images")
         print("image 0:", inputs[0][0].shape)
         print("len(targets) =", len(targets))
-        print("targets[0]:", targets[0])
-        print("targets[1]:", targets[1])
+        print("targets [0]:", targets[0])
+        print("targets 0[0]:", targets[0][0].shape)
+        print("targets 0[1]:", targets[0][1].shape)
         break

@@ -56,8 +56,8 @@ class ModelTarget(DataColumn):
     def __post_init__(self):
         if self.column_type == DataColumnType.CATEGORICAL:
             assert (
-                self.n_categories > 1
-            ), "Categorical target must have more than one category"
+                self.n_categories >= 2
+            ), "Categorical target must have at least 2 categories"
         self.target_groups = self.target_groups or []
 
     @classmethod

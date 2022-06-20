@@ -14,41 +14,31 @@ LOGGER = logging.getLogger(__name__)
 # TODO: Decipher how to use torchvision's FPN module.
 class TorchvisionDetectionModelFactory:
     def __init__(
-        self, num_classes=3, net="fcos_resnet50_fpn", lightning=True, lr=0.0001
+        self,
+        num_classes: int = 3,
+        net: str = "fcos_resnet50_fpn",
+        lightning: bool = True,
+        lr: float = 0.0001,
+        pretrained: bool = True,
     ):
         self.num_classes = num_classes
         self.net = net
         self.lightning = lightning
         # TODO: consider not putting lr here.
         self.lr = lr  # applicable for lightining model only
+        self.pretrained = pretrained
 
     def run(self):
-        model = create_detection_model_with_torchvision(self.num_classes, self.net)
+        model = create_detection_model_with_torchvision(
+            self.num_classes, self.net, pretrained=self.pretrained
+        )
         if self.lightning:
             model = LitDetector(model, lr=self.lr)
         return model
 
     @classmethod
     def model_names(cls):
-        model_names = [
-            "retinanet_resnet50_fpn",
-            "fasterrcnn_resnet50_fpn",
-            "retinanet_mobilenet",
-        ] + [
-            f"retinanet_{backbone}"
-            for backbone in [
-                "resnet18",
-                "resnet34",
-                "resnet50",
-                "resnet101",
-                "resnet152",
-            ]
-        ]
-        if hasattr(detection, "fcos_resnet50_fpn"):
-            model_names += [
-                "fcos_resnet50_fpn",
-                "fcos_resnet50",
-            ]
+        model_names = ["maskrcnn_resnet50_fpn"]
         return model_names
 
 
@@ -109,53 +99,58 @@ class LitDetector(LightningModule):
         return optimizer
 
 
-def get_resnet_backbone(backbone_name: str) -> nn.Module:
+def get_resnet_backbone(backbone_name: str, pretrained: bool = True) -> nn.Module:
     if backbone_name == "resnet18":
-        resnet_net = torchvision.models.resnet18(pretrained=True)
+        resnet_net = torchvision.models.resnet18(pretrained=pretrained)
         modules = list(resnet_net.children())[:-2]
         backbone = nn.Sequential(*modules)
         backbone.out_channels = 512
     elif backbone_name == "resnet34":
-        resnet_net = torchvision.models.resnet34(pretrained=True)
+        resnet_net = torchvision.models.resnet34(pretrained=pretrained)
         modules = list(resnet_net.children())[:-2]
         backbone = nn.Sequential(*modules)
         backbone.out_channels = 512
     elif backbone_name == "resnet50":
-        resnet_net = torchvision.models.resnet50(pretrained=True)
+        resnet_net = torchvision.models.resnet50(pretrained=pretrained)
         modules = list(resnet_net.children())[:-2]
         backbone = nn.Sequential(*modules)
         backbone.out_channels = 2048
     elif backbone_name == "resnet101":
-        resnet_net = torchvision.models.resnet101(pretrained=True)
+        resnet_net = torchvision.models.resnet101(pretrained=pretrained)
         modules = list(resnet_net.children())[:-2]
         backbone = nn.Sequential(*modules)
         backbone.out_channels = 2048
     elif backbone_name == "resnet152":
-        resnet_net = torchvision.models.resnet152(pretrained=True)
+        resnet_net = torchvision.models.resnet152(pretrained=pretrained)
         modules = list(resnet_net.children())[:-2]
         backbone = nn.Sequential(*modules)
         backbone.out_channels = 2048
     elif backbone_name == "resnet50_modified_stride_1":
-        resnet_net = torchvision.models.resnet50(pretrained=True)
+        resnet_net = torchvision.models.resnet50(pretrained=pretrained)
         modules = list(resnet_net.children())[:-2]
         backbone = nn.Sequential(*modules)
         backbone.out_channels = 2048
     elif backbone_name == "resnext101_32x8d":
-        resnet_net = torchvision.models.resnext101_32x8d(pretrained=True)
+        resnet_net = torchvision.models.resnext101_32x8d(pretrained=pretrained)
         modules = list(resnet_net.children())[:-2]
         backbone = nn.Sequential(*modules)
         backbone.out_channels = 2048
+    else:
+        raise ValueError(f"Unknown backbone: {backbone_name}")
     return backbone
 
 
-def create_detection_model_with_torchvision(num_classes=3, net="fcos_resnet50_fpn"):
+def create_detection_model_with_torchvision(
+    num_classes=3, net="fcos_resnet50_fpn", pretrained=True
+):
     if net == "fcos_resnet50_fpn":
         model = detection.fcos_resnet50_fpn(
-            num_classes=num_classes, pretrained_backbone=True
+            num_classes=num_classes, pretrained_backbone=pretrained
         )
     elif net == "fcos_resnet50":
         backbone = get_resnet_backbone(
-            "resnet50"
+            "resnet50",
+            pretrained=pretrained,
         )  # using torchvision's provided method
         # backbone = create_image_backbone(name="resnet50", pretrained=True) # using cvlization's method
         backbone.out_channels = 2048
@@ -170,17 +165,17 @@ def create_detection_model_with_torchvision(num_classes=3, net="fcos_resnet50_fp
         )
     elif net == "retinanet_resnet50_fpn":
         model = detection.retinanet_resnet50_fpn(
-            num_classes=num_classes, pretrained_backbone=True
+            num_classes=num_classes, pretrained_backbone=pretrained
         )
     elif net == "fasterrcnn_resnet50_fpn":
         model = detection.fasterrcnn_resnet50_fpn(
-            num_classes=num_classes, pretrained_backbone=True
+            num_classes=num_classes, pretrained_backbone=pretrained
         )
     elif net == "retinanet_mobilenet":
         anchor_generator = AnchorGenerator(
             sizes=((32, 64, 128, 256, 512),), aspect_ratios=((0.33, 0.5, 1.0, 2.0, 3),)
         )
-        backbone = torchvision.models.mobilenet_v2(pretrained=True).features
+        backbone = torchvision.models.mobilenet_v2(pretrained=pretrained).features
         backbone.out_channels = 1280
         model = detection.RetinaNet(
             backbone=backbone,
@@ -191,11 +186,17 @@ def create_detection_model_with_torchvision(num_classes=3, net="fcos_resnet50_fp
         anchor_generator = AnchorGenerator(
             sizes=((32, 64, 128, 256, 512),), aspect_ratios=((0.33, 0.5, 1.0, 2.0, 3),)
         )
-        backbone = get_resnet_backbone(net.replace("retinanet_", ""))
+        backbone = get_resnet_backbone(
+            net.replace("retinanet_", ""), pretrained=pretrained
+        )
         model = detection.RetinaNet(
             backbone=backbone,
             num_classes=num_classes,
             anchor_generator=anchor_generator,
+        )
+    else:
+        raise ValueError(
+            f"Unknown network name for object detection in torchvision: {net}"
         )
     print("********************************** Model signature:")
     print(model.forward.__doc__)

@@ -1,9 +1,7 @@
 import logging
 
 from cvlization.specs.ml_framework import MLFramework
-from cvlization.torch.data.torchvision_dataset_builder import TorchvisionDatasetBuilder
 from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
-from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.specs.prediction_tasks import ObjectDetection
 from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.experiment import Experiment
@@ -21,12 +19,11 @@ class TrainingSession:
 
     def run(self):
         dataset_builder = self.create_dataset()
-        self.num_classes = num_classes = dataset_builder.num_classes
         model = self.create_model()
         training_pipeline = self.create_training_pipeline(model)
         Experiment(
             # The interface (inputs and outputs) of the model.
-            prediction_task=ObjectDetection(n_categories=num_classes),
+            prediction_task=ObjectDetection(n_categories=3),
             # Dataset and transforms.
             dataset_builder=dataset_builder,
             # Training pipeline: model, trainer, optimizer.
@@ -36,7 +33,7 @@ class TrainingSession:
     def create_model(self):
         # Use TorchvisionDetectionModelFactory.list_models() to get a list of available models.
         model = TorchvisionDetectionModelFactory(
-            num_classes=self.num_classes,
+            num_classes=3,
             net=self.args.net,
             lightning=True,
             lr=0.0001,  # TODO: lr is specified in 2 places
@@ -44,13 +41,8 @@ class TrainingSession:
         return model
 
     def create_dataset(self):
-        LOGGER.info(
-            f"Available dataset builders: {KittiTinyDatasetBuilder(), PennFudanPedestrianDatasetBuilder(), TorchvisionDatasetBuilder.list_dataset_builders()}"
-        )
-        dataset_builder = KittiTinyDatasetBuilder(flavor="torchvision")
-        # dataset_builder = PennFudanPedestrianDatasetBuilder(
-        #     flavor="torchvision", include_masks=False
-        # )
+        # Use TorchvisionDatasetBuilder.list_datasets() to get a list of available datasets.
+        dataset_builder = KittiTinyDatasetBuilder()
         return dataset_builder
 
     def create_training_pipeline(self, model):
