@@ -39,7 +39,7 @@ class TrainingSession:
             num_classes=self.num_classes,
             net=self.args.net,
             lightning=True,
-            lr=0.0001,  # TODO: lr is specified in 2 places
+            lr=0.00001,  # TODO: lr is specified in 2 places
         ).run()
         return model
 
@@ -47,9 +47,9 @@ class TrainingSession:
         LOGGER.info(
             f"Available dataset builders: {KittiTinyDatasetBuilder(), PennFudanPedestrianDatasetBuilder(), TorchvisionDatasetBuilder.list_dataset_builders()}"
         )
-        dataset_builder = KittiTinyDatasetBuilder(flavor="torchvision")
+        dataset_builder = KittiTinyDatasetBuilder(flavor="torchvision", label_offset=1)
         # dataset_builder = PennFudanPedestrianDatasetBuilder(
-        #     flavor="torchvision", include_masks=False
+        #     flavor="torchvision", include_masks=False, label_offset=1
         # )
         return dataset_builder
 

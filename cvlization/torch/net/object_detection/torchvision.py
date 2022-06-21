@@ -21,6 +21,9 @@ class TorchvisionDetectionModelFactory:
         lr: float = 0.0001,
         pretrained: bool = True,
     ):
+        """
+        :param num_classes: Number of classes to detect, excluding the background.
+        """
         self.num_classes = num_classes
         self.net = net
         self.lightning = lightning
@@ -30,7 +33,7 @@ class TorchvisionDetectionModelFactory:
 
     def run(self):
         model = create_detection_model_with_torchvision(
-            self.num_classes, self.net, pretrained=self.pretrained
+            self.num_classes + 1, self.net, pretrained=self.pretrained
         )
         if self.lightning:
             model = LitDetector(model, lr=self.lr)
@@ -38,7 +41,25 @@ class TorchvisionDetectionModelFactory:
 
     @classmethod
     def model_names(cls):
-        model_names = ["maskrcnn_resnet50_fpn"]
+        model_names = [
+            "retinanet_resnet50_fpn",
+            "fasterrcnn_resnet50_fpn",
+            "retinanet_mobilenet",
+        ] + [
+            f"retinanet_{backbone}"
+            for backbone in [
+                "resnet18",
+                "resnet34",
+                "resnet50",
+                "resnet101",
+                "resnet152",
+            ]
+        ]
+        if hasattr(detection, "fcos_resnet50_fpn"):
+            model_names += [
+                "fcos_resnet50_fpn",
+                "fcos_resnet50",
+            ]
         return model_names
 
 
@@ -80,6 +101,10 @@ class LitDetector(LightningModule):
         assert len(detections) == len(
             targets
         ), f"{len(detections)} detections but {len(targets)} targets. detections={detections}"
+        for det in detections:
+            idx = det["labels"] > 0
+            det["boxes"] = det["boxes"][idx]
+            det["labels"] = det["labels"][idx]
         self.val_mAP.update(preds=detections, target=targets)
 
     def validation_epoch_end(self, outputs):

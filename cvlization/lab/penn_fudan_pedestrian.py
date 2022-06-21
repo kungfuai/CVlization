@@ -3,6 +3,7 @@ import numpy as np
 import os
 from subprocess import check_output
 from PIL import Image
+from skimage import measure
 from typing import Union, List
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
@@ -20,6 +21,7 @@ class PennFudanPedestrianDatasetBuilder:
     data_dir: str = "./data"
     preload: bool = False
     include_masks: bool = True
+    label_offset: int = 0
 
     @property
     def dataset_provider(self):
@@ -61,7 +63,9 @@ class PennFudanPedestrianDatasetBuilder:
             channels_first=self.channels_first,
             data_dir=self.data_dir,
             start_idx=0,
-            end_idx=-50,
+            end_idx=10,
+            label_offset=self.label_offset,
+            # end_idx=-50,
         )
         if self.preload:
             ds.load_annotations()
@@ -82,8 +86,10 @@ class PennFudanPedestrianDatasetBuilder:
         ds = PennFudanPedestrianDataset(
             channels_first=self.channels_first,
             data_dir=self.data_dir,
-            start_idx=-50,
+            # start_idx=-50,
+            start_idx=-10,
             end_idx=None,
+            label_offset=self.label_offset,
         )
         if self.preload:
             ds.load_annotations()
@@ -102,10 +108,7 @@ class PennFudanPedestrianDatasetBuilder:
 
 class PennFudanPedestrianDataset:
 
-    CLASSES = (
-        "Background",
-        "Pedestrian",
-    )
+    CLASSES = ("Pedestrian",)
 
     def __init__(
         self,
@@ -114,6 +117,7 @@ class PennFudanPedestrianDataset:
         start_idx: int = 0,
         end_idx: int = -50,
         include_masks: bool = True,
+        label_offset: int = 0,
     ):
         """
         Data flow: download -> extract -> load_annotations
@@ -125,6 +129,7 @@ class PennFudanPedestrianDataset:
         self.end_idx = end_idx
         self.include_masks = include_masks
         self.parent_dir = "PennFudanPed"
+        self.label_offset = label_offset
 
     def __getitem__(self, index: int):
         # load images and masks
@@ -154,7 +159,7 @@ class PennFudanPedestrianDataset:
         # of binary masks
         masks = mask == obj_ids[:, None, None]
         if self.channels_first:
-            pass
+            pass  # N, H, W
         else:
             masks = masks.transpose((1, 2, 0))
 
@@ -171,9 +176,12 @@ class PennFudanPedestrianDataset:
 
         boxes = np.array(boxes, dtype=np.float32)
         # there is only one foreground class
-        labels = np.ones((num_objs, 1), dtype=np.int64)
+        labels = np.zeros((num_objs, 1), dtype=np.int64) + self.label_offset
         labels = labels.astype(np.float32)
         masks = np.array(masks, dtype=np.uint8)
+        assert (
+            masks.shape[0] == boxes.shape[0]
+        ), f"{masks.shape[0]} masks != {boxes.shape[0]} boxes"
 
         image_id = np.array([index])
         area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
@@ -242,16 +250,72 @@ class PennFudanPedestrianDataset:
         )
         self.imgs = self.imgs[self.start_idx : self.end_idx]
         self.masks = self.masks[self.start_idx : self.end_idx]
-        return self.masks
+        self.annotations = [
+            {"image_path": os.path.join(img_dir, img_path)} for img_path in self.imgs
+        ]
+        assert len(self.imgs) > 1, f"num images: {len(self.imgs)}"
+        return self.annotations
+
+    def create_coco_annotations(self):
+        if not self.annotations:
+            self.load_annotations()
+        images = []
+        annotations = []
+        obj_count = 0
+        for idx, ann in enumerate(self.annotations):
+            # filename = ann["image_path"]
+            filename = "PNGImages/" + self.imgs[idx]
+            example = self[idx]
+            inputs, targets = example
+            boxes, labels, masks = targets
+            img = inputs[0]
+            height = img.shape[1]
+            width = img.shape[2]
+            images.append(dict(id=idx, file_name=filename, height=height, width=width))
+            for j, box in enumerate(boxes):
+                category_id = int(labels[j])
+                x_min, y_min, x_max, y_max = tuple(box.ravel().tolist())
+                mask_img = masks[j]
+                contours = measure.find_contours(mask_img, 0.5)
+                data_anno = dict(
+                    image_id=idx,
+                    id=obj_count,
+                    category_id=int(category_id),
+                    bbox=[x_min, y_min, x_max - x_min, y_max - y_min],
+                    area=float((x_max - x_min) * (y_max - y_min)),
+                    segmentation=[],
+                    iscrowd=0,
+                )
+
+                # print(f"num contours: {len(contours)}")
+                for i_contour, contour in enumerate(contours):
+                    x_min = contour[:, 0].min()
+                    x_max = contour[:, 0].max()
+                    y_min = contour[:, 1].min()
+                    y_max = contour[:, 1].max()
+                    mask_area = (x_max - x_min) * (y_max - y_min)
+                    # print(f"mask_area for {i_contour}:", mask_area)
+                    if mask_area > 1000:
+                        contour = np.flip(contour, axis=1)
+                        segmentation = contour.ravel().tolist()
+                        data_anno["segmentation"].append(segmentation)
+                annotations.append(data_anno)
+                obj_count += 1
+
+        return dict(
+            images=images,
+            annotations=annotations,
+            categories=[{"id": k, "name": c} for k, c in enumerate(self.CLASSES)],
+        )
 
 
 if __name__ == "__main__":
     """
     python -m cvlization.lab.penn_fudan_pedestrian
     """
-    dsb = PennFudanPedestrianDatasetBuilder(flavor=None)
-    ds = PennFudanPedestrianDataset(start_idx=0, end_idx=12)
-    # ds = dsb.training_dataset()
+    dsb = PennFudanPedestrianDatasetBuilder(flavor=None, preload=True)
+    # ds = PennFudanPedestrianDataset(start_idx=0, end_idx=12)
+    ds = dsb.training_dataset()
     print(len(ds), "examples in the dataset")
     example = ds[10]
     assert isinstance(example, tuple)

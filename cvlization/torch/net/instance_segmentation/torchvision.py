@@ -9,6 +9,8 @@ from torchmetrics.detection.map import MeanAveragePrecision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
+from cvlization.torch.net.object_detection.mmdet import MODEL_MENU
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +25,9 @@ class TorchvisionInstanceSegmentationModelFactory:
         lr: float = 0.0001,
         pretrained: bool = True,
     ):
+        """
+        :param num_classes: Number of classes to detect, excluding the background.
+        """
         self.num_classes = num_classes
         self.net = net
         self.lightning = lightning
@@ -40,26 +45,7 @@ class TorchvisionInstanceSegmentationModelFactory:
 
     @classmethod
     def model_names(cls):
-        model_names = [
-            "retinanet_resnet50_fpn",
-            "fasterrcnn_resnet50_fpn",
-            "retinanet_mobilenet",
-        ] + [
-            f"retinanet_{backbone}"
-            for backbone in [
-                "resnet18",
-                "resnet34",
-                "resnet50",
-                "resnet101",
-                "resnet152",
-            ]
-        ]
-        if hasattr(detection, "fcos_resnet50_fpn"):
-            model_names += [
-                "fcos_resnet50_fpn",
-                "fcos_resnet50",
-            ]
-        return model_names
+        return ["maskrcnn_resnet50_fpn"]
 
 
 class LitDetector(LightningModule):
@@ -131,14 +117,17 @@ def create_instance_segmentation_model_with_torchvision(
         # get number of input features for the classifier
         in_features = model.roi_heads.box_predictor.cls_score.in_features
         # replace the pre-trained head with a new one
-        model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+        num_classes_including_background = num_classes + 1
+        model.roi_heads.box_predictor = FastRCNNPredictor(
+            in_features, num_classes_including_background
+        )
 
         # now get the number of input features for the mask classifier
         in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
         hidden_layer = 256
         # and replace the mask predictor with a new one
         model.roi_heads.mask_predictor = MaskRCNNPredictor(
-            in_features_mask, hidden_layer, num_classes
+            in_features_mask, hidden_layer, num_classes_including_background
         )
     else:
         raise ValueError(

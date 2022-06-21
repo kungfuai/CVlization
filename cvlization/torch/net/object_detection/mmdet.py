@@ -5,13 +5,10 @@ import numpy as np
 import mmcv
 from mmcv.runner import load_checkpoint
 from mmdet.datasets.builder import DATASETS
-from mmdet.datasets import build_dataset
 from mmdet.datasets.custom import CustomDataset
 from mmdet.apis import set_random_seed, train_detector
-from mmdet.apis import inference_detector, show_result_pyplot
 from mmdet.models import build_detector
 from cvlization.utils.io import download_file
-from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
 
 
 @dataclass
@@ -195,7 +192,7 @@ class MMDatasetAdaptor:
                     assert (
                         dataset.annotations is not None
                     ), f"{dataset} has no annotations"
-                for row in dataset.annotations:
+                for idx, row in enumerate(dataset.annotations):
                     image_path = row["image_path"]
                     image = mmcv.imread(image_path)
                     height, width = image.shape[:2]
@@ -203,14 +200,37 @@ class MMDatasetAdaptor:
                         dataset_builder.image_dir, ""
                     ).lstrip("/")
                     data_info = dict(filename=relative_path, width=width, height=height)
-                    data_anno = dict(
-                        bboxes=np.array(row["bboxes"], dtype=np.float32).reshape(-1, 4),
-                        labels=np.array(row["labels"], dtype=np.long),
-                        bboxes_ignore=np.array(
-                            row["bboxes_ignore"], dtype=np.float32
-                        ).reshape(-1, 4),
-                        labels_ignore=np.array(row["labels_ignore"], dtype=np.long),
-                    )
+                    if "bboxes" in row:
+                        labels = np.array(row["labels"], dtype=np.long)
+                        if labels.ndim == 2:
+                            labels = np.squeeze(labels, -1)
+                        data_anno = dict(
+                            bboxes=np.array(row["bboxes"], dtype=np.float32).reshape(
+                                -1, 4
+                            ),
+                            labels=labels,
+                            bboxes_ignore=np.array(
+                                row["bboxes_ignore"], dtype=np.float32
+                            ).reshape(-1, 4),
+                            labels_ignore=np.array(row["labels_ignore"], dtype=np.long),
+                        )
+                    else:
+                        example = dataset[idx]
+                        targets = example[1]
+                        if isinstance(targets, dict):
+                            bboxes = targets["boxes"]
+                            labels = targets["labels"]
+                        elif isinstance(targets, list):
+                            bboxes, labels = targets[0], targets[1]
+                        if labels.ndim == 2:
+                            labels = np.squeeze(labels, -1)
+                        data_anno = dict(
+                            bboxes=np.array(bboxes, dtype=np.float32).reshape(-1, 4),
+                            labels=np.array(labels, dtype=np.long),
+                            bboxes_ignore=None,
+                            labels_ignore=None,
+                        )
+
                     data_info.update(ann=data_anno)
                     data_infos.append(data_info)
                 return data_infos

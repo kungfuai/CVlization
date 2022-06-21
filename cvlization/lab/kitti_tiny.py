@@ -15,6 +15,7 @@ class KittiTinyDatasetBuilder:
     flavor: str = None  # "torchvision"
     data_dir: str = "./data"
     preload: bool = False
+    label_offset: int = 0
 
     @property
     def dataset_provider(self):
@@ -94,7 +95,11 @@ class KittiTinyDataset:
     CLASSES = ("Car", "Pedestrian", "Cyclist")
 
     def __init__(
-        self, data_dir="./data", ann_file="kitti_tiny/train.txt", channels_first=True
+        self,
+        data_dir: str = "./data",
+        ann_file: str = "kitti_tiny/train.txt",
+        channels_first: bool = True,
+        label_offset: int = 0,
     ):
         """
         Data flow: download -> extract -> load_annotations
@@ -103,6 +108,7 @@ class KittiTinyDataset:
         self.data_dir = data_dir
         self.ann_file = os.path.join(data_dir, ann_file)
         self.channels_first = channels_first
+        self.label_offset = label_offset
 
     def __getitem__(self, index: int):
         if self.annotations is None:
@@ -113,7 +119,10 @@ class KittiTinyDataset:
         np_img = (np_img - np_img.min()) / max(1e-3, np_img.max() - np_img.min())
         if self.channels_first:
             np_img = np_img.transpose((2, 0, 1))
-        return [np_img], [row["bboxes"], np.expand_dims(row["labels"], -1)]
+        return [np_img], [
+            row["bboxes"],
+            self.label_offset + np.expand_dims(row["labels"], -1),
+        ]
 
     def __len__(self):
         if self.annotations is None:

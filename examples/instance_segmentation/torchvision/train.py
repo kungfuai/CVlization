@@ -47,7 +47,7 @@ class TrainingSession:
     def create_dataset(self):
         # Use TorchvisionDatasetBuilder.list_datasets() to get a list of available datasets.
         dataset_builder = PennFudanPedestrianDatasetBuilder(
-            flavor="torchvision", include_masks=True
+            flavor="torchvision", include_masks=True, label_offset=1
         )
         return dataset_builder
 
