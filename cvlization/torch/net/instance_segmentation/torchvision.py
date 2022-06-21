@@ -1,15 +1,10 @@
 import logging
-from torch import nn
 import torch
 import torchvision
-from torchvision.models import detection
-from torchvision.models.detection.rpn import AnchorGenerator
 from pytorch_lightning.core.lightning import LightningModule
 from torchmetrics.detection.map import MeanAveragePrecision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-
-from cvlization.torch.net.object_detection.mmdet import MODEL_MENU
 
 
 LOGGER = logging.getLogger(__name__)

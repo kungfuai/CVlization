@@ -10,9 +10,18 @@ from ..data.dataset_builder import TransformedMapStyleDataset
 
 @dataclass
 class KittiTinyDatasetBuilder:
+    """
+    :param label_offset
+        By default, label_offset is 0 which means class labels start from 0. Set it to 1 if you want to
+        reserve 0 for the background class.
+    :param flavor
+        If None, `__getitem__()` will return a list of input arrays and a list of target arrays. If
+        "torchvision", it will return an image (numpy array), and a dictionary.
+    """
+
     channels_first: bool = True
     to_torch_tensor: bool = True
-    flavor: str = None  # "torchvision"
+    flavor: str = None  # one of None, "torchvision"
     data_dir: str = "./data"
     preload: bool = False
     label_offset: int = 0

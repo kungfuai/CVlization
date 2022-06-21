@@ -165,10 +165,6 @@ MODEL_MENU = {
         "config_path": "configs/dyhead/atss_r50_fpn_dyhead_1x_coco.py",
         "checkpoint_url": "https://download.openmmlab.com/mmdetection/v2.0/dyhead/atss_r50_fpn_dyhead_4x4_1x_coco/atss_r50_fpn_dyhead_4x4_1x_coco_20211219_023314-eaa620c6.pth",
     },
-    # "queryinst": { # for instance segmentation
-    #     "config_path": "configs/queryinst/queryinst_r50_fpn_1x_coco.py",
-    #     "checkpoint_url": "https://download.openmmlab.com/mmdetection/v2.0/queryinst/queryinst_r50_fpn_1x_coco/queryinst_r50_fpn_1x_coco_20210907_084916-5a8f1998.pth"
-    # },
 }
 
 

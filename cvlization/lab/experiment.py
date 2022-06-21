@@ -31,15 +31,18 @@ class Experiment:
     Example usage:
 
     e = Experiment(
-        model_spec=Experiment.model_specs()["resnet18"], # model_spec is framework-agnostic (e.g. tf, torch)
+        # model_spec is framework-agnostic (e.g. tf, torch)
+        model_spec=Experiment.model_specs()["resnet18"],
         dataset=Experiment.datasets()["cifar10"],
-        training_pipeline=Experiment.training_pipelines()["resnet50_tf"],  # trainer is framework-specific
+        # trainer is framework-specific
+        training_pipeline=Experiment.training_pipelines()["resnet50_tf"],
     )
     e.run()
     # e.run_remotely()  # to run in the cloud
 
     Design goals:
-        ModelSpec is an abstract contract about the modeling task. What are the inputs and outputs?
+        ModelSpec is an abstract contract about the modeling task.
+            What are the inputs and outputs?
             What are the loss functions? These are declared without specifying how they are implemented.
         Dataset is responsible for instantiating the data.
         Trainer is responsible for instantiating the neural network architecture and training the model.
