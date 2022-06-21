@@ -63,7 +63,7 @@ class PennFudanPedestrianDatasetBuilder:
             channels_first=self.channels_first,
             data_dir=self.data_dir,
             start_idx=0,
-            end_idx=10,
+            end_idx=30,
             label_offset=self.label_offset,
             # end_idx=-50,
         )
@@ -87,7 +87,7 @@ class PennFudanPedestrianDatasetBuilder:
             channels_first=self.channels_first,
             data_dir=self.data_dir,
             # start_idx=-50,
-            start_idx=-10,
+            start_idx=-20,
             end_idx=None,
             label_offset=self.label_offset,
         )

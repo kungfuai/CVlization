@@ -87,6 +87,7 @@ class LitDetector(LightningModule):
         assert len(detections) == len(
             targets
         ), f"{len(detections)} detections but {len(targets)} targets. detections={detections}"
+        # TODO: add metric for masks!
         self.val_mAP.update(preds=detections, target=targets)
 
     def validation_epoch_end(self, outputs):

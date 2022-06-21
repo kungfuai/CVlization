@@ -94,7 +94,7 @@ if __name__ == "__main__":
     parser.add_argument("--net", type=str, default="fcos_resnet50_fpn")
     # Alternative options:
     # net="retinanet_resnet50_fpn",
-    # net="fasterrcnn_resnet50_fpn",
+    # net="fasterrcnn_resnet50_fpn", and more
     parser.add_argument("--track", action="store_true")
 
     args = parser.parse_args()
