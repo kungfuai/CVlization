@@ -101,10 +101,10 @@ class LitDetector(LightningModule):
         assert len(detections) == len(
             targets
         ), f"{len(detections)} detections but {len(targets)} targets. detections={detections}"
-        for det in detections:
-            idx = det["labels"] > 0
-            det["boxes"] = det["boxes"][idx]
-            det["labels"] = det["labels"][idx]
+        # for det in detections:
+        #     idx = det["labels"] > 0
+        #     det["boxes"] = det["boxes"][idx]
+        #     det["labels"] = det["labels"][idx]
         self.val_mAP.update(preds=detections, target=targets)
 
     def validation_epoch_end(self, outputs):
@@ -185,7 +185,7 @@ def create_detection_model_with_torchvision(
         )
         model = detection.FCOS(
             backbone=backbone,
-            num_classes=num_classes,
+            num_classes=num_classes - 1,
             anchor_generator=anchor_generator,
         )
     elif net == "retinanet_resnet50_fpn":
@@ -204,7 +204,7 @@ def create_detection_model_with_torchvision(
         backbone.out_channels = 1280
         model = detection.RetinaNet(
             backbone=backbone,
-            num_classes=num_classes,
+            num_classes=num_classes - 1,
             anchor_generator=anchor_generator,
         )
     elif net.startswith("retinanet_resnet"):
@@ -216,7 +216,7 @@ def create_detection_model_with_torchvision(
         )
         model = detection.RetinaNet(
             backbone=backbone,
-            num_classes=num_classes,
+            num_classes=num_classes - 1,
             anchor_generator=anchor_generator,
         )
     else:

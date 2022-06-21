@@ -39,7 +39,7 @@ class TrainingSession:
             num_classes=self.num_classes,
             net=self.args.net,
             lightning=True,
-            lr=0.00001,  # TODO: lr is specified in 2 places
+            lr=0.0001,  # TODO: lr is specified in 2 places
         ).run()
         return model
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     options = TorchvisionDetectionModelFactory.model_names()
     parser = ArgumentParser(
         epilog=f"""
-            Options for net: {options} ({len(options)} of them).
+            Options for net: {options} ({len(options)} of them). Though you probably want a fpn in it.
             """
     )
     parser.add_argument("--net", type=str, default="fcos_resnet50_fpn")
