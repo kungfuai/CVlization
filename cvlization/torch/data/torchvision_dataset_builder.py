@@ -35,6 +35,10 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
     def dataset_provider(self):
         return DatasetProvider.TORCHVISION
 
+    @classmethod
+    def list_dataset_builders(cls):
+        return [cls(n) for n in torchvision_dataset_classnames()]
+
     def __post_init__(self):
         image_mean, image_std = self.image_mean, self.image_std
         if image_mean is None or image_std is None:
