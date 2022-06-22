@@ -25,30 +25,9 @@ def PanopticSegmentation(
         return [
             # The following targets should have the same sequence length.
             ModelTarget(
-                key="bbox",
-                column_type=DataColumnType.BOUNDING_BOXES,
-                raw_shape=[None, 4],
-                sequence=sequence_key,
-            ),
-            ModelTarget(
-                key="bbox_class",
-                column_type=DataColumnType.CATEGORICAL,
-                raw_shape=[None, 1],
-                n_categories=n_categories,
-                sequence=sequence_key,
-            ),
-            ModelTarget(
-                key="bbox_mask",  # things
-                column_type=DataColumnType.IMAGE,
-                raw_shape=[None, None, None],
-                # TODO: the n_channels of mask should be the same as num_categories.
-                sequence=sequence_key,
-            ),
-            ModelTarget(
                 key="stuff_mask",
                 column_type=DataColumnType.IMAGE,
                 raw_shape=[None, None, None],
-                # TODO: the n_channels of mask should be the same as num_categories.
                 sequence=sequence_key,
             ),
         ]
