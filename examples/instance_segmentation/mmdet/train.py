@@ -1,13 +1,12 @@
 from mmdet.datasets import build_dataset
-from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
 from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
-from cvlization.torch.net.object_detection.mmdet import (
-    MMDetectionModels,
+from cvlization.torch.net.instance_segmentation.mmdet import (
+    MMInstanceSegmentationModels,
     MMDatasetAdaptor,
-    MMDetectionTrainer,
+    MMTrainer,
 )
 
-# pip install mmdet==2.24.1
+# pip install mmdet==2.24.1 or 2.25.0
 # pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html
 
 
@@ -19,20 +18,13 @@ class TrainingSession:
         self.args = args
 
     def run(self):
-        # User: Need to adjust num_classes to match the dataset.
-        self.dataset_builder_cls = KittiTinyDatasetBuilder
-        # self.dataset_builder_cls = PennFudanPedestrianDatasetBuilder
+        self.dataset_builder_cls = PennFudanPedestrianDatasetBuilder
         num_classes = self.dataset_builder_cls().num_classes
         self.model, self.cfg = self.create_model(num_classes)
-        # self.cfg.data.samples_per_gpu = 2
-        # self.cfg.optimizer.lr = 0.00001
         self.datasets = self.create_dataset(self.cfg)
         self.trainer = self.create_trainer(self.cfg, self.args.net)
         self.cfg = self.trainer.config
-        # Additional customization of the config here. e.g.
-        #   cfg.optimizer.lr = 0.0001
         print("batch size:", self.cfg.data.samples_per_gpu)
-        print(self.datasets[0])
         self.trainer.fit(
             model=self.model,
             train_dataset=self.datasets[0],
@@ -40,18 +32,18 @@ class TrainingSession:
         )
 
     def create_model(self, num_classes: int):
-        model_registry = MMDetectionModels(num_classes=num_classes)
+        model_registry = MMInstanceSegmentationModels(num_classes=num_classes)
         model_dict = model_registry[self.args.net]
         model, cfg = model_dict["model"], model_dict["config"]
+        # print("******************************")
+        # print(cfg.pretty_text)
+
         return model, cfg
 
     def create_dataset(self, config):
         dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False)
-        dataset_classname = MMDatasetAdaptor.adapt_and_register_detection_dataset(dsb)
-        print("registered:", dataset_classname)
-
         MMDatasetAdaptor.set_dataset_info_in_config(
-            config, dataset_classname=dataset_classname, image_dir=dsb.image_dir
+            config, dataset_builder=dsb, image_dir=dsb.image_dir
         )
 
         if hasattr(config.data.train, "dataset"):
@@ -62,38 +54,38 @@ class TrainingSession:
         else:
             datasets = [
                 build_dataset(config.data.train),
-                build_dataset(config.data.val),
             ]
+            datasets.append(build_dataset(config.data.val))
 
-        print("\n***** Training data:")
+        # print(config.pretty_text)
+        print("\n***** Training data:", type(datasets[0]))
         print(datasets[0])
 
         print("\n***** Validation data:")
         print(datasets[1])
+
+        print("\n----------------------------- first training example:")
+        print(datasets[0][0])
         return datasets
 
     def create_trainer(self, cfg, net: str):
-        return MMDetectionTrainer(cfg, net)
+        return MMTrainer(cfg, net)
 
 
 if __name__ == "__main__":
     """
-    python -m examples.object_detection.mmdet.train
+    python -m examples.instance_segmentation.mmdet.train
     """
 
     from argparse import ArgumentParser
 
-    options = MMDetectionModels.model_names()
+    options = MMInstanceSegmentationModels.model_names()
     parser = ArgumentParser(
         epilog=f"""
             Options for net: {options} ({len(options)} of them).
             """
     )
-    parser.add_argument("--net", type=str, default="fcos")
-    # Alternative options:
-    # net="deformable_detr",
-    # net="dyhead",
-    # net="retinanet_r18"
+    parser.add_argument("--net", type=str, default="maskrcnn_r50")
     parser.add_argument("--track", action="store_true")
 
     args = parser.parse_args()

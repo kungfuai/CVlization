@@ -10,11 +10,21 @@ from ..data.dataset_builder import TransformedMapStyleDataset
 
 @dataclass
 class KittiTinyDatasetBuilder:
+    """
+    :param label_offset
+        By default, label_offset is 0 which means class labels start from 0. Set it to 1 if you want to
+        reserve 0 for the background class.
+    :param flavor
+        If None, `__getitem__()` will return a list of input arrays and a list of target arrays. If
+        "torchvision", it will return an image (numpy array), and a dictionary.
+    """
+
     channels_first: bool = True
     to_torch_tensor: bool = True
-    flavor: str = "torchvision"
+    flavor: str = None  # one of None, "torchvision"
     data_dir: str = "./data"
     preload: bool = False
+    label_offset: int = 0
 
     @property
     def dataset_provider(self):
@@ -23,6 +33,10 @@ class KittiTinyDatasetBuilder:
     @property
     def image_dir(self):
         return os.path.join(self.data_dir, "kitti_tiny")
+
+    @property
+    def num_classes(self):
+        return len(KittiTinyDataset.CLASSES)
 
     def get_totensor_transform(self):
         import torch
@@ -90,7 +104,11 @@ class KittiTinyDataset:
     CLASSES = ("Car", "Pedestrian", "Cyclist")
 
     def __init__(
-        self, data_dir="./data", ann_file="kitti_tiny/train.txt", channels_first=True
+        self,
+        data_dir: str = "./data",
+        ann_file: str = "kitti_tiny/train.txt",
+        channels_first: bool = True,
+        label_offset: int = 0,
     ):
         """
         Data flow: download -> extract -> load_annotations
@@ -99,6 +117,7 @@ class KittiTinyDataset:
         self.data_dir = data_dir
         self.ann_file = os.path.join(data_dir, ann_file)
         self.channels_first = channels_first
+        self.label_offset = label_offset
 
     def __getitem__(self, index: int):
         if self.annotations is None:
@@ -109,7 +128,10 @@ class KittiTinyDataset:
         np_img = (np_img - np_img.min()) / max(1e-3, np_img.max() - np_img.min())
         if self.channels_first:
             np_img = np_img.transpose((2, 0, 1))
-        return [np_img], [row["bboxes"], np.expand_dims(row["labels"], -1)]
+        return [np_img], [
+            row["bboxes"],
+            self.label_offset + np.expand_dims(row["labels"], -1),
+        ]
 
     def __len__(self):
         if self.annotations is None:
@@ -181,12 +203,15 @@ class KittiTinyDataset:
                     labels_ignore=np.array(gt_labels_ignore, dtype=np.int32),
                 )
                 annotations.append(row)
-        
+
         self.annotations = annotations
         return annotations
 
 
 if __name__ == "__main__":
+    """
+    python -m cvlization.lab.kitti_tiny
+    """
     kitti = KittiTinyDataset()
     print(len(kitti), "examples in the dataset")
     example = kitti[10]
@@ -208,6 +233,7 @@ if __name__ == "__main__":
         print("batch:", i, len(inputs), "images")
         print("image 0:", inputs[0][0].shape)
         print("len(targets) =", len(targets))
-        print("targets[0]:", targets[0])
-        print("targets[1]:", targets[1])
+        print("targets [0]:", targets[0])
+        print("targets 0[0]:", targets[0][0].shape)
+        print("targets 0[1]:", targets[0][1].shape)
         break

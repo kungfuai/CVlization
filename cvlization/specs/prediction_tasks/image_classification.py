@@ -7,8 +7,14 @@ def ImageClassification(
     num_channels: int = 3,
     image_height: int = None,
     image_width: int = None,
-    channels_first: bool = False,
+    channels_first: bool = True,
+    **kwargs,
 ) -> ModelSpec:
+    """
+    channels_first: whether the input image has the channels axis in the first dimension.
+        For Pytorch, this is typically True. For Tensorflow, this is usually False.
+    """
+
     def get_model_inputs():
         if channels_first:
             raw_shape = [num_channels, image_height, image_width]
@@ -47,4 +53,6 @@ def ImageClassification(
                 )
             ]
 
-    return ModelSpec(model_inputs=get_model_inputs(), model_targets=get_model_targets())
+    return ModelSpec(
+        model_inputs=get_model_inputs(), model_targets=get_model_targets(), **kwargs
+    )

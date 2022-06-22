@@ -2,14 +2,14 @@ from ..data_column import DataColumnType
 from ..model_spec import ModelSpec, ModelInput, ModelTarget
 
 
-def ObjectDetection(
+def PanopticSegmentation(
     n_channels: int = 3,
     n_categories: int = 3,
     sequence_key: str = "detection",
     **kwargs
 ) -> ModelSpec:
     """
-    Example models: RetinaNet, Pix2Seq
+    Example models:
     """
 
     def get_model_inputs():
