@@ -2,6 +2,7 @@ from typing import Dict
 
 from ..training_pipeline import TrainingPipeline
 from ..specs import MLFramework, ModelSpec
+from ..specs.prediction_tasks.image_classification import ImageClassification
 
 
 def training_pipelines() -> Dict[str, TrainingPipeline]:
@@ -20,11 +21,12 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         ),
         "resnet50_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            model=ModelSpec(
+            model=ImageClassification(
                 image_backbone="ResNet50",
                 image_pool="flatten",
                 pretrained=True,
                 dropout=0,
+                channels_first=False,
             ),
             epochs=50,
             train_batch_size=256,
@@ -37,8 +39,11 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         ),
         "mobilenet_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            model=ModelSpec(
-                image_backbone="MobileNetV2", image_pool="flatten", pretrained=True
+            model=ImageClassification(
+                image_backbone="MobileNetV2",
+                image_pool="flatten",
+                pretrained=True,
+                channels_first=False,
             ),
             epochs=50,
             train_batch_size=256,
@@ -50,11 +55,12 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         ),
         "resnet18_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            model=ModelSpec(
+            model=ImageClassification(
                 image_backbone="resnet18v2",
                 input_shape=[32, 32, 3],
                 image_pool="flatten",
                 dropout=0,
+                channels_first=False,
             ),
             epochs=100,
             train_batch_size=256,
@@ -67,11 +73,12 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         ),
         "resnet18_smallimage_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            model=ModelSpec(
+            model=ImageClassification(
                 image_backbone="resnet18v2_smallimage",
                 input_shape=[32, 32, 3],
                 image_pool="flatten",
                 dropout=0,
+                channels_first=False,
             ),
             epochs=100,
             train_batch_size=256,
@@ -84,10 +91,11 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         ),
         "simple_tf": TrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
-            model=ModelSpec(
+            model=ImageClassification(
                 image_backbone="simple",
                 image_pool="flatten",
                 dropout=0,
+                channels_first=False,
             ),
             epochs=100,
             train_batch_size=256,
@@ -103,7 +111,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         "davidnet_torch": TrainingPipeline(
             ml_framework=MLFramework.PYTORCH,
             # https://myrtle.ai/learn/how-to-train-your-resnet/
-            model=ModelSpec(
+            model=ImageClassification(
                 image_backbone="davidnet",
                 image_pool="flatten",
                 dense_layer_sizes=[10],
@@ -138,7 +146,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         ),
         "resnet18_torch": TrainingPipeline(
             ml_framework=MLFramework.PYTORCH,
-            model=ModelSpec(
+            model=ImageClassification(
                 image_backbone="resnet18",
                 image_pool="flatten",
                 pretrained=True,
@@ -172,7 +180,7 @@ def training_pipelines() -> Dict[str, TrainingPipeline]:
         "resnet18_torch_gc": TrainingPipeline(
             # with gradient accumulation (gc)
             ml_framework=MLFramework.PYTORCH,
-            model=ModelSpec(
+            model=ImageClassification(
                 image_backbone="resnet18",
                 image_pool="flatten",
                 pretrained=False,

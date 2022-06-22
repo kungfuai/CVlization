@@ -1,5 +1,6 @@
 """Goal: run computer vision experiments easily.
 """
+import logging
 from typing import Dict
 
 from cvlization.data.dataset_builder import DatasetBuilder
@@ -22,20 +23,26 @@ from ..training_pipeline import TrainingPipeline
 from .experiment_tracker import ExperimentTracker
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 class Experiment:
     """
     Example usage:
 
     e = Experiment(
-        model_spec=Experiment.model_specs()["resnet18"], # model_spec is framework-agnostic (e.g. tf, torch)
+        # model_spec is framework-agnostic (e.g. tf, torch)
+        model_spec=Experiment.model_specs()["resnet18"],
         dataset=Experiment.datasets()["cifar10"],
-        training_pipeline=Experiment.training_pipelines()["resnet50_tf"],  # trainer is framework-specific
+        # trainer is framework-specific
+        training_pipeline=Experiment.training_pipelines()["resnet50_tf"],
     )
     e.run()
     # e.run_remotely()  # to run in the cloud
 
     Design goals:
-        ModelSpec is an abstract contract about the modeling task. What are the inputs and outputs?
+        ModelSpec is an abstract contract about the modeling task.
+            What are the inputs and outputs?
             What are the loss functions? These are declared without specifying how they are implemented.
         Dataset is responsible for instantiating the data.
         Trainer is responsible for instantiating the neural network architecture and training the model.
@@ -66,6 +73,7 @@ class Experiment:
         # Assemble training pipeline and feed the data.
         if self.experiment_tracker is not None:
             self.experiment_tracker.setup().log_params(self.get_config_dict())
+        LOGGER.info(f"Training pipeline: {self.training_pipeline}")
         self.training_pipeline.create_model().create_dataloaders(
             self.dataset_builder
         ).create_trainer().run()
@@ -106,7 +114,9 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument("--data", "-d", default="cifar10_torchvision")
-    parser.add_argument("--model_recipe", "-m", default="resnet18_torch")
+    parser.add_argument(
+        "--model_recipe", "-m", default="resnet18_torch"
+    )  # TODO: rename to algo?
     # parser.add_argument("--task", "-t", default="ImageClassification")
     parser.add_argument("--track", action="store_true")
 

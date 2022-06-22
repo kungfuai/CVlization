@@ -63,7 +63,7 @@ def test_experiment_can_get_config_dict():
 
 def test_experiment_can_run():
     # TODO: run an mnist exp.
-    model_spec = ImageClassification()
+    model_spec = ImageClassification(channels_first=False)
     model_spec.image_backbone = "simple"
     training_pipeline = TrainingPipeline(
         model=model_spec, ml_framework=MLFramework.TENSORFLOW
