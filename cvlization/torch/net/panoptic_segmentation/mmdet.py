@@ -3,7 +3,6 @@
 
 from dataclasses import dataclass
 import logging
-import json
 import os
 from subprocess import check_output
 import mmcv
@@ -20,7 +19,8 @@ LOGGER = logging.getLogger(__name__)
 class MMPanopticSegmentationModels:
     version: str = "2.24.1"  # this is the version of mmdetection
     data_dir: str = "./data"
-    num_classes: int = 3
+    num_things_classes: int = 3
+    num_stuff_classes: int = 3
     device: str = "cuda"
     work_dir = "./tmp"
 
@@ -49,22 +49,33 @@ class MMPanopticSegmentationModels:
             print("Downloading checkpoint...")
             download_file(checkpoint_url, checkpoint_filepath)
 
+        print(config.pretty_text)
+        # assert False
         if hasattr(config.model, "roi_head"):
             bbox_head = config.model.roi_head.bbox_head
             if isinstance(bbox_head, list):
                 for h in bbox_head:
-                    h["num_classes"] = self.num_classes
+                    h["num_classes"] = self.num_things_classes
             else:
-                bbox_head.num_classes = self.num_classes
+                bbox_head.num_classes = self.num_things_classes
 
             mask_head = config.model.roi_head.mask_head
             if isinstance(mask_head, list):
                 for h in mask_head:
-                    h["num_classes"] = self.num_classes
+                    h["num_classes"] = self.num_things_classes
             else:
-                mask_head.num_classes = self.num_classes
-        else:
-            config.model.bbox_head.num_classes = self.num_classes
+                mask_head.num_classes = self.num_things_classes
+        if hasattr(config.model, "semantic_head"):
+            config.model.semantic_head.num_things_classes = self.num_things_classes
+            config.model.semantic_head.num_stuff_classes = self.num_stuff_classes
+        if hasattr(config.model, "panoptic_head"):
+            config.model.panoptic_head.num_things_classes = self.num_things_classes
+            config.model.panoptic_head.num_stuff_classes = self.num_stuff_classes
+        if hasattr(config.model, "panoptic_fusion_head"):
+            config.model.panoptic_fusion_head.num_things_classes = (
+                self.num_things_classes
+            )
+            config.model.panoptic_fusion_head.num_stuff_classes = self.num_stuff_classes
 
         # Initialize the detector
         model = build_detector(config.model)
@@ -131,39 +142,43 @@ MODEL_MENU = {
         # https://download.openmmlab.com/mmdetection/v2.0/panoptic_fpn/panoptic_fpn_r50_fpn_1x_coco/panoptic_fpn_r50_fpn_1x_coco_20210821_101153-9668fd13.pth
         "checkpoint_url": "https://download.openmmlab.com/mmdetection/v2.0/panoptic_fpn/panoptic_fpn_r50_fpn_mstrain_3x_coco/panoptic_fpn_r50_fpn_mstrain_3x_coco_20210824_171155-5650f98b.pth",
     },
+    "maskformer_r50": {
+        "config_path": "configs/maskformer/maskformer_r50_mstrain_16x1_75e_coco.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmdetection/v2.0/maskformer/maskformer_r50_mstrain_16x1_75e_coco/maskformer_r50_mstrain_16x1_75e_coco_20220221_141956-bc2699cb.pth",
+    },
+    "maskrcnn_swin": {
+        "config_path": "configs/maskformer/maskformer_swin-l-p4-w12_mstrain_64x1_300e_coco.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmdetection/v2.0/maskformer/maskformer_swin-l-p4-w12_mstrain_64x1_300e_coco/maskformer_swin-l-p4-w12_mstrain_64x1_300e_coco_20220326_221612-061b4eb8.pth",
+    },
+    "mask2former_r50": {
+        "config_path": "configs/mask2former/mask2former_r50_lsj_8x2_50e_coco-panoptic.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmdetection/v2.0/mask2former/mask2former_r50_lsj_8x2_50e_coco-panoptic/mask2former_r50_lsj_8x2_50e_coco-panoptic_20220326_224516-11a44721.pth",
+    },
+    "mask2former_swin_t": {
+        "config_path": "configs/mask2former/mask2former_swin-t-p4-w7-224_lsj_8x2_50e_coco-panoptic.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmdetection/v2.0/mask2former/mask2former_swin-t-p4-w7-224_lsj_8x2_50e_coco-panoptic/mask2former_swin-t-p4-w7-224_lsj_8x2_50e_coco-panoptic_20220326_224553-fc567107.pth",
+    },
 }
 
 
 class MMDatasetAdaptor:
     @classmethod
-    def set_dataset_info_in_config(cls, cfg, image_dir):
-        image_dir = "/home/ubuntu/zz/coco/val2017"
-        seg_dir = "/home/ubuntu/zz/coco/annotations/panoptic_val2017"
+    def set_dataset_info_in_config(
+        cls, cfg, train_anno_file, val_anno_file, image_dir, seg_dir, classes
+    ):
         cfg.dataset_type = "COCOPanopticDataset"
-        import json
 
-        a = json.load(
-            open("/home/ubuntu/zz/coco/annotations/panoptic_val2017_last200.json")
-        )
-        classes = tuple([c["name"] for c in a["categories"]])
-
-        cfg.data.test.ann_file = (
-            "/home/ubuntu/zz/coco/annotations/panoptic_val2017_last200.json"
-        )
+        cfg.data.test.ann_file = val_anno_file
         cfg.data.test.img_prefix = image_dir
         cfg.data.test.seg_prefix = seg_dir
         cfg.data.test.classes = classes
 
-        cfg.data.train.ann_file = (
-            "/home/ubuntu/zz/coco/annotations/panoptic_val2017_first500.json"
-        )
+        cfg.data.train.ann_file = train_anno_file
         cfg.data.train.img_prefix = image_dir
         cfg.data.train.seg_prefix = seg_dir
         cfg.data.train.classes = classes
 
-        cfg.data.val.ann_file = (
-            "/home/ubuntu/zz/coco/annotations/panoptic_val2017_last200.json"
-        )
+        cfg.data.val.ann_file = val_anno_file
         cfg.data.val.img_prefix = image_dir
         cfg.data.val.seg_prefix = seg_dir
         cfg.data.val.classes = classes
