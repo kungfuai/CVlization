@@ -1,14 +1,15 @@
-# A Computer vision library easy to customize
+# A python library for accessible computer vision research and development
+
 
 ## Requirements
 
-- Docker
+- Docker or `conda` with at least `python3.6`
 
 ## Quickstart
 
 [Colab notebook: running experiments on cifar10](https://colab.research.google.com/drive/1FkZcZnJC_z-PuFSYM91kU1-d63-LecMJ?usp=sharing)
 
-## Quickstart for development
+## Quickstart for development using Docker
 ```
 bin/build.sh
 bin/test.sh
