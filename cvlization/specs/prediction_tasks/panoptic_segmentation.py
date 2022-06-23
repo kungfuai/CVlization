@@ -37,8 +37,20 @@ def PanopticSegmentation(
                 n_categories=n_categories,
                 sequence=sequence_key,
             ),
-            # TODO: take make_matching_figure from the following notebook into visulization sub folder.
-            # https://colab.research.google.com/drive/17HPR0sz1iXu3wTw7b0p6BMqvRTDmfT-x?usp=sharing
+            ModelTarget(
+                key="bbox_mask",  # things
+                column_type=DataColumnType.IMAGE,
+                raw_shape=[None, None, None],
+                # TODO: the n_channels of mask should be the same as num_categories.
+                sequence=sequence_key,
+            ),
+            ModelTarget(
+                key="stuff_mask",
+                column_type=DataColumnType.IMAGE,
+                raw_shape=[None, None, None],
+                # TODO: the n_channels of mask should be the same as num_categories.
+                sequence=sequence_key,
+            ),
         ]
 
     return ModelSpec(
