@@ -7,7 +7,20 @@
 
 ## Quickstart
 
+### Use CVlization on Colab
 [Colab notebook: running experiments on cifar10](https://colab.research.google.com/drive/1FkZcZnJC_z-PuFSYM91kU1-d63-LecMJ?usp=sharing)
+
+### Use CVlization on your local machine
+
+Run either `bin/train.sh` (if you have NVidia docker runtime installed) or `bin/train_no_docker.sh` (if you want to run without docker). This will start a default training job to produce an image classification model.
+
+To explore more model training options, use example training scripts in the `examples/` folder. For example,
+
+```
+python -m examples.instance_segementation.mmdet.train --help
+```
+
+is an example script to run instance segmentation model training using [`MMDetection`](https://github.com/open-mmlab/mmdetection).
 
 ## Quickstart for development using Docker
 ```
