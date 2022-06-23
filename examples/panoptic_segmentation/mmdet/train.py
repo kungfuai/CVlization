@@ -1,7 +1,6 @@
-from dataclasses import dataclass
-import json
+import os
 from mmdet.datasets import build_dataset
-from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
+from cvlization.lab.coco_panoptic_tiny import CocoPanopticTinyDatasetBuilder
 from cvlization.torch.net.panoptic_segmentation.mmdet import (
     MMPanopticSegmentationModels,
     MMDatasetAdaptor,
@@ -9,46 +8,26 @@ from cvlization.torch.net.panoptic_segmentation.mmdet import (
 )
 
 
-@dataclass
-class COCOPanopticDatasetBuilder:
-    train_annotation_path: str = (
-        "/home/ubuntu/zz/coco/annotations/panoptic_val2017_first500.json"
-    )
-    val_annotation_path: str = (
-        "/home/ubuntu/zz/coco/annotations/panoptic_val2017_last200.json"
-    )
-    img_dir = "/home/ubuntu/zz/coco/val2017"
-    seg_dir = "/home/ubuntu/zz/coco/annotations/panoptic_val2017"
-
-    def __post_init__(self):
-        a = json.load(open(self.val_annotation_path))
-        self.things_classes = [c["name"] for c in a["categories"] if c["isthing"] == 1]
-        self.stuff_classes = [c["name"] for c in a["categories"] if c["isthing"] == 0]
-        self.classes = [c["name"] for c in a["categories"]]
-
-    def download(self):
-        pass
-
-
 class TrainingSession:
-    # TODO: integrate with Experiment interface.
-    #   Create a MMDetTrainer class.
-
     def __init__(self, args):
         self.args = args
 
     def run(self):
-        dsb = COCOPanopticDatasetBuilder()
+        dsb = CocoPanopticTinyDatasetBuilder(preload=True, flavor=None)
         self.model, self.cfg = self.create_model(
             num_things_classes=len(dsb.things_classes),
             num_stuff_classes=len(dsb.stuff_classes),
         )
         self.datasets = self.create_dataset(
             self.cfg,
-            train_annotation_path=dsb.train_annotation_path,
-            val_annotation_path=dsb.val_annotation_path,
-            img_dir=dsb.img_dir,
-            seg_dir=dsb.seg_dir,
+            train_annotation_path=os.path.join(
+                dsb.data_dir, dsb.dataset_folder, dsb.train_ann_file
+            ),
+            val_annotation_path=os.path.join(
+                dsb.data_dir, dsb.dataset_folder, dsb.val_ann_file
+            ),
+            img_dir=os.path.join(dsb.data_dir, dsb.dataset_folder, dsb.img_folder),
+            seg_dir=os.path.join(dsb.data_dir, dsb.dataset_folder, dsb.seg_folder),
             classes=dsb.classes,
         )
         self.trainer = self.create_trainer(self.cfg, self.args.net)
