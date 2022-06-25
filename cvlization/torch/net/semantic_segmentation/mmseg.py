@@ -9,6 +9,8 @@ import mmcv
 from mmcv.runner import load_checkpoint
 from mmseg.apis import set_random_seed, train_segmentor, init_segmentor
 from mmseg.models import build_segmentor
+from mmseg.datasets.custom import CustomDataset
+from mmseg.datasets.builder import DATASETS
 from cvlization.utils.io import download_file
 
 
@@ -60,10 +62,13 @@ class MMSemanticSegmentationModels:
                 head.num_classes = self.num_classes
 
         # Since we use only one GPU, BN is used instead of SyncBN
+        # TODO: revisit norm type!
         config.norm_cfg = dict(type="BN", requires_grad=True)
+        # config.norm_cfg = dict(type="LN", requires_grad=True)
         config.model.backbone.norm_cfg = config.norm_cfg
         config.model.decode_head.norm_cfg = config.norm_cfg
-        config.model.auxiliary_head.norm_cfg = config.norm_cfg
+        if hasattr(config.model, "auxiliary_head"):
+            config.model.auxiliary_head.norm_cfg = config.norm_cfg
 
         # Initialize the detector
         model = build_segmentor(config.model)
@@ -126,35 +131,174 @@ class MMSemanticSegmentationModels:
         return os.path.isdir(self.download_filepath.replace(".tar.gz", ""))
 
 
+"""
+For vit:
+
+ File "/home/ubuntu/anaconda3/envs/tensorflow2_p38/lib/python3.8/site-packages/mmseg/models/backbones/vit.py", line 121, in forward
+    x = _inner_forward(x)
+  File "/home/ubuntu/anaconda3/envs/tensorflow2_p38/lib/python3.8/site-packages/mmseg/models/backbones/vit.py", line 114, in _inner_forward
+    x = self.attn(self.norm1(x), identity=x)
+  File "/home/ubuntu/anaconda3/envs/tensorflow2_p38/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1110, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/ubuntu/anaconda3/envs/tensorflow2_p38/lib/python3.8/site-packages/torch/nn/modules/batchnorm.py", line 135, in forward
+    self._check_input_dim(input)
+  File "/home/ubuntu/anaconda3/envs/tensorflow2_p38/lib/python3.8/site-packages/torch/nn/modules/batchnorm.py", line 407, in _check_input_dim
+    raise ValueError("expected 4D input (got {}D input)".format(input.dim()))
+ValueError: expected 4D input (got 3D input)
+"""
+
 MODEL_MENU = {
     "pspnet_r50": {
+        # https://github.com/open-mmlab/mmsegmentation/tree/master/configs/pspnet
         "config_path": "configs/pspnet/pspnet_r50-d8_512x1024_40k_cityscapes.py",
-        "checkpoint_url": "checkpoints/pspnet_r50-d8_512x1024_40k_cityscapes_20200605_003338-2966598c.pth",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/pspnet/pspnet_r50-d8_512x1024_40k_cityscapes/pspnet_r50-d8_512x1024_40k_cityscapes_20200605_003338-2966598c.pth",
     },
+    "deeplabv3_r18": {
+        # https://github.com/open-mmlab/mmsegmentation/tree/master/configs/deeplabv3
+        "config_path": "configs/deeplabv3/deeplabv3_r18-d8_512x1024_80k_cityscapes.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/deeplabv3/deeplabv3_r18-d8_512x1024_80k_cityscapes/deeplabv3_r18-d8_512x1024_80k_cityscapes_20201225_021506-23dffbe2.pth",
+    },
+    "deeplabv3_r50": {
+        # https://github.com/open-mmlab/mmsegmentation/tree/master/configs/deeplabv3
+        "config_path": "configs/deeplabv3/deeplabv3_r50-d8_512x1024_40k_cityscapes.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/deeplabv3/deeplabv3_r50-d8_512x1024_40k_cityscapes/deeplabv3_r50-d8_512x1024_40k_cityscapes_20200605_022449-acadc2f8.pth",
+    },
+    "apcnet_r50": {
+        # https://github.com/open-mmlab/mmsegmentation/tree/master/configs/apcnet
+        "config_path": "configs/apcnet/apcnet_r50-d8_769x769_40k_cityscapes.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/apcnet/apcnet_r50-d8_769x769_40k_cityscapes/apcnet_r50-d8_769x769_40k_cityscapes_20201214_115717-2a2628d7.pth",
+    },
+    "lraspp_mobilenetv3": {
+        # https://github.com/open-mmlab/mmsegmentation/tree/master/configs/mobilenet_v3
+        "config_path": "configs/mobilenet_v3/lraspp_m-v3-d8_512x1024_320k_cityscapes.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/mobilenet_v3/lraspp_m-v3-d8_512x1024_320k_cityscapes/lraspp_m-v3-d8_512x1024_320k_cityscapes_20201224_220337-cfe8fb07.pth",
+    },
+    "unet_d16_fcn": {
+        # OOM!
+        # https://github.com/open-mmlab/mmsegmentation/blob/master/configs/unet/README.md
+        "config_path": "configs/unet/fcn_unet_s5-d16_4x4_512x1024_160k_cityscapes.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/unet/fcn_unet_s5-d16_4x4_512x1024_160k_cityscapes/fcn_unet_s5-d16_4x4_512x1024_160k_cityscapes_20211210_145204-6860854e.pth",
+    },
+    "upernet_r50": {
+        # https://github.com/open-mmlab/mmsegmentation/tree/master/configs/upernet
+        # https://github.com/open-mmlab/mmsegmentation/blob/master/configs/upernet/upernet_r50_512x1024_40k_cityscapes.py
+        "config_path": "configs/upernet/upernet_r50_512x1024_40k_cityscapes.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/upernet/upernet_r50_512x1024_40k_cityscapes/upernet_r50_512x1024_40k_cityscapes_20200605_094827-aa54cb54.pth",
+    },
+    "upernet_vit_b": {
+        # https://github.com/open-mmlab/mmsegmentation/blob/master/configs/vit/README.md
+        "config_path": "configs/vit/upernet_vit-b16_mln_512x512_80k_ade20k.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth",
+    },
+    "upernet_swin_s": {
+        # https://github.com/open-mmlab/mmsegmentation/blob/master/configs/swin/README.md
+        "config_path": "configs/swin/upernet_swin_small_patch4_window7_512x512_160k_ade20k_pretrain_224x224_1K.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/swin/upernet_swin_small_patch4_window7_512x512_160k_ade20k_pretrain_224x224_1K/upernet_swin_small_patch4_window7_512x512_160k_ade20k_pretrain_224x224_1K_20210526_192015-ee2fff1c.pth",
+    },
+    "upernet_swin_b": {
+        # https://github.com/open-mmlab/mmsegmentation/blob/master/configs/swin/upernet_swin_base_patch4_window7_512x512_160k_ade20k_pretrain_224x224_22K.py
+        "config_path": "configs/swin/upernet_swin_base_patch4_window7_512x512_160k_ade20k_pretrain_224x224_22K.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/swin/upernet_swin_base_patch4_window7_512x512_160k_ade20k_pretrain_224x224_22K/upernet_swin_base_patch4_window7_512x512_160k_ade20k_pretrain_224x224_22K_20210526_211650-762e2178.pth",
+    },
+    "segformer_b0": {
+        # https://github.com/open-mmlab/mmsegmentation/tree/master/configs/segformer
+        # https://github.com/open-mmlab/mmsegmentation/blob/master/configs/segformer/segformer_mit-b0_8x1_1024x1024_160k_cityscapes.py
+        "config_path": "configs/segformer/segformer_mit-b0_8x1_1024x1024_160k_cityscapes.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmsegmentation/v0.5/segformer/segformer_mit-b0_8x1_1024x1024_160k_cityscapes/segformer_mit-b0_8x1_1024x1024_160k_cityscapes_20211208_101857-e7f88502.pth",
+    }
+    # TODO: test https://github.com/open-mmlab/mmsegmentation/tree/master/configs/twins
+    # TODO: test https://github.com/open-mmlab/mmsegmentation/tree/master/configs/segmenter
 }
 
 
 class MMDatasetAdaptor:
     @classmethod
+    def adapt_and_register_detection_dataset(cls, dataset_builder):
+        class TempMMSegDataset(CustomDataset):
+            CLASSES = dataset_builder.CLASSES
+            PALETTE = dataset_builder.PALETTE
+
+            def __init__(self, split, **kwargs):
+                super().__init__(
+                    img_suffix=".jpg", seg_map_suffix=".png", split=split, **kwargs
+                )
+                assert os.path.exists(self.img_dir) and self.split is not None
+
+        TempMMSegDataset.__name__ = "MM" + dataset_builder.__class__.__name__
+        if TempMMSegDataset.__name__ in DATASETS.module_dict:
+            DATASETS.module_dict.pop(TempMMSegDataset.__name__)
+        DATASETS.register_module(TempMMSegDataset)
+        return TempMMSegDataset.__name__
+
+    @classmethod
     def set_dataset_info_in_config(
-        cls, cfg, train_anno_file, val_anno_file, image_dir, seg_dir, classes
+        cls,
+        cfg,
+        dataset_classname,
+        dataset_dir,
+        train_anno_file,
+        val_anno_file,
+        image_dir,
+        seg_dir,
     ):
-        cfg.dataset_type = "COCOPanopticDataset"
+        cfg.dataset_type = dataset_classname
 
-        cfg.data.test.ann_file = val_anno_file
-        cfg.data.test.img_prefix = image_dir
-        cfg.data.test.seg_prefix = seg_dir
-        cfg.data.test.classes = classes
+        cfg.img_norm_cfg = dict(
+            mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True
+        )
+        # cfg.crop_size = (256, 256)
 
-        cfg.data.train.ann_file = train_anno_file
-        cfg.data.train.img_prefix = image_dir
-        cfg.data.train.seg_prefix = seg_dir
-        cfg.data.train.classes = classes
+        # TODO: pass the data pipeline as parameters.
+        cfg.train_pipeline = [
+            dict(type="LoadImageFromFile"),
+            dict(type="LoadAnnotations"),
+            dict(type="Resize", img_scale=(320, 240), ratio_range=(0.5, 2.0)),
+            dict(type="RandomCrop", crop_size=cfg.crop_size, cat_max_ratio=0.75),
+            dict(type="RandomFlip", flip_ratio=0.5),
+            dict(type="PhotoMetricDistortion"),
+            dict(type="Normalize", **cfg.img_norm_cfg),
+            dict(type="Pad", size=cfg.crop_size, pad_val=0, seg_pad_val=255),
+            dict(type="DefaultFormatBundle"),
+            dict(type="Collect", keys=["img", "gt_semantic_seg"]),
+        ]
 
-        cfg.data.val.ann_file = val_anno_file
-        cfg.data.val.img_prefix = image_dir
-        cfg.data.val.seg_prefix = seg_dir
-        cfg.data.val.classes = classes
+        cfg.test_pipeline = [
+            dict(type="LoadImageFromFile"),
+            dict(
+                type="MultiScaleFlipAug",
+                img_scale=(320, 240),
+                # img_ratios=[0.5, 0.75, 1.0, 1.25, 1.5, 1.75],
+                flip=False,
+                transforms=[
+                    dict(type="Resize", keep_ratio=True),
+                    dict(type="RandomFlip"),
+                    dict(type="Normalize", **cfg.img_norm_cfg),
+                    dict(type="ImageToTensor", keys=["img"]),
+                    dict(type="Collect", keys=["img"]),
+                ],
+            ),
+        ]
+
+        cfg.data.train.type = cfg.dataset_type
+        cfg.data.train.data_root = dataset_dir
+        cfg.data.train.img_dir = image_dir
+        cfg.data.train.ann_dir = seg_dir
+        cfg.data.train.pipeline = cfg.train_pipeline
+        cfg.data.train.split = train_anno_file
+
+        cfg.data.val.type = cfg.dataset_type
+        cfg.data.val.data_root = dataset_dir
+        cfg.data.val.img_dir = image_dir
+        cfg.data.val.ann_dir = seg_dir
+        cfg.data.val.pipeline = cfg.test_pipeline
+        cfg.data.val.split = val_anno_file
+
+        cfg.data.test.type = cfg.dataset_type
+        cfg.data.test.data_root = dataset_dir
+        cfg.data.test.img_dir = image_dir
+        cfg.data.test.ann_dir = seg_dir
+        cfg.data.test.pipeline = cfg.test_pipeline
+        cfg.data.test.split = val_anno_file
 
         return cfg
 
@@ -168,7 +312,7 @@ class MMTrainer:
     def fit(self, model, train_dataset, val_dataset=None, **kwargs):
         print("batch size:", self.config.data.samples_per_gpu)
         model.CLASSES = train_dataset.CLASSES
-        train_detector(
+        train_segmentor(
             model,
             # `mmdet`` uses config.data.val to construct val_dataset, and pass it to EvalHook
             # So it is not necessary and also not useful to provide val_dataset here.
@@ -183,16 +327,14 @@ class MMTrainer:
         cfg = self.config
         # The original learning rate (LR) is set for 8-GPU training.
         # We divide it by 8 since we only use one GPU.
-        cfg.optimizer.lr = 0.02 / 8
-        cfg.lr_config.warmup = None
+        # cfg.optimizer.lr = 0.02 / 8
+        # cfg.lr_config.warmup = None
         cfg.log_config.interval = 10
 
-        cfg.evaluation.metric == ["bbox", "segm"]
-
         # We can set the evaluation interval to reduce the evaluation times
-        cfg.evaluation.interval = 1
+        cfg.evaluation.interval = 2
         # We can set the checkpoint saving interval to reduce the storage cost
-        cfg.checkpoint_config.interval = 10
+        cfg.checkpoint_config.interval = 50
         if hasattr(cfg.data.train, "times"):
             cfg.data.train.pop("times", None)
 
@@ -207,24 +349,4 @@ class MMTrainer:
             # dict(type="TensorboardLoggerHook"),
         ]
 
-        cfg.runner.max_epochs = 15
-
-        model_menu_key = self.net
-        if "retinanet" in model_menu_key:
-            cfg.optimizer.lr = 0.001 / 8
-            cfg.lr_config.warmup = "linear"
-            cfg.lr_config.warmup_iters = 200
-            cfg.lr_config.warmup_ratio = 0.001
-            cfg.runner.max_epochs = 35
-        elif "detr" in model_menu_key:
-            cfg.optimizer.lr = 0.002 / 8
-            cfg.lr_config.warmup = "linear"
-            cfg.lr_config.warmup_iters = 100
-            cfg.lr_config.warmup_ratio = 0.001
-            cfg.runner.max_epochs = 35
-        elif "dyhead" in model_menu_key:
-            cfg.optimizer.lr = 0.00001
-            cfg.lr_config.warmup = "linear"
-            cfg.lr_config.warmup_iters = 200
-            cfg.lr_config.warmup_ratio = 0.001
-            cfg.runner.max_epochs = 35
+        cfg.runner.max_iters = 50

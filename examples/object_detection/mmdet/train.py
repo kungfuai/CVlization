@@ -19,7 +19,7 @@ class TrainingSession:
         self.args = args
 
     def run(self):
-        # User: Need to adjust num_classes to match the dataset.
+        # Get num_classes from the dataset. This is needed to construct the model.
         self.dataset_builder_cls = KittiTinyDatasetBuilder
         # self.dataset_builder_cls = PennFudanPedestrianDatasetBuilder
         num_classes = self.dataset_builder_cls().num_classes

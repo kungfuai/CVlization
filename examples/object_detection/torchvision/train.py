@@ -89,6 +89,7 @@ if __name__ == "__main__":
     parser = ArgumentParser(
         epilog=f"""
             Options for net: {options} ({len(options)} of them). Though you probably want a fpn in it.
+            
             """
     )
     parser.add_argument("--net", type=str, default="fcos_resnet50_fpn")

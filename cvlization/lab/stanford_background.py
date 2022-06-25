@@ -7,14 +7,26 @@ https://colab.research.google.com/github/open-mmlab/mmsegmentation/blob/master/d
 from dataclasses import dataclass
 import numpy as np
 import os
+import random
 from subprocess import check_output
 from glob import glob
 from PIL import Image
-from typing import Union, List, Tuple
-from panopticapi.utils import rgb2id
-from mmdet.datasets.coco_panoptic import COCOPanoptic
+from typing import Union, List
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
+
+
+CLASSES = ("sky", "tree", "road", "grass", "water", "bldg", "mntn", "fg obj")
+PALETTE = [
+    [128, 128, 128],
+    [129, 127, 38],
+    [120, 69, 125],
+    [53, 125, 34],
+    [0, 11, 123],
+    [118, 20, 12],
+    [122, 81, 25],
+    [241, 134, 51],
+]
 
 
 @dataclass
@@ -35,13 +47,15 @@ class StanfordBackgroundDatasetBuilder:
     dataset_folder: str = "stanford_background"
     dataset_original_folder: str = "iccv09Data"
     archive_ext: str = "tar.gz"
-    train_ann_file: str = "annotations/panoptic_val2017_first500.json"
-    val_ann_file: str = "annotations/panoptic_val2017_last200.json"
+    train_ann_file: str = "train.txt"
+    val_ann_file: str = "val.txt"
     download_url: str = "http://dags.stanford.edu/data/iccv09Data.tar.gz"
     preload: bool = False
     label_offset: int = 0
 
     def __post_init__(self):
+        self.CLASSES = CLASSES
+        self.PALETTE = PALETTE
         if self.preload:
             self.training_dataset()
             self.validation_dataset()
@@ -72,7 +86,7 @@ class StanfordBackgroundDatasetBuilder:
 
     @property
     def num_classes(self):
-        return len(CocoPanopticTinyDataset.CLASSES)
+        return len(self.CLASSES)
 
     def get_totensor_transform(self):
         import torch
@@ -148,17 +162,8 @@ class StanfordBackgroundDatasetBuilder:
 
 
 class StanfordBackgroundDataset:
-    CLASSES = ("sky", "tree", "road", "grass", "water", "bldg", "mntn", "fg obj")
-    PALETTE = [
-        [128, 128, 128],
-        [129, 127, 38],
-        [120, 69, 125],
-        [53, 125, 34],
-        [0, 11, 123],
-        [118, 20, 12],
-        [122, 81, 25],
-        [241, 134, 51],
-    ]
+    CLASSES = CLASSES
+    PALETTE = PALETTE
 
     def __init__(
         self,
@@ -168,7 +173,7 @@ class StanfordBackgroundDataset:
         archive_ext: str = "tar.gz",
         img_folder: str = "images",
         seg_folder: str = "labels",
-        ann_file: str = "horizons.txt",
+        ann_file: str = "train.txt",
         channels_first: bool = True,
         label_offset: int = 0,
         download_url: str = "http://dags.stanford.edu/data/iccv09Data.tar.gz",
@@ -251,30 +256,90 @@ class StanfordBackgroundDataset:
             os.path.join(
                 self.data_dir,
                 self.dataset_folder,
-                self.ann_file,
+                "horizons.txt",
             )
         )
 
-    def load_annotations(self):
-        if not self._is_extracted():
-            self.extract()
+    def _load_annotations_from_ann_file(self, ann_path: str):
+        data_infos = []
+        with open(ann_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                img_id: str = line
+                img_path = os.path.join(
+                    self.data_dir,
+                    self.dataset_folder,
+                    self.img_folder,
+                    img_id + ".jpg",
+                )
+                label_path = os.path.join(
+                    self.data_dir,
+                    self.dataset_folder,
+                    self.seg_folder,
+                    img_id + ".regions.txt",
+                )
+                data_info = {
+                    "img_path": img_path,
+                    "label_path": label_path,
+                }
+                data_infos.append(data_info)
 
+        self.annotations = data_infos
+        return data_infos
+
+    def _scan_and_split_images(self):
         label_regions_paths = glob(
             os.path.join(
                 self.data_dir, self.dataset_folder, self.seg_folder, "*.regions.txt"
             )
         )
-        data_infos = [
-            {
-                "img_path": label_regions_path.replace(".regions.txt", ".jpg").replace(
-                    self.seg_folder + "/", self.img_folder + "/"
-                ),
-                "label_path": label_regions_path,
-            }
-            for label_regions_path in label_regions_paths
-        ]
-        self.annotations = data_infos
-        return data_infos
+        image_ids = []
+        for label_regions_path in label_regions_paths:
+            self._convert_regions_txt_to_png(label_regions_path)
+            image_id = os.path.basename(label_regions_path).replace(".regions.txt", "")
+            image_ids.append(image_id)
+        random.seed(0)
+        random.shuffle(image_ids)
+        train_portion = 0.8
+        split_idx = int(len(image_ids) * train_portion)
+        train_image_ids = image_ids[:split_idx]
+        val_image_ids = image_ids[split_idx:]
+        train_txt_path = os.path.join(self.data_dir, self.dataset_folder, "train.txt")
+        val_txt_path = os.path.join(self.data_dir, self.dataset_folder, "val.txt")
+        with open(train_txt_path, "w") as f:
+            for image_id in train_image_ids:
+                f.write(image_id + "\n")
+        with open(val_txt_path, "w") as f:
+            for image_id in val_image_ids:
+                f.write(image_id + "\n")
+
+    def load_annotations(self):
+        if not self._is_extracted():
+            self.extract()
+
+        assert self.ann_file in [
+            "train.txt",
+            "val.txt",
+        ], f"ann_file is not valid: {self.ann_file}, need to be one of train.txt or val.txt"
+        ann_path = os.path.join(self.data_dir, self.dataset_folder, self.ann_file)
+        if not os.path.isfile(ann_path):
+            self._scan_and_split_images()
+            assert os.path.isfile(
+                ann_path
+            ), f"ann_file is not generated successfully: {ann_path}"
+
+        return self._load_annotations_from_ann_file(ann_path)
+
+    def _convert_regions_txt_to_png(self, txt_path):
+        dst_path = txt_path.replace(".regions.txt", ".png")
+        if os.path.isfile(dst_path):
+            return
+        seg_map = np.loadtxt(txt_path).astype(np.uint8)
+        seg_img = Image.fromarray(seg_map).convert("P")
+        seg_img.putpalette(np.array(self.PALETTE, dtype=np.uint8))
+        seg_img.save(dst_path)
 
 
 if __name__ == "__main__":
@@ -288,7 +353,7 @@ if __name__ == "__main__":
     assert isinstance(example, tuple)
     inputs, targets = example
     img = inputs[0]
-    print("image:", img.shape, img.dtype, type(img))
+    print("image:", img.shape, img.dtype, type(img), "max:", img.max())
     for j in range(1):
         print(
             f"target[{j}]:",
