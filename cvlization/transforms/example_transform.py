@@ -144,7 +144,7 @@ class ExampleTransform:
             return "image"
         elif column_type == DataColumnType.BOUNDING_BOXES:
             return "bboxes"
-        elif column_type == DataColumnType.MASKS:
+        elif column_type == DataColumnType.MASK:
             return "mask"
         elif column_type == DataColumnType.KEYPOINTS:
             return "keypoints"

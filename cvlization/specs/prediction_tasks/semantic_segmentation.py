@@ -2,10 +2,10 @@ from ..data_column import DataColumnType
 from ..model_spec import ModelSpec, ModelInput, ModelTarget
 
 
-def PanopticSegmentation(
+def SemanticSegmentation(
     n_channels: int = 3,
-    n_categories: int = 3,
     sequence_key: str = "detection",
+    channels_first: bool = True,
     **kwargs
 ) -> ModelSpec:
     """
@@ -13,11 +13,14 @@ def PanopticSegmentation(
     """
 
     def get_model_inputs():
+        image_shape = (
+            [n_channels, None, None] if channels_first else [None, None, n_channels]
+        )
         return [
             ModelInput(
                 key="image",
                 column_type=DataColumnType.IMAGE,
-                raw_shape=[None, None, n_channels],
+                raw_shape=image_shape,
             ),
         ]
 
@@ -26,7 +29,7 @@ def PanopticSegmentation(
             # The following targets should have the same sequence length.
             ModelTarget(
                 key="stuff_mask",
-                column_type=DataColumnType.IMAGE,
+                column_type=DataColumnType.MASK,
                 raw_shape=[None, None, None],
                 sequence=sequence_key,
             ),

@@ -102,12 +102,8 @@ class StanfordBackgroundDatasetBuilder:
 
         inputs, targets = example
         image = torch.tensor(inputs[0])
-        boxes = torch.tensor(targets[0])
-        labels = torch.tensor(targets[1]).type(torch.long)
-        labels = torch.squeeze(labels, -1)
-        masks = torch.tensor(targets[2])
-        seg_map = torch.tensor(targets[3])
-        return image, dict(boxes=boxes, labels=labels, masks=masks, seg_map=seg_map)
+        seg_map = torch.tensor(targets[0])
+        return image, seg_map
 
     def training_dataset(self) -> Dataset:
         ds = StanfordBackgroundDataset(
@@ -201,13 +197,12 @@ class StanfordBackgroundDataset:
         img_path = data_info["img_path"]
         label_path = data_info["label_path"]
         img = Image.open(img_path)
-        np_img = np.array(img)
+        np_img = np.array(img, dtype=np.float32)
         if self.channels_first:
             np_img = np_img.transpose((2, 0, 1))
 
         seg_map = np.loadtxt(label_path).astype(np.uint8)
         seg_map = seg_map[np.newaxis, :, :]
-        # seg_img = Image.fromarray(seg_map).convert("P")
         return [np_img], [
             seg_map,  # shape: (n, H, W)
         ]
