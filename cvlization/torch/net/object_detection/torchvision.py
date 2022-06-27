@@ -7,6 +7,9 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from pytorch_lightning.core.lightning import LightningModule
 from torchmetrics.detection.map import MeanAveragePrecision
 
+# TODO: Use this object detection e
+from ...evaluation.object_detection_evaluator.evaluator import Evaluator
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -64,11 +67,14 @@ class TorchvisionDetectionModelFactory:
 
 
 class LitDetector(LightningModule):
-    def __init__(self, model, lr=0.001):
+    # TODO: use our own evaluator. Copy the unit tests for it.
+    def __init__(self, model, num_classes, lr=0.001):
         super().__init__()
         self.model = model
         self.lr = lr
         self.val_mAP = MeanAveragePrecision()
+        self.val_evaluator = Evaluator(num_classes=num_classes)
+        self.num_classes = num_classes
 
     def forward(self, *args, **kwargs):
         return self.model.forward(*args, **kwargs)
@@ -98,6 +104,7 @@ class LitDetector(LightningModule):
                 target["labels"] = target["labels"][:, 0]
                 assert len(target["labels"].shape) == 1
 
+        # TODO: double check, this could be just asserting num_images in dets is the same as targets.
         assert len(detections) == len(
             targets
         ), f"{len(detections)} detections but {len(targets)} targets. detections={detections}"
