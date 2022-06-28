@@ -17,7 +17,7 @@
 To explore more model training options, use example training scripts in the `examples/` folder. For example,
 
 ```
-python -m examples.instance_segementation.mmdet.train --help
+python -m examples.instance_segmentation.mmdet.train --help
 ```
 
 is an example script to run instance segmentation model training using [`MMDetection`](https://github.com/open-mmlab/mmdetection).

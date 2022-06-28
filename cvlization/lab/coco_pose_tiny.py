@@ -3,6 +3,7 @@ Dataset adapted from: https://github.com/open-mmlab/mmpose/blob/master/demo/MMPo
 """
 
 from dataclasses import dataclass
+import json
 import numpy as np
 import os
 from subprocess import check_output
@@ -357,23 +358,60 @@ class CocoPoseTinyDataset:
         )
 
     def _get_db(self):
-        self.load_annotations()
+        with open(self.ann_file) as f:
+            anns = json.load(f)
+
+        db = []
+        for idx, ann in enumerate(anns):
+            # get image path
+            image_file = os.path.join(self.img_prefix, ann["image_file"])
+            # get bbox
+            bbox = ann["bbox"]
+            # get keypoints
+            keypoints = np.array(ann["keypoints"], dtype=np.float32).reshape(-1, 3)
+            num_joints = keypoints.shape[0]
+            joints_3d = np.zeros((num_joints, 3), dtype=np.float32)
+            joints_3d[:, :2] = keypoints[:, :2]
+            joints_3d_visible = np.zeros((num_joints, 3), dtype=np.float32)
+            joints_3d_visible[:, :2] = np.minimum(1, keypoints[:, 2:3])
+
+            sample = {
+                "image_file": image_file,
+                "bbox": bbox,
+                "rotation": 0,
+                "joints_3d": joints_3d,
+                "joints_3d_visible": joints_3d_visible,
+                "bbox_score": 1,
+                "bbox_id": idx,
+            }
+            db.append(sample)
+
+        # flip_pairs, upper_body_ids and lower_body_ids will be used
+        # in some data augmentations like random flip
+        self.ann_info["flip_pairs"] = [
+            # These numbers are specific to the keypoint definitions of this dataset.
+            [1, 2],
+            [3, 4],
+            [5, 6],
+            [7, 8],
+            [9, 10],
+            [11, 12],
+            [13, 14],
+            [15, 16],
+        ]
+        self.ann_info["upper_body_ids"] = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        self.ann_info["lower_body_ids"] = (11, 12, 13, 14, 15, 16)
+        self.ann_info["joint_weights"] = None
+        self.ann_info["use_different_joint_weights"] = False
+
+        return db
 
     def load_annotations(self):
         if not self._is_extracted():
             self.extract()
 
-        print("data_dir:", self.data_dir)
-        print("ann_file:", self.ann_file)
-        print("dataset_folder:", self.dataset_folder)
-        # self.coco = COCOPanoptic(
-        #     os.path.join(self.data_dir, self.dataset_folder, self.ann_file)
-        # )
-        # self.ids = list(sorted(self.coco.imgs.keys()))
-        # self.CLASSES = self.coco.cats.keys()
-        # print(f"{len(self.CLASSES)} classes")
-        # self.cat2label = {k: i for i, k in enumerate(self.CLASSES)}
-        # return self.coco.anns
+        self.annotations = self._get_db()
+        return self.annotations
 
 
 if __name__ == "__main__":
