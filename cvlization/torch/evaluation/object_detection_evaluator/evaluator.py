@@ -1,14 +1,13 @@
 import numpy as np
 import torch
-from src.evaluation.confusion_matrix_maker import ConfusionMatrixMaker
-from src.evaluation.box_matcher import BoxMatcher
-from src.evaluation.match_holder import MatchHolder
-from src.evaluation.metrics import Metrics
-from src.evaluation.dict_to_tensor import DictToTensor
+from .box_matcher import BoxMatcher
+from .match_holder import MatchHolder
+from .metrics import Metrics
+from .dict_to_tensor import DictToTensor
+from .pr_calculator import PRCalculator
 from src.dataset.target import Target
 from src.dataset.prediction import Prediction
 from numpy import float64, ndarray
-from src.evaluation.confusion_matrix import ConfusionMatrix
 from typing import Dict, List, Optional, Union
 
 
@@ -22,16 +21,17 @@ class Evaluator:
         self,
         num_classes: int = 1,
         iou_detection_threshold: float = 0.5,
-        score_thresholds: ndarray = np.arange(0, 1.00, 0.01),
     ) -> None:
         self.num_classes = num_classes
         self.iou_detection_threshold = iou_detection_threshold
-        self.score_thresholds = score_thresholds
 
         self.box_matcher = BoxMatcher(iou_detection_threshold=iou_detection_threshold)
         self.match_holder = MatchHolder(num_classes=num_classes)
-        self.metrics = Metrics(score_thresholds=score_thresholds)
+        self.metrics = Metrics()
         self.dict_to_tensor = DictToTensor()
+        self.pr_calculator = PRCalculator(
+            iou_detection_threshold=iou_detection_threshold
+        )
 
     def _filter_nans(
         self, arr_list: List[Optional[torch.Tensor]]
@@ -97,25 +97,15 @@ class Evaluator:
         self.metrics.reset()
         self.match_holder.reset()
 
-    def calculate(self, recall_thresholds: ndarray = np.arange(0, 1, 0.01)) -> None:
+    def calculate(self) -> None:
         pr_array_list = []
 
         # Each holder contains matched/unmatched lists for a single class. This loop lets us get class metrics
         for holder in self.match_holder.holder_list:
             matched_list, unmatched_list = holder.matched_list, holder.unmatched_list
-            precision_recall_array = np.zeros(shape=(4, len(self.score_thresholds)))
-
-            # For each score threshold, calculate precision and recall and add it to the precision_recall_array
-            for i, score_threshold in enumerate(self.score_thresholds):
-                precision_recall_array = self._update_precision_recall_array(
-                    matched_list=matched_list,
-                    unmatched_list=unmatched_list,
-                    iou_detection_threshold=self.iou_detection_threshold,
-                    score_threshold=score_threshold,
-                    precision_recall_array=precision_recall_array,
-                    i=i,
-                )
-
+            precision_recall_array = self.pr_calculator(
+                matched_list=matched_list, unmatched_list=unmatched_list
+            )
             pr_array_list.append(precision_recall_array)
 
         # A precision_recall_array is also calculated for all classes together. This will be used to calculate F1 score
@@ -131,86 +121,16 @@ class Evaluator:
         self.metrics.update_metrics(
             pr_array_list=pr_array_list,
             all_classes_precision_recall_array=all_classes_precision_recall_array,
-            recall_thresholds=recall_thresholds,
         )
 
     def _get_all_classes_precision_recall_array(self) -> ndarray:
-        all_classes_precision_recall_array = np.zeros(
-            shape=(4, len(self.score_thresholds))
-        )
         all_matched = []
         all_unmatched = []
         for holder in self.match_holder.holder_list:
             all_matched.extend(holder.matched_list)
             all_unmatched.extend(holder.unmatched_list)
 
-        for i, score_threshold in enumerate(self.score_thresholds):
-            all_classes_precision_recall_array = self._update_precision_recall_array(
-                matched_list=all_matched,
-                unmatched_list=all_unmatched,
-                iou_detection_threshold=self.iou_detection_threshold,
-                score_threshold=score_threshold,
-                precision_recall_array=all_classes_precision_recall_array,
-                i=i,
-            )
+        all_classes_precision_recall_array = self.pr_calculator(
+            matched_list=all_matched, unmatched_list=all_unmatched
+        )
         return all_classes_precision_recall_array
-
-    def _update_precision_recall_array(
-        self,
-        matched_list: List[torch.Tensor],
-        unmatched_list: List[Optional[torch.Tensor]],
-        iou_detection_threshold: float,
-        score_threshold: float64,
-        precision_recall_array: ndarray,
-        i: int,
-    ) -> ndarray:
-        """
-        Returns a (3xN) array where:
-            row 0 = precision
-            row 1 = recall
-            row 2 = f1 score
-            row 3 = score (at which precision and recall were calculated)
-
-        Each time this method is called it extends the array with the precision and recall values
-        for the score_threshold that was past
-
-        Note: F1 score is being calculated individual classes as well and stored in the precision_recall_array,
-        however the F1 score for individual classes is not being reported in the Metrics object (unless self.num_classes = 1)
-        """
-        confusion_matrix = self._make_confusion_matrix(
-            matched_list=matched_list,
-            unmatched_list=unmatched_list,
-            iou_detection_threshold=iou_detection_threshold,
-            score_threshold=score_threshold,
-        )
-        precision_recall_array[0, i] = confusion_matrix.precision
-        precision_recall_array[1, i] = confusion_matrix.recall
-        precision_recall_array[2, i] = self._calculate_f1(
-            precision=confusion_matrix.precision, recall=confusion_matrix.recall
-        )
-        precision_recall_array[3, i] = score_threshold
-        return precision_recall_array
-
-    def _calculate_f1(self, precision: float, recall: float) -> float:
-        if precision + recall == 0:
-            return 0
-        else:
-            return 2 * (precision * recall) / (precision + recall)
-
-    def _make_confusion_matrix(
-        self,
-        matched_list: List[torch.Tensor],
-        unmatched_list: List[Optional[torch.Tensor]],
-        iou_detection_threshold: float,
-        score_threshold: float64,
-    ) -> ConfusionMatrix:
-        """Confusion matrix is the common name for a table holding the number of false positives, false negatives,
-        true positives, and true negatives. In object detection, we do not count true negatives (they are hard to define
-        so we dont do it)."""
-        confusion_matrix_maker = ConfusionMatrixMaker(
-            iou_detection_threshold=iou_detection_threshold,
-            score_threshold=score_threshold,
-        )
-        return confusion_matrix_maker(
-            matched_list=matched_list, unmatched_list=unmatched_list
-        )

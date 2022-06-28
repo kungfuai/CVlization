@@ -1,6 +1,6 @@
 from logging import exception
 import torch
-from src.evaluation.confusion_matrix import ConfusionMatrix
+from .confusion_matrix import ConfusionMatrix
 from numpy import float64
 from typing import List, Optional, Tuple
 

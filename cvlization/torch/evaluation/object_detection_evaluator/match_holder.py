@@ -1,4 +1,4 @@
-from src.evaluation.holder import Holder
+from .holder import Holder
 from torch import Tensor
 from typing import List, Optional
 

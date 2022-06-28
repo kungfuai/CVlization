@@ -43,21 +43,18 @@ class Metrics:
         self,
         pr_array_list: List[ndarray],
         all_classes_precision_recall_array: ndarray,
-        recall_thresholds: ndarray,
     ) -> None:
         """This could have also been named 'calculate_metrics'. It calculates metrics."""
         self._f1_max = np.max(all_classes_precision_recall_array[2, :])
-        self._score_at_f1_max = self.score_thresholds[
+        f1_max_index = [
             np.where(all_classes_precision_recall_array[2, :] == self._f1_max)[0][0]
         ]
-        self._map = self._get_mean_average_pecision(
-            pr_array_list=pr_array_list,
-            recall_thresholds=recall_thresholds,
-        )
+        self._score_at_f1_max = all_classes_precision_recall_array[3, :][f1_max_index][
+            0
+        ]
+        self._map = self._get_mean_average_pecision(pr_array_list=pr_array_list)
 
-    def _get_mean_average_pecision(
-        self, pr_array_list: List[ndarray], recall_thresholds: ndarray
-    ) -> float64:
+    def _get_mean_average_pecision(self, pr_array_list: List[ndarray]) -> float64:
         """The smaller the interval between recall thresholds, the more precise the calculation
         of average precision"""
         ap_list = []
@@ -66,9 +63,21 @@ class Metrics:
             recall = pr_array[1, :]
 
             average_precision = 0
-            for t in recall_thresholds:
-                p = np.max(precision[recall >= t]) if np.sum(recall >= t) != 0 else 0
-                average_precision = average_precision + p / recall_thresholds.size
+            if recall[0] != 0:
+                recall = np.concatenate([np.zeros(shape=(1)), recall], axis=0)
+                precision = np.concatenate(
+                    [np.expand_dims(precision[0], axis=0), precision], axis=0
+                )
+            if recall[-1] != 1:
+                recall = np.concatenate([np.ones(shape=(1)), recall], axis=0)
+                precision = np.concatenate([np.zeros(shape=(1)), precision], axis=0)
+
+            # Use the mid point for integral estimation
+            shifted_precision = precision[1:]
+            precision = (precision[:-1] + shifted_precision) / 2
+
+            delta_recall = np.diff(recall)
+            average_precision = np.sum(delta_recall * precision)
             ap_list.append(average_precision)
         mean_average_precision = sum(ap_list) / len(ap_list)
         return mean_average_precision

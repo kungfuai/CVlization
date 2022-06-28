@@ -1,5 +1,5 @@
 import torch
-from src.evaluation.match_filter import MatchFilter
+from .match_filter import MatchFilter
 from typing import List, Optional, Tuple
 
 

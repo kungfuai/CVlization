@@ -2,7 +2,7 @@ from hashlib import new
 import math
 import torch
 from torchvision.ops import box_iou, nms
-from src.evaluation.match_determiner import MatchDeterminer
+from .match_determiner import MatchDeterminer
 from typing import Any, List, Optional, Tuple, Union
 
 
