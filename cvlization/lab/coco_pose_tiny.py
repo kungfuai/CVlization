@@ -1,5 +1,5 @@
 """
-Serves a subset of COCO val2017 panoptic segmentation dataset with 700 images.
+Dataset adapted from: https://github.com/open-mmlab/mmpose/blob/master/demo/MMPose_Tutorial.ipynb
 """
 
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ from ..data.dataset_builder import TransformedMapStyleDataset
 
 
 @dataclass
-class CocoPanopticTinyDatasetBuilder:
+class CocoPoseTinyDatasetBuilder:
     """
     :param label_offset
         By default, label_offset is 0 which means class labels start from 0. Set it to 1 if you want to
@@ -29,11 +29,11 @@ class CocoPanopticTinyDatasetBuilder:
     to_torch_tensor: bool = False
     flavor: str = None  # one of None, "torchvision"
     data_dir: str = "./data"
-    dataset_folder: str = "coco_panoptic_tiny"
-    train_ann_file: str = "annotations/panoptic_val2017_first500.json"
-    val_ann_file: str = "annotations/panoptic_val2017_last200.json"
+    dataset_folder: str = "coco_pose_tiny"
+    train_ann_file: str = ""
+    val_ann_file: str = ""
     download_url: str = (
-        "https://storage.googleapis.com/research-datasets-public/coco_panoptic_tiny.zip"
+        "https://storage.googleapis.com/research-datasets-public/coco_pose_tiny.zip"
     )
     preload: bool = False
     label_offset: int = 0
@@ -52,20 +52,8 @@ class CocoPanopticTinyDatasetBuilder:
         return self.training_dataset().img_folder
 
     @property
-    def seg_folder(self):
-        return self.training_dataset().seg_folder
-
-    @property
     def classes(self):
         return [c["name"] for c in self.training_dataset().coco.dataset["categories"]]
-
-    @property
-    def things_classes(self) -> List[dict]:
-        return self.training_dataset().things_classes
-
-    @property
-    def stuff_classes(self) -> List[dict]:
-        return self.training_dataset().stuff_classes
 
     @property
     def num_classes(self):
@@ -140,17 +128,16 @@ class CocoPanopticTinyDatasetBuilder:
         return ds
 
 
-class CocoPanopticTinyDataset:
+class CocoPoseTinyDataset:
     def __init__(
         self,
         data_dir: str = "./data",
-        dataset_folder: str = "coco_panoptic_tiny",
-        img_folder: str = "val2017_subset",
-        seg_folder: str = "val2017_subset_panoptic_masks",
-        ann_file: str = "annotations/panoptic_val2017_first500.json",
+        dataset_folder: str = "coco_pose_tiny",
+        img_folder: str = "images",
+        ann_file: str = "train.json",
         channels_first: bool = True,
         label_offset: int = 0,
-        download_url: str = "https://storage.googleapis.com/research-datasets-public/coco_panoptic_tiny.zip",
+        download_url: str = "https://storage.googleapis.com/research-datasets-public/coco_pose_tiny.zip",
     ):
         """
         Data flow: download -> extract -> load_annotations
@@ -159,7 +146,6 @@ class CocoPanopticTinyDataset:
         self.data_dir = data_dir
         self.dataset_folder = dataset_folder
         self.img_folder = img_folder
-        self.seg_folder = seg_folder
         self.ann_file = ann_file
         self.channels_first = channels_first
         self.label_offset = label_offset
@@ -370,13 +356,8 @@ class CocoPanopticTinyDataset:
             )
         )
 
-    @property
-    def things_classes(self):
-        return [c for c in self.coco.dataset["categories"] if c["isthing"] == 1]
-
-    @property
-    def stuff_classes(self):
-        return [c for c in self.coco.dataset["categories"] if c["isthing"] == 0]
+    def _get_db(self):
+        self.load_annotations()
 
     def load_annotations(self):
         if not self._is_extracted():
@@ -385,29 +366,22 @@ class CocoPanopticTinyDataset:
         print("data_dir:", self.data_dir)
         print("ann_file:", self.ann_file)
         print("dataset_folder:", self.dataset_folder)
-        self.coco = COCOPanoptic(
-            os.path.join(self.data_dir, self.dataset_folder, self.ann_file)
-        )
-        self.ids = list(sorted(self.coco.imgs.keys()))
-        self.CLASSES = self.coco.cats.keys()
-        print(f"{len(self.CLASSES)} classes")
-        self.cat2label = {k: i for i, k in enumerate(self.CLASSES)}
-        return self.coco.anns
+        # self.coco = COCOPanoptic(
+        #     os.path.join(self.data_dir, self.dataset_folder, self.ann_file)
+        # )
+        # self.ids = list(sorted(self.coco.imgs.keys()))
+        # self.CLASSES = self.coco.cats.keys()
+        # print(f"{len(self.CLASSES)} classes")
+        # self.cat2label = {k: i for i, k in enumerate(self.CLASSES)}
+        # return self.coco.anns
 
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.coco_panoptic_tiny
+    python -m cvlization.lab.coco_pose_tiny
     """
-    from mmdet.datasets.coco_panoptic import CocoPanopticDataset
 
-    # ds = CocoPanopticDataset(
-    #     ann_file="data/coco_panoptic_tiny/annotations/panoptic_val2017_first500.json",
-    #     pipeline=[],
-    # )
-    # assert False
-
-    ds = CocoPanopticTinyDataset()
+    ds = CocoPoseTinyDataset()
     print(len(ds), "examples in the dataset")
     example = ds[10]
     assert isinstance(example, tuple)
