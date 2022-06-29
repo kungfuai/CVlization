@@ -36,7 +36,7 @@ class CocoPoseTinyDatasetBuilder:
     download_url: str = (
         "https://storage.googleapis.com/research-datasets-public/coco_pose_tiny.zip"
     )
-    preload: bool = False
+    preload: bool = True
     label_offset: int = 0
 
     def __post_init__(self):
@@ -106,7 +106,7 @@ class CocoPoseTinyDatasetBuilder:
 
     def validation_dataset(self) -> Union[Dataset, List[Dataset]]:
         # For some use cases, more than one validation datasets are returned.
-        ds = CocoPanopticTinyDataset(
+        ds = CocoPoseTinyDataset(
             ann_file=self.val_ann_file,
             dataset_folder=self.dataset_folder,
             channels_first=self.channels_first,

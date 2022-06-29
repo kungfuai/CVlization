@@ -1,13 +1,13 @@
 # Adapted from https://github.com/open-mmlab/mmpose/blob/master/demo/MMPose_Tutorial.ipynb
-# pip install mmsegmentation==0.27.0
+# pip install mmpose==0.27.0
 # pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html
 
 import os
-from mmseg.datasets import build_dataset
-from cvlization.lab.stanford_background import StanfordBackgroundDatasetBuilder
+from mmpose.datasets.builder import build_dataset
+from cvlization.lab.coco_pose_tiny import CocoPoseTinyDatasetBuilder
 from cvlization.torch.net.pose_estimation.mmpose import (
     MMDatasetAdaptor,
-    MMSemanticSegmentationModels,
+    MMPoseModels,
     MMTrainer,
 )
 
@@ -17,16 +17,20 @@ class TrainingSession:
         self.args = args
 
     def run(self):
-        self.dataset_builder_cls = StanfordBackgroundDatasetBuilder
-        num_classes = self.dataset_builder_cls().num_classes
-        self.model, self.cfg = self.create_model(num_classes)
+        self.dataset_builder_cls = CocoPoseTinyDatasetBuilder
+        # num_classes = self.dataset_builder_cls().num_classes
+        self.model, self.cfg = self.create_model()  # num_classes)
         # self.cfg.data.samples_per_gpu = 2
         # self.cfg.optimizer.lr = 0.00001
         self.datasets = self.create_dataset(self.cfg)
+
         self.trainer = self.create_trainer(self.cfg, self.args.net)
+
         self.cfg = self.trainer.config
+        
         # Additional customization of the config here. e.g.
         #   cfg.optimizer.lr = 0.0001
+        self.cfg.total_epochs = 30
         print("batch size:", self.cfg.data.samples_per_gpu)
         print(self.datasets[0])
         self.trainer.fit(
@@ -35,8 +39,8 @@ class TrainingSession:
             val_dataset=self.datasets[1],
         )
 
-    def create_model(self, num_classes: int):
-        model_registry = MMSemanticSegmentationModels(num_classes=num_classes)
+    def create_model(self):
+        model_registry = MMPoseModels()
         model_dict = model_registry[self.args.net]
         model, cfg = model_dict["model"], model_dict["config"]
         return model, cfg
@@ -53,13 +57,12 @@ class TrainingSession:
             train_anno_file=dsb.train_ann_file,
             val_anno_file=dsb.val_ann_file,
             image_dir=dsb.img_folder,
-            seg_dir=dsb.seg_folder,
         )
 
         if hasattr(config.data.train, "dataset"):
             datasets = [
                 build_dataset(config.data.train.dataset),
-                build_dataset(config.data.val),
+                build_dataset(config.data.val.dataset),
             ]
         else:
             datasets = [
@@ -72,6 +75,8 @@ class TrainingSession:
 
         print("\n***** Validation data:")
         print(datasets[1])
+        print(datasets[1][0])
+
         return datasets
 
     def create_trainer(self, cfg, net: str):
@@ -80,18 +85,18 @@ class TrainingSession:
 
 if __name__ == "__main__":
     """
-    python -m examples.semantic_segmentation.mmseg.train
+    python -m examples.pose_estimation.mmpose.train
     """
 
     from argparse import ArgumentParser
 
-    options = MMSemanticSegmentationModels.model_names()
+    options = MMPoseModels.model_names()
     parser = ArgumentParser(
         epilog=f"""
             *** Options for net: {options} ({len(options)} of them).
             """
     )
-    parser.add_argument("--net", type=str, default="pspnet_r50")
+    parser.add_argument("--net", type=str, default="hrnet_w32_coco_256")
     parser.add_argument("--track", action="store_true")
 
     args = parser.parse_args()
