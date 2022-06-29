@@ -10,7 +10,7 @@ from subprocess import check_output
 from PIL import Image
 from typing import Union, List, Tuple
 from panopticapi.utils import rgb2id
-from mmdet.datasets.coco_panoptic import COCOPanoptic
+from pycocotools.coco import COCO
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
 
@@ -31,8 +31,8 @@ class CocoPoseTinyDatasetBuilder:
     flavor: str = None  # one of None, "torchvision"
     data_dir: str = "./data"
     dataset_folder: str = "coco_pose_tiny"
-    train_ann_file: str = ""
-    val_ann_file: str = ""
+    train_ann_file: str = "person_keypoints_val2017_first80.json"
+    val_ann_file: str = "person_keypoints_val2017_last20.json"
     download_url: str = (
         "https://storage.googleapis.com/research-datasets-public/coco_pose_tiny.zip"
     )
@@ -82,7 +82,7 @@ class CocoPoseTinyDatasetBuilder:
         return image, dict(boxes=boxes, labels=labels, masks=masks, seg_map=seg_map)
 
     def training_dataset(self) -> Dataset:
-        ds = CocoPanopticTinyDataset(
+        ds = CocoPoseTinyDataset(
             ann_file=self.train_ann_file,
             dataset_folder=self.dataset_folder,
             channels_first=self.channels_first,
@@ -135,7 +135,7 @@ class CocoPoseTinyDataset:
         data_dir: str = "./data",
         dataset_folder: str = "coco_pose_tiny",
         img_folder: str = "images",
-        ann_file: str = "train.json",
+        ann_file: str = "person_keypoints_val2017_first80.json",
         channels_first: bool = True,
         label_offset: int = 0,
         download_url: str = "https://storage.googleapis.com/research-datasets-public/coco_pose_tiny.zip",
@@ -159,104 +159,18 @@ class CocoPoseTinyDataset:
         Returns:
             dict: Annotation info of specified index.
         """
-        img_id = self.ids[idx]
-        ann_ids = self.coco.get_ann_ids(img_ids=[img_id])
-        ann_info = self.coco.load_anns(ann_ids)
-        # filter out unmatched images
-        ann_info = [i for i in ann_info if i["image_id"] == img_id]
+        ann_info = [self.anns[idx]]
         return self._parse_ann_info(ann_info)
-
-    def _parse_ann_info(self, ann_info):
-        """Parse annotations and load panoptic ground truths.
-        Args:
-            img_info (int): Image info of an image.
-            ann_info (list[dict]): Annotation info of an image.
-        Returns:
-            dict: A dict containing the following keys: bboxes, bboxes_ignore,
-                labels, masks, seg_map.
-        """
-        gt_bboxes = []
-        gt_labels = []
-        gt_bboxes_ignore = []
-        gt_mask_infos = []
-
-        for i, ann in enumerate(ann_info):
-            x1, y1, w, h = ann["bbox"]
-            if ann["area"] <= 0 or w < 1 or h < 1:
-                continue
-            bbox = [x1, y1, x1 + w, y1 + h]
-
-            category_id = ann["category_id"]
-            contiguous_cat_id = self.cat2label[category_id]
-
-            is_thing = self.coco.load_cats(ids=category_id)[0]["isthing"]
-            if is_thing:
-                is_crowd = ann.get("iscrowd", False)
-                if not is_crowd:
-                    gt_bboxes.append(bbox)
-                    gt_labels.append(contiguous_cat_id)
-                else:
-                    gt_bboxes_ignore.append(bbox)
-                    is_thing = False
-
-            mask_info = {
-                "id": ann["id"],
-                "category": contiguous_cat_id,
-                "is_thing": is_thing,
-            }
-            gt_mask_infos.append(mask_info)
-
-        if gt_bboxes:
-            gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
-            gt_labels = np.array(gt_labels, dtype=np.int64)
-        else:
-            gt_bboxes = np.zeros((0, 4), dtype=np.float32)
-            gt_labels = np.array([], dtype=np.int64)
-
-        if gt_bboxes_ignore:
-            gt_bboxes_ignore = np.array(gt_bboxes_ignore, dtype=np.float32)
-        else:
-            gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
-
-        ann = dict(
-            bboxes=gt_bboxes,
-            labels=gt_labels,
-            bboxes_ignore=gt_bboxes_ignore,
-            masks=gt_mask_infos,
-        )
-
-        return ann
-
-    def _parse_pan_label_image(
-        self, pan_label_image: np.ndarray, mask_infos: List[dict]
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Parse panoptic label image and load panoptic ground truths."""
-        pan_png = pan_label_image
-        pan_png = rgb2id(pan_png)
-
-        gt_masks = []
-        gt_seg = np.zeros_like(pan_png) + 255  # 255 as ignore
-
-        for mask_info in mask_infos:
-            mask = pan_png == mask_info["id"]
-            gt_seg = np.where(mask, mask_info["category"], gt_seg)
-
-            # The legal thing masks
-            if mask_info.get("is_thing"):
-                gt_masks.append(mask.astype(np.uint8))
-
-        gt_masks = np.stack(gt_masks, axis=0)
-        assert gt_masks.ndim == 3, f"gt_masks.ndim = {gt_masks.ndim}, expected: 3"
-
-        return gt_seg, gt_masks
 
     def __getitem__(self, index: int):
         if self.annotations is None:
             self.annotations = self.load_annotations()
 
         id = self.ids[index]
-        ann = self._get_ann_info(index)
         image_filename = self.coco.loadImgs(id)[0]["file_name"]
+        ann_info = [x for x in self.annotations if x["image_id"] == id]
+        boxes = np.stack([ann["bbox"] for ann in ann_info], axis=0)
+        joints_3d = np.stack([ann["joints_3d"] for ann in ann_info], axis=0)
         pil_img = Image.open(
             os.path.join(
                 self.data_dir, self.dataset_folder, self.img_folder, image_filename
@@ -265,57 +179,9 @@ class CocoPoseTinyDataset:
         np_img = np.array(pil_img, dtype=np.float32)
         np_img = (np_img - np_img.min()) / max(1e-3, np_img.max() - np_img.min())
 
-        pan_png_filename = image_filename.replace("jpg", "png")
-        pan_label_image = Image.open(
-            os.path.join(
-                self.data_dir,
-                self.dataset_folder,
-                self.seg_folder,
-                pan_png_filename,
-            )
-        )
-        pan_label_image = np.array(pan_label_image)
-        gt_seg, gt_masks = self._parse_pan_label_image(pan_label_image, ann["masks"])
-
-        """
-        Code sample from mmdet.datasets.pipelines.loading:
-        (for parsing panoptic segmentations)
-
-        pan_png = mmcv.imfrombytes(
-            img_bytes, flag='color', channel_order='rgb').squeeze()
-        pan_png = rgb2id(pan_png)
-
-        gt_masks = []
-        gt_seg = np.zeros_like(pan_png) + 255  # 255 as ignore
-
-        for mask_info in results['ann_info']['masks']:
-            mask = (pan_png == mask_info['id'])
-            gt_seg = np.where(mask, mask_info['category'], gt_seg)
-
-            # The legal thing masks
-            if mask_info.get('is_thing'):
-                gt_masks.append(mask.astype(np.uint8))
-        
-        if self.with_mask:
-            h, w = results['img_info']['height'], results['img_info']['width']
-            gt_masks = BitmapMasks(gt_masks, h, w)
-            results['gt_masks'] = gt_masks
-            results['mask_fields'].append('gt_masks')
-
-        if self.with_seg:
-            results['gt_semantic_seg'] = gt_seg
-            results['seg_fields'].append('gt_semantic_seg')
-        """
-
-        if self.channels_first:
-            np_img = np_img.transpose((2, 0, 1))
-
-        box_labels = self.label_offset + np.expand_dims(ann["labels"], -1)
         return [np_img], [
-            ann["bboxes"],  # shape: num_boxes, 4
-            box_labels,  # shape: num_boxes, 1
-            gt_masks,  # shape: num_boxes, h, w
-            gt_seg,  # shape: h, w (int32)
+            boxes,
+            joints_3d,
         ]
 
     def __len__(self):
@@ -349,22 +215,34 @@ class CocoPoseTinyDataset:
         return os.path.isfile(self.download_file_local_path)
 
     def _is_extracted(self):
-        return os.path.isfile(
-            os.path.join(
-                self.data_dir,
-                self.dataset_folder,
-                self.ann_file,
-            )
+        ann_path = os.path.join(
+            self.data_dir,
+            self.dataset_folder,
+            self.ann_file,
         )
+        return os.path.isfile(ann_path)
 
     def _get_db(self):
-        with open(self.ann_file) as f:
-            anns = json.load(f)
+        ann_path = os.path.join(self.data_dir, self.dataset_folder, self.ann_file)
+        coco = self.coco = COCO(ann_path)
+
+        ann_ids = coco.getAnnIds()
+        self.anns = anns = coco.loadAnns(ann_ids)
+        catIds = coco.getCatIds(catNms=["person"])
+        imgIds = coco.getImgIds(catIds=catIds)
+        self.ids = imgIds
 
         db = []
         for idx, ann in enumerate(anns):
             # get image path
-            image_file = os.path.join(self.img_prefix, ann["image_file"])
+            img_id = ann["image_id"]
+            img = coco.loadImgs([img_id])[0]
+            image_file = os.path.join(
+                self.data_dir,
+                self.dataset_folder,
+                self.img_folder,
+                img["file_name"],
+            )
             # get bbox
             bbox = ann["bbox"]
             # get keypoints
@@ -383,11 +261,13 @@ class CocoPoseTinyDataset:
                 "joints_3d_visible": joints_3d_visible,
                 "bbox_score": 1,
                 "bbox_id": idx,
+                "image_id": img_id,
             }
             db.append(sample)
 
         # flip_pairs, upper_body_ids and lower_body_ids will be used
         # in some data augmentations like random flip
+        self.ann_info = {}
         self.ann_info["flip_pairs"] = [
             # These numbers are specific to the keypoint definitions of this dataset.
             [1, 2],
@@ -420,13 +300,14 @@ if __name__ == "__main__":
     """
 
     ds = CocoPoseTinyDataset()
+    assert ds._is_extracted()
     print(len(ds), "examples in the dataset")
     example = ds[10]
     assert isinstance(example, tuple)
     inputs, targets = example
     img = inputs[0]
     print("image:", img.shape, img.dtype, type(img))
-    for j in range(4):
+    for j in range(2):
         print(
             f"target[{j}]:",
             targets[j].shape,

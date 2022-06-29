@@ -1,13 +1,17 @@
 import pickle
 import torch
-from .dict_to_tensor import DictToTensor
+from cvlization.torch.evaluation.object_detection_evaluator.dict_to_tensor import (
+    DictToTensor,
+)
 
 
 with open("tests/torch/object_detection_evaluator/real_targets.pickle", "rb") as handle:
     real_targets = pickle.load(handle)
     real_targets = DictToTensor()(targets=real_targets)
 
-with open("tests/torch/object_detection_evaluator/real_detections.pickle", "rb") as handle:
+with open(
+    "tests/torch/object_detection_evaluator/real_detections.pickle", "rb"
+) as handle:
     real_detections = pickle.load(handle)
     real_detections = DictToTensor()(detections=real_detections)
 
