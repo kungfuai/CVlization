@@ -1,10 +1,8 @@
 import torch
 import warnings
-from src.dataset.bbox import Bbox
-from src.type_validation.bbox_converter import FORMATS
 from typing import List
-from src.dataset.target_base import TargetBase
-
+from .bbox import Bbox, FORMATS
+from .target_base import TargetBase
 
 class Prediction(TargetBase):
     def __init__(

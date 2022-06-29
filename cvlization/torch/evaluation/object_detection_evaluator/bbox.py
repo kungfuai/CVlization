@@ -1,4 +1,3 @@
-import re
 import torch
 import numpy as np
 from typing import Union, Optional, Tuple
@@ -13,7 +12,7 @@ class Bbox:
 
     def __init__(
         self,
-        bbox: Optional[Union[torch.tensor, np.ndarray]]=None,
+        bbox: Optional[Union[torch.tensor, np.ndarray]] = None,
         class_id: Optional[Union[int, torch.tensor]] = None,
         class_name: Optional[str] = None,
         score: Optional[Union[float, torch.tensor]] = None,
@@ -22,7 +21,6 @@ class Bbox:
         self.class_id = class_id
         self.class_name = class_name
         self.score = score
-
 
     @property
     def x_1(self) -> float:
@@ -38,7 +36,7 @@ class Bbox:
 
     @property
     def y_2(self) -> float:
-         return self.bbox[3]
+        return self.bbox[3]
 
     @property
     def as_torch(self) -> torch.FloatTensor:

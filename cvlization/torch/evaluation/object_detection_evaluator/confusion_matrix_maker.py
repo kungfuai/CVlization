@@ -1,4 +1,3 @@
-from logging import exception
 import torch
 from .confusion_matrix import ConfusionMatrix
 from numpy import float64

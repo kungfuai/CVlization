@@ -1,7 +1,6 @@
 import numpy as np
 import torch
-from src.dataset.bbox import Bbox
-from src.type_validation.bbox_converter import FORMATS
+from .bbox import Bbox, FORMATS
 from typing import List
 
 

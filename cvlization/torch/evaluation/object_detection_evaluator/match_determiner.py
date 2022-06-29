@@ -1,6 +1,6 @@
 import torch
-from .match_filter import MatchFilter
 from typing import List, Optional, Tuple
+from .match_filter import MatchFilter
 
 
 class MatchDeterminer:

@@ -1,6 +1,6 @@
-from .holder import Holder
 from torch import Tensor
 from typing import List, Optional
+from .holder import Holder
 
 
 class MatchHolder:
@@ -18,7 +18,9 @@ class MatchHolder:
             holder_list.append(Holder(class_id=i))
         return holder_list
 
-    def add(self, matched: List[Tensor], unmatched: List[Optional[Tensor]], class_id: int) -> None:
+    def add(
+        self, matched: List[Tensor], unmatched: List[Optional[Tensor]], class_id: int
+    ) -> None:
         self.holder_list[class_id].add(matched=matched, unmatched=unmatched)
 
     def reset(self):

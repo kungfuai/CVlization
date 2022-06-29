@@ -1,14 +1,14 @@
 import numpy as np
 import torch
+from numpy import ndarray
+from typing import Dict, List, Optional, Union
 from .box_matcher import BoxMatcher
 from .match_holder import MatchHolder
 from .metrics import Metrics
 from .dict_to_tensor import DictToTensor
 from .pr_calculator import PRCalculator
-from src.dataset.target import Target
-from src.dataset.prediction import Prediction
-from numpy import float64, ndarray
-from typing import Dict, List, Optional, Union
+from .target import Target
+from .prediction import Prediction
 
 
 class Evaluator:

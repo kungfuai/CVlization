@@ -1,10 +1,10 @@
-import numpy as np
 import warnings
-from src.dataset.bbox import Bbox
 from typing import List
-from src.dataset.target_base import TargetBase
+from .bbox import Bbox
+from .target_base import TargetBase
 
 FORMATS = ["COCO", "Pascal_VOC"]
+
 
 class Target(TargetBase):
     def __init__(self, bboxes: List[Bbox]) -> None:

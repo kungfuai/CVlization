@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 from numpy import float64, ndarray
 from typing import List, Optional

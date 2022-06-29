@@ -1,5 +1,3 @@
-from hashlib import new
-import math
 import torch
 from torchvision.ops import box_iou, nms
 from .match_determiner import MatchDeterminer
