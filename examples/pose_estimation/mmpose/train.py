@@ -1,36 +1,36 @@
-from mmdet.datasets import build_dataset
-from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
-from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
-from cvlization.torch.net.object_detection.mmdet import (
-    MMDetectionModels,
-    MMDatasetAdaptor,
-    MMDetectionTrainer,
-)
-
-# pip install mmdet==2.24.1
+# Adapted from https://github.com/open-mmlab/mmpose/blob/master/demo/MMPose_Tutorial.ipynb
+# pip install mmpose==0.27.0
 # pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html
+
+import os
+from mmpose.datasets.builder import build_dataset
+from cvlization.lab.coco_pose_tiny import CocoPoseTinyDatasetBuilder
+from cvlization.torch.net.pose_estimation.mmpose import (
+    MMDatasetAdaptor,
+    MMPoseModels,
+    MMTrainer,
+)
 
 
 class TrainingSession:
-    # TODO: integrate with Experiment interface.
-    #   Create a MMDetTrainer class.
-
     def __init__(self, args):
         self.args = args
 
     def run(self):
-        # Get num_classes from the dataset. This is needed to construct the model.
-        self.dataset_builder_cls = KittiTinyDatasetBuilder
-        # self.dataset_builder_cls = PennFudanPedestrianDatasetBuilder
-        num_classes = self.dataset_builder_cls().num_classes
-        self.model, self.cfg = self.create_model(num_classes)
+        self.dataset_builder_cls = CocoPoseTinyDatasetBuilder
+        # num_classes = self.dataset_builder_cls().num_classes
+        self.model, self.cfg = self.create_model()  # num_classes)
         # self.cfg.data.samples_per_gpu = 2
         # self.cfg.optimizer.lr = 0.00001
         self.datasets = self.create_dataset(self.cfg)
+
         self.trainer = self.create_trainer(self.cfg, self.args.net)
+
         self.cfg = self.trainer.config
+
         # Additional customization of the config here. e.g.
         #   cfg.optimizer.lr = 0.0001
+        self.cfg.total_epochs = 30
         print("batch size:", self.cfg.data.samples_per_gpu)
         print(self.datasets[0])
         self.trainer.fit(
@@ -39,8 +39,8 @@ class TrainingSession:
             val_dataset=self.datasets[1],
         )
 
-    def create_model(self, num_classes: int):
-        model_registry = MMDetectionModels(num_classes=num_classes)
+    def create_model(self):
+        model_registry = MMPoseModels()
         model_dict = model_registry[self.args.net]
         model, cfg = model_dict["model"], model_dict["config"]
         return model, cfg
@@ -51,13 +51,18 @@ class TrainingSession:
         print("registered:", dataset_classname)
 
         MMDatasetAdaptor.set_dataset_info_in_config(
-            config, dataset_classname=dataset_classname, image_dir=dsb.image_dir
+            config,
+            dataset_classname=dataset_classname,
+            dataset_dir=os.path.join(dsb.data_dir, dsb.dataset_folder),
+            train_anno_file=dsb.train_ann_file,
+            val_anno_file=dsb.val_ann_file,
+            image_dir=dsb.img_folder,
         )
 
         if hasattr(config.data.train, "dataset"):
             datasets = [
                 build_dataset(config.data.train.dataset),
-                build_dataset(config.data.val),
+                build_dataset(config.data.val.dataset),
             ]
         else:
             datasets = [
@@ -70,30 +75,28 @@ class TrainingSession:
 
         print("\n***** Validation data:")
         print(datasets[1])
+        print(datasets[1][0])
+
         return datasets
 
     def create_trainer(self, cfg, net: str):
-        return MMDetectionTrainer(cfg, net)
+        return MMTrainer(cfg, net)
 
 
 if __name__ == "__main__":
     """
-    python -m examples.object_detection.mmdet.train
+    python -m examples.pose_estimation.mmpose.train
     """
 
     from argparse import ArgumentParser
 
-    options = MMDetectionModels.model_names()
+    options = MMPoseModels.model_names()
     parser = ArgumentParser(
         epilog=f"""
-            Options for net: {options} ({len(options)} of them).
+            *** Options for net: {options} ({len(options)} of them).
             """
     )
-    parser.add_argument("--net", type=str, default="fcos")
-    # Alternative options:
-    # net="deformable_detr",
-    # net="dyhead",
-    # net="retinanet_r18"
+    parser.add_argument("--net", type=str, default="pose_hrnet_w32")
     parser.add_argument("--track", action="store_true")
 
     args = parser.parse_args()

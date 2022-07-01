@@ -87,6 +87,7 @@ if __name__ == "__main__":
     parser = ArgumentParser(
         epilog=f"""
             Options for net: {options} ({len(options)} of them).
+            
             """
     )
     parser.add_argument("--net", type=str, default="maskrcnn_resnet50_fpn")
