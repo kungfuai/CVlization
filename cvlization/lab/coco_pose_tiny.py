@@ -1,21 +1,22 @@
 """
-Serves a subset of COCO val2017 panoptic segmentation dataset with 700 images.
+Dataset adapted from: https://github.com/open-mmlab/mmpose/blob/master/demo/MMPose_Tutorial.ipynb
 """
 
 from dataclasses import dataclass
+import json
 import numpy as np
 import os
 from subprocess import check_output
 from PIL import Image
 from typing import Union, List, Tuple
 from panopticapi.utils import rgb2id
-from mmdet.datasets.coco_panoptic import COCOPanoptic
+from pycocotools.coco import COCO
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
 
 
 @dataclass
-class CocoPanopticTinyDatasetBuilder:
+class CocoPoseTinyDatasetBuilder:
     """
     :param label_offset
         By default, label_offset is 0 which means class labels start from 0. Set it to 1 if you want to
@@ -29,13 +30,13 @@ class CocoPanopticTinyDatasetBuilder:
     to_torch_tensor: bool = False
     flavor: str = None  # one of None, "torchvision"
     data_dir: str = "./data"
-    dataset_folder: str = "coco_panoptic_tiny"
-    train_ann_file: str = "annotations/panoptic_val2017_first500.json"
-    val_ann_file: str = "annotations/panoptic_val2017_last200.json"
+    dataset_folder: str = "coco_pose_tiny"
+    train_ann_file: str = "person_keypoints_val2017_first80.json"
+    val_ann_file: str = "person_keypoints_val2017_last20.json"
     download_url: str = (
-        "https://storage.googleapis.com/research-datasets-public/coco_panoptic_tiny.zip"
+        "https://storage.googleapis.com/research-datasets-public/coco_pose_tiny.zip"
     )
-    preload: bool = False
+    preload: bool = True
     label_offset: int = 0
 
     def __post_init__(self):
@@ -52,20 +53,8 @@ class CocoPanopticTinyDatasetBuilder:
         return self.training_dataset().img_folder
 
     @property
-    def seg_folder(self):
-        return self.training_dataset().seg_folder
-
-    @property
     def classes(self):
         return [c["name"] for c in self.training_dataset().coco.dataset["categories"]]
-
-    @property
-    def things_classes(self) -> List[dict]:
-        return self.training_dataset().things_classes
-
-    @property
-    def stuff_classes(self) -> List[dict]:
-        return self.training_dataset().stuff_classes
 
     @property
     def num_classes(self):
@@ -93,7 +82,7 @@ class CocoPanopticTinyDatasetBuilder:
         return image, dict(boxes=boxes, labels=labels, masks=masks, seg_map=seg_map)
 
     def training_dataset(self) -> Dataset:
-        ds = CocoPanopticTinyDataset(
+        ds = CocoPoseTinyDataset(
             ann_file=self.train_ann_file,
             dataset_folder=self.dataset_folder,
             channels_first=self.channels_first,
@@ -117,7 +106,7 @@ class CocoPanopticTinyDatasetBuilder:
 
     def validation_dataset(self) -> Union[Dataset, List[Dataset]]:
         # For some use cases, more than one validation datasets are returned.
-        ds = CocoPanopticTinyDataset(
+        ds = CocoPoseTinyDataset(
             ann_file=self.val_ann_file,
             dataset_folder=self.dataset_folder,
             channels_first=self.channels_first,
@@ -140,17 +129,16 @@ class CocoPanopticTinyDatasetBuilder:
         return ds
 
 
-class CocoPanopticTinyDataset:
+class CocoPoseTinyDataset:
     def __init__(
         self,
         data_dir: str = "./data",
-        dataset_folder: str = "coco_panoptic_tiny",
-        img_folder: str = "val2017_subset",
-        seg_folder: str = "val2017_subset_panoptic_masks",
-        ann_file: str = "annotations/panoptic_val2017_first500.json",
+        dataset_folder: str = "coco_pose_tiny",
+        img_folder: str = "images",
+        ann_file: str = "person_keypoints_val2017_first80.json",
         channels_first: bool = True,
         label_offset: int = 0,
-        download_url: str = "https://storage.googleapis.com/research-datasets-public/coco_panoptic_tiny.zip",
+        download_url: str = "https://storage.googleapis.com/research-datasets-public/coco_pose_tiny.zip",
     ):
         """
         Data flow: download -> extract -> load_annotations
@@ -159,7 +147,6 @@ class CocoPanopticTinyDataset:
         self.data_dir = data_dir
         self.dataset_folder = dataset_folder
         self.img_folder = img_folder
-        self.seg_folder = seg_folder
         self.ann_file = ann_file
         self.channels_first = channels_first
         self.label_offset = label_offset
@@ -172,104 +159,18 @@ class CocoPanopticTinyDataset:
         Returns:
             dict: Annotation info of specified index.
         """
-        img_id = self.ids[idx]
-        ann_ids = self.coco.get_ann_ids(img_ids=[img_id])
-        ann_info = self.coco.load_anns(ann_ids)
-        # filter out unmatched images
-        ann_info = [i for i in ann_info if i["image_id"] == img_id]
+        ann_info = [self.anns[idx]]
         return self._parse_ann_info(ann_info)
-
-    def _parse_ann_info(self, ann_info):
-        """Parse annotations and load panoptic ground truths.
-        Args:
-            img_info (int): Image info of an image.
-            ann_info (list[dict]): Annotation info of an image.
-        Returns:
-            dict: A dict containing the following keys: bboxes, bboxes_ignore,
-                labels, masks, seg_map.
-        """
-        gt_bboxes = []
-        gt_labels = []
-        gt_bboxes_ignore = []
-        gt_mask_infos = []
-
-        for i, ann in enumerate(ann_info):
-            x1, y1, w, h = ann["bbox"]
-            if ann["area"] <= 0 or w < 1 or h < 1:
-                continue
-            bbox = [x1, y1, x1 + w, y1 + h]
-
-            category_id = ann["category_id"]
-            contiguous_cat_id = self.cat2label[category_id]
-
-            is_thing = self.coco.load_cats(ids=category_id)[0]["isthing"]
-            if is_thing:
-                is_crowd = ann.get("iscrowd", False)
-                if not is_crowd:
-                    gt_bboxes.append(bbox)
-                    gt_labels.append(contiguous_cat_id)
-                else:
-                    gt_bboxes_ignore.append(bbox)
-                    is_thing = False
-
-            mask_info = {
-                "id": ann["id"],
-                "category": contiguous_cat_id,
-                "is_thing": is_thing,
-            }
-            gt_mask_infos.append(mask_info)
-
-        if gt_bboxes:
-            gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
-            gt_labels = np.array(gt_labels, dtype=np.int64)
-        else:
-            gt_bboxes = np.zeros((0, 4), dtype=np.float32)
-            gt_labels = np.array([], dtype=np.int64)
-
-        if gt_bboxes_ignore:
-            gt_bboxes_ignore = np.array(gt_bboxes_ignore, dtype=np.float32)
-        else:
-            gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
-
-        ann = dict(
-            bboxes=gt_bboxes,
-            labels=gt_labels,
-            bboxes_ignore=gt_bboxes_ignore,
-            masks=gt_mask_infos,
-        )
-
-        return ann
-
-    def _parse_pan_label_image(
-        self, pan_label_image: np.ndarray, mask_infos: List[dict]
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Parse panoptic label image and load panoptic ground truths."""
-        pan_png = pan_label_image
-        pan_png = rgb2id(pan_png)
-
-        gt_masks = []
-        gt_seg = np.zeros_like(pan_png) + 255  # 255 as ignore
-
-        for mask_info in mask_infos:
-            mask = pan_png == mask_info["id"]
-            gt_seg = np.where(mask, mask_info["category"], gt_seg)
-
-            # The legal thing masks
-            if mask_info.get("is_thing"):
-                gt_masks.append(mask.astype(np.uint8))
-
-        gt_masks = np.stack(gt_masks, axis=0)
-        assert gt_masks.ndim == 3, f"gt_masks.ndim = {gt_masks.ndim}, expected: 3"
-
-        return gt_seg, gt_masks
 
     def __getitem__(self, index: int):
         if self.annotations is None:
             self.annotations = self.load_annotations()
 
         id = self.ids[index]
-        ann = self._get_ann_info(index)
         image_filename = self.coco.loadImgs(id)[0]["file_name"]
+        ann_info = [x for x in self.annotations if x["image_id"] == id]
+        boxes = np.stack([ann["bbox"] for ann in ann_info], axis=0)
+        joints_3d = np.stack([ann["joints_3d"] for ann in ann_info], axis=0)
         pil_img = Image.open(
             os.path.join(
                 self.data_dir, self.dataset_folder, self.img_folder, image_filename
@@ -278,57 +179,9 @@ class CocoPanopticTinyDataset:
         np_img = np.array(pil_img, dtype=np.float32)
         np_img = (np_img - np_img.min()) / max(1e-3, np_img.max() - np_img.min())
 
-        pan_png_filename = image_filename.replace("jpg", "png")
-        pan_label_image = Image.open(
-            os.path.join(
-                self.data_dir,
-                self.dataset_folder,
-                self.seg_folder,
-                pan_png_filename,
-            )
-        )
-        pan_label_image = np.array(pan_label_image)
-        gt_seg, gt_masks = self._parse_pan_label_image(pan_label_image, ann["masks"])
-
-        """
-        Code sample from mmdet.datasets.pipelines.loading:
-        (for parsing panoptic segmentations)
-
-        pan_png = mmcv.imfrombytes(
-            img_bytes, flag='color', channel_order='rgb').squeeze()
-        pan_png = rgb2id(pan_png)
-
-        gt_masks = []
-        gt_seg = np.zeros_like(pan_png) + 255  # 255 as ignore
-
-        for mask_info in results['ann_info']['masks']:
-            mask = (pan_png == mask_info['id'])
-            gt_seg = np.where(mask, mask_info['category'], gt_seg)
-
-            # The legal thing masks
-            if mask_info.get('is_thing'):
-                gt_masks.append(mask.astype(np.uint8))
-        
-        if self.with_mask:
-            h, w = results['img_info']['height'], results['img_info']['width']
-            gt_masks = BitmapMasks(gt_masks, h, w)
-            results['gt_masks'] = gt_masks
-            results['mask_fields'].append('gt_masks')
-
-        if self.with_seg:
-            results['gt_semantic_seg'] = gt_seg
-            results['seg_fields'].append('gt_semantic_seg')
-        """
-
-        if self.channels_first:
-            np_img = np_img.transpose((2, 0, 1))
-
-        box_labels = self.label_offset + np.expand_dims(ann["labels"], -1)
         return [np_img], [
-            ann["bboxes"],  # shape: num_boxes, 4
-            box_labels,  # shape: num_boxes, 1
-            gt_masks,  # shape: num_boxes, h, w
-            gt_seg,  # shape: h, w (int32)
+            boxes,
+            joints_3d,
         ]
 
     def __len__(self):
@@ -362,59 +215,99 @@ class CocoPanopticTinyDataset:
         return os.path.isfile(self.download_file_local_path)
 
     def _is_extracted(self):
-        return os.path.isfile(
-            os.path.join(
+        ann_path = os.path.join(
+            self.data_dir,
+            self.dataset_folder,
+            self.ann_file,
+        )
+        return os.path.isfile(ann_path)
+
+    def _get_db(self):
+        ann_path = os.path.join(self.data_dir, self.dataset_folder, self.ann_file)
+        coco = self.coco = COCO(ann_path)
+
+        ann_ids = coco.getAnnIds()
+        self.anns = anns = coco.loadAnns(ann_ids)
+        catIds = coco.getCatIds(catNms=["person"])
+        imgIds = coco.getImgIds(catIds=catIds)
+        self.ids = imgIds
+
+        db = []
+        for idx, ann in enumerate(anns):
+            # get image path
+            img_id = ann["image_id"]
+            img = coco.loadImgs([img_id])[0]
+            image_file = os.path.join(
                 self.data_dir,
                 self.dataset_folder,
-                self.ann_file,
+                self.img_folder,
+                img["file_name"],
             )
-        )
+            # get bbox
+            bbox = ann["bbox"]
+            # get keypoints
+            keypoints = np.array(ann["keypoints"], dtype=np.float32).reshape(-1, 3)
+            num_joints = keypoints.shape[0]
+            joints_3d = np.zeros((num_joints, 3), dtype=np.float32)
+            joints_3d[:, :2] = keypoints[:, :2]
+            joints_3d_visible = np.zeros((num_joints, 3), dtype=np.float32)
+            joints_3d_visible[:, :2] = np.minimum(1, keypoints[:, 2:3])
 
-    @property
-    def things_classes(self):
-        return [c for c in self.coco.dataset["categories"] if c["isthing"] == 1]
+            sample = {
+                "image_file": image_file,
+                "bbox": bbox,
+                "rotation": 0,
+                "joints_3d": joints_3d,
+                "joints_3d_visible": joints_3d_visible,
+                "bbox_score": 1,
+                "bbox_id": idx,
+                "image_id": img_id,
+            }
+            db.append(sample)
 
-    @property
-    def stuff_classes(self):
-        return [c for c in self.coco.dataset["categories"] if c["isthing"] == 0]
+        # flip_pairs, upper_body_ids and lower_body_ids will be used
+        # in some data augmentations like random flip
+        self.ann_info = {}
+        self.ann_info["flip_pairs"] = [
+            # These numbers are specific to the keypoint definitions of this dataset.
+            [1, 2],
+            [3, 4],
+            [5, 6],
+            [7, 8],
+            [9, 10],
+            [11, 12],
+            [13, 14],
+            [15, 16],
+        ]
+        self.ann_info["upper_body_ids"] = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        self.ann_info["lower_body_ids"] = (11, 12, 13, 14, 15, 16)
+        self.ann_info["joint_weights"] = None
+        self.ann_info["use_different_joint_weights"] = False
+
+        return db
 
     def load_annotations(self):
         if not self._is_extracted():
             self.extract()
 
-        print("data_dir:", self.data_dir)
-        print("ann_file:", self.ann_file)
-        print("dataset_folder:", self.dataset_folder)
-        self.coco = COCOPanoptic(
-            os.path.join(self.data_dir, self.dataset_folder, self.ann_file)
-        )
-        self.ids = list(sorted(self.coco.imgs.keys()))
-        self.CLASSES = self.coco.cats.keys()
-        print(f"{len(self.CLASSES)} classes")
-        self.cat2label = {k: i for i, k in enumerate(self.CLASSES)}
-        return self.coco.anns
+        self.annotations = self._get_db()
+        return self.annotations
 
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.coco_panoptic_tiny
+    python -m cvlization.lab.coco_pose_tiny
     """
-    from mmdet.datasets.coco_panoptic import CocoPanopticDataset
 
-    # ds = CocoPanopticDataset(
-    #     ann_file="data/coco_panoptic_tiny/annotations/panoptic_val2017_first500.json",
-    #     pipeline=[],
-    # )
-    # assert False
-
-    ds = CocoPanopticTinyDataset()
+    ds = CocoPoseTinyDataset()
+    assert ds._is_extracted()
     print(len(ds), "examples in the dataset")
     example = ds[10]
     assert isinstance(example, tuple)
     inputs, targets = example
     img = inputs[0]
     print("image:", img.shape, img.dtype, type(img))
-    for j in range(4):
+    for j in range(2):
         print(
             f"target[{j}]:",
             targets[j].shape,
