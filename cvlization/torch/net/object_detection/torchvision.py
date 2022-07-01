@@ -39,7 +39,7 @@ class TorchvisionDetectionModelFactory:
             self.num_classes + 1, self.net, pretrained=self.pretrained
         )
         if self.lightning:
-            model = LitDetector(model, lr=self.lr)
+            model = LitDetector(model, num_classes=self.num_classes + 1, lr=self.lr)
         return model
 
     @classmethod
