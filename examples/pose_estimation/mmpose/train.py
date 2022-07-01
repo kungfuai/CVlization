@@ -27,7 +27,7 @@ class TrainingSession:
         self.trainer = self.create_trainer(self.cfg, self.args.net)
 
         self.cfg = self.trainer.config
-        
+
         # Additional customization of the config here. e.g.
         #   cfg.optimizer.lr = 0.0001
         self.cfg.total_epochs = 30
@@ -96,7 +96,7 @@ if __name__ == "__main__":
             *** Options for net: {options} ({len(options)} of them).
             """
     )
-    parser.add_argument("--net", type=str, default="hrnet_w32_coco_256")
+    parser.add_argument("--net", type=str, default="pose_hrnet_w32")
     parser.add_argument("--track", action="store_true")
 
     args = parser.parse_args()

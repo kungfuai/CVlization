@@ -121,10 +121,32 @@ class MMPoseModels:
 
 
 MODEL_MENU = {
-    "hrnet_w32_coco_256": {
-        # https://github.com/open-mmlab/mmsegmentation/tree/master/configs/pspnet
+    "pose_hrnet_w32": {
+        # from https://github.com/open-mmlab/mmpose/blob/master/demo/MMPose_Tutorial.ipynb
+        # "config_path": "configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/hrnet_w32_coco_256x192.py",
         "config_path": "configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/hrnet_w32_coco_256x192.py",
-        "checkpoint_url": "https://download.openmmlab.com/mmpose/pretrain_models/hrnet_w32-36af842e.pth",
+        "checkpoint_url": "https://download.openmmlab.com/mmpose/top_down/hrnet/hrnet_w32_coco_256x192-c78dce93_20200708.pth",
+    },
+    "pose_hrnet_w48": {
+        "config_path": "configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/hrnet_w48_coco_256x192.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmpose/top_down/hrnet/hrnet_w48_coco_256x192-b9e0b3ab_20200708.pth",
+    },
+    "pose_swin_t": {
+        "config_path": "configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/swin_t_p4_w7_coco_256x192.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmpose/top_down/swin/swin_t_p4_w7_coco_256x192-eaefe010_20220503.pth",
+    },
+    # The following are from https://mmpose.readthedocs.io/en/latest/papers/datasets.html
+    "deeppose_resnet_50": {
+        "config_path": "configs/body/2d_kpt_sview_rgb_img/deeppose/coco/res50_coco_256x192.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmpose/top_down/deeppose/deeppose_res50_coco_256x192-f6de6c0e_20210205.pth",
+    },
+    "pose_mobilenetv2": {
+        "config_path": "configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/mobilenetv2_coco_256x192.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmpose/top_down/mobilenetv2/mobilenetv2_coco_256x192-d1e58e7b_20200727.pth",
+    },
+    "mspn_50": {
+        "config_path": "configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/mspn50_coco_256x192.py",
+        "checkpoint_url": "https://download.openmmlab.com/mmpose/top_down/mspn/mspn50_coco_256x192-8fbfb5d0_20201123.pth",
     },
 }
 
