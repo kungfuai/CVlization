@@ -27,6 +27,7 @@ class TrainingPipeline:
     model: Union[
         ModelSpec, Callable
     ] = None  # If specified, the following parameters will be ignored.
+    prediction_task: ModelSpec = None
     loss_function_included_in_model: bool = False
 
     # Precision
@@ -121,30 +122,47 @@ class TrainingPipeline:
             batch = tuple([ensure_list(x) for x in batch])
 
             if isinstance(batch[0], list):
-                assert len(self.get_model_inputs()) == len(
-                    batch[0]
-                ), f"{len(self.get_model_inputs())} model inputs expected, {len(batch[0])} actual arrays."
+                if self.get_model_inputs() is not None:
+                    assert len(self.get_model_inputs()) == len(
+                        batch[0]
+                    ), f"{len(self.get_model_inputs())} model inputs expected, {len(batch[0])} actual arrays."
+                else:
+                    LOGGER.warning(
+                        f"Saw {len(batch[0])} input arrays, please check if this is expected."
+                        " If model spec is provided, the check can be done automatically."
+                    )
             else:
-                assert (
-                    len(self.get_model_inputs()) == 1
-                ), f"Input arrays is not a list, indicating it is probably a single input. But {len(self.get_model_inputs())} model inputs expected."
-            for model_input, array in zip(self.get_model_inputs(), batch[0]):
-                if model_input.column_type == DataColumnType.IMAGE:
+                if self.get_model_inputs() is not None:
                     assert (
-                        len(array.shape) == 4
-                    ), f"Image batch has shape {array.shape}. Training dataset is {self.train_data} with batch size {self.train_data.batch_size}"
-                    if dataset_builder.dataset_provider == None:
-                        if self.ml_framework == MLFramework.PYTORCH:
-                            assert array.shape[1] in [
-                                1,
-                                3,
-                            ], f"image batch has shape {array.shape}. Expect channels_first format when dataset_provider is None"
+                        len(self.get_model_inputs()) == 1
+                    ), f"Input arrays is not a list, indicating it is probably a single input. But {len(self.get_model_inputs())} model inputs expected."
+                else:
+                    LOGGER.warning(
+                        f"Input arrays is not a list, indicating it is probably a single input."
+                        " Please check if this is expected."
+                    )
+            if self.get_model_inputs() is not None:
+                # Some asserts about ml framework, column types. To be refactored.
+                for model_input, array in zip(self.get_model_inputs(), batch[0]):
+                    if model_input.column_type == DataColumnType.IMAGE:
+                        assert (
+                            len(array.shape) == 4
+                        ), f"Image batch has shape {array.shape}. Training dataset is {self.train_data} with batch size {self.train_data.batch_size}"
+                        dataset_provider = self._get_dataset_provider(dataset_builder)
+                        if dataset_provider is None:
+                            if self.ml_framework == MLFramework.PYTORCH:
+                                assert array.shape[1] in [
+                                    1,
+                                    3,
+                                ], f"image batch has shape {array.shape}. Expect channels_first format when dataset_provider is None"
 
-            model_spec = ModelSpec(
-                model_inputs=self.get_model_inputs(),
-                model_targets=self.get_model_targets(),
-            )
-            ensure_dataset_shapes_and_types(model_spec=model_spec, dataset=train_data)
+                model_spec = ModelSpec(
+                    model_inputs=self.get_model_inputs(),
+                    model_targets=self.get_model_targets(),
+                )
+                ensure_dataset_shapes_and_types(
+                    model_spec=model_spec, dataset=train_data
+                )
 
         return self
 
@@ -205,6 +223,8 @@ class TrainingPipeline:
     def _populate_model_spec_based_on_user_provided_model(self):
         if isinstance(self.model, ModelSpec):
             self.model_spec = self.model
+        elif isinstance(self.prediction_task, ModelSpec):
+            self.model_spec = self.prediction_task
         else:
             self.model_spec = None
 
@@ -266,11 +286,15 @@ class TrainingPipeline:
         from .tensorflow.transforms.image_augmentation import normalize
 
         training_dataset = dataset_builder.training_dataset()
-        if dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
+        dataset_provider = self._get_dataset_provider(dataset_builder)
+        if dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
             # Dataset is already batched.
             # TODO: we should expect an already augmented dataset when calling DatasetBuilder.training_dataset().
             # TODO: dataset builder should handle shuffling.
-            if dataset_builder.shuffle_size:
+            if (
+                hasattr(dataset_builder, "shuffle_size")
+                and dataset_builder.shuffle_size
+            ):
                 training_dataset = training_dataset.shuffle(
                     dataset_builder.shuffle_size
                 )
@@ -278,28 +302,25 @@ class TrainingPipeline:
                 normalize, num_parallel_calls=tf.data.experimental.AUTOTUNE
             )
             return training_dataset
-        elif dataset_builder.dataset_provider in [DatasetProvider.TORCHVISION, None]:
+        elif dataset_provider in [DatasetProvider.TORCHVISION, None]:
             ds = self.convert_tuple_iterator_to_tf_dataset(
                 training_dataset, source_image_is_channels_first=True
             )
             return ds.batch(self.train_batch_size)
         else:
-            raise ValueError(
-                "Unknown dataset provider: {}".format(dataset_builder.dataset_provider)
-            )
+            raise ValueError("Unknown dataset provider: {}".format(dataset_provider))
 
     def create_tf_validation_dataloader(self, dataset_builder: DatasetBuilder):
         ds = dataset_builder.validation_dataset()
-        if dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
+        dataset_provider = self._get_dataset_provider(dataset_builder)
+        if dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
             return ds.batch(self.val_batch_size)
-        elif dataset_builder.dataset_provider in [DatasetProvider.TORCHVISION, None]:
+        elif dataset_provider in [DatasetProvider.TORCHVISION, None]:
             return self.convert_tuple_iterator_to_tf_dataset(ds).batch(
                 self.val_batch_size
             )
         else:
-            raise ValueError(
-                "Unknown dataset provider: {}".format(dataset_builder.dataset_provider)
-            )
+            raise ValueError("Unknown dataset provider: {}".format(dataset_provider))
 
     def convert_tf_dataset_to_iterable_dataset(self, tf_dataset):
         # TODO: allow using imgaug as a default
@@ -331,22 +352,23 @@ class TrainingPipeline:
         elif self.ml_framework == MLFramework.PYTORCH:
             import torch
 
-            if dataset_builder.dataset_provider in [
+            dataset_provider = self._get_dataset_provider(dataset_builder)
+            if dataset_provider in [
                 DatasetProvider.TORCHVISION,
                 DatasetProvider.CVLIZATION,
                 None,
             ]:
+                train_ds = dataset_builder.training_dataset()
+                LOGGER.info(f"Training data: {len(train_ds)} examples")
                 dl = torch.utils.data.DataLoader(
-                    dataset_builder.training_dataset(),
+                    train_ds,
                     batch_size=self.train_batch_size,
                     shuffle=True,
                     num_workers=self.num_workers,
                     collate_fn=self.create_collate_fn(),
                 )
                 return dl
-            elif (
-                dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS
-            ):
+            elif dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
                 training_dataset = dataset_builder.training_dataset()
                 training_dataset = self.convert_tf_dataset_to_iterable_dataset(
                     training_dataset
@@ -359,34 +381,41 @@ class TrainingPipeline:
                     collate_fn=self.create_collate_fn(),
                 )
             else:
-                raise ValueError(
-                    f"Unknown dataset provider: {dataset_builder.dataset_provider}"
-                )
+                raise ValueError(f"Unknown dataset provider: {dataset_provider}")
 
         raise ValueError(f"Unknown ML framework: {self.ml_framework}")
 
+    def _get_dataset_provider(
+        self, dataset_builder: DatasetBuilder
+    ) -> Union[DatasetProvider, None]:
+        if hasattr(dataset_builder, "dataset_provider"):
+            return dataset_builder.dataset_provider
+        else:
+            return None
+
     def create_validation_dataloader(self, dataset_builder: DatasetBuilder):
+        dataset_provider = self._get_dataset_provider(dataset_builder)
         if self.ml_framework == MLFramework.TENSORFLOW:
             return self.create_tf_validation_dataloader(dataset_builder)
         elif self.ml_framework == MLFramework.PYTORCH:
-            if dataset_builder.dataset_provider in [
+            if dataset_provider in [
                 DatasetProvider.TORCHVISION,
                 DatasetProvider.CVLIZATION,
                 None,
             ]:
                 import torch
 
+                val_ds = dataset_builder.validation_dataset()
+                LOGGER.info(f"Validation data: {len(val_ds)} examples")
                 dl = torch.utils.data.DataLoader(
-                    dataset_builder.validation_dataset(),
+                    val_ds,
                     batch_size=self.val_batch_size,
                     shuffle=False,
                     num_workers=self.num_workers,
                     collate_fn=self.create_collate_fn(),
                 )
                 return dl
-            elif (
-                dataset_builder.dataset_provider == DatasetProvider.TENSORFLOW_DATASETS
-            ):
+            elif dataset_provider == DatasetProvider.TENSORFLOW_DATASETS:
                 validation_dataset = dataset_builder.validation_dataset()
                 validation_dataset = self.convert_tf_dataset_to_iterable_dataset(
                     validation_dataset
@@ -396,9 +425,7 @@ class TrainingPipeline:
                     batch_size=self.val_batch_size,
                 )
             else:
-                raise ValueError(
-                    f"Unknown dataset provider: {dataset_builder.dataset_provider}"
-                )
+                raise ValueError(f"Unknown dataset provider: {dataset_provider}")
 
     def _iterate_through_data(self):
         LOGGER.info("Running through data without model training.")
