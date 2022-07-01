@@ -136,6 +136,7 @@ def test_transform_example_with_imgaug_bbox():
     target["labels"] = np.ones(1)
     image_aug_object.aug.seed_(1)
     assert isinstance(img, np.ndarray)
+    assert img.shape[0] <= 3  # channels_first
     input_arrays = [img]
     target_arrays = [target["boxes"], target["labels"]]
     example = (input_arrays, target_arrays)
@@ -143,6 +144,8 @@ def test_transform_example_with_imgaug_bbox():
     assert isinstance(aug_inputs, list)
     assert isinstance(aug_targets, list)
     image_aug = aug_inputs[0]
+    assert image_aug.shape[0] <= 3  # channels_first
+    image_aug = image_aug.transpose(1, 2, 0)
     assert image_aug.shape == (818, 645, 3)
     aug_bbox = aug_targets[0]
     image_aug = draw_bounding_boxes(
@@ -219,7 +222,7 @@ def test_transform_example_with_imgaug_segmap():
             ),
             ModelTarget(
                 key="segmaps",
-                column_type=DataColumnType.MASKS,
+                column_type=DataColumnType.MASK,
                 n_categories=10,
                 raw_shape=[None, None],
             ),
@@ -233,8 +236,11 @@ def test_transform_example_with_imgaug_segmap():
     example = (input_arrays, target_arrays)
     aug_inputs, aug_targets = example_transform.transform_example(example)
     image_aug = aug_inputs[0]
+    assert image_aug.shape[0] <= 3  # channels_first
+    image_aug = np.transpose(image_aug, (1, 2, 0))
     aug_segmap = aug_targets[1]
-    image_aug = aug_segmap.draw_on_image(image=image_aug)[0]
+    segmap_on_img = SegmentationMapsOnImage(arr=aug_segmap, shape=image_aug.shape)
+    image_aug = segmap_on_img.draw_on_image(image=image_aug)[0]
     # Uncomment the following line to produce expected test case.
     # If a new image is generated, please visually inspect it.
     # Image.fromarray(image_aug).save(test_image_path.replace(".jpeg", "_segmap_aug.png"))
