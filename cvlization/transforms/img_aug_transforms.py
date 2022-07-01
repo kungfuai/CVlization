@@ -30,7 +30,13 @@ TRANSFORM_MENU = {
 
 
 class ImgAugTransform:
-    def __init__(self, cv_task=None, config_file_or_dict=None, **kwargs):
+    def __init__(
+        self,
+        cv_task: str = None,
+        config_file_or_dict=None,
+        channels_first: bool = True,
+        **kwargs,
+    ):
         if config_file_or_dict:
             self.aug = self.build_transform_from_config(config_file_or_dict)
         else:
@@ -47,6 +53,7 @@ class ImgAugTransform:
             "semseg",
         ], f"{cv_task} is not a valid cv task"
         self.cv_task = cv_task
+        self.channels_first = channels_first
 
     def transform_tuple(self, x):
         """
@@ -69,7 +76,13 @@ class ImgAugTransform:
         kwargs = {}
         for k, v in td.get("kwargs", {}).items():
             kwargs[k] = self.transform_tuple(v)
-        return iaa.Sometimes(prob, TRANSFORM_MENU[td["type"]](**kwargs))
+        try:
+            return iaa.Sometimes(prob, TRANSFORM_MENU[td["type"]](**kwargs))
+        except:
+            print(
+                f"Error creating augmentation step: {td['type']}, {TRANSFORM_MENU[td['type']]}"
+            )
+            raise
 
     def build_transform_from_config(
         self, transform_config_json: Union[str, dict]
@@ -130,7 +143,11 @@ class ImgAugTransform:
         keypoints=None,
     ) -> dict:
         assert image is not None, "image is None"
-        image = np.moveaxis(image, 0, -1)
+        # TODO: add support for channels_last
+        if self.channels_first:
+            # imgaug assumes channels last, so we need to transpose the image.
+            assert image.shape[0] <= 3, "image is not channels_first"
+            image = np.transpose(image, (1, 2, 0))
         aug_det = self.aug.to_deterministic()
         input_dict = dict(
             image=image,
@@ -147,9 +164,12 @@ class ImgAugTransform:
             bboxes = BoundingBoxesOnImage(bboxes, image.shape)
             input_dict["bounding_boxes"] = bboxes
         if "segmentation_maps" in input_dict:
-            segmap = SegmentationMapsOnImage(
-                input_dict["segmentation_maps"], image.shape
-            )
+            input_segmap = input_dict["segmentation_maps"]
+            input_segmap = np.squeeze(input_segmap)
+            assert (
+                input_segmap.ndim == 2
+            ), f"segmentation_maps must be 2D, got shape {input_segmap.shape}"
+            segmap = SegmentationMapsOnImage(input_segmap, image.shape)
             input_dict["segmentation_maps"] = segmap
 
         keys = [k for k in input_dict]
@@ -158,7 +178,24 @@ class ImgAugTransform:
             keys
         ), f"output length {len(output)} != keys length {len(keys)}"
         key_mapping = self.get_key_mapping()
-        return {key_mapping[k]: v for k, v in zip(keys, output)}
+        dict_np_output = {key_mapping[k]: v for k, v in zip(keys, output)}
+        for k, v in dict_np_output.items():
+            if hasattr(v, "get_arr"):
+                dict_np_output[k] = v.get_arr()  # draw()
+            elif k == "image":
+                # The output of imgaug is channels_last. So if `channels_first`
+                # is set to True, we need to transpose the image.
+                if self.channels_first:
+                    dict_np_output[k] = np.transpose(v, (2, 0, 1))
+        # print("***** transformed!!")
+        # for k, v in dict_np_output.items():
+        #     if isinstance(v, np.ndarray):
+        #         print(f"{k}: {v.shape}")
+        #     elif isinstance(v, list):
+        #         for i in v[:2]:
+        #             print(f"{k}: {i.shape}")
+        # assert False
+        return dict_np_output
 
     def get_key_mapping(self) -> dict:
         return {
