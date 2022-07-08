@@ -8,11 +8,12 @@ from dataclasses import dataclass
 import numpy as np
 import os
 from subprocess import check_output
-from PIL import Image
 import torch
 from torchvision.datasets import CocoDetection
 from typing import Union, List
+from . import york_transforms as T
 from ..data.dataset_builder import Dataset, DatasetProvider
+from ..torch.net.line_detection.letr.util import collate_fn
 
 
 @dataclass
@@ -115,6 +116,7 @@ class YorkLinesDataset:
         self.download_url = download_url
 
         self.prepare = ConvertCocoPolysToMask()
+        self.transforms = make_coco_transforms(is_train="train" in self.ann_file)
 
     def _get_ann_info(self, idx):
         """Get COCO annotation by index.
@@ -134,6 +136,9 @@ class YorkLinesDataset:
         image_id = self.coco_ds.ids[index]
         target = {"image_id": image_id, "annotations": target}
         img, target = self.prepare(img, target)
+        img, target = self.transforms(img, target)
+        assert isinstance(target, dict)
+        assert "lines" in target, f"keys in target: {target.keys()}"
         if self.flavor == "torchvision":
             return img, target
         elif self.flavor is None:
@@ -141,8 +146,10 @@ class YorkLinesDataset:
             np_img = (np_img - np_img.min()) / max(1e-3, np_img.max() - np_img.min())
             inputs = [np_img]
             targets = [
+                # TODO: use relative coordinates for lines so that orig_size is not needed
                 target["lines"].numpy(),
                 target["labels"].numpy(),
+                target["orig_size"].numpy(),
             ]
             return inputs, targets
         else:
@@ -238,6 +245,48 @@ class ConvertCocoPolysToMask(object):
         return image, target
 
 
+def make_coco_transforms(is_train: bool = False):
+    """Torchvision transforms."""
+
+    normalize = T.Compose(
+        [T.ToTensor(), T.Normalize([0.538, 0.494, 0.453], [0.257, 0.263, 0.273])]
+    )
+
+    scales = [480, 512, 544, 576, 608, 640, 672, 680, 690, 704, 736, 768, 788, 800]
+    test_size = 1100
+    max = 1333
+
+    if is_train:
+        return T.Compose(
+            [
+                T.RandomSelect(
+                    T.RandomHorizontalFlip(),
+                    T.RandomVerticalFlip(),
+                ),
+                T.RandomSelect(
+                    T.RandomResize(scales, max_size=max),
+                    T.Compose(
+                        [
+                            T.RandomResize([400, 500, 600]),
+                            T.RandomSizeCrop(384, 600),
+                            T.RandomResize(scales, max_size=max),
+                        ]
+                    ),
+                ),
+                T.ColorJitter(),
+                normalize,
+            ]
+        )
+
+    else:
+        return T.Compose(
+            [
+                T.RandomResize([test_size], max_size=max),
+                normalize,
+            ]
+        )
+
+
 if __name__ == "__main__":
     """
     python -m cvlization.lab.york_lines
@@ -267,16 +316,21 @@ if __name__ == "__main__":
 
     from torch.utils.data import DataLoader
 
+    ds = YorkLinesDataset(
+        download_url="https://storage.googleapis.com/research-datasets-public/york_lines.zip",
+        flavor="torchvision",
+    )
+
     print("Now inspecting the dataloader..")
     dl = DataLoader(
-        ds, batch_size=3, shuffle=False, collate_fn=lambda batch: tuple(zip(*batch))
+        ds,
+        batch_size=3,
+        shuffle=False,
+        # collate_fn=lambda batch: tuple(zip(*batch))
+        collate_fn=collate_fn,
     )
     for i, (inputs, targets) in enumerate(dl):
         # print("batch:", i, inputs[0].shape, targets[0].shape, targets[1].shape)
-        print("batch:", i, len(inputs), "images")
-        print("image 0:", inputs[0][0].shape)
+        print("image batch:", i, inputs.tensors.shape)
         print("len(targets) =", len(targets))
-        print("targets [0]:", targets[0])
-        print("targets 0[0]:", targets[0][0].shape)
-        print("targets 0[1]:", targets[0][1].shape)
         break

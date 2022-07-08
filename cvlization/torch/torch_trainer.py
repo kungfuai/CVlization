@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
-from typing import Union, Optional, Any, Iterable, List
+from typing import Union, Optional, Any, Iterable, List, Callable
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -37,7 +37,9 @@ class TorchTrainer(BaseTrainer):
     val_dataset: Dataset = None
     train_batch_size: int = 1
     val_batch_size: int = 1
-    collate_method: str = None  # "zip", None (None means default collate_fn)
+    collate_method: Union[
+        str, Callable
+    ] = None  # "zip", None (None means default collate_fn)
     num_workers: int = 0
 
     loss_function_included_in_model: bool = False
@@ -59,6 +61,7 @@ class TorchTrainer(BaseTrainer):
     initial_epoch: Optional[int] = 1
     train_steps_per_epoch: Optional[int] = None
     val_steps_per_epoch: Optional[int] = None
+    check_val_every_n_epoch: Optional[int] = 5  # Used for Pytorch Lightning Trainer.
 
     # TODO: lr_finder not implemented.
     use_lr_finder: Optional[bool] = False
@@ -135,6 +138,7 @@ class TorchTrainer(BaseTrainer):
             callbacks=callbacks,
             enable_progress_bar=True,
             log_every_n_steps=10,
+            check_val_every_n_epoch=self.check_val_every_n_epoch,
         )
         if not self.loss_function_included_in_model:
             self._loss_function = self._get_or_create_loss_function(self.model).to(
@@ -192,6 +196,8 @@ class TorchTrainer(BaseTrainer):
                 return tuple(zip(*batch))
 
             return collate_fn
+        elif callable(self.collate_method):
+            return self.collate_method
         else:
             return None
 
@@ -201,7 +207,6 @@ class TorchTrainer(BaseTrainer):
         train_batch_size = self.train_batch_size
         val_batch_size = self.val_batch_size
         num_workers = self.num_workers
-        collate_fn = self.create_collate_fn()
 
         class DataModule(LightningDataModule):
             def train_dataloader(self):
@@ -209,6 +214,7 @@ class TorchTrainer(BaseTrainer):
                     return train_dataset
                 # Error: "Subscripted generics cannot be used with class and instance checks."
                 elif isinstance(train_dataset, MapStyleDataset):
+                    collate_fn = self.create_collate_fn()
                     return DataLoader(
                         train_dataset,
                         batch_size=train_batch_size,
@@ -217,6 +223,7 @@ class TorchTrainer(BaseTrainer):
                         collate_fn=collate_fn,
                     )
                 elif isinstance(train_dataset, Iterable):
+                    collate_fn = self.create_collate_fn()
                     return DataLoader(
                         train_dataset,
                         batch_size=train_batch_size,
@@ -233,6 +240,7 @@ class TorchTrainer(BaseTrainer):
                 elif isinstance(val_dataset, MapStyleDataset) or isinstance(
                     val_dataset, Iterable
                 ):
+                    collate_fn = self.create_collate_fn()
                     return DataLoader(
                         val_dataset,
                         batch_size=val_batch_size,

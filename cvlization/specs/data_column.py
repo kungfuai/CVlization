@@ -17,6 +17,7 @@ class DataColumnType(str, enum.Enum):
     BOOLEAN = "boolean"
     # Structured outputs:
     BOUNDING_BOXES = "bboxes"
+    LINES = "lines"
     MASK = "mask"
     KEYPOINTS = "keypoints"
 

@@ -35,7 +35,7 @@ class TrainingPipeline:
 
     # Data
     num_workers: int = 0
-    collate_method: str = None  # "zip", None
+    collate_method: Union[str, Callable] = None  # "zip", None
 
     # Optimizer
     lr: float = 0.0001
@@ -628,6 +628,10 @@ class TrainingPipeline:
 
         if self.model is not None and callable(self.model):
             if isinstance(self.model, LightningModule):
+                if hasattr(self.model, "lr"):
+                    self.model.lr = self.lr
+                else:
+                    raise ValueError("Model does not have a lr attribute.")
                 return self.model
             elif isinstance(self.model, nn.Module):
                 return TorchLitModel(
@@ -710,6 +714,10 @@ class TrainingPipeline:
                 return tuple(zip(*batch))
 
             return collate_fn
+        elif callable(self.collate_method):
+            return self.collate_method
+        else:
+            return None
 
     def get_model_inputs(self):
         if self.model_spec:
