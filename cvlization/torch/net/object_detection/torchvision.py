@@ -8,7 +8,12 @@ from pytorch_lightning.core.lightning import LightningModule
 from torchmetrics.detection.map import MeanAveragePrecision
 
 # TODO: Use this object detection e
-from ...evaluation.object_detection_evaluator.evaluator import Evaluator
+from ...evaluation.object_detection_evaluator.evaluator import (
+    Evaluator,
+    Prediction,
+    Target,
+)
+from ...evaluation.object_detection_evaluator.bbox import Bbox
 
 
 LOGGER = logging.getLogger(__name__)
@@ -108,14 +113,13 @@ class LitDetector(LightningModule):
         assert len(detections) == len(
             targets
         ), f"{len(detections)} detections but {len(targets)} targets. detections={detections}"
-        # for det in detections:
-        #     idx = det["labels"] > 0
-        #     det["boxes"] = det["boxes"][idx]
-        #     det["labels"] = det["labels"][idx]
         self.val_mAP.update(preds=detections, target=targets)
+        self.val_evaluator.add(targets=targets, detections=detections)
 
     def validation_epoch_end(self, outputs):
         mAP = self.val_mAP.compute()
+        self.val_evaluator.calculate()
+        print(self.val_evaluator.metrics)
         self.log_dict(
             mAP,
             on_step=False,
