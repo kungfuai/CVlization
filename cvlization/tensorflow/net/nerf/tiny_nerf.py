@@ -42,7 +42,7 @@ class TinyNerfModel(tf.keras.Model):
                 rand=True,
             )
             rgbs.append(rgb)
-        return tf.stack(rgbs, axis=0)
+        return [tf.stack(rgbs, axis=0)]
 
     def train_step(self, data):
         assert tf.executing_eagerly(), "Eager execution expected."
@@ -51,17 +51,21 @@ class TinyNerfModel(tf.keras.Model):
         data = data_adapter.expand_1d(data)
         inputs, targets, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
         # print("inputs", inputs)
-        images = targets[0]
 
         with tf.GradientTape() as tape:
-            rgbs = self(inputs)
-            loss = tf.reduce_mean(tf.square(rgbs - images))
+            y_pred = self(inputs, training=True)
+            images = targets[0]
+            pred_images = y_pred[0]
+            # loss is expected to be MSE
+            loss = self.compiled_loss(
+                images, pred_images, regularization_losses=self.losses
+            )
             gradients = tape.gradient(loss, self.coordinate_model.trainable_variables)
             self.optimizer.apply_gradients(
                 zip(gradients, self.coordinate_model.trainable_variables)
             )
 
-        return_metrics = self._evaluate_metrics(images, rgbs, inputs)
+        return_metrics = self._evaluate_metrics(y=targets, y_pred=y_pred, x=inputs)
         # Return a dict mapping metric names to current value
         return return_metrics
 

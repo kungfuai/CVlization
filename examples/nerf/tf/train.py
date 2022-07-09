@@ -9,6 +9,7 @@ from cvlization.specs.prediction_tasks.nerf import Nerf
 from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.experiment import Experiment
 from cvlization.lab.tiny_nerf import TinyNerfDatasetBuilder
+from cvlization.tensorflow.metrics.psnr import PSNR
 
 
 LOGGER = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class TrainingSession:
         model.compile(
             optimizer=optimizer,
             metrics=[keras.metrics.MeanSquaredError()],
+            loss=keras.losses.MeanSquaredError(),
             run_eagerly=True,
         )
         return model
