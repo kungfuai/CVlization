@@ -44,6 +44,10 @@ class Metrics:
         all_classes_precision_recall_array: ndarray,
     ) -> None:
         """This could have also been named 'calculate_metrics'. It calculates metrics."""
+        print("all_classes_precision_recall_array", all_classes_precision_recall_array)
+        assert (
+            all_classes_precision_recall_array.size > 0
+        ), f"Empty array: {all_classes_precision_recall_array}"
         self._f1_max = np.max(all_classes_precision_recall_array[2, :])
         f1_max_index = [
             np.where(all_classes_precision_recall_array[2, :] == self._f1_max)[0][0]
@@ -51,6 +55,7 @@ class Metrics:
         self._score_at_f1_max = all_classes_precision_recall_array[3, :][f1_max_index][
             0
         ]
+        print("pr_array_list:", pr_array_list)
         self._map = self._get_mean_average_pecision(pr_array_list=pr_array_list)
 
     def _get_mean_average_pecision(self, pr_array_list: List[ndarray]) -> float64:
@@ -60,6 +65,8 @@ class Metrics:
         for pr_array in pr_array_list:
             precision = pr_array[0, :]
             recall = pr_array[1, :]
+
+            assert recall.size > 0, f"Empty recall values."
 
             average_precision = 0
             if recall[0] != 0:

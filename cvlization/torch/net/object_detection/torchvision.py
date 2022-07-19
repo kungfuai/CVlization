@@ -41,10 +41,18 @@ class TorchvisionDetectionModelFactory:
 
     def run(self):
         model = create_detection_model_with_torchvision(
-            self.num_classes + 1, self.net, pretrained=self.pretrained
+            # self.num_classes + 1,
+            self.num_classes,
+            self.net,
+            pretrained=self.pretrained,
         )
         if self.lightning:
-            model = LitDetector(model, num_classes=self.num_classes + 1, lr=self.lr)
+            model = LitDetector(
+                model,
+                # num_classes=self.num_classes + 1,
+                num_classes=self.num_classes,
+                lr=self.lr,
+            )
         return model
 
     @classmethod
@@ -79,6 +87,7 @@ class LitDetector(LightningModule):
         self.lr = lr
         self.val_mAP = MeanAveragePrecision()
         self.val_evaluator = Evaluator(num_classes=num_classes)
+        assert self.val_evaluator.num_classes == num_classes
         self.num_classes = num_classes
 
     def forward(self, *args, **kwargs):
@@ -100,11 +109,14 @@ class LitDetector(LightningModule):
         for det in detections:
             assert isinstance(det, dict), f"det is not a dict: {det}"
             assert len(det["labels"].shape) == 1
+            det["boxes"] = det["boxes"].to("cpu")
+            det["labels"] = det["labels"].to("cpu")
+            det["scores"] = det["scores"].to("cpu")
 
         for target in targets:
             assert isinstance(target, dict), f"target is not a dict: {target}"
-            target["boxes"] = target["boxes"].to("cuda")
-            target["labels"] = target["labels"].to("cuda")
+            target["boxes"] = target["boxes"].to("cpu")
+            target["labels"] = target["labels"].to("cpu")
             if len(target["labels"].shape) == 2:
                 target["labels"] = target["labels"][:, 0]
                 assert len(target["labels"].shape) == 1
