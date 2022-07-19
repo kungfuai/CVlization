@@ -22,7 +22,7 @@ class PRCalculator:
         self, unmatched_list: List[Optional[torch.Tensor]]
     ) -> torch.Tensor:
         """We concat the tensors together so that we can later count true pos, false pos, and false neg easier."""
-        unmatched = [item for item in unmatched_list if item != None]
+        unmatched = [item for item in unmatched_list if item != None and item != []]
         if len(unmatched) > 1:
             unmatched = torch.concat(unmatched, dim=0)
         elif len(unmatched) == 1:
