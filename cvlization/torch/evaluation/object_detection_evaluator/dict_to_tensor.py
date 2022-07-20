@@ -3,7 +3,9 @@ from typing import Dict, List, Optional, Tuple
 
 
 class DictToTensor:
-    def _targets_to_tensor(self, targets: List[Dict[str,     torch.Tensor]]) -> List[Optional[    torch.Tensor]]:
+    def _targets_to_tensor(
+        self, targets: List[Dict[str, torch.Tensor]]
+    ) -> List[Optional[torch.Tensor]]:
         targets_tensors = []
         for target in targets:
             if len(target["boxes"]) > 0:
@@ -19,7 +21,9 @@ class DictToTensor:
                 targets_tensors.append(None)
         return targets_tensors
 
-    def _detections_to_tensor(self, detections: List[Dict[str,     torch.Tensor]]) -> List[Optional[    torch.Tensor]]:
+    def _detections_to_tensor(
+        self, detections: List[Dict[str, torch.Tensor]]
+    ) -> List[Optional[torch.Tensor]]:
         detections_tensors = []
         for detection in detections:
             if len(detection["boxes"]) > 0:
@@ -33,10 +37,15 @@ class DictToTensor:
                 )
                 detections_tensors.append(target_tensor)
             else:
-                detections_tensors.append(None)
+                # detections_tensors.append(None)
+                detections_tensors.append(torch.zeros(size=(0, 6)))
         return detections_tensors
 
-    def __call__(self, targets: Optional[List[Dict[str,     torch.Tensor]]]=None, detections: Optional[List[Dict[str,     torch.Tensor]]]=None) -> Tuple[List[Optional[    torch.Tensor]], List[Optional[    torch.Tensor]]]:
+    def __call__(
+        self,
+        targets: Optional[List[Dict[str, torch.Tensor]]] = None,
+        detections: Optional[List[Dict[str, torch.Tensor]]] = None,
+    ) -> Tuple[List[Optional[torch.Tensor]], List[Optional[torch.Tensor]]]:
         """
         Input:
             targets (List[dict]): List of targets in retinanet format

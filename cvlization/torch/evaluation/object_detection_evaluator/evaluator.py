@@ -40,9 +40,10 @@ class Evaluator:
         to avoid runtime errors that stop training before epoch 0 even starts"""
         filtered = []
         for arr in arr_list:
-            print("============================")
+            # print("============================")
             if arr is not None:
-                print("arr:", len(arr))
+                # print("arr:", len(arr))
+                pass
             else:
                 raise ValueError("array is None!")
 
@@ -50,7 +51,7 @@ class Evaluator:
                 filtered.append(arr[~torch.any(arr.isnan(), dim=1)])
             else:
                 filtered.append(arr)
-        print("filtered:", filtered)
+        # print("filtered:", filtered)
         return filtered
 
     def _class_filter(
@@ -83,11 +84,14 @@ class Evaluator:
 
         targets = Target.to_retinanet_dicts_list(targets)
         # TODO: Need to rename detection to prediction to be congruent with Object name
+        # print("detections:", detections)
         detections = Prediction.to_retinanet_dicts_list(detections)
+        # print("detections 2:", detections)
 
         targets, detections = self.dict_to_tensor(
             targets=targets, detections=detections
         )
+        # print("detections 3:", detections)
         targets, detections = self._filter_nans(targets), self._filter_nans(detections)
         for i in range(self.num_classes):
             filtered_targets, filtered_detections = self._class_filter(
@@ -108,16 +112,16 @@ class Evaluator:
         pr_array_list = []
 
         # Each holder contains matched/unmatched lists for a single class. This loop lets us get class metrics
-        # for i_holder, holder in enumerate(self.match_holder.holder_list):
-        #     matched_list, unmatched_list = holder.matched_list, holder.unmatched_list
-        #     print("********************")
-        #     print("class id:", i_holder)
-        #     print("matched_list:", matched_list)
-        #     print("unmatched_list:", unmatched_list)
-        #     precision_recall_array = self.pr_calculator(
-        #         matched_list=matched_list, unmatched_list=unmatched_list
-        #     )
-        #     pr_array_list.append(precision_recall_array)
+        for i_holder, holder in enumerate(self.match_holder.holder_list):
+            matched_list, unmatched_list = holder.matched_list, holder.unmatched_list
+            # print("********************")
+            # print("class id:", i_holder)
+            # print("matched_list:", matched_list)
+            # print("unmatched_list:", unmatched_list)
+            precision_recall_array = self.pr_calculator(
+                matched_list=matched_list, unmatched_list=unmatched_list
+            )
+            pr_array_list.append(precision_recall_array)
 
         # A precision_recall_array is also calculated for all classes together. This will be used to calculate F1 score
         # F1 score is thus only calculated for all classes together and not for individual classes. This is done because the

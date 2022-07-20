@@ -615,6 +615,7 @@ class TrainingPipeline:
             precision=config.precision,
             loss_function_included_in_model=config.loss_function_included_in_model,
             collate_method=config.collate_method,
+            check_val_every_n_epoch=1,
         )
         # TODO: experiment tracker should be an experiment-level object.
         trainer.log_params(config.__dict__)

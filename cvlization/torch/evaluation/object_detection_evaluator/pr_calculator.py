@@ -58,14 +58,14 @@ class PRCalculator:
         return arr[arr >= score]
 
     def _create_pr_array(self, true_positives, false_positives, false_negatives):
-        print("*************************")
-        print("true pos:", true_positives)
-        print("false pos:", false_positives)
-        print("false neg:", false_negatives)
+        # print("*************************")
+        # print("true pos:", true_positives)
+        # print("false pos:", false_positives)
+        # print("false neg:", false_negatives)
         possible_scores = torch.unique(
             torch.concat([true_positives, false_positives, false_negatives], dim=0)
         )
-        print("possible_scores:", possible_scores)
+        # print("possible_scores:", possible_scores)
         possible_scores = torch.sort(possible_scores).values
         precision_recall_array = torch.zeros(size=(4, len(possible_scores)))
         for i, score in enumerate(possible_scores):
@@ -98,13 +98,13 @@ class PRCalculator:
             arr[3,i] = score_threshold (confidence) associated with the precision
             and recall values
         """
-        print("***********************************")
-        print("in pr_calculator")
-        print("matched_list:", matched_list)
-        print("unmatched_list:", unmatched_list)
-        # assert False
+        # print("***********************************")
+        # print("in pr_calculator")
+        # print("matched_list:", matched_list)
+        # print("unmatched_list:", unmatched_list)
+
         matched = self._concat_matched(matched_list=matched_list)
-        print("matched:", matched)
+        # print("matched:", matched)
         unmatched = self._concat_unmatched(unmatched_list=unmatched_list)
         true_positives, false_negatives, false_positives = self._analyze_matches(
             matched=matched
@@ -115,5 +115,5 @@ class PRCalculator:
             false_positives=false_positives,
             false_negatives=false_negatives,
         )
-        print("precision_recall_array:", precision_recall_array)
+        # print("precision_recall_array:", precision_recall_array)
         return precision_recall_array.numpy()

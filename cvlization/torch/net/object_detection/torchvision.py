@@ -131,7 +131,8 @@ class LitDetector(LightningModule):
     def validation_epoch_end(self, outputs):
         mAP = self.val_mAP.compute()
         self.val_evaluator.calculate()
-        print(self.val_evaluator.metrics)
+        print("-----------------------------")
+        print("map from evalutor:", self.val_evaluator.metrics.mean_average_precision)
         self.log_dict(
             mAP,
             on_step=False,
