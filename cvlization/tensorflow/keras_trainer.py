@@ -86,7 +86,7 @@ class KerasTrainer(BaseTrainer):
             self.model.optimizer.lr = self._find_best_lr(train_data, val_data)
 
         LOGGER.info("Begin to fit model...")
-        self.fit_model(train_data, val_data, self.epochs, self.callbacks)
+        self.fit(train_data, val_data, self.epochs, self.callbacks)
 
     def _find_best_lr(self, train_data, val_data) -> float:
         LOGGER.info("LR Finder at work...")
@@ -111,7 +111,7 @@ class KerasTrainer(BaseTrainer):
             f"Best Learning Rate: {best_lr}. Setting the starting lr in this optimizer."
         )
 
-    def fit_model(self, train_data, val_data, epochs, callbacks):
+    def fit(self, train_data, val_data, epochs, callbacks):
         # Evaluate before training starts.
         if self.evaluate_before_train:
             LOGGER.info("First, evaluate the starting model...")
