@@ -52,7 +52,9 @@ def ensure_array_shape_and_type(array, data_column: DataColumn):
             f"Shape of array is {array.shape}, raw_shape of data column {data_column.key} is {data_column.raw_shape} (not including batch axis)"
         )
     else:
-        assert len(data_column.raw_shape) == len(array.shape) - 1
+        assert (
+            len(data_column.raw_shape) == len(array.shape) - 1
+        ), f"Expected shape {data_column.raw_shape} (not including batch axis) but got {array.shape}, for data column {data_column.key}"
         for expected_size, actual_size in zip(
             data_column.raw_shape[::-1], array.shape[::-1]
         ):

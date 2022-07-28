@@ -35,7 +35,7 @@ class TrainingPipeline:
 
     # Data
     num_workers: int = 0
-    collate_method: str = None  # "zip", None
+    collate_method: Union[str, Callable] = None  # "zip", None
 
     # Optimizer
     lr: float = 0.0001
@@ -242,6 +242,36 @@ class TrainingPipeline:
             self.model = self._create_torch_model_from_spec()
         return self.model
 
+    def convert_data_rows_to_tf_dataset(self, tuple_iterator):
+        import tensorflow as tf
+
+        assert tuple_iterator is not None, f"tuple_iterator is None"
+
+        def gen():
+            # TODO: the output of gen() is not flexible.
+            for example in tuple_iterator:
+                inputs = example[0]
+                targets = example[1]
+                yield (
+                    tuple([tf.convert_to_tensor(x) for x in inputs]),
+                    tuple([tf.convert_to_tensor(x) for x in targets]),
+                )
+
+        output_signature = (
+            tuple(
+                [tf.TensorSpec(shape=None, dtype=tf.float32)]
+                * len(self.prediction_task.model_inputs)
+            ),
+            tuple(
+                [tf.TensorSpec(shape=None, dtype=tf.float32)]
+                * len(self.prediction_task.model_targets)
+            ),
+        )
+        return tf.data.Dataset.from_generator(
+            gen,
+            output_signature=output_signature,
+        )
+
     def convert_tuple_iterator_to_tf_dataset(
         self, tuple_iterator, source_image_is_channels_first=True
     ):
@@ -307,6 +337,9 @@ class TrainingPipeline:
                 training_dataset, source_image_is_channels_first=True
             )
             return ds.batch(self.train_batch_size)
+        elif dataset_provider == DatasetProvider.CVLIZATION:
+            ds = self.convert_data_rows_to_tf_dataset(training_dataset)
+            return ds.batch(self.train_batch_size)
         else:
             raise ValueError("Unknown dataset provider: {}".format(dataset_provider))
 
@@ -319,6 +352,9 @@ class TrainingPipeline:
             return self.convert_tuple_iterator_to_tf_dataset(ds).batch(
                 self.val_batch_size
             )
+        elif dataset_provider == DatasetProvider.CVLIZATION:
+            ds = self.convert_data_rows_to_tf_dataset(ds)
+            return ds.batch(self.val_batch_size)
         else:
             raise ValueError("Unknown dataset provider: {}".format(dataset_provider))
 
@@ -524,11 +560,11 @@ class TrainingPipeline:
 
     def _create_keras_trainer(self, model, train_dataset, val_dataset):
         from .tensorflow.keras_trainer import KerasTrainer
-        from tensorflow.keras import callbacks
+        from tensorflow import keras
 
         callbacks = [
-            callbacks.ReduceLROnPlateau(patience=self.reduce_lr_patience),
-            callbacks.EarlyStopping(patience=self.early_stop_patience),
+            keras.callbacks.ReduceLROnPlateau(patience=self.reduce_lr_patience),
+            keras.callbacks.EarlyStopping(patience=self.early_stop_patience),
         ]
         if self.experiment_tracker == "wandb":
             import wandb
@@ -628,6 +664,10 @@ class TrainingPipeline:
 
         if self.model is not None and callable(self.model):
             if isinstance(self.model, LightningModule):
+                if hasattr(self.model, "lr"):
+                    self.model.lr = self.lr
+                else:
+                    raise ValueError("Model does not have a lr attribute.")
                 return self.model
             elif isinstance(self.model, nn.Module):
                 return TorchLitModel(
@@ -710,6 +750,10 @@ class TrainingPipeline:
                 return tuple(zip(*batch))
 
             return collate_fn
+        elif callable(self.collate_method):
+            return self.collate_method
+        else:
+            return None
 
     def get_model_inputs(self):
         if self.model_spec:
