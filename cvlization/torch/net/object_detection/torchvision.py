@@ -7,9 +7,6 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from pytorch_lightning.core.lightning import LightningModule
 from torchmetrics.detection.map import MeanAveragePrecision
 
-# TODO: Use this object detection e
-from ...evaluation.object_detection_evaluator.evaluator import Evaluator
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,13 +64,11 @@ class TorchvisionDetectionModelFactory:
 
 
 class LitDetector(LightningModule):
-    # TODO: use our own evaluator. Copy the unit tests for it.
     def __init__(self, model, num_classes, lr=0.001):
         super().__init__()
         self.model = model
         self.lr = lr
         self.val_mAP = MeanAveragePrecision()
-        self.val_evaluator = Evaluator(num_classes=num_classes)
         self.num_classes = num_classes
 
     def forward(self, *args, **kwargs):
@@ -108,10 +103,6 @@ class LitDetector(LightningModule):
         assert len(detections) == len(
             targets
         ), f"{len(detections)} detections but {len(targets)} targets. detections={detections}"
-        # for det in detections:
-        #     idx = det["labels"] > 0
-        #     det["boxes"] = det["boxes"][idx]
-        #     det["labels"] = det["labels"][idx]
         self.val_mAP.update(preds=detections, target=targets)
 
     def validation_epoch_end(self, outputs):
