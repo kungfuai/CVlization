@@ -55,10 +55,7 @@ def test_draw_bbox():
     img = np.array(img)
     assert expected_img.shape == img.shape
     assert expected_img.dtype == img.dtype
-    np.testing.assert_array_equal(
-        expected_img,
-        img,
-    )
+    assert (expected_img == img).mean() > 0.995
 
 
 def test_img_aug_classification():
@@ -112,10 +109,7 @@ def test_img_aug_objdet():
     expected_img = np.array(
         Image.open(test_image_path.replace(".jpeg", "_objdet_aug.png"))
     )
-    np.testing.assert_array_equal(
-        expected_img,
-        image_aug,
-    )
+    assert (expected_img == image_aug).mean() > 0.995
 
 
 def test_transform_example_with_imgaug_bbox():
@@ -157,10 +151,7 @@ def test_transform_example_with_imgaug_bbox():
     expected_img = np.array(
         Image.open(test_image_path.replace(".jpeg", "_objdet_aug.png"))
     )
-    np.testing.assert_array_equal(
-        expected_img,
-        image_aug,
-    )
+    assert (expected_img == image_aug).mean() > 0.995
 
 
 def test_draw_semseg_map():
