@@ -5,7 +5,14 @@ import torchvision
 from torchvision.models import detection
 from torchvision.models.detection.rpn import AnchorGenerator
 from pytorch_lightning.core.lightning import LightningModule
-from torchmetrics.detection.map import MeanAveragePrecision
+try:
+    from torchmetrics.detection.map import MeanAveragePrecision
+except ImportError:
+    from torchmetrics.detection.mean_ap import MeanAveragePrecision
+    # Tested on torchmetrics 0.7.*, 0.9.*
+    # TODO: there seems to be a bug in torchmetrics mAP calculation,
+    #   when FPs and TPs have the same score.
+    #   https://github.com/Lightning-AI/metrics/issues/1184
 
 
 LOGGER = logging.getLogger(__name__)
@@ -33,10 +40,10 @@ class TorchvisionDetectionModelFactory:
 
     def run(self):
         model = create_detection_model_with_torchvision(
-            self.num_classes + 1, self.net, pretrained=self.pretrained
+            self.num_classes + 0, self.net, pretrained=self.pretrained
         )
         if self.lightning:
-            model = LitDetector(model, num_classes=self.num_classes + 1, lr=self.lr)
+            model = LitDetector(model, num_classes=self.num_classes + 0, lr=self.lr)
         return model
 
     @classmethod
@@ -68,7 +75,7 @@ class LitDetector(LightningModule):
         super().__init__()
         self.model = model
         self.lr = lr
-        self.val_mAP = MeanAveragePrecision()
+        self.val_mAP = MeanAveragePrecision(class_metrics=True)
         self.num_classes = num_classes
 
     def forward(self, *args, **kwargs):
@@ -99,14 +106,15 @@ class LitDetector(LightningModule):
                 target["labels"] = target["labels"][:, 0]
                 assert len(target["labels"].shape) == 1
 
-        # TODO: double check, this could be just asserting num_images in dets is the same as targets.
         assert len(detections) == len(
             targets
         ), f"{len(detections)} detections but {len(targets)} targets. detections={detections}"
+        # LOGGER.info(f"preds={detections}")
+        # LOGGER.info(f"targets={targets}")
         self.val_mAP.update(preds=detections, target=targets)
 
     def validation_epoch_end(self, outputs):
-        mAP = self.val_mAP.compute()
+        mAP = self.val_mAP.to("cpu").compute()
         self.log_dict(
             mAP,
             on_step=False,
@@ -114,7 +122,9 @@ class LitDetector(LightningModule):
             prog_bar=True,
         )
         self.val_mAP.reset()
-        LOGGER.info(f"\nValidation mAP: {float(mAP['map_50'].numpy())}")
+        LOGGER.info(f"\nValidation mAP: {float(mAP['map'].numpy())}")
+        LOGGER.info(f"\nValidation mAP(50): {float(mAP['map_50'].numpy())}")
+        LOGGER.info(f"\nValidation mAP per class: {mAP['map_per_class'].numpy()}")
         return mAP
 
     def configure_optimizers(self):
