@@ -3,7 +3,7 @@ import logging
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from transformers import VisionEncoderDecoderConfig, VisionEncoderDecoderModel, DonutProcessor
-from cvlization.torch.net.doc_ai.donut import DonutPLModule, ProcessedDataset, DonutPredictionTask
+from .model import DonutPLModule, ProcessedDataset, DonutPredictionTask
 
 
 LOGGER = logging.getLogger(__name__)
