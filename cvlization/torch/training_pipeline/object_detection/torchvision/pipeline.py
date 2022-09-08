@@ -3,7 +3,7 @@ import logging
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.specs.prediction_tasks import ObjectDetection
 from cvlization.training_pipeline import TrainingPipeline
-from cvlization.torch.net.object_detection.torchvision import (
+from cvlization.torch.training_pipeline.object_detection.torchvision.model import (
     TorchvisionDetectionModelFactory,
 )
 from cvlization.lab.experiment import Experiment

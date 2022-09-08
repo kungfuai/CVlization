@@ -3,7 +3,7 @@ import logging
 from cvlization.torch.data.torchvision_dataset_builder import TorchvisionDatasetBuilder
 from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
 from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
-from cvlization.torch.training_pipeline.object_detection.torchvision_object_detection import TorchvisionObjectDetection
+from cvlization.torch.training_pipeline.object_detection.torchvision.pipeline import TorchvisionObjectDetection
 
 
 LOGGER = logging.getLogger(__name__)

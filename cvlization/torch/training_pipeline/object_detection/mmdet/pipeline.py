@@ -10,7 +10,7 @@ except ImportError:
     print("pip install mmdet==2.25.1")
     print("pip install -U mmcv-full==1.6.1 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.12.0/index.html")
     raise
-from cvlization.torch.net.object_detection.mmdet import (
+from .model import (
     MMDetectionModels,
     MMDatasetAdaptor,
     MMDetectionTrainer,

@@ -1,6 +1,6 @@
 from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
 from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
-from cvlization.torch.training_pipeline.object_detection.mmdet_object_detection import MMDetObjectDetection
+from cvlization.torch.training_pipeline.object_detection.mmdet.pipeline import MMDetObjectDetection
 
 class TrainingSession:
     # TODO: add experiment tracker to the training pipeline.
