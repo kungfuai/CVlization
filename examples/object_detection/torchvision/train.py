@@ -21,7 +21,7 @@ class TrainingSession:
         LOGGER.info(
             f"Available dataset builders: {KittiTinyDatasetBuilder(), PennFudanPedestrianDatasetBuilder(), TorchvisionDatasetBuilder.list_dataset_builders()}"
         )
-        dataset_builder = KittiTinyDatasetBuilder(flavor="torchvision", label_offset=1)
+        dataset_builder = KittiTinyDatasetBuilder(flavor="torchvision", label_offset=0)
         # dataset_builder = PennFudanPedestrianDatasetBuilder(
         #     flavor="torchvision", include_masks=False, label_offset=1
         # )
