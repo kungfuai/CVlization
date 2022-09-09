@@ -300,6 +300,7 @@ class TorchTrainer(BaseTrainer):
         if hasattr(model, "loss_function"):
             return model.loss_function
         else:
+            assert self.model_targets is not None, f"model_targets is None but loss_function is not defined in model."
             return TorchModelFactory(
                 model_inputs=self.model_inputs,
                 model_targets=self.model_targets,

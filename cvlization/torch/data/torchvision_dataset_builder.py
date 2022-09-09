@@ -131,6 +131,26 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
         raise ValueError(
             f"Cannot find dataset in torchvision: {dataset_classname_lowercase} (case insensitive)"
         )
+    
+    @property
+    def num_classes(self):
+        if self.dataset_classname.lower == "cifar10":
+            return 10
+        elif self.dataset_classname.lower == "cifar100":
+            return 100
+        elif self.dataset_classname.lower == "mnist":
+            return 10
+        elif self.dataset_classname.lower == "fashionmnist":
+            return 10
+        elif self.dataset_classname.lower == "voc":
+            return 20
+        else:
+            raise ValueError(f"Cannot determine num_classes for {self.dataset_classname}")
+    
+    @property
+    def num_channels(self):
+        # TODO: hard coded for now.
+        return 3
 
     def construct_torchvision_dataset(self, dataset_classname, train: bool = True):
         if hasattr(torchvision.datasets, dataset_classname):
