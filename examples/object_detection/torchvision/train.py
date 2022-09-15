@@ -15,11 +15,14 @@ class TrainingSession:
 
     def run(self):
         dataset_builder = self.create_dataset()
-        TorchvisionObjectDetection(net=self.args.net).train(dataset_builder=dataset_builder)
+        TorchvisionObjectDetection(
+            net=self.args.net,
+            epochs=30,
+        ).train(dataset_builder=dataset_builder)
 
     def create_dataset(self):
         LOGGER.info(
-            f"Available dataset builders: {KittiTinyDatasetBuilder(), PennFudanPedestrianDatasetBuilder(), TorchvisionDatasetBuilder.list_dataset_builders()}"
+            f"Available dataset builders: {KittiTinyDatasetBuilder(), PennFudanPedestrianDatasetBuilder()}"
         )
         dataset_builder = KittiTinyDatasetBuilder(flavor="torchvision", label_offset=0)
         # dataset_builder = PennFudanPedestrianDatasetBuilder(
