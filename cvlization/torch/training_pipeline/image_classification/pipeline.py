@@ -13,7 +13,7 @@ from cvlization.torch.encoder.torch_image_backbone import image_backbone_names
 LOGGER = logging.getLogger(__name__)
 
 
-class ImageClassification:
+class ImageClassificationTrainingPipeline:
     net: str = "resnet18"
     num_classes: int = 10
     num_channels: int = 3
