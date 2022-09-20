@@ -24,6 +24,9 @@ class MMDetObjectDetection:
         self._net = net
         self._config_override_fn = config_override_fn
     
+    def fit(self, dataset_builder):
+        self.train(dataset_builder)
+    
     def train(self, dataset_builder):
         self.model, self.cfg = self.create_model(num_classes=dataset_builder.num_classes, net=self._net)
         self.datasets = self.create_dataset(dataset_builder, self.cfg)

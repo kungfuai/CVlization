@@ -35,6 +35,9 @@ class Donut:
     def __post_init__(self):
         self._image_size = (self.image_height, self.image_width)  # TODO: reverse?
     
+    def fit(self, dataset_builder):
+        self.train(dataset_builder)
+    
     def train(self, dataset_builder):
         config = self.create_config()
         trainer = self.create_trainer()

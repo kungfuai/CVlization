@@ -33,6 +33,9 @@ class ImageClassificationTrainingPipeline:
     lr: float = 0.0001
     n_gradients: int = 1  # for gradient accumulation
     experiment_tracker = None
+
+    def fit(self, dataset_builder=TorchvisionDatasetBuilder(dataset_classname="CIFAR10")):
+        return self.train(dataset_builder=dataset_builder)
     
     def train(self, dataset_builder=TorchvisionDatasetBuilder(dataset_classname="CIFAR10")):
         prediction_task = ImageClassification(
