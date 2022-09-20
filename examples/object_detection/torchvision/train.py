@@ -18,7 +18,7 @@ class TrainingSession:
         TorchvisionObjectDetection(
             net=self.args.net,
             epochs=30,
-        ).train(dataset_builder=dataset_builder)
+        ).fit(dataset_builder=dataset_builder)
 
     def create_dataset(self):
         LOGGER.info(

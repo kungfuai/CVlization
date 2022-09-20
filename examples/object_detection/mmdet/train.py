@@ -10,8 +10,7 @@ class TrainingSession:
     def run(self):
         self.dataset_builder_cls = KittiTinyDatasetBuilder
         dataset_builder = self.dataset_builder_cls(flavor=None, to_torch_tensor=False, label_offset=0)
-        tp = MMDetObjectDetection(net=self.args.net, config_override_fn=None)
-        tp.train(dataset_builder)
+        MMDetObjectDetection(net=self.args.net, config_override_fn=None).fit(dataset_builder)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ class TrainingSession:
 
     def run(self):
         dataset_builder = TorchvisionDatasetBuilder(dataset_classname="CIFAR10")
-        ImageClassificationTrainingPipeline().train(dataset_builder=dataset_builder)
+        ImageClassificationTrainingPipeline().fit(dataset_builder=dataset_builder)
 
 
 if __name__ == "__main__":
