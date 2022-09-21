@@ -24,7 +24,7 @@ class KittiTinyDatasetBuilder:
     flavor: str = None  # one of None, "torchvision"
     data_dir: str = "./data"
     preload: bool = False
-    label_offset: int = 0
+    label_offset: int = 1
 
     @property
     def dataset_provider(self):

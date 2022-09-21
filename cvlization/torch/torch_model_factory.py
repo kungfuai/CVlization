@@ -24,6 +24,8 @@ class TorchModelCheckpoint:
 class TorchModelFactory:
     # TODO: TorchModelFactory may not be needed. Consider using TorchModel to maintain
     #   the class members of TorchModelFactory.
+    # TODO: when TorchModelFactory is changed, make it backward compatible.
+    #   Otherwise previously trained models may not be loaded successfully.
     """Create customized torch models."""
 
     # ## Model input and output specs

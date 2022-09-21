@@ -5,7 +5,7 @@ from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
 from cvlization.specs.prediction_tasks import ObjectDetection
 from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.experiment import Experiment
-from cvlization.torch.net.object_detection.torchvision import (
+from cvlization.torch.training_pipeline.object_detection.torchvision.model import (
     TorchvisionDetectionModelFactory,
 )
 
