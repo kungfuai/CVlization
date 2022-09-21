@@ -2,7 +2,14 @@ import logging
 import torch
 import torchvision
 from pytorch_lightning.core.lightning import LightningModule
-from torchmetrics.detection.map import MeanAveragePrecision
+try:
+    from torchmetrics.detection.map import MeanAveragePrecision
+except ImportError:
+    from torchmetrics.detection.mean_ap import MeanAveragePrecision
+    # Tested on torchmetrics 0.7.*, 0.9.*
+    # TODO: there seems to be a bug in torchmetrics mAP calculation,
+    #   when FPs and TPs have the same score.
+    #   https://github.com/Lightning-AI/metrics/issues/1184
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 

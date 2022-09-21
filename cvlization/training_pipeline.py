@@ -14,6 +14,30 @@ from .specs import ensure_dataset_shapes_and_types
 LOGGER = logging.getLogger(__name__)
 
 
+
+class DataReducer:
+    """
+    R. A. Fisher, 1921: "In its most concrete form, the object of statistical methods is the reduction of data."
+    https://royalsocietypublishing.org/doi/pdf/10.1098/rsta.1922.0009
+
+    A DataReducer implements this view, by having one and only method: _reduce, which takes
+    data and no other arguments as input. No optimizer options, no model architecture options, no training loop options.
+    By having this restriction, the DataReducer is encouraged to be self contained recipes, and ready
+    to receive data. The user of DataReducers can then focus on getting the data ready.
+
+    This is in contract to learning systems augmented with causal inference, where the reduce() method
+    takes as input not only the data, but a causal diagram that encodes domain knowledge.
+    """
+    def _reduce(self,
+        training_dataset=None, validation_dataset=None, test_dataset=None,
+        dataset_builder=None,
+        data_module=None,
+    ):
+        raise NotImplementedError
+
+
+# TODO: Re-define TrainingPipeline as a DataReducer.
+
 @dataclass
 class TrainingPipeline:
     """
@@ -49,6 +73,7 @@ class TrainingPipeline:
     train_steps_per_epoch: int = None
     val_batch_size: int = 32
     val_steps_per_epoch: int = None
+    check_val_every_n_epoch: int = 5
     reduce_lr_patience: int = 5
     early_stop_patience: int = 10
 
@@ -640,6 +665,8 @@ class TrainingPipeline:
             model_targets=self.get_model_targets(),
             train_dataset=train_dataset,
             val_dataset=val_dataset,
+            train_batch_size=config.train_batch_size,
+            val_batch_size=config.val_batch_size,
             epochs=config.epochs,
             train_steps_per_epoch=config.train_steps_per_epoch,
             val_steps_per_epoch=config.val_steps_per_epoch,
@@ -651,6 +678,7 @@ class TrainingPipeline:
             precision=config.precision,
             loss_function_included_in_model=config.loss_function_included_in_model,
             collate_method=config.collate_method,
+            check_val_every_n_epoch=config.check_val_every_n_epoch,
         )
         # TODO: experiment tracker should be an experiment-level object.
         trainer.log_params(config.__dict__)
