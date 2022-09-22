@@ -24,7 +24,7 @@ class TorchvisionObjectDetection(TorchTrainingPipeline):
     n_gradients: int = 1
     reduce_lr_patience: int = 5
 
-    def create_model(self, dataset_builder) -> Union[torch.nn.Module, LightningModule]:
+    def _create_model(self, dataset_builder) -> Union[torch.nn.Module, LightningModule]:
         num_classes = dataset_builder.num_classes
         model = TorchvisionDetectionModelFactory(
             num_classes=num_classes,
