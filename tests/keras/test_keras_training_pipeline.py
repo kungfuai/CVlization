@@ -1,5 +1,5 @@
 from tensorflow import keras
-from cvlization.training_pipeline import TrainingPipeline
+from cvlization.legacy_training_pipeline import LegacyTrainingPipeline as TrainingPipeline
 from cvlization.lab.model_specs import ImageClassification
 from cvlization.lab.datasets import get_dataset_builder_registry
 from cvlization.specs import MLFramework, ModelSpec

@@ -92,6 +92,8 @@ class TorchTrainingPipeline:
     def __post_init__(self):
         # add more input args: model config, optimizer config, training_loop_config, validation_config, etc.
         self._adjust_batch_size_if_doing_data_only_debugging()
+        # TODO: _populate_model_spec_based_on_user_provided_model is too specific of an
+        #   implementation detail. Consider removing it.
         self._populate_model_spec_based_on_user_provided_model()
         assert self.lightning, "PyTorchLighnting is used by default. Please set lightning=True."
 
