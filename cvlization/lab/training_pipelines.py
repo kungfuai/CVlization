@@ -1,6 +1,6 @@
 from typing import Dict
 
-from ..training_pipeline import TrainingPipeline
+from ..legacy_training_pipeline import LegacyTrainingPipeline as TrainingPipeline
 from ..specs import MLFramework, ModelSpec
 from ..specs.prediction_tasks.image_classification import ImageClassification
 
