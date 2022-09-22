@@ -3,8 +3,8 @@ import numpy as np
 from unittest.mock import patch
 from cvlization.lab.experiment import Experiment, SplittedDataset
 from cvlization.specs.prediction_tasks import ImageClassification
-from cvlization.training_pipeline import (
-    TrainingPipeline,
+from cvlization.legacy_training_pipeline import (
+    LegacyTrainingPipeline as TrainingPipeline,
     MLFramework,
 )
 
