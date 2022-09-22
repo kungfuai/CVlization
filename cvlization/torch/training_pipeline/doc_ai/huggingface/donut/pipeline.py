@@ -39,28 +39,28 @@ class Donut:
         self.train(dataset_builder)
     
     def train(self, dataset_builder):
-        config = self.create_config()
-        trainer = self.create_trainer()
-        processor = self.create_processor()
-        train_dataloader, val_dataloader, newly_added_num = self.create_dataloaders(dataset_builder, processor)
+        config = self._create_config()
+        trainer = self._create_trainer()
+        processor = self._create_processor()
+        train_dataloader, val_dataloader, newly_added_num = self._create_dataloaders(dataset_builder, processor)
         # newly_added_num: num of newly added tokens
-        model = self.create_model(self.pretrained_model_name, newly_added_num, config, processor)
+        model = self._create_model(self.pretrained_model_name, newly_added_num, config, processor)
         pl_model = DonutPLModule(model=model, processor=processor, task=self.task)
         trainer.fit(pl_model, train_dataloader, val_dataloader)
     
-    def create_config(self):
+    def _create_config(self):
         config = VisionEncoderDecoderConfig.from_pretrained(self.pretrained_model_name)
         config.encoder.image_size = self._image_size
         config.decoder.max_length = self.max_length
         return config
     
-    def create_processor(self):
+    def _create_processor(self):
         processor = DonutProcessor.from_pretrained(self.pretrained_model_name)
         processor.feature_extractor.size = self._image_size[::-1] # should be (width, height)
         processor.feature_extractor.do_align_long_axis = False
         return processor
     
-    def process_dataset(self, dataset, processor):
+    def _process_dataset(self, dataset, processor):
         # prepare the dataset using the Processor
         return ProcessedDataset(
             source_dataset=dataset,
@@ -72,7 +72,7 @@ class Donut:
             sort_json_key=self.sort_json_key,
         )
     
-    def create_model(self, pretrained_model_name: str, newly_added_num: int, config, processor):
+    def _create_model(self, pretrained_model_name: str, newly_added_num: int, config, processor):
         pretrained_model_name = self.pretrained_model_name
         model = VisionEncoderDecoderModel.from_pretrained(pretrained_model_name, config=config)
         if newly_added_num > 0:
@@ -81,7 +81,7 @@ class Donut:
         model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids(['<s_rvlcdip>'])[0]
         return model
     
-    def create_trainer(self):
+    def _create_trainer(self):
         trainer = pl.Trainer(
             accelerator=self.accelerator,
             devices=self.devices,
@@ -91,9 +91,9 @@ class Donut:
         )
         return trainer
 
-    def create_dataloaders(self, dataset_builder, processor):
-        train_dataset = self.process_dataset(dataset_builder.training_dataset(), processor)
-        val_dataset = self.process_dataset(dataset_builder.validation_dataset(), processor)
+    def _create_dataloaders(self, dataset_builder, processor):
+        train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor)
+        val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor)
         newly_added_num = train_dataset.newly_added_num
         train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)

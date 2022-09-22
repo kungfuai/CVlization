@@ -134,15 +134,15 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
     
     @property
     def num_classes(self):
-        if self.dataset_classname.lower == "cifar10":
+        if self.dataset_classname.lower() == "cifar10":
             return 10
-        elif self.dataset_classname.lower == "cifar100":
+        elif self.dataset_classname.lower() == "cifar100":
             return 100
-        elif self.dataset_classname.lower == "mnist":
+        elif self.dataset_classname.lower() == "mnist":
             return 10
-        elif self.dataset_classname.lower == "fashionmnist":
+        elif self.dataset_classname.lower() == "fashionmnist":
             return 10
-        elif self.dataset_classname.lower == "voc":
+        elif self.dataset_classname.lower() == "voc":
             return 20
         else:
             raise ValueError(f"Cannot determine num_classes for {self.dataset_classname}")
