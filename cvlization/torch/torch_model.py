@@ -107,6 +107,7 @@ class TorchLitModel(LightningModule):
         tensors_encoded = []
         tensors_not_encoded = []
         for input_layer, encoder_model in zip(inputs, self._encoder_models):
+            assert isinstance(input_layer, torch.Tensor), f"Input layer {input_layer} is not a tensor."
             if encoder_model is not None:
                 encoded = encoder_model(input_layer.float())
                 tensors_encoded.append(encoded)
@@ -215,6 +216,7 @@ class TorchLitModel(LightningModule):
         else:
             raise ValueError(f"Batch has {len(batch)} parts.")
         outputs = self(inputs)
+        
         loss = self.config.loss_function(outputs, targets)
         self.log(
             "train_loss", loss, on_step=False, on_epoch=True
