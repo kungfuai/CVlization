@@ -46,7 +46,7 @@ class ModelUtils:
         elif self._model_is_provided():
             LOGGER.info(f"Using the model provided by the user: {type(self.model)}")
         else:
-            raise ValueError(
+            raise TypeError(
                 f"model must be a ModelSpec or a Callable object, but got {self.model}"
             )
 
@@ -65,7 +65,11 @@ class ModelUtils:
     
     def _ensure_torch_lit_model(self, model):
         if model is not None and callable(model):
-            if isinstance(model, LightningModule):
+            if isinstance(model, TorchLitModel):
+                assert hasattr(model.config, "lr"), f"model.config does not have 'lr' attribute."
+                model.config.lr = self.lr
+                return model
+            elif isinstance(model, LightningModule):
                 if hasattr(model, "lr"):
                     LOGGER.info(f"Setting lr to {self.lr}")
                     model.lr = self.lr
@@ -170,7 +174,7 @@ class ModelUtils:
                     lr_scheduler_kwargs=self.lr_scheduler_kwargs,
                 ),
             )
-        assert isinstance(model, LightningModule)
+        assert isinstance(model, LightningModule), f"model must be a LightningModule, got {type(model)}"
         return model
 
 

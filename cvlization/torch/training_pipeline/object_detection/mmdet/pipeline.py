@@ -28,8 +28,8 @@ class MMDetObjectDetection:
         self.train(dataset_builder)
     
     def train(self, dataset_builder):
-        self.model, self.cfg = self.create_model(num_classes=dataset_builder.num_classes, net=self._net)
-        self.datasets = self.create_dataset(dataset_builder, self.cfg)
+        self.model, self.cfg = self._create_model(num_classes=dataset_builder.num_classes, net=self._net)
+        self.datasets = self._create_dataset(dataset_builder, self.cfg)
         self.trainer = MMDetectionTrainer(self.cfg, self._net)
         self.cfg = self.trainer.config
         if self._config_override_fn is not None:
@@ -49,13 +49,13 @@ class MMDetObjectDetection:
     def model_names(cls):
         return MMDetectionModels.model_names()
     
-    def create_model(self, num_classes: int, net: str):
+    def _create_model(self, num_classes: int, net: str):
         model_registry = MMDetectionModels(num_classes=num_classes)
         model_dict = model_registry[net]
         model, cfg = model_dict["model"], model_dict["config"]
         return model, cfg
     
-    def create_dataset(self, dataset_builder, config):
+    def _create_dataset(self, dataset_builder, config):
         dsb = dataset_builder
         # dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False)
         dataset_classname = MMDatasetAdaptor.adapt_and_register_detection_dataset(dsb)

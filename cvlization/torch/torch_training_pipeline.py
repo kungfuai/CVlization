@@ -94,21 +94,24 @@ class TorchTrainingPipeline:
         self._adjust_batch_size_if_doing_data_only_debugging()
         self._populate_model_spec_based_on_user_provided_model()
         assert self.lightning, "PyTorchLighnting is used by default. Please set lightning=True."
-        self._prepare_components()
 
     # TODO: define DatasetBuilder inferface
     def fit(self, dataset_builder):
         LOGGER.info(f"Training pipeline: {self}")
+        self._prepare_components()
         if self.experiment_tracker is not None:
-            self.log_params()
-        if not self.data_is_compatible(dataset_builder):
-            raise ValueError("Dataset is not compatible with the pipeline.")
-        self.model = self.create_model(dataset_builder=dataset_builder)
+            self._log_params()
+        try:
+            if not self.data_is_compatible(dataset_builder):
+                raise ValueError("Dataset is not compatible with the pipeline.")
+        except NotImplementedError:
+            LOGGER.info("No data compatibility check is implemented for this pipeline. Let's just go ahead.")
+        self.model = self._create_model(dataset_builder=dataset_builder)
         # This is where model surgery happens.
-        self.model = self.adapt_model(self.model, dataset_builder=dataset_builder)
-        train_dataloader = self.create_training_dataloader(dataset_builder)
-        val_dataloader = self.create_validation_dataloader(dataset_builder)
-        trainer = self.create_trainer()
+        self.model = self._adapt_model(self.model, dataset_builder=dataset_builder)
+        train_dataloader = self._create_training_dataloader(dataset_builder)
+        val_dataloader = self._create_validation_dataloader(dataset_builder)
+        trainer = self._create_trainer()
         assert isinstance(self.model, LightningModule), f"Model must be a LightningModule. Got {type(self.model)}."
         trainer.fit(self.model, train_dataloader, val_dataloader)
 
@@ -118,26 +121,26 @@ class TorchTrainingPipeline:
         return self.fit(dataset_builder)
 
     def data_is_compatible(self, dataset_builder):
-        return True
+        raise NotImplementedError("This TrainingPipeline does not have specific data requirements.")
     
     def describe_data_requirement(self) -> str:
         # Show examples of data.
         # Display schema (names, types and shapes) of required data.
-        return None
+        raise NotImplementedError("This TrainingPipeline does not have specific data requirements.")
     
-    def create_model(self, dataset_builder):
+    def _create_model(self, dataset_builder):
         return self._model_utils.create_model(dataset_builder=dataset_builder)
     
-    def adapt_model(self, model, dataset_builder):
+    def _adapt_model(self, model, dataset_builder):
         return self._model_utils.adapt_model(model, dataset_builder)
     
-    def create_training_dataloader(self, dataset_builder):
+    def _create_training_dataloader(self, dataset_builder):
         return self._dataloader_utils.create_training_dataloader(dataset_builder)
     
-    def create_validation_dataloader(self, dataset_builder):
+    def _create_validation_dataloader(self, dataset_builder):
         return self._dataloader_utils.create_validation_dataloader(dataset_builder)
     
-    def create_trainer(self):
+    def _create_trainer(self):
         return self._trainer_utils.create_trainer()
 
     # Helper methods:
@@ -197,17 +200,20 @@ class TorchTrainingPipeline:
         else:
             self.model_spec = None
 
-    def get_model_inputs(self):
+    def _get_model_inputs(self):
         if self.model_spec:
             return self.model_spec.get_model_inputs()
 
-    def get_model_targets(self):
+    def _get_model_targets(self):
         if self.model_spec:
             return self.model_spec.get_model_targets()
 
     ## Experiment tracker.
-    def log_params(self):
-        pass
+    def _get_config_dict(self):
+        raise NotImplementedError("This TrainingPipeline does not have specific config requirements.")
+
+    def _log_params(self):
+        self.experiment_tracker.setup().log_params(self._get_config_dict())
     
     def _watch_model(self):
         if self.experiment_tracker == "wandb":
