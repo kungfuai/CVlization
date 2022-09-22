@@ -59,6 +59,7 @@ class TrainingPipeline:
     """
     A training pipeline consists of the following components:
 
+    - random seed handling
     - data transforms (and augmentations)
     - dataloaders
     - model creation (architecture, initial weights, etc.) and adaptation (e.g. freeze layers, change strides), sometimes including metrics, losses
@@ -76,6 +77,7 @@ class TrainingPipeline:
         
     def fit(self, dataset_builder):
         LOGGER.info(f"Training pipeline: {self}")
+        self._set_random_seed()
         self._prepare_components(dataset_builder)
         if self.experiment_tracker is not None:
             self._log_params()
@@ -112,6 +114,10 @@ class TrainingPipeline:
     def _prepare_components(dataset_builder):
         pass
     
+    # Random seed handling.
+    def _set_random_seed(self):
+        ...
+
     # Model.
     def _create_model(self, dataset_builder):
         """
@@ -133,7 +139,7 @@ class TrainingPipeline:
         ...
     
     # Data transforms and augmentations.
-    def _transform_training_dataset(self, dataset) -> Dataset:
+    def _transform_training_dataset(self, dataset):
         """
         You can do one or more of the following:
         - Modify the transform(example) function of a Dataset.
@@ -147,6 +153,7 @@ class TrainingPipeline:
             # Do something to the example.
 
         dataset.transform = new_transform
+        return dataset
         """
         ...
     
