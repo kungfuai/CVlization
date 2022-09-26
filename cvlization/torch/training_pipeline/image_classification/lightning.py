@@ -1,5 +1,8 @@
-from torch import nn
+import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
+import torch
+from torch import nn
+from torch.nn import functional as F
 from torchmetrics import Accuracy
 
 
@@ -48,7 +51,7 @@ class ImageClassifierCallback(Callback):
         super().on_train_batch_end(trainer, pl_module, outputs, batch, batch_idx)
         loss = outputs["loss"]
         self.log(name="loss", value=loss.item(), on_step=True)
-    
+
     def on_train_epoch_end(self, trainer, pl_module, *args, **kwargs):
         super().on_train_epoch_end(trainer, pl_module, *args, **kwargs)
         avg_acc = pl_module.train_accuracy.compute()
