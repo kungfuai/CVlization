@@ -1,10 +1,14 @@
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pytorch_lightning.loggers import MLFlowLogger
+from pytorch_lightning import Trainer
+from torch import nn
+from torch.utils.data import DataLoader
+import torchvision
 from .lightning import ImageClassifier, ImageClassifierCallback
 
 
-class SimpleImageClassificationPipeline:
+class SimpleMultiLabelImageClassificationPipeline:
     """An example image classification training pipeline with minimal dependencies,
     while having enough capacity to train high quality models and being reproducible.
     """
@@ -50,10 +54,14 @@ class SimpleImageClassificationPipeline:
         model_constructor = getattr(torchvision.models, self._config.model_name)
         model = model_constructor(pretrained=self._config.pretrained, num_classes=self._config.num_classes)
         pl_model = ImageClassifier(model=model, num_classes=self._config.num_classes, lr=self._config.lr)
-        pl_model.loss = torch.nn.BCEWithLogitsLoss()
+        pl_model.loss = nn.BCEWithLogitsLoss()
         return pl_model
     
     def _create_trainer(self):
+        if self._config.tracking_uri is None:
+            tracking_uri = None
+        else:
+            tracking_uri = f"file:{self._config.tracking_uri}"
         trainer = Trainer(
             deterministic=True,
             limit_train_batches=self._config.train_steps_per_epoch or 1.0,
@@ -62,10 +70,11 @@ class SimpleImageClassificationPipeline:
             logger=MLFlowLogger(
                 experiment_name=self._config.experiment_name,
                 run_name=self._config.run_name,
-                tracking_uri=self._config.tracking_uri
+                tracking_uri=tracking_uri,
             ),
             callbacks=[ImageClassifierCallback()]
         )
+        return trainer
     
     def create_training_dataloader(self, dataset_builder):
         return DataLoader(
