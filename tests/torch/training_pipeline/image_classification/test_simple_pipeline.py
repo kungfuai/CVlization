@@ -1,0 +1,1 @@
+from cvlization.torch.training_pipeline.image_classification
