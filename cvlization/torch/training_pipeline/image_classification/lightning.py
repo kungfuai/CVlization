@@ -27,7 +27,7 @@ class ImageClassifier(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y)
-        self.train_accuracy.update(preds=y_hat, target=y)
+        self.train_accuracy.update(preds=y_hat, target=y.int())
 
         # Note: The return value can be None, a loss tensor, or a dictionary with a "loss" key.
         return {"loss": loss}
@@ -35,7 +35,7 @@ class ImageClassifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx=None):
         x, y = batch
         y_hat = self(x)
-        self.val_accuracy.update(preds=y_hat, target=y)
+        self.val_accuracy.update(preds=y_hat, target=y.int())
         val_loss = self.loss(y_hat, y)
         return {"loss": val_loss}
 
