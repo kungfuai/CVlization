@@ -21,12 +21,10 @@ from cvlization.torch.torch_model_factory import TorchModelFactory
 LOGGER = logging.getLogger(__name__)
 
 @dataclass
-class ImageClassificationTrainingPipeline(TorchTrainingPipeline):
-    """This is a multi-task training pipeline. You can use multiple inputs and multiple outputs
+class SpecBasedImageClassification(TorchTrainingPipeline):
+    """This is a multi-task training pipeline based on ModelSpec.
+    You can use multiple inputs and multiple outputs
     by specifying the ModelSpec.
-
-    TODO: rename this to MultiTaskTrainingPipeline, and implement a simplified training pipeline
-    that only supports image classification.
     """
     net: str = "resnet18"
     num_classes: int = None
