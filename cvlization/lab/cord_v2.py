@@ -13,8 +13,8 @@ LOGGER = logging.getLogger(__name__)
 @dataclass
 class CordV2DatasetBuilder:
     max_length: int = 768
-    image_height: int = 2560
-    image_width: int = 1920
+    image_height: int = 1024
+    image_width: int = 768
     ignore_id: int = -100
     task_start_token: str = "<s_cord-v2>"
     prompt_end_token: str = None

@@ -9,6 +9,7 @@ import re
 from typing import Any, List
 import torch
 import pytorch_lightning as pl
+from nltk import edit_distance
 
 
 LOGGER = logging.getLogger(__name__)
@@ -47,11 +48,10 @@ class DonutPLModule(pl.LightningModule):
         pixel_values = batch["pixel_values"]
 
         # prepare decoder inputs
-        # FIXME - unsure if `decode` is a real function - need to test.
         task_prompt = processor.tokenizer.decode([model.config.decoder_start_token_id])
         decoder_input_ids = processor.tokenizer(task_prompt, add_special_tokens=False, return_tensors="pt").input_ids
         decoder_input_ids = decoder_input_ids.to(model.device)
-        
+
         # autoregressively generate sequence
         outputs = model.generate(
             pixel_values,
@@ -69,6 +69,8 @@ class DonutPLModule(pl.LightningModule):
         if self.task == DonutPredictionTask.CLASSIFICATION:
             scores = self._compute_classification_metrics(outputs, batch)
             return scores
+        elif self.task == DonutPredictionTask.PARSE:
+            scores = self._compute_parse_metrics(outputs, batch)
         else:
             raise NotImplementedError(f"Task {self.task} is not implemented!")
     
@@ -90,7 +92,28 @@ class DonutPLModule(pl.LightningModule):
             score = float(seq.get("class") == gt["class"])
             scores.append(score)
         return scores
-        
+
+    def _compute_parse_metrics(self, outputs, batch):
+        pixel_values, labels, answers = batch
+
+        """
+        Copied from https://github.com/NielsRogge/Transformers-Tutorials/tree/master/Donut
+        """
+        predictions = []
+        for seq in self.processor.tokenizer.batch_decode(outputs.sequences):
+            seq = seq.replace(self.processor.tokenizer.eos_token, "").replace(self.processor.tokenizer.pad_token, "")
+            seq = re.sub(r"<.*?>", "", seq, count=1).strip()  # remove first task start token
+            predictions.append(seq)
+
+        scores = list()
+        for pred, answer in zip(predictions, answers):
+            pred = re.sub(r"(?:(?<=>) | (?=</s_))", "", pred)
+            # NOT NEEDED ANYMORE
+            # answer = re.sub(r"<.*?>", "", answer, count=1)
+            answer = answer.replace(self.processor.tokenizer.eos_token, "")
+            scores.append(edit_distance(pred, answer) / max(len(pred), len(answer)))
+        return scores
+
     def validation_epoch_end(self, validation_step_outputs):
         print(f"val_acc = {np.mean(validation_step_outputs)}  --------")
         self.log_dict({"val_acc": np.mean(validation_step_outputs)}, sync_dist=True)
