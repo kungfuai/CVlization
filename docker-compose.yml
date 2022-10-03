@@ -12,7 +12,14 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - .:/workspace
-  
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
   ci:
     build:
       dockerfile: Dockerfile
