@@ -71,6 +71,7 @@ class DonutPLModule(pl.LightningModule):
             return scores
         elif self.task == DonutPredictionTask.PARSE:
             scores = self._compute_parse_metrics(outputs, batch)
+            return scores
         else:
             raise NotImplementedError(f"Task {self.task} is not implemented!")
     
