@@ -1,6 +1,11 @@
-from cvlization.lab.rvl_cdip_tiny import RvlCdipTinyDatasetBuilder
+from cvlization.lab.cord_v2 import CordV2DatasetBuilder
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.pipeline import Donut
+from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.model import DonutPredictionTask
 
+"""
+Example based on:
+https://github.com/NielsRogge/Transformers-Tutorials/tree/master/Donut
+"""
 
 class TrainingSession:
     def __init__(self, args):
@@ -8,10 +13,18 @@ class TrainingSession:
 
     def run(self):
         dataset_builder = self.create_dataset()
-        Donut().train(dataset_builder=dataset_builder)
+        config = {
+            "task": DonutPredictionTask.PARSE,
+            "max_length": CordV2DatasetBuilder.max_length,
+            "task_start_token": CordV2DatasetBuilder.task_start_token,
+            "image_height": CordV2DatasetBuilder.image_height,
+            "image_width": CordV2DatasetBuilder.image_width,
+            "ignore_id": CordV2DatasetBuilder.ignore_id,
+        }
+        Donut(**config).train(dataset_builder=dataset_builder)
 
     def create_dataset(self):
-        dataset_builder = RvlCdipTinyDatasetBuilder()
+        dataset_builder = CordV2DatasetBuilder()
         return dataset_builder
 
 
