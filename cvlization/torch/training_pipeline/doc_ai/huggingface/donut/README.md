@@ -2,7 +2,7 @@
 
 https://github.com/NielsRogge/Transformers-Tutorials/tree/master/Donut
 
-## Expected data sample format
+## Expected data label format
 
 ```json
 {
