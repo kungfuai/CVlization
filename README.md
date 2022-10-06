@@ -40,6 +40,11 @@ To run unit tests, use:
 bin/test.sh
 ```
 
+to use GPU on Ubuntu, you may need to install `nvidia-container-toolkit`.
+```
+sudo apt-get install -y nvidia-container-toolkit
+```
+
 ## Using the library in a project
 
 Copy `cvlization` directory as a python module to your project.

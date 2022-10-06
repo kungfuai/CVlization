@@ -14,3 +14,7 @@ tensorflow-addons
 tensorflow_datasets
 wandb # seems to be required by torch-lightning
 kornia
+transformers>=4.22.0
+datasets>=2.5.1
+sentencepiece>=0.1.97
+nltk
