@@ -78,9 +78,11 @@ class Donut:
         if newly_added_num > 0:
             model.decoder.resize_token_embeddings(len(processor.tokenizer))
         model.config.pad_token_id = processor.tokenizer.pad_token_id
-        model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids(['<s_rvlcdip>'])[0]
+        model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids([
+            self.task_start_token,
+        ])[0]
         return model
-    
+
     def _create_trainer(self):
         trainer = pl.Trainer(
             accelerator=self.accelerator,
@@ -98,6 +100,3 @@ class Donut:
         train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
         return train_dataloader, val_dataloader, newly_added_num
-
-
-

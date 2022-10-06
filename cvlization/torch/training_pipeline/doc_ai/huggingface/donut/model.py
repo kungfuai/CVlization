@@ -9,6 +9,7 @@ import re
 from typing import Any, List
 import torch
 import pytorch_lightning as pl
+from nltk import edit_distance
 
 
 LOGGER = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ class DonutPredictionTask(enum.Enum):
     """Donut supports a variety of tasks, which are defined by the target type.
     """
     CLASSIFICATION = "classification"
-    # DETECTION = "detection"
+    PARSE = "parse"
 
 
 class DonutPLModule(pl.LightningModule):
@@ -45,12 +46,12 @@ class DonutPLModule(pl.LightningModule):
         processor = self.processor
         model = self.model
         pixel_values = batch["pixel_values"]
-        
+
         # prepare decoder inputs
-        task_prompt = "<s_rvlcdip>"
+        task_prompt = processor.tokenizer.decode([model.config.decoder_start_token_id])
         decoder_input_ids = processor.tokenizer(task_prompt, add_special_tokens=False, return_tensors="pt").input_ids
         decoder_input_ids = decoder_input_ids.to(model.device)
-        
+
         # autoregressively generate sequence
         outputs = model.generate(
             pixel_values,
@@ -67,6 +68,9 @@ class DonutPLModule(pl.LightningModule):
         
         if self.task == DonutPredictionTask.CLASSIFICATION:
             scores = self._compute_classification_metrics(outputs, batch)
+            return scores
+        elif self.task == DonutPredictionTask.PARSE:
+            scores = self._compute_parse_metrics(outputs, batch)
             return scores
         else:
             raise NotImplementedError(f"Task {self.task} is not implemented!")
@@ -89,7 +93,28 @@ class DonutPLModule(pl.LightningModule):
             score = float(seq.get("class") == gt["class"])
             scores.append(score)
         return scores
-        
+
+    def _compute_parse_metrics(self, outputs, batch):
+        pixel_values, labels, answers = batch
+
+        """
+        Copied from https://github.com/NielsRogge/Transformers-Tutorials/tree/master/Donut
+        """
+        predictions = []
+        for seq in self.processor.tokenizer.batch_decode(outputs.sequences):
+            seq = seq.replace(self.processor.tokenizer.eos_token, "").replace(self.processor.tokenizer.pad_token, "")
+            seq = re.sub(r"<.*?>", "", seq, count=1).strip()  # remove first task start token
+            predictions.append(seq)
+
+        scores = list()
+        for pred, answer in zip(predictions, answers):
+            pred = re.sub(r"(?:(?<=>) | (?=</s_))", "", pred)
+            # NOT NEEDED ANYMORE
+            # answer = re.sub(r"<.*?>", "", answer, count=1)
+            answer = answer.replace(self.processor.tokenizer.eos_token, "")
+            scores.append(edit_distance(pred, answer) / max(len(pred), len(answer)))
+        return scores
+
     def validation_epoch_end(self, validation_step_outputs):
         print(f"val_acc = {np.mean(validation_step_outputs)}  --------")
         self.log_dict({"val_acc": np.mean(validation_step_outputs)}, sync_dist=True)
@@ -142,6 +167,7 @@ class ProcessedDataset:
         self.dataset = source_dataset
         self.dataset_length = len(self.dataset)
 
+        self.additional_tokens = []
         self.gt_token_sequences = []
         for sample in self.dataset:
             ground_truth = json.loads(sample["ground_truth"])
@@ -167,13 +193,11 @@ class ProcessedDataset:
         self.add_tokens([self.task_start_token, self.prompt_end_token] + (self.additional_tokens or []))
         self.prompt_end_token_id = processor.tokenizer.convert_tokens_to_ids(self.prompt_end_token)
 
-    @property
-    def additional_tokens(self):
-        return ["<advertisement/>", "<budget/>", "<email/>", "<file_folder/>", "<form/>", "<handwritten/>", "<invoice/>",
-  "<letter/>", "<memo/>", "<news_article/>", "<presentation/>", "<questionnaire/>", "<resume/>",
-  "<scientific_publication/>", "<scientific_report/>", "<specification/>"]
-
-    def json2token(self, obj: Any, update_special_tokens_for_json_key: bool = True, sort_json_key: bool = True):
+    def json2token(self,
+        obj: Any,
+        update_special_tokens_for_json_key: bool = True,
+        sort_json_key: bool = True,
+        is_class_token: bool = False):
         """
         Convert an ordered JSON object into a token sequence
         """
@@ -191,7 +215,7 @@ class ProcessedDataset:
                         self.add_tokens([fr"<s_{k}>", fr"</s_{k}>"])
                     output += (
                         fr"<s_{k}>"
-                        + self.json2token(obj[k], update_special_tokens_for_json_key, sort_json_key)
+                        + self.json2token(obj[k], update_special_tokens_for_json_key, sort_json_key, k == "class")
                         + fr"</s_{k}>"
                     )
                 return output
@@ -199,11 +223,15 @@ class ProcessedDataset:
             return r"<sep/>".join(
                 [self.json2token(item, update_special_tokens_for_json_key, sort_json_key) for item in obj]
             )
-        else:
+        elif is_class_token:
             obj = str(obj)
-            if f"<{obj}/>" in self.additional_tokens:
-                obj = f"<{obj}/>"  # for categorical special tokens
+            obj = f"<{obj}/>" # for categorical special tokens
+            if self.add_tokens([obj]) > 0:
+                self.additional_tokens.append(obj)
             return obj
+        else:
+            # Value
+            return str(obj)
 
     def add_tokens(self, list_of_tokens: List[str]):
         """
@@ -214,10 +242,8 @@ class ProcessedDataset:
         self.newly_added_num += added_num
         if added_num > 0:
             LOGGER.info(f"Added {added_num} tokens to tokenizer. Total tokens: {len(processor.tokenizer)}")
-        # TODO: the model's decoder also needs to be resized
-        # if newly_added_num > 0:
-        #     model.decoder.resize_token_embeddings(len(processor.tokenizer))
-    
+        return added_num
+
     def __len__(self) -> int:
         return self.dataset_length
 
