@@ -4,12 +4,9 @@ from typing import List, Tuple, Union, Optional
 import numpy as np
 
 from cvlization.specs.model_spec.model_spec import ModelSpec
-from ...data.dataset_builder import BaseDatasetBuilder, Dataset, DatasetProvider
+from ...data.dataset_builder import BaseDatasetBuilder, DatasetProvider
 from ...specs import (
     ImageAugmentationSpec,
-    ModelInput,
-    ModelTarget,
-    DataColumnType,
     ImageAugmentationProvider,
 )
 from . import dataset_adaptors
@@ -17,6 +14,18 @@ from ...data.dataset_builder import TransformedMapStyleDataset
 from ...transforms.image_augmentation_builder import ImageAugmentationBuilder
 from ...transforms.example_transform import ExampleTransform
 from ...specs.prediction_tasks import ImageClassification, ObjectDetection
+
+
+def to_tensor_numpy(x) -> np.ndarray:
+    return torchvision.transforms.ToTensor()(x).numpy()
+
+
+def to_tensor_numpy_list(x) -> List[np.ndarray]:
+    return [torchvision.transforms.ToTensor()(x).numpy()]
+
+
+def to_numpy_list(x) -> List[np.ndarray]:
+    return [np.array(x)]
 
 
 @dataclass
@@ -131,7 +140,7 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
         raise ValueError(
             f"Cannot find dataset in torchvision: {dataset_classname_lowercase} (case insensitive)"
         )
-    
+
     @property
     def num_classes(self):
         if self.dataset_classname.lower() == "cifar10":
@@ -145,8 +154,10 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
         elif self.dataset_classname.lower() == "voc":
             return 20
         else:
-            raise ValueError(f"Cannot determine num_classes for {self.dataset_classname}")
-    
+            raise ValueError(
+                f"Cannot determine num_classes for {self.dataset_classname}"
+            )
+
     @property
     def num_channels(self):
         # TODO: hard coded for now.
@@ -156,11 +167,6 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
         if hasattr(torchvision.datasets, dataset_classname):
             dataset_class = getattr(torchvision.datasets, dataset_classname)
             # Torchvision datasets can be constructed using one of the following two ways:
-            to_tensor_numpy_list = lambda x: [
-                torchvision.transforms.ToTensor()(x).numpy()
-            ]
-            to_tensor_numpy = lambda x: torchvision.transforms.ToTensor()(x).numpy()
-            to_numpy_list = lambda x: [np.array(x)]
             try:
                 ds = dataset_class(
                     root=self.data_dir,

@@ -16,8 +16,13 @@ class TrainingSession:
     def run(self):
         dataset_builder = TorchvisionDatasetBuilder(dataset_classname="CIFAR10")
         SimpleImageClassificationPipeline(
-            config=SimpleImageClassificationPipeline.Config(num_classes=10)
+            config=SimpleImageClassificationPipeline.Config(
+                num_classes=10, accelerator=self._get_accelerator()
+            ),
         ).fit(dataset_builder=dataset_builder)
+
+    def _get_accelerator(self):
+        return self.args.accelerator
 
 
 if __name__ == "__main__":
@@ -35,5 +40,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--track", action="store_true")
     parser.add_argument("--net", default="resnet18")
+    parser.add_argument("--accelerator", default="ddp")
     args = parser.parse_args()
     TrainingSession(args).run()

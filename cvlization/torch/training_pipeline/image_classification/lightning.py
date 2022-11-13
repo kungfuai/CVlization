@@ -15,6 +15,9 @@ class ImageClassifier(pl.LightningModule):
         self.lr = lr
 
     def forward(self, x):
+        if isinstance(x, list):
+            assert len(x) == 1, f"Expected a list of length 1, got {len(x)}"
+            x = x[0]
         return self.net(x)
 
     def configure_optimizers(self):
@@ -25,6 +28,9 @@ class ImageClassifier(pl.LightningModule):
 
     def training_step(self, batch, batch_idx=None):
         x, y = batch
+        if isinstance(y, list):
+            assert len(y) == 1, f"Expected a list of length 1, got {len(y)}"
+            y = y[0]
         y_hat = self(x)
         loss = self.loss(y_hat, y)
         self.train_accuracy.update(preds=y_hat, target=y.int())
@@ -34,6 +40,9 @@ class ImageClassifier(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx=None):
         x, y = batch
+        if isinstance(y, list):
+            assert len(y) == 1, f"Expected a list of length 1, got {len(y)}"
+            y = y[0]
         y_hat = self(x)
         self.val_accuracy.update(preds=y_hat, target=y.int())
         val_loss = self.loss(y_hat, y)

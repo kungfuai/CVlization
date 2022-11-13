@@ -23,6 +23,9 @@ class SimpleImageClassificationPipeline:
         model_name: str = "resnet18"
         pretrained: bool = True
 
+        # device:
+        accelerator: str = "cuda"
+
         # training loop
         epochs: int = 10
         train_steps_per_epoch: int = None
@@ -63,6 +66,7 @@ class SimpleImageClassificationPipeline:
     def _create_trainer(self):
         trainer = Trainer(
             deterministic=True,
+            accelerator=self._config.accelerator,
             limit_train_batches=self._config.train_steps_per_epoch or 1.0,
             limit_val_batches=self._config.val_steps_per_epoch or 1.0,
             max_epochs=self._config.epochs,
