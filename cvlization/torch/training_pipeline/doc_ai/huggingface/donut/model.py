@@ -8,7 +8,7 @@ import random
 import re
 from typing import Any, List
 import torch
-import pytorch_lightning as pl
+import lightning as pl
 from nltk import edit_distance
 
 
@@ -16,8 +16,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class DonutPredictionTask(enum.Enum):
-    """Donut supports a variety of tasks, which are defined by the target type.
-    """
+    """Donut supports a variety of tasks, which are defined by the target type."""
+
     CLASSIFICATION = "classification"
     PARSE = "parse"
 
@@ -49,7 +49,9 @@ class DonutPLModule(pl.LightningModule):
 
         # prepare decoder inputs
         task_prompt = processor.tokenizer.decode([model.config.decoder_start_token_id])
-        decoder_input_ids = processor.tokenizer(task_prompt, add_special_tokens=False, return_tensors="pt").input_ids
+        decoder_input_ids = processor.tokenizer(
+            task_prompt, add_special_tokens=False, return_tensors="pt"
+        ).input_ids
         decoder_input_ids = decoder_input_ids.to(model.device)
 
         # autoregressively generate sequence
@@ -65,7 +67,7 @@ class DonutPLModule(pl.LightningModule):
             bad_words_ids=[[processor.tokenizer.unk_token_id]],
             return_dict_in_generate=True,
         )
-        
+
         if self.task == DonutPredictionTask.CLASSIFICATION:
             scores = self._compute_classification_metrics(outputs, batch)
             return scores
@@ -74,7 +76,7 @@ class DonutPLModule(pl.LightningModule):
             return scores
         else:
             raise NotImplementedError(f"Task {self.task} is not implemented!")
-    
+
     def _compute_classification_metrics(self, outputs, batch):
         # turn into JSON
         processor = self.processor
@@ -83,9 +85,13 @@ class DonutPLModule(pl.LightningModule):
         ground_truths = [json.loads(g) for g in batch["ground_truth"]]
         scores = []
         for seq, label_token_ids, ground_truth in zip(seqs, labels, ground_truths):
-            
-            seq = seq.replace(processor.tokenizer.eos_token, "").replace(processor.tokenizer.pad_token, "")
-            seq = re.sub(r"<.*?>", "", seq, count=1).strip()  # remove first task start token
+
+            seq = seq.replace(processor.tokenizer.eos_token, "").replace(
+                processor.tokenizer.pad_token, ""
+            )
+            seq = re.sub(
+                r"<.*?>", "", seq, count=1
+            ).strip()  # remove first task start token
             seq = processor.token2json(seq)
             # print("seq:", seq)
             gt = ground_truth["gt_parse"]
@@ -102,8 +108,12 @@ class DonutPLModule(pl.LightningModule):
         """
         predictions = []
         for seq in self.processor.tokenizer.batch_decode(outputs.sequences):
-            seq = seq.replace(self.processor.tokenizer.eos_token, "").replace(self.processor.tokenizer.pad_token, "")
-            seq = re.sub(r"<.*?>", "", seq, count=1).strip()  # remove first task start token
+            seq = seq.replace(self.processor.tokenizer.eos_token, "").replace(
+                self.processor.tokenizer.pad_token, ""
+            )
+            seq = re.sub(
+                r"<.*?>", "", seq, count=1
+            ).strip()  # remove first task start token
             predictions.append(seq)
 
         scores = list()
@@ -160,7 +170,9 @@ class ProcessedDataset:
         self.split = split
         self.ignore_id = ignore_id
         self.task_start_token = task_start_token
-        self.prompt_end_token = prompt_end_token if prompt_end_token else task_start_token
+        self.prompt_end_token = (
+            prompt_end_token if prompt_end_token else task_start_token
+        )
         self.sort_json_key = sort_json_key
         self.newly_added_num = 0
 
@@ -171,11 +183,15 @@ class ProcessedDataset:
         self.gt_token_sequences = []
         for sample in self.dataset:
             ground_truth = json.loads(sample["ground_truth"])
-            if "gt_parses" in ground_truth:  # when multiple ground truths are available, e.g., docvqa
+            if (
+                "gt_parses" in ground_truth
+            ):  # when multiple ground truths are available, e.g., docvqa
                 assert isinstance(ground_truth["gt_parses"], list)
                 gt_jsons = ground_truth["gt_parses"]
             else:
-                assert "gt_parse" in ground_truth and isinstance(ground_truth["gt_parse"], dict)
+                assert "gt_parse" in ground_truth and isinstance(
+                    ground_truth["gt_parse"], dict
+                )
                 gt_jsons = [ground_truth["gt_parse"]]
 
             self.gt_token_sequences.append(
@@ -190,14 +206,21 @@ class ProcessedDataset:
                 ]
             )
 
-        self.add_tokens([self.task_start_token, self.prompt_end_token] + (self.additional_tokens or []))
-        self.prompt_end_token_id = processor.tokenizer.convert_tokens_to_ids(self.prompt_end_token)
+        self.add_tokens(
+            [self.task_start_token, self.prompt_end_token]
+            + (self.additional_tokens or [])
+        )
+        self.prompt_end_token_id = processor.tokenizer.convert_tokens_to_ids(
+            self.prompt_end_token
+        )
 
-    def json2token(self,
+    def json2token(
+        self,
         obj: Any,
         update_special_tokens_for_json_key: bool = True,
         sort_json_key: bool = True,
-        is_class_token: bool = False):
+        is_class_token: bool = False,
+    ):
         """
         Convert an ordered JSON object into a token sequence
         """
@@ -212,20 +235,30 @@ class ProcessedDataset:
                     keys = obj.keys()
                 for k in keys:
                     if update_special_tokens_for_json_key:
-                        self.add_tokens([fr"<s_{k}>", fr"</s_{k}>"])
+                        self.add_tokens([rf"<s_{k}>", rf"</s_{k}>"])
                     output += (
-                        fr"<s_{k}>"
-                        + self.json2token(obj[k], update_special_tokens_for_json_key, sort_json_key, k == "class")
-                        + fr"</s_{k}>"
+                        rf"<s_{k}>"
+                        + self.json2token(
+                            obj[k],
+                            update_special_tokens_for_json_key,
+                            sort_json_key,
+                            k == "class",
+                        )
+                        + rf"</s_{k}>"
                     )
                 return output
         elif type(obj) == list:
             return r"<sep/>".join(
-                [self.json2token(item, update_special_tokens_for_json_key, sort_json_key) for item in obj]
+                [
+                    self.json2token(
+                        item, update_special_tokens_for_json_key, sort_json_key
+                    )
+                    for item in obj
+                ]
             )
         elif is_class_token:
             obj = str(obj)
-            obj = f"<{obj}/>" # for categorical special tokens
+            obj = f"<{obj}/>"  # for categorical special tokens
             if self.add_tokens([obj]) > 0:
                 self.additional_tokens.append(obj)
             return obj
@@ -241,7 +274,9 @@ class ProcessedDataset:
         added_num = processor.tokenizer.add_tokens(list_of_tokens)
         self.newly_added_num += added_num
         if added_num > 0:
-            LOGGER.info(f"Added {added_num} tokens to tokenizer. Total tokens: {len(processor.tokenizer)}")
+            LOGGER.info(
+                f"Added {added_num} tokens to tokenizer. Total tokens: {len(processor.tokenizer)}"
+            )
         return added_num
 
     def __len__(self) -> int:
@@ -260,11 +295,17 @@ class ProcessedDataset:
         sample = self.dataset[idx]
 
         # pixel values (we remove the batch dimension)
-        pixel_values = processor(sample["image"].convert("RGB"), random_padding=self.split == "train", return_tensors="pt").pixel_values
+        pixel_values = processor(
+            sample["image"].convert("RGB"),
+            random_padding=self.split == "train",
+            return_tensors="pt",
+        ).pixel_values
         pixel_values = pixel_values.squeeze()
 
         # labels, which are the input ids of the target sequence
-        target_sequence = random.choice(self.gt_token_sequences[idx])  # can be more than one, e.g., DocVQA Task 1
+        target_sequence = random.choice(
+            self.gt_token_sequences[idx]
+        )  # can be more than one, e.g., DocVQA Task 1
         input_ids = processor.tokenizer(
             target_sequence,
             add_special_tokens=False,
@@ -275,13 +316,15 @@ class ProcessedDataset:
         )["input_ids"].squeeze(0)
 
         labels = input_ids.clone()
-        labels[labels == processor.tokenizer.pad_token_id] = self.ignore_id  # model doesn't need to predict pad token
+        labels[
+            labels == processor.tokenizer.pad_token_id
+        ] = self.ignore_id  # model doesn't need to predict pad token
         # labels[: torch.nonzero(labels == self.prompt_end_token_id).sum() + 1] = self.ignore_id  # model doesn't need to predict prompt (for VQA)
-        
+
         encoding = dict(
             pixel_values=pixel_values,
             labels=labels,
             ground_truth=sample["ground_truth"],
         )
-        
+
         return encoding

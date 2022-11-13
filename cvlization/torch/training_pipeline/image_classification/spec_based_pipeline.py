@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
-from pytorch_lightning import LightningModule
+from lightning import LightningModule
 
 # TODO: specs are useful for multi-task model, consider not importing them
 from cvlization.specs.ml_framework import MLFramework
@@ -11,7 +11,10 @@ from cvlization.specs.prediction_tasks import ImageClassification
 # TODO: consider not importing this dataset builder
 from cvlization.torch.data.torchvision_dataset_builder import TorchvisionDatasetBuilder
 
-from cvlization.torch.encoder.torch_image_backbone import image_backbone_names, create_image_backbone
+from cvlization.torch.encoder.torch_image_backbone import (
+    image_backbone_names,
+    create_image_backbone,
+)
 from cvlization.torch.torch_training_pipeline import TorchTrainingPipeline
 from cvlization.torch.encoder.torch_image_encoder import TorchImageEncoder
 from cvlization.torch.torch_model import TorchLitModel
@@ -20,12 +23,14 @@ from cvlization.torch.torch_model_factory import TorchModelFactory
 
 LOGGER = logging.getLogger(__name__)
 
+
 @dataclass
 class SpecBasedImageClassification(TorchTrainingPipeline):
     """This is a multi-task training pipeline based on ModelSpec.
     You can use multiple inputs and multiple outputs
     by specifying the ModelSpec.
     """
+
     net: str = "resnet18"
     num_classes: int = None
     num_channels: int = None
@@ -44,11 +49,15 @@ class SpecBasedImageClassification(TorchTrainingPipeline):
     n_gradients: int = 1  # for gradient accumulation
     experiment_tracker = None
 
-    def train(self, dataset_builder=TorchvisionDatasetBuilder(dataset_classname="CIFAR10")):
+    def train(
+        self, dataset_builder=TorchvisionDatasetBuilder(dataset_classname="CIFAR10")
+    ):
         """Alias for fit()."""
         return self.train(dataset_builder=dataset_builder)
-    
-    def fit(self, dataset_builder=TorchvisionDatasetBuilder(dataset_classname="CIFAR10")):
+
+    def fit(
+        self, dataset_builder=TorchvisionDatasetBuilder(dataset_classname="CIFAR10")
+    ):
         if self.model is None:
             prediction_task = ImageClassification(
                 n_classes=self.num_classes or dataset_builder.num_classes,
@@ -64,18 +73,28 @@ class SpecBasedImageClassification(TorchTrainingPipeline):
             )
 
         return super().fit(dataset_builder=dataset_builder)
-    
+
     def _create_model(self, dataset_builder):
         if self.model_spec:
             return self._create_torch_model_from_spec(self.model_spec)
         else:
             return super()._create_model(dataset_builder)
-    
+
     def _create_training_dataloader(self, dataset_builder):
-        return DataLoader(dataset_builder.training_dataset(), batch_size=self.train_batch_size, shuffle=True, num_workers=self.num_workers)
-    
+        return DataLoader(
+            dataset_builder.training_dataset(),
+            batch_size=self.train_batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+        )
+
     def _create_validation_dataloader(self, dataset_builder):
-        return DataLoader(dataset_builder.validation_dataset(), batch_size=self.val_batch_size, shuffle=False, num_workers=self.num_workers)
+        return DataLoader(
+            dataset_builder.validation_dataset(),
+            batch_size=self.val_batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
 
     def _create_torch_model_from_spec(self, model_spec):
         model_inputs = model_spec.get_model_inputs()
@@ -121,5 +140,3 @@ class SpecBasedImageClassification(TorchTrainingPipeline):
             )
         assert isinstance(model, LightningModule)
         return model
-
-

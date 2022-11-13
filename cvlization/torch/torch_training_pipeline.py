@@ -3,7 +3,7 @@ import logging
 from typing import Union, Callable, Optional
 import torch
 from torch import nn
-from pytorch_lightning.core.lightning import LightningModule
+from lightning.core.lightning import LightningModule
 from ..specs import ModelSpec, MLFramework
 from .training_pipeline.utils.dataloader_utils import DataLoaderUtils
 from .training_pipeline.utils.model_utils import ModelUtils
@@ -44,8 +44,10 @@ class TorchTrainingPipeline:
     ] = None  # If specified, the following parameters will be ignored.
     prediction_task: ModelSpec = None
     lightning: bool = True
-    loss_function_included_in_model: bool = False  # this is a property of the forward() method of the model
-    
+    loss_function_included_in_model: bool = (
+        False  # this is a property of the forward() method of the model
+    )
+
     # Data
     num_workers: int = 0
     collate_method: Union[str, Callable] = "zip"  # "zip", None
@@ -95,7 +97,9 @@ class TorchTrainingPipeline:
         # TODO: _populate_model_spec_based_on_user_provided_model is too specific of an
         #   implementation detail. Consider removing it.
         self._populate_model_spec_based_on_user_provided_model()
-        assert self.lightning, "PyTorchLighnting is used by default. Please set lightning=True."
+        assert (
+            self.lightning
+        ), "PyTorchLighnting is used by default. Please set lightning=True."
 
     # TODO: define DatasetBuilder inferface
     def fit(self, dataset_builder):
@@ -107,41 +111,48 @@ class TorchTrainingPipeline:
             if not self.data_is_compatible(dataset_builder):
                 raise ValueError("Dataset is not compatible with the pipeline.")
         except NotImplementedError:
-            LOGGER.info("No data compatibility check is implemented for this pipeline. Let's just go ahead.")
+            LOGGER.info(
+                "No data compatibility check is implemented for this pipeline. Let's just go ahead."
+            )
         self.model = self._create_model(dataset_builder=dataset_builder)
         # This is where model surgery happens.
         self.model = self._adapt_model(self.model, dataset_builder=dataset_builder)
         train_dataloader = self._create_training_dataloader(dataset_builder)
         val_dataloader = self._create_validation_dataloader(dataset_builder)
         trainer = self._create_trainer()
-        assert isinstance(self.model, LightningModule), f"Model must be a LightningModule. Got {type(self.model)}."
+        assert isinstance(
+            self.model, LightningModule
+        ), f"Model must be a LightningModule. Got {type(self.model)}."
         trainer.fit(self.model, train_dataloader, val_dataloader)
 
     def train(self, dataset_builder):
-        """An alias for fit().
-        """
+        """An alias for fit()."""
         return self.fit(dataset_builder)
 
     def data_is_compatible(self, dataset_builder):
-        raise NotImplementedError("This TrainingPipeline does not have specific data requirements.")
-    
+        raise NotImplementedError(
+            "This TrainingPipeline does not have specific data requirements."
+        )
+
     def describe_data_requirement(self) -> str:
         # Show examples of data.
         # Display schema (names, types and shapes) of required data.
-        raise NotImplementedError("This TrainingPipeline does not have specific data requirements.")
-    
+        raise NotImplementedError(
+            "This TrainingPipeline does not have specific data requirements."
+        )
+
     def _create_model(self, dataset_builder):
         return self._model_utils.create_model(dataset_builder=dataset_builder)
-    
+
     def _adapt_model(self, model, dataset_builder):
         return self._model_utils.adapt_model(model, dataset_builder)
-    
+
     def _create_training_dataloader(self, dataset_builder):
         return self._dataloader_utils.create_training_dataloader(dataset_builder)
-    
+
     def _create_validation_dataloader(self, dataset_builder):
         return self._dataloader_utils.create_validation_dataloader(dataset_builder)
-    
+
     def _create_trainer(self):
         return self._trainer_utils.create_trainer()
 
@@ -191,7 +202,7 @@ class TorchTrainingPipeline:
             enable_progress_bar=self.enable_progress_bar,
             data_only=self.data_only,
         )
-    
+
     ## Type and shape checking.
 
     def _populate_model_spec_based_on_user_provided_model(self):
@@ -212,11 +223,13 @@ class TorchTrainingPipeline:
 
     ## Experiment tracker.
     def _get_config_dict(self):
-        raise NotImplementedError("This TrainingPipeline does not have specific config requirements.")
+        raise NotImplementedError(
+            "This TrainingPipeline does not have specific config requirements."
+        )
 
     def _log_params(self):
         self.experiment_tracker.setup().log_params(self._get_config_dict())
-    
+
     def _watch_model(self):
         if self.experiment_tracker == "wandb":
             if isinstance(self.model, nn.Module) or isinstance(
@@ -230,9 +243,7 @@ class TorchTrainingPipeline:
                 f"Watching model for {self.experiment_tracker} not implemented yet."
             )
 
-    
     ## Debugging.
     def _adjust_batch_size_if_doing_data_only_debugging(self):
         if self.data_only:
             self.train_batch_size = 1
-

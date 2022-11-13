@@ -3,9 +3,9 @@ import logging
 from typing import Union, Callable, Optional
 import torch
 from torch import nn
-from pytorch_lightning.core import LightningModule
-from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning import callbacks as cb
+from lightning.core import LightningModule
+from lightning import Trainer, seed_everything
+from lightning import callbacks as cb
 from ....specs import ModelSpec
 
 LOGGER = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class TrainerUtils:
         else:
             weights_save_path = self.checkpoint_root_dir
             enable_checkpointing = True
-        
+
         logger_for_experiment_tracking = self.create_experiment_tracker()
 
         trainer = Trainer(
@@ -94,7 +94,7 @@ class TrainerUtils:
         )
         self.trainer = trainer
         return trainer
-    
+
     def create_callbacks(self):
         callbacks = [
             # cb.EarlyStopping(
@@ -111,10 +111,10 @@ class TrainerUtils:
                 )
             )
         return callbacks
-    
+
     def create_experiment_tracker(self):
         if self.experiment_tracker == "wandb":
-            from pytorch_lightning.loggers import WandbLogger
+            from lightning.loggers import WandbLogger
 
             # TODO: for wandb, customize the summary method.
             # define a metric we are interested in the maximum of

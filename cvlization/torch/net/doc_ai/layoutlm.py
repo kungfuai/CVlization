@@ -1,7 +1,7 @@
 import logging
 import torch
 import re
-import pytorch_lightning as pl
+import lightning as pl
 from torchmetrics import F1Score, Accuracy
 from transformers import LayoutLMv3ForSequenceClassification
 from transformers.modeling_outputs import SequenceClassifierOutput
@@ -29,7 +29,9 @@ class LayoutLMv3SequenceClassifier(pl.LightningModule):
         first 4 attention layers).
     """
 
-    def __init__(self, config: dict, id2label: dict, label2id: dict, train_pattern: str = r".*"):
+    def __init__(
+        self, config: dict, id2label: dict, label2id: dict, train_pattern: str = r".*"
+    ):
         super().__init__()
         self.model = LayoutLMv3ForSequenceClassification.from_pretrained(
             "microsoft/layoutlmv3-base", id2label=id2label, label2id=label2id

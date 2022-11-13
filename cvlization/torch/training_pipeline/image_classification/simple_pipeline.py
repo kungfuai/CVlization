@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from multiprocessing import cpu_count
-from pytorch_lightning.loggers import MLFlowLogger
-from pytorch_lightning import Trainer
+
+from lightning.pytorch.loggers import MLFlowLogger
+from lightning.pytorch import Trainer
 from torch import nn
 from torch.utils.data import DataLoader
 import torchvision
@@ -51,12 +52,12 @@ class SimpleImageClassificationPipeline:
         trainer.fit(pl_model, train_dataloader, val_dataloader)
 
     def _create_model(self):
-        model_constructor = getattr(
-            torchvision.models, self._config.model_name)
+        model_constructor = getattr(torchvision.models, self._config.model_name)
         model = model_constructor(pretrained=self._config.pretrained)
         model.fc = nn.Linear(model.fc.in_features, self._config.num_classes)
         pl_model = ImageClassifier(
-            model=model, num_classes=self._config.num_classes, lr=self._config.lr)
+            model=model, num_classes=self._config.num_classes, lr=self._config.lr
+        )
         return pl_model
 
     def _create_trainer(self):
@@ -68,9 +69,9 @@ class SimpleImageClassificationPipeline:
             logger=MLFlowLogger(
                 experiment_name=self._config.experiment_name,
                 run_name=self._config.run_name,
-                tracking_uri=self._config.tracking_uri
+                tracking_uri=self._config.tracking_uri,
             ),
-            callbacks=[ImageClassifierCallback()]
+            callbacks=[ImageClassifierCallback()],
         )
         return trainer
 
@@ -79,7 +80,7 @@ class SimpleImageClassificationPipeline:
             dataset_builder.training_dataset(),
             batch_size=self._config.batch_size,
             shuffle=True,
-            num_workers=self._config.num_workers
+            num_workers=self._config.num_workers,
         )
 
     def create_validation_dataloader(self, dataset_builder):
@@ -87,5 +88,5 @@ class SimpleImageClassificationPipeline:
             dataset_builder.validation_dataset(),
             batch_size=self._config.batch_size,
             shuffle=False,
-            num_workers=self._config.num_workers
+            num_workers=self._config.num_workers,
         )

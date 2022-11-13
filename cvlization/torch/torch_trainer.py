@@ -6,9 +6,9 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 import logging
 import os
-from pytorch_lightning.core.datamodule import LightningDataModule
-from pytorch_lightning import Trainer, LightningModule
-from pytorch_lightning.callbacks import (
+from lightning.core.datamodule import LightningDataModule
+from lightning import Trainer, LightningModule
+from lightning.callbacks import (
     EarlyStopping,
     LearningRateMonitor,
 )
@@ -155,7 +155,7 @@ class TorchTrainer(BaseTrainer):
 
     def _set_up_experiment_tracker(self):
         if self.experiment_tracker == "wandb":
-            from pytorch_lightning.loggers import WandbLogger
+            from lightning.loggers import WandbLogger
 
             # TODO: for wandb, customize the summary method.
             # define a metric we are interested in the maximum of
@@ -300,7 +300,9 @@ class TorchTrainer(BaseTrainer):
         if hasattr(model, "loss_function"):
             return model.loss_function
         else:
-            assert self.model_targets is not None, f"model_targets is None but loss_function is not defined in model."
+            assert (
+                self.model_targets is not None
+            ), f"model_targets is None but loss_function is not defined in model."
             return TorchModelFactory(
                 model_inputs=self.model_inputs,
                 model_targets=self.model_targets,

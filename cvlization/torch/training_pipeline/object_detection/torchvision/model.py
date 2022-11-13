@@ -4,11 +4,13 @@ import torch
 import torchvision
 from torchvision.models import detection
 from torchvision.models.detection.rpn import AnchorGenerator
-from pytorch_lightning.core.lightning import LightningModule
+from lightning.core.lightning import LightningModule
+
 try:
     from torchmetrics.detection.map import MeanAveragePrecision
 except ImportError:
     from torchmetrics.detection.mean_ap import MeanAveragePrecision
+
     # Tested on torchmetrics 0.7.*, 0.9.*
     # TODO: there seems to be a bug in torchmetrics mAP calculation,
     #   when FPs and TPs have the same score.

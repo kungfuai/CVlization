@@ -1,5 +1,5 @@
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks import Callback
+import lightning.pytorch as pl
+from lightning.pytorch.callbacks import Callback
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -41,7 +41,6 @@ class ImageClassifier(pl.LightningModule):
 
 
 class ImageClassifierCallback(Callback):
-
     def __init__(self, save_prediction_examples=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.current_epoch = 0
@@ -55,12 +54,15 @@ class ImageClassifierCallback(Callback):
     def on_train_epoch_end(self, trainer, pl_module, *args, **kwargs):
         super().on_train_epoch_end(trainer, pl_module, *args, **kwargs)
         avg_acc = pl_module.train_accuracy.compute()
-        self.log('train_acc', avg_acc, prog_bar=True)
+        self.log("train_acc", avg_acc, prog_bar=True)
         print("train_accuracy:", avg_acc)
 
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        super().on_validation_batch_end(trainer, pl_module,
-                                        outputs, batch, batch_idx, dataloader_idx)
+    def on_validation_batch_end(
+        self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
+    ):
+        super().on_validation_batch_end(
+            trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
+        )
         loss = outputs["loss"]
         self.log(name="loss", value=loss.item(), on_step=True)
         # self.log(name="acc", value=pl_module.val_accuracy.compute(), on_step=True)
@@ -69,7 +71,7 @@ class ImageClassifierCallback(Callback):
     def on_validation_epoch_end(self, trainer, pl_module, *args, **kwargs):
         super().on_validation_epoch_end(trainer, pl_module, *args, **kwargs)
         avg_acc = pl_module.val_accuracy.compute()
-        self.log('val_acc', avg_acc, prog_bar=True)
+        self.log("val_acc", avg_acc, prog_bar=True)
         print("val_accuracy:", avg_acc)
         if self.save_prediction_examples:
             pass  # not implemented

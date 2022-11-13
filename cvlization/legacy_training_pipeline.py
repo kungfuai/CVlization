@@ -14,7 +14,6 @@ from .specs import ensure_dataset_shapes_and_types
 LOGGER = logging.getLogger(__name__)
 
 
-
 @dataclass
 class LegacyTrainingPipeline:
     """
@@ -179,7 +178,7 @@ class LegacyTrainingPipeline:
                 self.model, self.train_data, self.val_data
             )
         elif self.ml_framework == MLFramework.PYTORCH:
-            from pytorch_lightning.core import LightningModule
+            from lightning.core import LightningModule
 
             assert isinstance(self.model, LightningModule)
             self.trainer = self._create_torch_trainer(
@@ -666,7 +665,7 @@ class LegacyTrainingPipeline:
         return trainer
 
     def _ensure_torch_model(self):
-        from pytorch_lightning.core.lightning import LightningModule
+        from lightning.core.lightning import LightningModule
         from torch import nn
         from .torch.torch_model import TorchLitModel
 
@@ -704,7 +703,7 @@ class LegacyTrainingPipeline:
         from .torch.torch_model_factory import TorchModelFactory
         from .torch.encoder.torch_image_encoder import TorchImageEncoder
         from .torch.encoder.torch_image_backbone import create_image_backbone
-        from pytorch_lightning.core import LightningModule
+        from lightning.core import LightningModule
         from .torch.torch_model import TorchLitModel
 
         model_inputs = self.get_model_inputs()

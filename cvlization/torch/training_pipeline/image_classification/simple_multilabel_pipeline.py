@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from multiprocessing import cpu_count
-from pytorch_lightning.loggers import MLFlowLogger
-from pytorch_lightning import Trainer
+from lightning.loggers import MLFlowLogger
+from lightning import Trainer
 from torch import nn
 from torch.utils.data import DataLoader
 import torchvision
@@ -49,14 +49,18 @@ class SimpleMultiLabelImageClassificationPipeline:
         train_dataloader = self.create_training_dataloader(dataset_builder)
         val_dataloader = self.create_validation_dataloader(dataset_builder)
         trainer.fit(pl_model, train_dataloader, val_dataloader)
-    
+
     def _create_model(self):
         model_constructor = getattr(torchvision.models, self._config.model_name)
-        model = model_constructor(pretrained=self._config.pretrained, num_classes=self._config.num_classes)
-        pl_model = ImageClassifier(model=model, num_classes=self._config.num_classes, lr=self._config.lr)
+        model = model_constructor(
+            pretrained=self._config.pretrained, num_classes=self._config.num_classes
+        )
+        pl_model = ImageClassifier(
+            model=model, num_classes=self._config.num_classes, lr=self._config.lr
+        )
         pl_model.loss = nn.BCEWithLogitsLoss()
         return pl_model
-    
+
     def _create_trainer(self):
         if self._config.tracking_uri is None:
             tracking_uri = None
@@ -72,22 +76,22 @@ class SimpleMultiLabelImageClassificationPipeline:
                 run_name=self._config.run_name,
                 tracking_uri=tracking_uri,
             ),
-            callbacks=[ImageClassifierCallback()]
+            callbacks=[ImageClassifierCallback()],
         )
         return trainer
-    
+
     def create_training_dataloader(self, dataset_builder):
         return DataLoader(
             dataset_builder.training_dataset(),
             batch_size=self._config.batch_size,
             shuffle=True,
-            num_workers=self._config.num_workers
+            num_workers=self._config.num_workers,
         )
-    
+
     def create_validation_dataloader(self, dataset_builder):
         return DataLoader(
             dataset_builder.validation_dataset(),
             batch_size=self._config.batch_size,
             shuffle=False,
-            num_workers=self._config.num_workers
+            num_workers=self._config.num_workers,
         )

@@ -2,7 +2,7 @@ import logging
 from torch import nn
 import torch
 import torchvision
-from pytorch_lightning.core.lightning import LightningModule
+from lightning.core.lightning import LightningModule
 from ...metrics.semantic_segmentation_confusion_matrix import (
     SemanticSegmentationConfusionMatrix,
 )
@@ -48,7 +48,9 @@ class TorchvisionSemanticSegmentationModelFactory:
             for x in torchvision.models.segmentation.__dict__.keys()
             if not x.startswith("_") and x[0] in "abcdefghijklmnopqrstuvwxyz"
         ]
-        names = [x for x in names if callable(torchvision.models.segmentation.__dict__[x])]
+        names = [
+            x for x in names if callable(torchvision.models.segmentation.__dict__[x])
+        ]
         return names
 
 
