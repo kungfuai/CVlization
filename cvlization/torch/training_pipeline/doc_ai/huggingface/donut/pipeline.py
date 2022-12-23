@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import logging
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
+import transformers
 from transformers import VisionEncoderDecoderConfig, VisionEncoderDecoderModel, DonutProcessor
 from .model import DonutPLModule, ProcessedDataset, DonutPredictionTask
 
@@ -55,6 +56,7 @@ class Donut:
         return config
     
     def _create_processor(self):
+        print("transformers", transformers.__version__)
         processor = DonutProcessor.from_pretrained(self.pretrained_model_name)
         processor.feature_extractor.size = self._image_size[::-1] # should be (width, height)
         processor.feature_extractor.do_align_long_axis = False
@@ -97,6 +99,7 @@ class Donut:
         train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor)
         val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor)
         newly_added_num = train_dataset.newly_added_num
-        train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True)
-        val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+        batch_size = 2
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         return train_dataloader, val_dataloader, newly_added_num
