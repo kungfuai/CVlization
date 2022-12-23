@@ -95,8 +95,6 @@ class DonutPLModule(pl.LightningModule):
         return scores
 
     def _compute_parse_metrics(self, outputs, batch):
-        pixel_values, labels, answers = batch
-
         """
         Copied from https://github.com/NielsRogge/Transformers-Tutorials/tree/master/Donut
         """
@@ -107,21 +105,23 @@ class DonutPLModule(pl.LightningModule):
             predictions.append(seq)
 
         scores = list()
-        for pred, answer in zip(predictions, answers):
+        for pred, answer in zip(predictions, batch["target_sequence"]):
             pred = re.sub(r"(?:(?<=>) | (?=</s_))", "", pred)
             # NOT NEEDED ANYMORE
             # answer = re.sub(r"<.*?>", "", answer, count=1)
             answer = answer.replace(self.processor.tokenizer.eos_token, "")
-            scores.append(edit_distance(pred, answer) / max(len(pred), len(answer)))
+            score = edit_distance(pred, answer) / max(len(pred), len(answer))
+            scores.append(score)
+            print(f"\nPrediction: \"{pred}\", Answer: \"{answer}\" (score: {score})")
         return scores
 
     def validation_epoch_end(self, validation_step_outputs):
-        print(f"val_acc = {np.mean(validation_step_outputs)}  --------")
-        self.log_dict({"val_acc": np.mean(validation_step_outputs)}, sync_dist=True)
+        print(f"val_metric = {np.mean(validation_step_outputs)}  --------")
+        self.log_dict({"val_metric": np.mean(validation_step_outputs)}, sync_dist=True)
 
     def configure_optimizers(self):
         # TODO add scheduler
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-5)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
         return optimizer
 
 
@@ -281,6 +281,7 @@ class ProcessedDataset:
         encoding = dict(
             pixel_values=pixel_values,
             labels=labels,
+            target_sequence=target_sequence,
             ground_truth=sample["ground_truth"],
         )
         
