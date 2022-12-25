@@ -33,3 +33,4 @@ class CordV2DatasetBuilder:
         # hf_ds = load_dataset("naver-clova-ix/cord-v2")["test"]
         hf_ds = load_from_disk("data/caption")["test"]
         return hf_ds
+j

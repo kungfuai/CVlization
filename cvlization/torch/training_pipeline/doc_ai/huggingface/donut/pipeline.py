@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import logging
+import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 import transformers
@@ -26,9 +27,9 @@ class Donut:
     task_start_token: str = "<s>"
     prompt_end_token: str = None
     sort_json_key: bool = True
-    max_epochs: int = 20
+    max_epochs: int = 100
     accelerator: str = "gpu"
-    devices: int = 1
+    devices: int = 2
     # For debugging
     limit_train_batches = None # 3
     limit_val_batches = None # 3
@@ -46,9 +47,14 @@ class Donut:
         train_dataloader, val_dataloader, newly_added_num = self._create_dataloaders(dataset_builder, processor)
         # newly_added_num: num of newly added tokens
         model = self._create_model(self.pretrained_model_name, newly_added_num, config, processor)
-        pl_model = DonutPLModule(model=model, processor=processor, task=self.task)
+        # TODO: Refactor
+        if False:
+            pl_model = DonutPLModule(model=model, processor=processor, task=self.task)
+        else:
+            checkpoint_path = "lightning_logs/version_3/checkpoints/epoch=99-step=182099.ckpt"
+            pl_model = DonutPLModule.load_from_checkpoint(checkpoint_path, model=model, processor=processor, task=DonutPredictionTask.CAPTION)
         trainer.fit(pl_model, train_dataloader, val_dataloader)
-    
+
     def _create_config(self):
         config = VisionEncoderDecoderConfig.from_pretrained(self.pretrained_model_name)
         config.encoder.image_size = self._image_size
@@ -83,12 +89,14 @@ class Donut:
         model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids([
             self.task_start_token,
         ])[0]
+        # TODO: Reload weights from checkpoint?
         return model
 
     def _create_trainer(self):
         trainer = pl.Trainer(
             accelerator=self.accelerator,
             devices=self.devices,
+            strategy="ddp",
             max_epochs=self.max_epochs,
             limit_train_batches=self.limit_train_batches or 1.0,
             limit_val_batches=self.limit_val_batches or 1.0,

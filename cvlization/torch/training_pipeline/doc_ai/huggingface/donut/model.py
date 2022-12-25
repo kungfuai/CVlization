@@ -20,6 +20,7 @@ class DonutPredictionTask(enum.Enum):
     """
     CLASSIFICATION = "classification"
     PARSE = "parse"
+    CAPTION = "caption"
 
 
 class DonutPLModule(pl.LightningModule):
@@ -65,16 +66,30 @@ class DonutPLModule(pl.LightningModule):
             bad_words_ids=[[processor.tokenizer.unk_token_id]],
             return_dict_in_generate=True,
         )
-        
+
         if self.task == DonutPredictionTask.CLASSIFICATION:
-            scores = self._compute_classification_metrics(outputs, batch)
-            return scores
+            return self._compute_classification_metrics(outputs, batch)
         elif self.task == DonutPredictionTask.PARSE:
-            scores = self._compute_parse_metrics(outputs, batch)
-            return scores
+            return self._compute_parse_metrics(outputs, batch)
+        elif self.task == DonutPredictionTask.CAPTION:
+            return self._compute_caption_metrics(outputs, batch)
         else:
             raise NotImplementedError(f"Task {self.task} is not implemented!")
-    
+
+    def training_epoch_end(self, outputs):
+        loss = torch.stack([x["loss"] for x in outputs]).mean().item()
+        print(f"training_loss_epoch = {loss} --------")
+        self.log_dict({"training_loss_epoch": loss}, sync_dist=True)
+
+    def validation_epoch_end(self, validation_step_outputs):
+        print(f"val_accuracy = {np.mean(validation_step_outputs)}  --------")
+        self.log_dict({"val_accuracy": np.mean(validation_step_outputs)}, sync_dist=True)
+
+    def configure_optimizers(self):
+        # TODO add scheduler
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-5)
+        return optimizer
+
     def _compute_classification_metrics(self, outputs, batch):
         # turn into JSON
         processor = self.processor
@@ -110,19 +125,38 @@ class DonutPLModule(pl.LightningModule):
             # NOT NEEDED ANYMORE
             # answer = re.sub(r"<.*?>", "", answer, count=1)
             answer = answer.replace(self.processor.tokenizer.eos_token, "")
-            score = edit_distance(pred, answer) / max(len(pred), len(answer))
+            score = 1 - edit_distance(pred, answer) / max(len(pred), len(answer))
             scores.append(score)
             print(f"\nPrediction: \"{pred}\", Answer: \"{answer}\" (score: {score})")
         return scores
 
-    def validation_epoch_end(self, validation_step_outputs):
-        print(f"val_metric = {np.mean(validation_step_outputs)}  --------")
-        self.log_dict({"val_metric": np.mean(validation_step_outputs)}, sync_dist=True)
+    def _compute_caption_metrics(self, outputs, batch):
+        """
+        Score by how many words the prediction and answer have in common.
+        """
+        predictions = []
+        for seq in self.processor.tokenizer.batch_decode(outputs.sequences):
+            seq = seq.replace(self.processor.tokenizer.eos_token, "").replace(self.processor.tokenizer.pad_token, "")
+            seq = re.sub(r"<.*?>", "", seq, count=1).strip()  # remove first task start token
+            predictions.append(seq)
 
-    def configure_optimizers(self):
-        # TODO add scheduler
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
-        return optimizer
+        scores = list()
+        for pred, answer in zip(predictions, batch["target_sequence"]):
+            # TODO: What does this regex do? Remove dataset task tokens?
+            pred = re.sub(r"(?:(?<=>) | (?=</s_))", "", pred)
+            answer = answer.replace(self.processor.tokenizer.eos_token, "")
+            # Remove <s_caption>...</s_caption> task tokens
+            pred = pred.replace("<s_caption>", "").replace("</s_caption>")
+            answer = answer.replace("<s_caption>", "").replace("</s_caption>")
+            pred_words, answer_words = set(pred.split()), set(answer.split())
+            # Now score
+            common_words = pred_words.union(answer_words)
+            common_word_total = 2 * len(common_words)
+            total_words = len(pred_words) + len(answer_words)
+            score = common_words_total / total_words
+            scores.append(score)
+            print(f"\nPrediction: \"{pred}\", Answer: \"{answer}\" (score: {score})")
+        return scores
 
 
 class ProcessedDataset:
