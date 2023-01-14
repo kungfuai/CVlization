@@ -13,6 +13,7 @@ services:
     volumes:
       - .:/workspace
       - ~/Datasets:/datasets
+      - ~/.cache:/home/appuser/.cache
     deploy:
       resources:
         reservations:

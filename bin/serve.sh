@@ -2,7 +2,6 @@
 
 : '
 ./bin/serve.sh -n img_caption_service -f examples.doc_ai.huggingface.donut.img_caption.serve:app -n img_caption_service -p 8080
-# FIXME: flags must come after script
 '
 
 # Defaults

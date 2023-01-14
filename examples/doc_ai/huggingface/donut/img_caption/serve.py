@@ -5,7 +5,7 @@ import io
 import PIL
 from fastapi import FastAPI, status, File, UploadFile
 
-from cvlization.lab.flickr import FlickrDatasetBuilder
+from cvlization.lab.conceptual_captions import ConceptualCaptionsDatasetBuilder
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.pipeline import Donut
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.model import DonutPredictionTask
 
@@ -21,11 +21,11 @@ async def _load_pl_model():
     global pl_model
     config = {
         "task": DonutPredictionTask.CAPTION,
-        "max_length": FlickrDatasetBuilder.max_length,
-        "task_start_token": FlickrDatasetBuilder.task_start_token,
-        "image_height": FlickrDatasetBuilder.image_height,
-        "image_width": FlickrDatasetBuilder.image_width,
-        "ignore_id": FlickrDatasetBuilder.ignore_id,
+        "max_length": ConceptualCaptionsDatasetBuilder.max_length,
+        "task_start_token": ConceptualCaptionsDatasetBuilder.task_start_token,
+        "image_height": ConceptualCaptionsDatasetBuilder.image_height,
+        "image_width": ConceptualCaptionsDatasetBuilder.image_width,
+        "ignore_id": ConceptualCaptionsDatasetBuilder.ignore_id,
     }
     pl_model = Donut(**config).eval()
 
