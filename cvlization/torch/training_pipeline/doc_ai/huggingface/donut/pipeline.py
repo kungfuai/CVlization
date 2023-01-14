@@ -141,7 +141,8 @@ class Donut:
 
     def _load_latest_pl_model_or_create(self, model, processor):
         # Auto-find latest checkpoint if exists (should only be 1 checkpoint from latest experiment)
-        checkpoints = list(self._get_latest_experiment_dir().iterdir())
+        checkpoints_dir = self._get_latest_experiment_dir() / "checkpoints"
+        checkpoints = list(checkpoints_dir.iterdir())
         if len(checkpoints) == 0:
             return DonutPLModule(model=model, processor=processor, task=self.task)
         return DonutPLModule.load_from_checkpoint(checkpoints[0], model=model, processor=processor, task=self.task)

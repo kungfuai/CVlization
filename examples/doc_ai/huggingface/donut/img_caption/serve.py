@@ -5,7 +5,7 @@ import io
 import PIL
 from fastapi import FastAPI, status, File, UploadFile
 
-from cvlization.lab.cord_v2 import CordV2DatasetBuilder
+from cvlization.lab.flickr import FlickrDatasetBuilder
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.pipeline import Donut
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.model import DonutPredictionTask
 
@@ -21,11 +21,11 @@ async def _load_pl_model():
     global pl_model
     config = {
         "task": DonutPredictionTask.CAPTION,
-        "max_length": CordV2DatasetBuilder.max_length,
-        "task_start_token": CordV2DatasetBuilder.task_start_token,
-        "image_height": CordV2DatasetBuilder.image_height,
-        "image_width": CordV2DatasetBuilder.image_width,
-        "ignore_id": CordV2DatasetBuilder.ignore_id,
+        "max_length": FlickrDatasetBuilder.max_length,
+        "task_start_token": FlickrDatasetBuilder.task_start_token,
+        "image_height": FlickrDatasetBuilder.image_height,
+        "image_width": FlickrDatasetBuilder.image_width,
+        "ignore_id": FlickrDatasetBuilder.ignore_id,
     }
     pl_model = Donut(**config).eval()
 
@@ -46,7 +46,7 @@ async def predict(file: UploadFile = File(...)):
     start = time.perf_counter()
     prediction = pl_model.predict(image)
     return {
-        "prediction": prediction,
+        "prediction": prediction.replace("<s_caption>", "").replace("</s_caption>", "").strip(),
         "time": {
             "total": time.perf_counter() - start,
         }

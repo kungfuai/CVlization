@@ -1,4 +1,4 @@
-from cvlization.lab.cord_v2 import CordV2DatasetBuilder
+from cvlization.lab.flickr import FlickrDatasetBuilder
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.pipeline import Donut
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.model import DonutPredictionTask
 
@@ -14,17 +14,17 @@ class TrainingSession:
     def run(self):
         dataset_builder = self.create_dataset()
         config = {
-            "task": DonutPredictionTask.PARSE,
-            "max_length": CordV2DatasetBuilder.max_length,
-            "task_start_token": CordV2DatasetBuilder.task_start_token,
-            "image_height": CordV2DatasetBuilder.image_height,
-            "image_width": CordV2DatasetBuilder.image_width,
-            "ignore_id": CordV2DatasetBuilder.ignore_id,
+            "task": DonutPredictionTask.CAPTION,
+            "max_length": FlickrDatasetBuilder.max_length,
+            "task_start_token": FlickrDatasetBuilder.task_start_token,
+            "image_height": FlickrDatasetBuilder.image_height,
+            "image_width": FlickrDatasetBuilder.image_width,
+            "ignore_id": FlickrDatasetBuilder.ignore_id,
         }
         Donut(**config).train(dataset_builder=dataset_builder)
 
     def create_dataset(self):
-        dataset_builder = CordV2DatasetBuilder()
+        dataset_builder = FlickrDatasetBuilder()
         return dataset_builder
 
 

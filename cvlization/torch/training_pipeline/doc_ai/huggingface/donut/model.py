@@ -45,8 +45,8 @@ class DonutPLModule(pl.LightningModule):
         return loss
 
     def predict(self, image: PIL.Image):
-        pixel_values = self.processor(image.convert("RGB"), return_tensors="pt").pixel_values.squeeze
-        predictions = self._predict_from_pixel_values(pixel_values=[pixel_values])
+        pixel_values = self.processor(image.convert("RGB"), return_tensors="pt").pixel_values
+        predictions = self._predict_from_pixel_values(pixel_values=pixel_values)
         return predictions[0]
 
     def validation_step(self, batch, batch_idx, dataset_idx=0):
