@@ -1,5 +1,8 @@
-from dataclasses import dataclass
+from pathlib import Path
 import logging
+from typing import Union
+
+from dataclasses import dataclass
 import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
@@ -29,7 +32,7 @@ class Donut:
     sort_json_key: bool = True
     max_epochs: int = 100
     accelerator: str = "gpu"
-    devices: int = 2
+    devices: int = 1
     # For debugging
     limit_train_batches = None # 3
     limit_val_batches = None # 3
@@ -39,20 +42,26 @@ class Donut:
     
     def fit(self, dataset_builder):
         self.train(dataset_builder)
-    
+
+    def eval(self):
+        config = self._create_config()
+        processor = self._load_latest_processor_or_create()
+        model = self._create_model(self.pretrained_model_name, config, processor)
+        pl_model = self._load_latest_pl_model_or_create(model=model, processor=processor)
+        return pl_model
+
     def train(self, dataset_builder):
         config = self._create_config()
         trainer = self._create_trainer()
         processor = self._create_processor()
         train_dataloader, val_dataloader, newly_added_num = self._create_dataloaders(dataset_builder, processor)
+        # Save the modified processor for use in inference
+        processor_save_dir = Path("lightning_logs") / f"version_{trainer.logger.version}" / "processor"
+        processor_save_dir.mkdir(exist_ok=True, parents=True)
+        processor.save_pretrained(processor_save_dir)
         # newly_added_num: num of newly added tokens
-        model = self._create_model(self.pretrained_model_name, newly_added_num, config, processor)
-        # TODO: Refactor
-        if False:
-            pl_model = DonutPLModule(model=model, processor=processor, task=self.task)
-        else:
-            checkpoint_path = "lightning_logs/version_3/checkpoints/epoch=99-step=182099.ckpt"
-            pl_model = DonutPLModule.load_from_checkpoint(checkpoint_path, model=model, processor=processor, task=DonutPredictionTask.CAPTION)
+        model = self._create_model(self.pretrained_model_name, config, processor)
+        pl_model = self._load_latest_pl_model_or_create(model=model, processor=processor)
         trainer.fit(pl_model, train_dataloader, val_dataloader)
 
     def _create_config(self):
@@ -67,7 +76,7 @@ class Donut:
         processor.feature_extractor.size = self._image_size[::-1] # should be (width, height)
         processor.feature_extractor.do_align_long_axis = False
         return processor
-    
+
     def _process_dataset(self, dataset, processor):
         # prepare the dataset using the Processor
         return ProcessedDataset(
@@ -79,27 +88,26 @@ class Donut:
             prompt_end_token=self.prompt_end_token,
             sort_json_key=self.sort_json_key,
         )
-    
-    def _create_model(self, pretrained_model_name: str, newly_added_num: int, config, processor):
+
+    def _create_model(self, pretrained_model_name: str, config, processor):
         pretrained_model_name = self.pretrained_model_name
         model = VisionEncoderDecoderModel.from_pretrained(pretrained_model_name, config=config)
-        if newly_added_num > 0:
-            model.decoder.resize_token_embeddings(len(processor.tokenizer))
+        model.decoder.resize_token_embeddings(len(processor.tokenizer))
         model.config.pad_token_id = processor.tokenizer.pad_token_id
         model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids([
             self.task_start_token,
         ])[0]
-        # TODO: Reload weights from checkpoint?
         return model
 
     def _create_trainer(self):
         trainer = pl.Trainer(
             accelerator=self.accelerator,
             devices=self.devices,
-            strategy="ddp",
+            # strategy="ddp",
             max_epochs=self.max_epochs,
             limit_train_batches=self.limit_train_batches or 1.0,
             limit_val_batches=self.limit_val_batches or 1.0,
+            accumulate_grad_batches=2,
         )
         return trainer
 
@@ -107,7 +115,37 @@ class Donut:
         train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor)
         val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor)
         newly_added_num = train_dataset.newly_added_num
-        batch_size = 2
+        batch_size = 1
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         return train_dataloader, val_dataloader, newly_added_num
+
+    def _get_latest_experiment_version(self) -> Union[int, None]:
+        experiment_versions = [
+            int(str(exp_dir.name).split("_")[1])
+            for exp_dir in self.llogs.iterdir()
+        ]
+        if len(experiment_versions) == 0:
+            return None
+        return max(experiment_versions)
+
+    def _get_latest_experiment_dir(self) -> Union[Path, None]:
+        latest_version = self._get_latest_experiment_version()
+        return self.llogs / f"version_{latest_version}" if latest_version is not None else None
+
+    def _load_latest_processor_or_create(self):
+        processor_dir = self._get_latest_experiment_dir() / "processor"
+        if processor_dir.exists():
+            return DonutProcessor.from_pretrained(str(processor_dir))
+        return self._create_processor()
+
+    def _load_latest_pl_model_or_create(self, model, processor):
+        # Auto-find latest checkpoint if exists (should only be 1 checkpoint from latest experiment)
+        checkpoints = list(self._get_latest_experiment_dir().iterdir())
+        if len(checkpoints) == 0:
+            return DonutPLModule(model=model, processor=processor, task=self.task)
+        return DonutPLModule.load_from_checkpoint(checkpoints[0], model=model, processor=processor, task=self.task)
+
+    @property
+    def llogs(self):
+        return Path("lightning_logs")

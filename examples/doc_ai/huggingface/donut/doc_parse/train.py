@@ -14,7 +14,7 @@ class TrainingSession:
     def run(self):
         dataset_builder = self.create_dataset()
         config = {
-            "task": DonutPredictionTask.PARSE,
+            "task": DonutPredictionTask.CAPTION,
             "max_length": CordV2DatasetBuilder.max_length,
             "task_start_token": CordV2DatasetBuilder.task_start_token,
             "image_height": CordV2DatasetBuilder.image_height,

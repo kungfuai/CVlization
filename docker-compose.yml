@@ -12,6 +12,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - .:/workspace
+      - ~/Datasets:/datasets
     deploy:
       resources:
         reservations:

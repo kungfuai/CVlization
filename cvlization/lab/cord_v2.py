@@ -9,6 +9,7 @@ from ..data.dataset_builder import Dataset, DatasetProvider
 
 LOGGER = logging.getLogger(__name__)
 
+dataset_path = "/datasets/flickr30k/processed_as_huggingface_for_donutdocai"
 
 @dataclass
 class CordV2DatasetBuilder:
@@ -26,11 +27,10 @@ class CordV2DatasetBuilder:
     
     def training_dataset(self) -> Dataset:
         # hf_ds = load_dataset("naver-clova-ix/cord-v2")["train"]
-        hf_ds = load_from_disk("data/caption")["train"]
+        hf_ds = load_from_disk(dataset_path)["train"]
         return hf_ds
     
     def validation_dataset(self) -> Dataset:
         # hf_ds = load_dataset("naver-clova-ix/cord-v2")["test"]
-        hf_ds = load_from_disk("data/caption")["test"]
+        hf_ds = load_from_disk(dataset_path)["test"]
         return hf_ds
-j

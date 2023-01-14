@@ -8,6 +8,9 @@ tensorflow>=2
 coloredlogs>=15
 scikit-image>=0.16.2
 imgaug==0.4.0
+fastapi
+uvicorn
+python-multipart
 pandas
 mlflow
 tensorflow-addons
