@@ -64,8 +64,11 @@ class ConceptualCaptionsDatasetBuilder:
 
     def load(self):
         dset = load_dataset("conceptual_captions")
+        # About 300k images
+        desired_n_images = 100000
+        subsampled_dset = dset["train"].train_test_split(test_size=desired_n_images / 3e6, shuffle=True)["test"]
+        dset = subsampled_dset.train_test_split(test_size=0.05, shuffle=True)
         print(dset)
-        return
         dset = dset.map(fetch_images, batched=True, batch_size=100, fn_kwargs={"num_threads": self.num_threads})
         self.hf_ds = dset
 
