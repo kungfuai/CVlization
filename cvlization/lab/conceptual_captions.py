@@ -49,7 +49,9 @@ def fetch_images(batch, num_threads, timeout=None, retries=0):
 
 @dataclass
 class ConceptualCaptionsDatasetBuilder:
-    num_threads: int = 20
+    num_threads: int = 40
+    desired_images: int = 100000
+    cache_path: str = "/datasets/conceptual_captions_100k"
     max_length: int = 768
     image_height: int = 500
     image_width: int = 500
@@ -65,11 +67,13 @@ class ConceptualCaptionsDatasetBuilder:
     def load(self):
         dset = load_dataset("conceptual_captions")
         # About 300k images
-        desired_n_images = 100000
-        subsampled_dset = dset["train"].train_test_split(test_size=desired_n_images / 3e6, shuffle=True)["test"]
+        frac = self.desired_images / len(dset["train"])
+        subsampled_dset = dset["train"].train_test_split(test_size=frac, shuffle=True)["test"]
         dset = subsampled_dset.train_test_split(test_size=0.05, shuffle=True)
         print(dset)
-        dset = dset.map(fetch_images, batched=True, batch_size=100, fn_kwargs={"num_threads": self.num_threads})
+        # return
+        dset = dset.map(fetch_images, batched=False, fn_kwargs={"num_threads": self.num_threads})
+        dset.save_to_disk(self.cache_path)
         self.hf_ds = dset
 
     def training_dataset(self) -> Dataset:
