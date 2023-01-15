@@ -63,11 +63,11 @@ class DonutPLModule(pl.LightningModule):
 
     def training_epoch_end(self, outputs):
         loss = torch.stack([x["loss"] for x in outputs]).mean().item()
-        print(f"training_loss_epoch = {loss} --------")
+        LOGGER.info(f"training_loss_epoch = {loss} --------")
         self.log_dict({"training_loss_epoch": loss}, sync_dist=True)
 
     def validation_epoch_end(self, validation_step_outputs):
-        print(f"val_accuracy = {np.mean(validation_step_outputs)}  --------")
+        LOGGER.info(f"val_accuracy = {np.mean(validation_step_outputs)}  --------")
         self.log_dict({"val_accuracy": np.mean(validation_step_outputs)}, sync_dist=True)
 
     def configure_optimizers(self):
@@ -119,9 +119,7 @@ class DonutPLModule(pl.LightningModule):
         scores = []
         for pred, label_token_ids, ground_truth in zip(predictions, labels, ground_truths):
             seq = processor.token2json(pred)
-            # print("seq:", seq)
             gt = ground_truth["gt_parse"]
-            # print(seq.get("class"), gt["class"])
             score = float(seq.get("class") == gt["class"])
             scores.append(score)
         return scores
@@ -138,7 +136,7 @@ class DonutPLModule(pl.LightningModule):
             answer = answer.replace(self.processor.tokenizer.eos_token, "")
             score = 1 - edit_distance(pred, answer) / max(len(pred), len(answer))
             scores.append(score)
-            print(f"\nPrediction: \"{pred}\", Answer: \"{answer}\" (score: {score})")
+            LOGGER.info(f"\nPrediction: \"{pred}\", Answer: \"{answer}\" (score: {score})")
         return scores
 
     def _compute_caption_metrics(self, predictions, batch):
@@ -160,7 +158,7 @@ class DonutPLModule(pl.LightningModule):
             total_words = len(pred_words) + len(answer_words)
             score = common_words_total / total_words
             scores.append(score)
-            print(f"\nPredicted Caption: \"{pred}\", Answer: \"{answer}\" (score: {score})")
+            LOGGER.info(f"\nPredicted Caption: \"{pred}\", Answer: \"{answer}\" (score: {score})")
         return scores
 
 

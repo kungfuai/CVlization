@@ -51,27 +51,28 @@ class Donut:
         return pl_model
 
     def train(self, dataset_builder):
+        LOGGER.warn("WHAT THE HECK????")
         config = self._create_config()
         trainer = self._create_trainer()
-        processor = self._create_processor()
+        processor = self._create_processor() # TODO: Refactor to use cached processor.
+        # newly_added_num: num of newly added tokens
         train_dataloader, val_dataloader, newly_added_num = self._create_dataloaders(dataset_builder, processor)
+        model = self._create_model(self.pretrained_model_name, config, processor)
+        pl_model = self._load_latest_pl_model_or_create(model=model, processor=processor)
         # Save the modified processor for use in inference
+        # (Do this after looking for latest experiment directory because a new one will be created.)
         processor_save_dir = Path("lightning_logs") / f"version_{trainer.logger.version}" / "processor"
         processor_save_dir.mkdir(exist_ok=True, parents=True)
         processor.save_pretrained(processor_save_dir)
-        # newly_added_num: num of newly added tokens
-        model = self._create_model(self.pretrained_model_name, config, processor)
-        pl_model = self._load_latest_pl_model_or_create(model=model, processor=processor)
-        trainer.fit(pl_model, train_dataloader, val_dataloader)
+        # trainer.fit(pl_model, train_dataloader, val_dataloader)
 
     def _create_config(self):
         config = VisionEncoderDecoderConfig.from_pretrained(self.pretrained_model_name)
         config.encoder.image_size = self._image_size
         config.decoder.max_length = self.max_length
         return config
-    
+
     def _create_processor(self):
-        print("transformers", transformers.__version__)
         processor = DonutProcessor.from_pretrained(self.pretrained_model_name)
         processor.feature_extractor.size = self._image_size[::-1] # should be (width, height)
         processor.feature_extractor.do_align_long_axis = False
@@ -124,6 +125,7 @@ class Donut:
         experiment_versions = [
             int(str(exp_dir.name).split("_")[1])
             for exp_dir in self.llogs.iterdir()
+            if str(exp_dir.name).startswith("version_")
         ]
         if len(experiment_versions) == 0:
             return None
@@ -133,19 +135,28 @@ class Donut:
         latest_version = self._get_latest_experiment_version()
         return self.llogs / f"version_{latest_version}" if latest_version is not None else None
 
+    def _get_experiment_subdir(self, subdir_name: str) -> Union[Path, None]:
+        exp_dir = self._get_latest_experiment_dir()
+        subdir = exp_dir / subdir_name if exp_dir is not None else None
+        return subdir if subdir is not None and subdir.exists() else None
+
     def _load_latest_processor_or_create(self):
-        processor_dir = self._get_latest_experiment_dir() / "processor"
-        if processor_dir.exists():
-            return DonutProcessor.from_pretrained(str(processor_dir))
-        return self._create_processor()
+        processor_dir = self._get_experiment_subdir("processor")
+        return DonutProcessor.from_pretrained(str(processor_dir)) \
+            if processor_dir is not None else self._create_processor()
 
     def _load_latest_pl_model_or_create(self, model, processor):
         # Auto-find latest checkpoint if exists (should only be 1 checkpoint from latest experiment)
-        checkpoints_dir = self._get_latest_experiment_dir() / "checkpoints"
-        checkpoints = list(checkpoints_dir.iterdir())
-        if len(checkpoints) == 0:
-            return DonutPLModule(model=model, processor=processor, task=self.task)
-        return DonutPLModule.load_from_checkpoint(checkpoints[0], model=model, processor=processor, task=self.task)
+        # Directory existing implies not empty (UNLESS first epoch didn't finish, in which case, delete the directory)
+        # TODO: Could be more robust
+        checkpoints_dir = self._get_experiment_subdir("checkpoints")
+        checkpoints = list(checkpoints_dir.iterdir()) if checkpoints_dir is not None else []
+        if len(checkpoints) > 0:
+            checkpoint = checkpoints[0] # Assume only 1 checkpoint saved.
+            LOGGER.info(f"Found model checkpoint at \"{checkpoint}\".")
+            return DonutPLModule.load_from_checkpoint(checkpoint, model=model, processor=processor, task=self.task)
+        LOGGER.info("Could not find model checkpoint.")
+        return DonutPLModule(model=model, processor=processor, task=self.task)
 
     @property
     def llogs(self):

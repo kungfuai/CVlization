@@ -21,7 +21,7 @@ class TrainingSession:
             "image_width": ConceptualCaptionsDatasetBuilder.image_width,
             "ignore_id": ConceptualCaptionsDatasetBuilder.ignore_id,
         }
-        # Donut(**config).train(dataset_builder=dataset_builder)
+        Donut(**config).train(dataset_builder=dataset_builder)
 
     def create_dataset(self):
         dataset_builder = ConceptualCaptionsDatasetBuilder()

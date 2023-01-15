@@ -6,13 +6,20 @@
 
 # Defaults
 name="trainer"
+detach=0
 
-while getopts n:s: flag
+while getopts n:s:d flag
 do
     case "${flag}" in
         n) name=${OPTARG};;
         s) script=${OPTARG};;
+        d) detach=1
     esac
 done
 
-docker-compose run --rm --name $name app python -u -m $script
+if [ $detach -eq 1 ]
+  then
+    docker-compose run -d --name $name app python -u -m $script
+else
+    docker-compose run --rm --name $name app python -u -m $script
+fi
