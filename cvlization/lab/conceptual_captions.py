@@ -24,7 +24,7 @@ USER_AGENT = get_datasets_user_agent()
 
 class Util:
     @staticmethod
-    def fetch_image(image_url, timeout=None, retries=0):
+    def download_image(image_url, image_path, timeout=None, retries=0):
         for _ in range(retries + 1):
             try:
                 request = urllib.request.Request(
@@ -34,15 +34,18 @@ class Util:
                 )
                 with urllib.request.urlopen(request, timeout=timeout) as req:
                     image = PIL.Image.open(io.BytesIO(req.read()))
+                    image = image.convert("RGB")
+                    image.save(image_path, "png", optimize=True)
+                    image.close()
                 break
             except Exception:
-                image = None
-        return image
+                return False
+        return True
 
 
 @dataclass
 class ConceptualCaptionsDatasetBuilder:
-    num_proc: int = 32
+    num_proc: int = 16
     desired_images: int = 100000
     cache_path: str = "/datasets/conceptual_captions_100k"
     max_length: int = 768
@@ -65,11 +68,12 @@ class ConceptualCaptionsDatasetBuilder:
             dset = subsampled_dset.train_test_split(test_size=0.05, shuffle=True)
             print("Creating dataset:", dset)
             # return
-            dset = dset.map(self.fetch_image_and_format, num_proc=self.num_proc) \
-                .filter(lambda x: x["image"] != None) \
-                .cast_column("image", datasets.Image())
-            print("Saving to disk")
-            dset.save_to_disk(self.cache_path)
+            dset = dset.map(self.fetch_image_and_format, num_proc=self.num_proc, with_indices=True) \
+                .filter(lambda x: x["image_path"] != None) \
+                .cast_column("image_path", datasets.Image(decode=False))
+            # Casting as Image() copies images into .arrow files (as opposed to saving paths as strings).
+            # TODO: is there a more efficient way?
+            dset.save_to_disk(self.cache_path, num_proc=self.num_proc)
         else:
             dset = datasets.load_from_disk(self.cache_path)
         self.hf_ds = dset
@@ -80,13 +84,21 @@ class ConceptualCaptionsDatasetBuilder:
     def validation_dataset(self) -> Dataset:
         return self.hf_ds["test"]
 
-    def fetch_image_and_format(self, sample):
-        pil_image = Util.fetch_image(sample["image_url"], timeout=5, retries=1)
-        sample["image"] = pil_image.resize((self.image_width, self.image_height)) \
-            if pil_image is not None else None
+    def fetch_image_and_format(self, sample, idx):
+        img_dir = Path(self.cache_path) / "img"
+        img_dir.mkdir(exist_ok=True, parents=True)
+        img_path = img_dir / f"{idx}.png"
+
+        is_success = img_path.exists() \
+            or Util.download_image(sample["image_url"], str(img_path), timeout=5, retries=1)
+
+        sample["image_path"] = str(img_path) if is_success else None
+
+        # Format label for donut
         sample["ground_truth"] = json.dumps({
             "gt_parse": {
                 "caption": sample["caption"],
             }
         })
+
         return sample

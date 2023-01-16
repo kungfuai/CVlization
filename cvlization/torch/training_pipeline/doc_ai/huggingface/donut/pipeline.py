@@ -51,7 +51,6 @@ class Donut:
         return pl_model
 
     def train(self, dataset_builder):
-        LOGGER.warn("WHAT THE HECK????")
         config = self._create_config()
         trainer = self._create_trainer()
         processor = self._create_processor() # TODO: Refactor to use cached processor.
@@ -64,7 +63,7 @@ class Donut:
         processor_save_dir = Path("lightning_logs") / f"version_{trainer.logger.version}" / "processor"
         processor_save_dir.mkdir(exist_ok=True, parents=True)
         processor.save_pretrained(processor_save_dir)
-        # trainer.fit(pl_model, train_dataloader, val_dataloader)
+        trainer.fit(pl_model, train_dataloader, val_dataloader)
 
     def _create_config(self):
         config = VisionEncoderDecoderConfig.from_pretrained(self.pretrained_model_name)

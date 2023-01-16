@@ -1,3 +1,5 @@
+import random
+
 from cvlization.lab.conceptual_captions import ConceptualCaptionsDatasetBuilder
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.pipeline import Donut
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.model import DonutPredictionTask
