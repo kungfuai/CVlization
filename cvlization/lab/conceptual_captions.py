@@ -4,6 +4,7 @@ A huggingface interface for Google's Conceptual Captions dataset.
 
 from pathlib import Path
 import json
+import os
 from dataclasses import dataclass
 import logging
 import io
@@ -45,8 +46,9 @@ class Util:
 
 @dataclass
 class ConceptualCaptionsDatasetBuilder:
-    num_proc: int = 16
-    desired_images: int = 100000
+    # Networking seems to be the bottleneck, not CPU. Still, don't want timeouts.
+    num_proc: int = (os.cpu_count() * 3) // 2
+    desired_images: int = 10000
     cache_path: str = "/datasets/conceptual_captions_100k"
     max_length: int = 768
     image_height: int = 500
@@ -69,10 +71,16 @@ class ConceptualCaptionsDatasetBuilder:
             print("Creating dataset:", dset)
             # return
             dset = dset.map(self.fetch_image_and_format, num_proc=self.num_proc, with_indices=True) \
-                .filter(lambda x: x["image_path"] != None) \
-                .cast_column("image_path", datasets.Image(decode=False))
-            # Casting as Image() copies images into .arrow files (as opposed to saving paths as strings).
-            # TODO: is there a more efficient way?
+                .filter(lambda x: x["image"] != None) \
+                .cast_column("image", datasets.Image(decode=True))
+            """
+            My understanding of saving img file to disk (setting `["image"] = <path>`) then using `Image(decode=True)`
+            as opposed to downloading the file to `["image"] = PIL.Image()`
+            is, based on observation, that writing downloaded PIL images DIRECTLY to the dataset object
+            keeps every image in RAM, crashing the program, whereas `Image(decode=True)` somehow
+            plays nicely with RAM usage.
+            This could be wrong, in which case writing all the images to disk is a waste of time and disk.
+            """
             dset.save_to_disk(self.cache_path, num_proc=self.num_proc)
         else:
             dset = datasets.load_from_disk(self.cache_path)
@@ -92,7 +100,7 @@ class ConceptualCaptionsDatasetBuilder:
         is_success = img_path.exists() \
             or Util.download_image(sample["image_url"], str(img_path), timeout=5, retries=1)
 
-        sample["image_path"] = str(img_path) if is_success else None
+        sample["image"] = str(img_path) if is_success else None
 
         # Format label for donut
         sample["ground_truth"] = json.dumps({
