@@ -25,7 +25,7 @@ USER_AGENT = get_datasets_user_agent()
 
 class Util:
     @staticmethod
-    def download_image(image_url, image_path, timeout=None, retries=0):
+    def download_image(image_url, image_path, resize=None, timeout=None, retries=0):
         for _ in range(retries + 1):
             try:
                 request = urllib.request.Request(
@@ -35,6 +35,8 @@ class Util:
                 )
                 with urllib.request.urlopen(request, timeout=timeout) as req:
                     image = PIL.Image.open(io.BytesIO(req.read()))
+                    if resize is not None:
+                        image = image.resize(resize)
                     image = image.convert("RGB")
                     image.save(image_path, "png", optimize=True)
                     image.close()
@@ -46,9 +48,10 @@ class Util:
 
 @dataclass
 class ConceptualCaptionsDatasetBuilder:
-    # Networking seems to be the bottleneck, not CPU. Still, don't want timeouts.
-    num_proc: int = (os.cpu_count() * 3) // 2
-    desired_images: int = 10000
+    # Networking seems to be the bottleneck, not CPU. Still want avoid timeouts though.
+    # Image size effects CPU requirements b/c of conversion, saving & loading.
+    num_proc: int = os.cpu_count() * 2
+    desired_images: int = 100000
     cache_path: str = "/datasets/conceptual_captions_100k"
     max_length: int = 768
     image_height: int = 500
@@ -63,13 +66,13 @@ class ConceptualCaptionsDatasetBuilder:
         return DatasetProvider.HUGGINGFACE
 
     def load(self):
-        if not Path(self.cache_path).exists():
+        if True or not Path(self.cache_path).exists():
             dset = datasets.load_dataset("conceptual_captions")
             frac = self.desired_images / len(dset["train"])
-            subsampled_dset = dset["train"].train_test_split(test_size=frac, shuffle=True)["test"]
-            dset = subsampled_dset.train_test_split(test_size=0.05, shuffle=True)
+            shuffled_images = dset["train"].shuffle(seed=0)
+            frac_images = shuffled_images.train_test_split(test_size=frac, shuffle=False)["test"]
+            dset = frac_images.train_test_split(test_size=0.05, shuffle=False)
             print("Creating dataset:", dset)
-            # return
             dset = dset.map(self.fetch_image_and_format, num_proc=self.num_proc, with_indices=True) \
                 .filter(lambda x: x["image"] != None) \
                 .cast_column("image", datasets.Image(decode=True))
@@ -98,7 +101,11 @@ class ConceptualCaptionsDatasetBuilder:
         img_path = img_dir / f"{idx}.png"
 
         is_success = img_path.exists() \
-            or Util.download_image(sample["image_url"], str(img_path), timeout=5, retries=1)
+            or Util.download_image(
+                sample["image_url"],
+                str(img_path),
+                resize=(self.image_width, self.image_height),
+                timeout=5, retries=1)
 
         sample["image"] = str(img_path) if is_success else None
 
