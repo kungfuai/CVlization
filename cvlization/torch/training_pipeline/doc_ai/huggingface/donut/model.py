@@ -189,6 +189,7 @@ class ProcessedDataset:
         task_start_token: str = "<s>",
         prompt_end_token: str = None,
         sort_json_key: bool = True,
+        initialize_processor: bool = True,
     ):
         super().__init__()
 
@@ -199,35 +200,17 @@ class ProcessedDataset:
         self.task_start_token = task_start_token
         self.prompt_end_token = prompt_end_token if prompt_end_token else task_start_token
         self.sort_json_key = sort_json_key
-        self.newly_added_num = 0
 
         self.dataset = source_dataset
         self.dataset_length = len(self.dataset)
 
-        self.additional_tokens = []
-        self.gt_token_sequences = []
-        for sample in self.dataset:
-            ground_truth = json.loads(sample["ground_truth"])
-            if "gt_parses" in ground_truth:  # when multiple ground truths are available, e.g., docvqa
-                assert isinstance(ground_truth["gt_parses"], list)
-                gt_jsons = ground_truth["gt_parses"]
-            else:
-                assert "gt_parse" in ground_truth and isinstance(ground_truth["gt_parse"], dict)
-                gt_jsons = [ground_truth["gt_parse"]]
+        if initialize_processor:
+            """
+            Process all dataset samples and add tokens to processor.tokenizer.
+            Unnecessary if already performed and saved to disk.
+            """
+            self._initialize_processor()
 
-            self.gt_token_sequences.append(
-                [
-                    self.json2token(
-                        gt_json,
-                        update_special_tokens_for_json_key=self.split == "train",
-                        sort_json_key=self.sort_json_key,
-                    )
-                    + processor.tokenizer.eos_token
-                    for gt_json in gt_jsons  # load json from list of json
-                ]
-            )
-
-        self.add_tokens([self.task_start_token, self.prompt_end_token] + (self.additional_tokens or []))
         self.prompt_end_token_id = processor.tokenizer.convert_tokens_to_ids(self.prompt_end_token)
 
     def json2token(self,
@@ -264,6 +247,11 @@ class ProcessedDataset:
             obj = str(obj)
             obj = f"<{obj}/>" # for categorical special tokens
             if self.add_tokens([obj]) > 0:
+                """
+                If processor was loaded from disk (instead of initialized using dataset),
+                `self.additional_tokens` won't exist,
+                and no new tokens should be added [during training].
+                """
                 self.additional_tokens.append(obj)
             return obj
         else:
@@ -276,7 +264,6 @@ class ProcessedDataset:
         """
         processor = self.processor
         added_num = processor.tokenizer.add_tokens(list_of_tokens)
-        self.newly_added_num += added_num
         if added_num > 0:
             LOGGER.info(f"Added {added_num} tokens to tokenizer. Total tokens: {len(processor.tokenizer)}")
         return added_num
@@ -301,7 +288,8 @@ class ProcessedDataset:
         pixel_values = pixel_values.squeeze()
 
         # labels, which are the input ids of the target sequence
-        target_sequence = random.choice(self.gt_token_sequences[idx])  # can be more than one, e.g., DocVQA Task 1
+        gt_token_sequences = self._get_ground_truth_token_sequences(sample)
+        target_sequence = random.choice(gt_token_sequences)  # can be more than one, e.g., DocVQA Task 1
         input_ids = processor.tokenizer(
             target_sequence,
             add_special_tokens=False,
@@ -323,3 +311,31 @@ class ProcessedDataset:
         )
         
         return encoding
+
+    def _initialize_processor(self):
+        self.additional_tokens = []
+        for sample in self.dataset:
+            self._get_ground_truth_token_sequences(sample)
+        self.add_tokens([self.task_start_token, self.prompt_end_token] + (self.additional_tokens or []))
+
+    def _get_ground_truth_token_sequences(self, sample):
+        """
+        Get possible ground truth token sequences for a given sample index.
+        """
+        ground_truth = json.loads(sample["ground_truth"])
+        if "gt_parses" in ground_truth:  # when multiple ground truths are available, e.g., docvqa
+            assert isinstance(ground_truth["gt_parses"], list)
+            gt_jsons = ground_truth["gt_parses"]
+        else:
+            assert "gt_parse" in ground_truth and isinstance(ground_truth["gt_parse"], dict)
+            gt_jsons = [ground_truth["gt_parse"]]
+
+        return [
+            self.json2token(
+                gt_json,
+                update_special_tokens_for_json_key=self.split == "train",
+                sort_json_key=self.sort_json_key,
+            )
+            + processor.tokenizer.eos_token
+            for gt_json in gt_jsons  # load json from list of json
+        ]

@@ -53,11 +53,10 @@ class Donut:
     def train(self, dataset_builder):
         config = self._create_config()
         trainer = self._create_trainer()
-        processor = self._create_processor() # TODO: Refactor to use cached processor.
-        # newly_added_num: num of newly added tokens
-        train_dataloader, val_dataloader, newly_added_num = self._create_dataloaders(dataset_builder, processor)
+        is_loaded, processor = self._load_latest_processor_or_create()
+        train_dataloader, val_dataloader = self._create_dataloaders(dataset_builder, processor, initialize_processor=(not is_loaded))
         model = self._create_model(self.pretrained_model_name, config, processor)
-        pl_model = self._load_latest_pl_model_or_create(model=model, processor=processor)
+        is_loaded, pl_model = self._load_latest_pl_model_or_create(model=model, processor=processor)
         # Save the modified processor for use in inference
         # (Do this after looking for latest experiment directory because a new one will be created.)
         processor_save_dir = Path("lightning_logs") / f"version_{trainer.logger.version}" / "processor"
@@ -114,11 +113,10 @@ class Donut:
     def _create_dataloaders(self, dataset_builder, processor):
         train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor)
         val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor)
-        newly_added_num = train_dataset.newly_added_num
         batch_size = 1
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-        return train_dataloader, val_dataloader, newly_added_num
+        return train_dataloader, val_dataloader
 
     def _get_latest_experiment_version(self) -> Union[int, None]:
         experiment_versions = [
@@ -141,8 +139,11 @@ class Donut:
 
     def _load_latest_processor_or_create(self):
         processor_dir = self._get_experiment_subdir("processor")
-        return DonutProcessor.from_pretrained(str(processor_dir)) \
-            if processor_dir is not None else self._create_processor()
+        if processor_dir is not None:
+            LOGGER.info(f"Found saved processor at \"{processor_dir}\".")
+            return True, DonutProcessor.from_pretrained(str(processor_dir))
+        LOGGER.info("Did not find saved processor.")
+        return False, self._create_processor()
 
     def _load_latest_pl_model_or_create(self, model, processor):
         # Auto-find latest checkpoint if exists (should only be 1 checkpoint from latest experiment)
@@ -153,9 +154,9 @@ class Donut:
         if len(checkpoints) > 0:
             checkpoint = checkpoints[0] # Assume only 1 checkpoint saved.
             LOGGER.info(f"Found model checkpoint at \"{checkpoint}\".")
-            return DonutPLModule.load_from_checkpoint(checkpoint, model=model, processor=processor, task=self.task)
+            return True, DonutPLModule.load_from_checkpoint(checkpoint, model=model, processor=processor, task=self.task)
         LOGGER.info("Could not find model checkpoint.")
-        return DonutPLModule(model=model, processor=processor, task=self.task)
+        return False, DonutPLModule(model=model, processor=processor, task=self.task)
 
     @property
     def llogs(self):
