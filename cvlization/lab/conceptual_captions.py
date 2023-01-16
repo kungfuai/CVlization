@@ -66,7 +66,7 @@ class ConceptualCaptionsDatasetBuilder:
         return DatasetProvider.HUGGINGFACE
 
     def load(self):
-        if True or not Path(self.cache_path).exists():
+        if not Path(self.cache_path).exists():
             dset = datasets.load_dataset("conceptual_captions")
             frac = self.desired_images / len(dset["train"])
             shuffled_images = dset["train"].shuffle(seed=0)
