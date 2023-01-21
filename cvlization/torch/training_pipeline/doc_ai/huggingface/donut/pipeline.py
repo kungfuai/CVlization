@@ -45,9 +45,9 @@ class Donut:
 
     def eval(self):
         config = self._create_config()
-        processor = self._load_latest_processor_or_create()
+        is_loaded, processor = self._load_latest_processor_or_create()
         model = self._create_model(self.pretrained_model_name, config, processor)
-        pl_model = self._load_latest_pl_model_or_create(model=model, processor=processor)
+        is_loaded, pl_model = self._load_latest_pl_model_or_create(model=model, processor=processor)
         return pl_model
 
     def train(self, dataset_builder):
