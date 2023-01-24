@@ -336,6 +336,6 @@ class ProcessedDataset:
                 update_special_tokens_for_json_key=self.split == "train",
                 sort_json_key=self.sort_json_key,
             )
-            + processor.tokenizer.eos_token
+            + self.processor.tokenizer.eos_token
             for gt_json in gt_jsons  # load json from list of json
         ]

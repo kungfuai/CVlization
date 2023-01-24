@@ -76,11 +76,12 @@ class Donut:
         processor.feature_extractor.do_align_long_axis = False
         return processor
 
-    def _process_dataset(self, dataset, processor):
+    def _process_dataset(self, dataset, processor, initialize_processor):
         # prepare the dataset using the Processor
         return ProcessedDataset(
             source_dataset=dataset,
             processor=processor,
+            initialize_processor=initialize_processor,
             max_length=self.max_length,
             ignore_id=self.ignore_id,
             task_start_token=self.task_start_token,
@@ -110,9 +111,9 @@ class Donut:
         )
         return trainer
 
-    def _create_dataloaders(self, dataset_builder, processor):
-        train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor)
-        val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor)
+    def _create_dataloaders(self, dataset_builder, processor, initialize_processor):
+        train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor, initialize_processor)
+        val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor, initialize_processor)
         batch_size = 1
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
