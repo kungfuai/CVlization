@@ -20,6 +20,7 @@ class TrainingSession:
             "image_height": ConceptualCaptionsForDonutDatasetBuilder.image_height,
             "image_width": ConceptualCaptionsForDonutDatasetBuilder.image_width,
             "ignore_id": ConceptualCaptionsForDonutDatasetBuilder.ignore_id,
+            "batch_size": ConceptualCaptionsForDonutDatasetBuilder.batch_size,
         }
         Donut(**config).train(dataset_builder=dataset_builder)
 

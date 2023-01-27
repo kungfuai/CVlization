@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 import logging
 import io
+import json
 import urllib
 import PIL.Image
 
@@ -30,6 +31,7 @@ class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
     # Image size effects CPU requirements b/c of conversion, saving & loading.
     num_proc: int = os.cpu_count() * 2
     desired_images: int = 100
+    batch_size: int = 1
     max_length: int = 768
     image_height: int = 500
     image_width: int = 500
@@ -56,6 +58,7 @@ class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
         self.dataset = PostgresImageIterable(
             db_conn_info=self.postgres_connection_info,
             dataset_name="conceptual_captions",
+            batch_size=self.batch_size,
         )
 
         if not self.dataset.check_exists():
@@ -88,6 +91,10 @@ class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
         which streams existing & newly added samples.
         """
         return self
+        return datasets.load_from_disk("/datasets/conceptual_captions_100k")["test"]
+
+    def is_iterable(self):
+        return True
 
     def __iter__(self):
         self._iter = iter(self.dataset)
@@ -105,11 +112,11 @@ class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
         samples = [
             {
                 "image": img,
-                "ground_truth": {
+                "ground_truth": json.dumps({
                     "gt_parse": {
                         "caption": meta["caption"],
                     },
-                } if "caption" in meta else None,
+                }) if "caption" in meta else None,
             }
             for img, meta in batch
         ]

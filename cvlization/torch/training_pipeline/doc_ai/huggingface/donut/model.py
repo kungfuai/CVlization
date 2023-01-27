@@ -56,7 +56,7 @@ class DonutPLModule(pl.LightningModule):
             self.log_dict({"train_loss": loss}, sync_dist=True, on_step=True, prog_bar=True)
         else:
             # FIXME delete or use logger
-            print(f"loss of {loss.item()} for unlabeled sample")
+            print(f"loss of {loss.item()} for unlabeled sample (prediction: {text_predictions[0]})")
         return loss
 
     def predict(self, image: PIL.Image):
@@ -66,6 +66,8 @@ class DonutPLModule(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx, dataset_idx=0):
         token_predictions, text_predictions = self._predict_from_pixel_values(pixel_values=batch["pixel_values"])
+
+        return 0
 
         if self.task == DonutPredictionTask.CLASSIFICATION:
             return self._compute_classification_metrics(text_predictions, batch)
@@ -205,6 +207,7 @@ class ProcessedDataset(IterableDataset):
         prompt_end_token: str = None,
         sort_json_key: bool = True,
         initialize_processor: bool = True,
+        max_iterations: int = 100,
     ):
         super().__init__()
 
@@ -215,6 +218,7 @@ class ProcessedDataset(IterableDataset):
         self.task_start_token = task_start_token
         self.prompt_end_token = prompt_end_token if prompt_end_token else task_start_token
         self.sort_json_key = sort_json_key
+        self.max_iterations = max_iterations
 
         self.dataset = source_dataset
         if hasattr(self.dataset, '__len__'):
@@ -294,9 +298,13 @@ class ProcessedDataset(IterableDataset):
             self._idx = 0
         else:
             self._iter = iter(self.dataset)
+        self._iterations = 0
         return self
 
     def __next__(self) -> dict:
+        self._iterations += 1
+        if self._iterations > self.max_iterations:
+            raise StopIteration
         if self.dataset_length > 0:
             return self._get_next_mapstyle()
         return self._get_next_iterstyle()
@@ -348,10 +356,15 @@ class ProcessedDataset(IterableDataset):
         Get next batch.
         """
         batch = next(self._iter)
-        return [
-            self._encode_sample(sample)
-            for sample in batch
-        ]
+        batch = [self._encode_sample(sample) for sample in batch]
+        # Convert from list(dict()) to dict(list())
+        batch = {
+            key: [sample[key] for sample in batch]
+            for key in batch[0].keys()
+        }
+        batch["pixel_values"] = torch.stack(batch["pixel_values"])
+        batch["labels"] = torch.stack(batch["labels"]) if batch["labels"][0] is not None else None
+        return batch
 
     def _encode_sample(self, sample):
         """
@@ -385,7 +398,8 @@ class ProcessedDataset(IterableDataset):
             labels[labels == processor.tokenizer.pad_token_id] = self.ignore_id  # model doesn't need to predict pad token
             # labels[: torch.nonzero(labels == self.prompt_end_token_id).sum() + 1] = self.ignore_id  # model doesn't need to predict prompt (for VQA)
         else:
-            labels=None
+            labels = None
+            target_sequence = None
 
         encoding = dict(
             pixel_values=pixel_values,

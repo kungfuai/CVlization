@@ -26,6 +26,7 @@ class Donut:
     # image_size = [2560, 1920]  # smaller image size has lower accuracy, though training is faster
     image_height: int = 1024
     image_width: int = 768
+    batch_size: int = 1
     ignore_id: int = -100
     task_start_token: str = "<s>"
     prompt_end_token: str = None
@@ -76,7 +77,7 @@ class Donut:
         processor.feature_extractor.do_align_long_axis = False
         return processor
 
-    def _process_dataset(self, dataset, processor, initialize_processor):
+    def _process_dataset(self, dataset, processor, initialize_processor, max_iterations):
         # prepare the dataset using the Processor
         return ProcessedDataset(
             source_dataset=dataset,
@@ -87,6 +88,7 @@ class Donut:
             task_start_token=self.task_start_token,
             prompt_end_token=self.prompt_end_token,
             sort_json_key=self.sort_json_key,
+            max_iterations=max_iterations,
         )
 
     def _create_model(self, pretrained_model_name: str, config, processor):
@@ -112,11 +114,13 @@ class Donut:
         return trainer
 
     def _create_dataloaders(self, dataset_builder, processor, initialize_processor):
-        train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor, initialize_processor)
-        val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor, initialize_processor)
-        batch_size = 1
-        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+        train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor, initialize_processor, max_iterations=100)
+        val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor, initialize_processor, max_iterations=1)
+        if dataset_builder.is_iterable():
+            # Datasets will perform batching
+            return train_dataset, val_dataset
+        train_dataloader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=False)
+        val_dataloader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
         return train_dataloader, val_dataloader
 
     def _get_latest_experiment_version(self) -> Union[int, None]:
