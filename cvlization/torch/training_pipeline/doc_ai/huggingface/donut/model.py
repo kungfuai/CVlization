@@ -9,6 +9,7 @@ import random
 import re
 from typing import Any, List
 import torch
+from torch.utils.data import IterableDataset
 import pytorch_lightning as pl
 from nltk import edit_distance
 
@@ -39,25 +40,39 @@ class DonutPLModule(pl.LightningModule):
         pixel_values = batch["pixel_values"]
         labels = batch["labels"]
 
+        is_train = True
+        if labels is None:
+            """
+            Unseen/unlabeled example. We want loss of zero,
+            so labels should be the prediction.
+            """
+            is_train = False
+            token_predictions, text_predictions = self._predict_from_pixel_values(pixel_values=pixel_values)
+            labels = token_predictions
+
         outputs = model(pixel_values=pixel_values, labels=labels)
         loss = outputs.loss
-        self.log_dict({"train_loss": loss}, sync_dist=True, on_step=True, prog_bar=True)
+        if is_train:
+            self.log_dict({"train_loss": loss}, sync_dist=True, on_step=True, prog_bar=True)
+        else:
+            # FIXME delete or use logger
+            print(f"loss of {loss.item()} for unlabeled sample")
         return loss
 
     def predict(self, image: PIL.Image):
         pixel_values = self.processor(image.convert("RGB"), return_tensors="pt").pixel_values
-        predictions = self._predict_from_pixel_values(pixel_values=pixel_values)
-        return predictions[0]
+        token_predictions, text_predictions = self._predict_from_pixel_values(pixel_values=pixel_values)
+        return text_predictions[0]
 
     def validation_step(self, batch, batch_idx, dataset_idx=0):
-        predictions = self._predict_from_pixel_values(pixel_values=batch["pixel_values"])
+        token_predictions, text_predictions = self._predict_from_pixel_values(pixel_values=batch["pixel_values"])
 
         if self.task == DonutPredictionTask.CLASSIFICATION:
-            return self._compute_classification_metrics(predictions, batch)
+            return self._compute_classification_metrics(text_predictions, batch)
         elif self.task == DonutPredictionTask.PARSE:
-            return self._compute_parse_metrics(predictions, batch)
+            return self._compute_parse_metrics(text_predictions, batch)
         elif self.task == DonutPredictionTask.CAPTION:
-            return self._compute_caption_metrics(predictions, batch)
+            return self._compute_caption_metrics(text_predictions, batch)
         else:
             raise NotImplementedError(f"Task {self.task} is not implemented!")
 
@@ -106,7 +121,7 @@ class DonutPLModule(pl.LightningModule):
             seq = re.sub(r"<.*?>", "", seq, count=1).strip()  # remove first task start token
             predictions.append(seq)
 
-        return predictions
+        return outputs.sequences, predictions
 
     def _compute_classification_metrics(self, predictions, batch):
         """
@@ -162,7 +177,7 @@ class DonutPLModule(pl.LightningModule):
         return scores
 
 
-class ProcessedDataset:
+class ProcessedDataset(IterableDataset):
     # TODO: refactor this as a DatasetAdaptor (function that takes a dataset and returns a dataset)
     """
     ProcessedDataset which is saved in huggingface datasets format. (see details in https://huggingface.co/docs/datasets)
@@ -202,7 +217,10 @@ class ProcessedDataset:
         self.sort_json_key = sort_json_key
 
         self.dataset = source_dataset
-        self.dataset_length = len(self.dataset)
+        if hasattr(self.dataset, '__len__'):
+            self.dataset_length = len(self.dataset)
+        else:
+            self.dataset_length = 0 # Iterable
 
         if initialize_processor:
             """
@@ -268,54 +286,32 @@ class ProcessedDataset:
             LOGGER.info(f"Added {added_num} tokens to tokenizer. Total tokens: {len(processor.tokenizer)}")
         return added_num
 
-    def __len__(self) -> int:
-        return self.dataset_length
+    # def __len__(self) -> int:
+    #     return self.dataset_length
 
-    def __getitem__(self, idx: int) -> dict:
-        """
-        Load image from image_path of given dataset_path and convert into input_tensor and labels
-        Convert gt data into input_ids (tokenized string)
-        Returns:
-            input_tensor : preprocessed image
-            input_ids : tokenized gt_data
-            labels : masked labels (model doesn't need to predict prompt and pad token)
-        """
-        processor = self.processor
-        sample = self.dataset[idx]
+    def __iter__(self):
+        if self.dataset_length > 0:
+            self._idx = 0
+        else:
+            self._iter = iter(self.dataset)
+        return self
 
-        # pixel values (we remove the batch dimension)
-        pixel_values = processor(sample["image"].convert("RGB"), random_padding=self.split == "train", return_tensors="pt").pixel_values
-        pixel_values = pixel_values.squeeze()
-
-        # labels, which are the input ids of the target sequence
-        gt_token_sequences = self._get_ground_truth_token_sequences(sample)
-        target_sequence = random.choice(gt_token_sequences)  # can be more than one, e.g., DocVQA Task 1
-        input_ids = processor.tokenizer(
-            target_sequence,
-            add_special_tokens=False,
-            max_length=self.max_length,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        )["input_ids"].squeeze(0)
-
-        labels = input_ids.clone()
-        labels[labels == processor.tokenizer.pad_token_id] = self.ignore_id  # model doesn't need to predict pad token
-        # labels[: torch.nonzero(labels == self.prompt_end_token_id).sum() + 1] = self.ignore_id  # model doesn't need to predict prompt (for VQA)
-        
-        encoding = dict(
-            pixel_values=pixel_values,
-            labels=labels,
-            target_sequence=target_sequence,
-            ground_truth=sample["ground_truth"],
-        )
-        
-        return encoding
+    def __next__(self) -> dict:
+        if self.dataset_length > 0:
+            return self._get_next_mapstyle()
+        return self._get_next_iterstyle()
 
     def _initialize_processor(self):
         self.additional_tokens = []
+        count = 0
         for sample in self.dataset:
             self._get_ground_truth_token_sequences(sample)
+            count += 1
+            if count >= 100:
+                """
+                Shouldn't need more than 100 samples to learn about all the tokens needed.
+                """
+                break
         self.add_tokens([self.task_start_token, self.prompt_end_token] + (self.additional_tokens or []))
 
     def _get_ground_truth_token_sequences(self, sample):
@@ -339,3 +335,63 @@ class ProcessedDataset:
             + self.processor.tokenizer.eos_token
             for gt_json in gt_jsons  # load json from list of json
         ]
+
+    def _get_next_mapstyle(self):
+        """
+        Get next single sample.
+        """
+        sample = self.dataset[self._idx]
+        return self._encode_sample(sample)
+
+    def _get_next_iterstyle(self):
+        """
+        Get next batch.
+        """
+        batch = next(self._iter)
+        return [
+            self._encode_sample(sample)
+            for sample in batch
+        ]
+
+    def _encode_sample(self, sample):
+        """
+        Load image from image_path of given dataset_path and convert into input_tensor and labels
+        Convert gt data into input_ids (tokenized string)
+        Returns:
+            input_tensor : preprocessed image
+            input_ids : tokenized gt_data
+            labels : masked labels (model doesn't need to predict prompt and pad token)
+        """
+        processor = self.processor
+
+        # pixel values (we remove the batch dimension)
+        pixel_values = processor(sample["image"].convert("RGB"), random_padding=self.split == "train", return_tensors="pt").pixel_values
+        pixel_values = pixel_values.squeeze()
+
+        if sample["ground_truth"] is not None:
+            # labels, which are the input ids of the target sequence
+            gt_token_sequences = self._get_ground_truth_token_sequences(sample)
+            target_sequence = random.choice(gt_token_sequences)  # can be more than one, e.g., DocVQA Task 1
+            input_ids = processor.tokenizer(
+                target_sequence,
+                add_special_tokens=False,
+                max_length=self.max_length,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )["input_ids"].squeeze(0)
+
+            labels = input_ids.clone()
+            labels[labels == processor.tokenizer.pad_token_id] = self.ignore_id  # model doesn't need to predict pad token
+            # labels[: torch.nonzero(labels == self.prompt_end_token_id).sum() + 1] = self.ignore_id  # model doesn't need to predict prompt (for VQA)
+        else:
+            labels=None
+
+        encoding = dict(
+            pixel_values=pixel_values,
+            labels=labels,
+            target_sequence=target_sequence,
+            ground_truth=sample["ground_truth"],
+        )
+        
+        return encoding

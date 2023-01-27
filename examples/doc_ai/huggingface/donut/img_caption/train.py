@@ -1,6 +1,4 @@
-import random
-
-from cvlization.lab.conceptual_captions import ConceptualCaptionsDatasetBuilder
+from cvlization.lab.conceptual_captions_for_donut import ConceptualCaptionsForDonutDatasetBuilder
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.pipeline import Donut
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.model import DonutPredictionTask
 
@@ -17,16 +15,16 @@ class TrainingSession:
         dataset_builder = self.create_dataset()
         config = {
             "task": DonutPredictionTask.CAPTION,
-            "max_length": ConceptualCaptionsDatasetBuilder.max_length,
-            "task_start_token": ConceptualCaptionsDatasetBuilder.task_start_token,
-            "image_height": ConceptualCaptionsDatasetBuilder.image_height,
-            "image_width": ConceptualCaptionsDatasetBuilder.image_width,
-            "ignore_id": ConceptualCaptionsDatasetBuilder.ignore_id,
+            "max_length": ConceptualCaptionsForDonutDatasetBuilder.max_length,
+            "task_start_token": ConceptualCaptionsForDonutDatasetBuilder.task_start_token,
+            "image_height": ConceptualCaptionsForDonutDatasetBuilder.image_height,
+            "image_width": ConceptualCaptionsForDonutDatasetBuilder.image_width,
+            "ignore_id": ConceptualCaptionsForDonutDatasetBuilder.ignore_id,
         }
         Donut(**config).train(dataset_builder=dataset_builder)
 
     def create_dataset(self):
-        dataset_builder = ConceptualCaptionsDatasetBuilder()
+        dataset_builder = ConceptualCaptionsForDonutDatasetBuilder()
         dataset_builder.load()
         return dataset_builder
 

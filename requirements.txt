@@ -21,3 +21,4 @@ transformers==4.22.0
 datasets>=2.5.1
 sentencepiece>=0.1.97
 nltk
+psycopg2-binary
