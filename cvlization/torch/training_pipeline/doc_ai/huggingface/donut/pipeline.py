@@ -31,7 +31,7 @@ class Donut:
     task_start_token: str = "<s>"
     prompt_end_token: str = None
     sort_json_key: bool = True
-    max_epochs: int = 100
+    max_epochs: int = 1000
     accelerator: str = "gpu"
     devices: int = 1
     # For debugging
@@ -114,7 +114,7 @@ class Donut:
         return trainer
 
     def _create_dataloaders(self, dataset_builder, processor, initialize_processor):
-        train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor, initialize_processor, max_iterations=100)
+        train_dataset = self._process_dataset(dataset_builder.training_dataset(), processor, initialize_processor, max_iterations=10000)
         val_dataset = self._process_dataset(dataset_builder.validation_dataset(), processor, initialize_processor, max_iterations=1)
         if dataset_builder.is_iterable():
             # Datasets will perform batching

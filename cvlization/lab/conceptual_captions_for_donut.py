@@ -29,8 +29,8 @@ USER_AGENT = get_datasets_user_agent()
 class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
     # Networking seems to be the bottleneck, not CPU. Still want avoid timeouts though.
     # Image size effects CPU requirements b/c of conversion, saving & loading.
-    num_proc: int = os.cpu_count() * 2
-    desired_images: int = 100
+    num_proc: int = os.cpu_count()
+    desired_images: int = 200000
     batch_size: int = 1
     max_length: int = 768
     image_height: int = 500
@@ -129,7 +129,7 @@ class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
         }
 
         timeout = 5
-        retries = 1
+        retries = 0
 
         for _ in range(retries + 1):
             try:
@@ -141,10 +141,11 @@ class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
                 with urllib.request.urlopen(request, timeout=timeout) as req:
                     image = PIL.Image.open(io.BytesIO(req.read()))
                     image = image.convert("RGB")
-                    self.dataset.add_sample(image, img_metadata)
+                    self.dataset.add_sample(pil_image=image, metadata_dict=img_metadata, has_label=True)
                     image.close()
                 break
             except Exception as ex:
-                LOGGER.warn(f"Failed image fetch attempt: {str(ex)}")
+                # LOGGER.warn(f"Failed image fetch attempt: {str(ex)}")
+                pass
 
         return sample

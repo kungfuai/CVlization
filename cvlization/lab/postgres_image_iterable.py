@@ -14,10 +14,16 @@ class PostgresImageIterable:
 
     def __iter__(self):
         self._setup()
+        self.is_train_next = True
         return self
 
     def __next__(self):
-        return self._query_batch()
+        """
+        TODO: Alternate between batches that have labels and batches that don't.
+        """
+        is_train = self.is_train_next
+        self.is_train_next = not self.is_train_next
+        return self._query_batch(is_train=is_train)
 
     def close_connection(self):
         """
@@ -55,17 +61,21 @@ class PostgresImageIterable:
                 last_used timestamptz not null default now(),
                 file bytea not null,
                 md5sum text not null unique,
-                meta json not null
+                meta json not null,
+                has_label boolean not null,
+                is_active boolean not null default true
             )
             """,
             f"""
-            create index {tbl}_last_used on {tbl}(last_used);
+            create index {tbl}_last_used on {tbl}(last_used)
             """
         ]
         for query in creation_queries:
             self._run_query(query)
 
-    def add_sample(self, pil_image: Image, metadata_dict: dict):
+    def add_sample(self, pil_image: Image, metadata_dict: dict, has_label: bool):
+        self._connect_db()
+
         img_bytes = pil_image.tobytes()
         md5sum = md5(img_bytes).hexdigest()
         img_binary = psycopg2.Binary(img_bytes)
@@ -76,8 +86,8 @@ class PostgresImageIterable:
         })
         try:
             self._run_query(
-                "INSERT INTO conceptual_captions (file, md5sum, meta) VALUES (%s, %s, %s)",
-                args=(img_binary, md5sum, img_meta),
+                "INSERT INTO conceptual_captions (file, md5sum, meta, has_label) VALUES (%s, %s, %s, %s)",
+                args=(img_binary, md5sum, img_meta, has_label),
             )
         except Exception as ex:
             if not str(ex).startswith("duplicate"):
@@ -112,24 +122,30 @@ class PostgresImageIterable:
             cur.close()
         return data
 
-    def _query_batch(self) -> Image:
+    def _query_batch(self, is_train: bool) -> Image:
         query = f"""
         update {self.dataset_name}
         set last_used = now()
         where id in (
             select id from {self.dataset_name}
+            where has_label = {is_train}
+            and is_active
             order by last_used asc
             limit {self.batch_size}
         ) returning
-        file, meta
+        id, file, meta
         """
         columns = ["file", "meta"]
         data = self._run_query(query, columns=columns)
         return [
-            (Image.frombytes(
-                "RGB",
-                (row["meta"]["width"], row["meta"]["height"]),
-                row["file"].tobytes(),
-            ), row["meta"])
+            (
+                Image.frombytes(
+                    "RGB",
+                    (row["meta"]["width"], row["meta"]["height"]),
+                    row["file"].tobytes(),
+                ),
+                row["meta"],
+                lambda: self._set_prediction(row["id"]), # TODO: Implement
+            )
             for row in data
         ]
