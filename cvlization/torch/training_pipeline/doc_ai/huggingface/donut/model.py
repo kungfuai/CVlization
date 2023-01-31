@@ -57,6 +57,8 @@ class DonutPLModule(pl.LightningModule):
         else:
             # FIXME delete or use logger
             print(f"loss of {loss.item()} for unlabeled sample (prediction: {text_predictions[0]})")
+            for ix, _fxn in enumerate(batch["update_fxn"]):
+                _fxn(text_predictions[ix]) # TODO: Test this
         return loss
 
     def predict(self, image: PIL.Image):
@@ -406,6 +408,7 @@ class ProcessedDataset(IterableDataset):
             labels=labels,
             target_sequence=target_sequence,
             ground_truth=sample["ground_truth"],
+            update_fxn=sample["update_fxn"] if "update_fxn" in sample else lambda: 0,
         )
-        
+
         return encoding

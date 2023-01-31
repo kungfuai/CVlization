@@ -18,12 +18,13 @@ class PostgresImageIterable:
         return self
 
     def __next__(self):
-        """
-        TODO: Alternate between batches that have labels and batches that don't.
-        """
-        is_train = self.is_train_next
-        self.is_train_next = not self.is_train_next
-        return self._query_batch(is_train=is_train)
+        batch = self._query_batch(is_train=self.is_train_next)
+        if len(batch) > 0:
+            # Alternate
+            self.is_train_next = not self.is_train_next
+            return batch
+        # Other batch type (train/not train) is empty.
+        return self._query_batch(is_train=(not self.is_train_next))
 
     def close_connection(self):
         """
@@ -135,7 +136,7 @@ class PostgresImageIterable:
         ) returning
         id, file, meta
         """
-        columns = ["file", "meta"]
+        columns = ["id", "file", "meta"]
         data = self._run_query(query, columns=columns)
         return [
             (
@@ -145,7 +146,21 @@ class PostgresImageIterable:
                     row["file"].tobytes(),
                 ),
                 row["meta"],
-                lambda: self._set_prediction(row["id"]), # TODO: Implement
+                lambda prediction: self._set_prediction(row["id"], prediction) \
+                    if not is_train else lambda: 0,
             )
             for row in data
         ]
+
+    def _set_prediction(self, id, prediction):
+        print(f"SETTING PREDICTION FOR ID {id}: {prediction}")
+        prediction_dict = {
+            "prediction": prediction,
+        }
+        query = f"""
+        update {self.dataset_name} set
+        meta = (meta::jsonb || '{json.dumps(prediction_dict)}')::json,
+        is_active = false
+        where id = {id}
+        """
+        self._run_query(query)

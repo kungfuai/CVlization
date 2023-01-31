@@ -117,8 +117,9 @@ class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
                         "caption": meta["caption"],
                     },
                 }) if "caption" in meta else None,
+                "update_fxn": update_fxn,
             }
-            for img, meta in batch
+            for img, meta, update_fxn in batch
         ]
         return samples
 

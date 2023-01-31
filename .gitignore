@@ -13,4 +13,4 @@ tmp*
 # data files
 data/*
 doc/tmp_notes
-
+*.png
