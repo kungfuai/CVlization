@@ -1,9 +1,12 @@
+import logging
 from typing import Union
 from hashlib import md5
 import json
 
 import psycopg2
 from PIL import Image
+
+LOGGER = logging.getLogger(__name__)
 
 class PostgresImageIterable:
     def __init__(self, db_conn_info, dataset_name: str, batch_size=8):
@@ -87,12 +90,27 @@ class PostgresImageIterable:
         })
         try:
             self._run_query(
-                "INSERT INTO conceptual_captions (file, md5sum, meta, has_label) VALUES (%s, %s, %s, %s)",
+                f"INSERT INTO {self.dataset_name} (file, md5sum, meta, has_label) VALUES (%s, %s, %s, %s)",
                 args=(img_binary, md5sum, img_meta, has_label),
             )
         except Exception as ex:
             if not str(ex).startswith("duplicate"):
                 raise ex
+            else:
+                LOGGER.info(f"Duplicate md5sum: {md5sum}")
+        return md5sum
+
+    def get_meta_for_md5sum(self, md5sum):
+        query = f"""
+        select meta
+        from {self.dataset_name}
+        where md5sum = %s
+        and not is_active
+        """
+        results = self._run_query(query, args=(md5sum,), columns=("meta",))
+        if len(results) == 0:
+            return None
+        return results[0]["meta"]
 
     def _setup(self):
         self._connect_db()
@@ -153,7 +171,6 @@ class PostgresImageIterable:
         ]
 
     def _set_prediction(self, id, prediction):
-        print(f"SETTING PREDICTION FOR ID {id}: {prediction}")
         prediction_dict = {
             "prediction": prediction,
         }
