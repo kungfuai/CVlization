@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   # The general app which we've instrumented
-  server:
+  app:
     build:
       dockerfile: Dockerfile
       context: .
@@ -14,3 +14,18 @@ services:
       - .:/workspace
       - ~/Datasets:/datasets
       - ~/.cache:/home/appuser/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+
+  ci:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
