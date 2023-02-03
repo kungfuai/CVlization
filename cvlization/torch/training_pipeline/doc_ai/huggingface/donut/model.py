@@ -58,7 +58,7 @@ class DonutPLModule(pl.LightningModule):
             # FIXME delete or use logger
             print(f"loss of {loss.item()} for unlabeled sample (prediction: {text_predictions[0]})")
             for ix, _fxn in enumerate(batch["update_fxn"]):
-                _fxn(text_predictions[ix]) # TODO: Test this
+                _fxn(text_predictions[ix].replace("<s_caption>", "").replace("</s_caption>", "").strip())
         return loss
 
     def predict(self, image: PIL.Image):

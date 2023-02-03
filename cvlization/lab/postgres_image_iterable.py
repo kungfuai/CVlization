@@ -88,16 +88,20 @@ class PostgresImageIterable:
             "height": pil_image.height,
             **metadata_dict,
         })
-        try:
-            self._run_query(
-                f"INSERT INTO {self.dataset_name} (file, md5sum, meta, has_label) VALUES (%s, %s, %s, %s)",
-                args=(img_binary, md5sum, img_meta, has_label),
-            )
-        except Exception as ex:
-            if not str(ex).startswith("duplicate"):
-                raise ex
-            else:
-                LOGGER.info(f"Duplicate md5sum: {md5sum}")
+        self._run_query(
+            f"""
+            INSERT INTO {self.dataset_name}
+            (file, md5sum, meta, has_label)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (md5sum)
+            DO UPDATE SET
+            meta = ({self.dataset_name}.meta::jsonb || %s::jsonb)::json,
+            has_label = %s,
+            is_active = true
+            """,
+            args=(img_binary, md5sum, img_meta, has_label,
+                    img_meta, has_label,),
+        )
         return md5sum
 
     def get_meta_for_md5sum(self, md5sum):
@@ -142,19 +146,30 @@ class PostgresImageIterable:
         return data
 
     def _query_batch(self, is_train: bool) -> Image:
+        """
+        Shuffle samples over time by adding normally-distributed noise to the time_since_used.
+        """
+        twelve_randoms = "+".join(["random()" for i in range(12)])
+        normal_mean0_max6_minNeg6 = f"""
+        ({twelve_randoms} - 6)
+        """.strip()
         query = f"""
         update {self.dataset_name}
         set last_used = now()
         where id in (
-            select id from {self.dataset_name}
-            where has_label = {is_train}
-            and is_active
-            order by last_used asc
-            limit {self.batch_size}
+            select id from (
+                select id,
+                last_used + (interval '1 hour' * {normal_mean0_max6_minNeg6}) as "last_used_adj"
+                from {self.dataset_name}
+                where has_label = {is_train}
+                and is_active
+                order by last_used_adj asc
+                limit {self.batch_size}
+            ) t
         ) returning
-        id, file, meta
+        id, file, meta, has_label
         """
-        columns = ["id", "file", "meta"]
+        columns = ["id", "file", "meta", "has_label"]
         data = self._run_query(query, columns=columns)
         return [
             (
@@ -164,6 +179,7 @@ class PostgresImageIterable:
                     row["file"].tobytes(),
                 ),
                 row["meta"],
+                row["has_label"],
                 lambda prediction: self._set_prediction(row["id"], prediction) \
                     if not is_train else lambda: 0,
             )
@@ -176,8 +192,8 @@ class PostgresImageIterable:
         }
         query = f"""
         update {self.dataset_name} set
-        meta = (meta::jsonb || '{json.dumps(prediction_dict)}')::json,
+        meta = (meta::jsonb || %s::jsonb)::json,
         is_active = false
         where id = {id}
         """
-        self._run_query(query)
+        self._run_query(query, args=(json.dumps(prediction_dict),))

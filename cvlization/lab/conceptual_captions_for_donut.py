@@ -111,15 +111,15 @@ class ConceptualCaptionsForDonutDatasetBuilder(IterableDataset):
         batch = next(self._iter)
         samples = [
             {
-                "image": img,
+                "image": img.resize((self.image_width, self.image_height)),
                 "ground_truth": json.dumps({
                     "gt_parse": {
                         "caption": meta["caption"],
                     },
-                }) if "caption" in meta else None,
+                }) if has_label else None,
                 "update_fxn": update_fxn,
             }
-            for img, meta, update_fxn in batch
+            for img, meta, has_label, update_fxn in batch
         ]
         return samples
 

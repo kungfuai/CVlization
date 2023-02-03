@@ -109,7 +109,7 @@ class Donut:
             max_epochs=self.max_epochs,
             limit_train_batches=self.limit_train_batches or 1.0,
             limit_val_batches=self.limit_val_batches or 1.0,
-            accumulate_grad_batches=2,
+            accumulate_grad_batches=4,
         )
         return trainer
 
