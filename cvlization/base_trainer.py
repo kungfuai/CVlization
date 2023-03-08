@@ -1,7 +1,6 @@
 import logging
 import os
 import random
-from skimage.io import imsave
 import numpy as np
 
 from .data.ml_dataset import MLDataset
@@ -60,6 +59,8 @@ class BaseTrainer:
 
     # TODO: _save_image can be part of ExperimentTracker.
     def _save_image(self, im: np.array, filepath: str):
+        from skimage.io import imsave
+
         if hasattr(im, "numpy"):
             im = im.numpy()
         im = im.astype(np.float32)

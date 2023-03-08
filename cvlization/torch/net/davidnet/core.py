@@ -3,7 +3,6 @@ import copy
 from collections import namedtuple, defaultdict
 import time
 import numpy as np
-import pandas as pd
 from functools import singledispatch
 
 #####################
@@ -71,6 +70,8 @@ class Table:
                 raise
 
     def df(self):
+        import pandas as pd
+
         return pd.DataFrame(
             [{"_".join(p): v for p, v in path_iter(row)} for row in self.log]
         )
