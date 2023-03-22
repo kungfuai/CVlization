@@ -18,6 +18,23 @@ services:
           devices:
             - driver: nvidia
               capabilities: [gpu]
+  
+  torch:
+    build:
+      dockerfile: Dockerfile.torch-gpu
+      context: .
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - .:/workspace
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
 
   ci:
     build:

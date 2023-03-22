@@ -1,0 +1,2 @@
+class EnergyModelPipeline:
+    pass
