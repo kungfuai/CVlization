@@ -15,6 +15,8 @@ from lightning import pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
 # from lightning.pytorch.loggers import MLFlowLogger
+# TODO: common utils of cvlization can be moved to a separate package.
+from cvlization.data.transformed_map_dataset import TransformedMapDataset
 from .lightning import DeepEnergyModel, GenerateCallback, SamplerCallback, OutlierCallback
 
 
@@ -22,6 +24,9 @@ DATASET_PATH = "./data/raw/MNIST"
 
 @dataclass
 class PipelineResult:
+    """TODO: use this to as a return type for the pipeline.
+    During fit(), the PipelineResult should be updated.
+    """
     model_checkpoint_dir: str = None
     lightning_logs_path: str = None
     tensorboard_logs_dir: str = None
@@ -38,31 +43,44 @@ class PipelineResult:
 
 @dataclass
 class TrainingPipeline:
+    # Device
     device: str = "cuda"
-    checkpoint_path: str = None
+
+    # Data
     img_shape: tuple = (1, 28, 28)
     train_batch_size: int = 128
     val_batch_size: int = 256
-    lr: float = 1e-4
 
-    def fit(self):
+    # Optimizer
+    lr: float = 1e-4
+    epochs: int = 60
+
+    # Persistence
+    checkpoint_path: str = None
+    
+
+    def fit(self, dataset_builder):
+        train_loader, val_loader = self._create_dataloaders(dataset_builder)
         trainer = self._create_trainer()
-        train_loader, val_loader = self._create_dataloaders()
         model = self._create_model()
         trainer.fit(model, train_loader, val_loader)
         # Finally, pick the best model
         # model = DeepEnergyModel.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
 
-    def _create_dataloaders(self):
+    def _create_dataloaders(self, dataset_builder):
+        train_raw = dataset_builder.training_dataset()
+        val_raw = dataset_builder.validation_dataset()
         transform = transforms.Compose([transforms.ToTensor(),
                                 transforms.Normalize((0.5,), (0.5,))
                                ])
 
+        train_set = TransformedMapDataset(train_raw, image_transform=transform)
+        test_set = TransformedMapDataset(val_raw, image_transform=transform)
         # Loading the training dataset. We need to split it into a training and validation part
-        train_set = MNIST(root=DATASET_PATH, train=True, transform=transform, download=True)
+        # train_set = MNIST(root=DATASET_PATH, train=True, transform=transform, download=True)
 
-        # Loading the test set
-        test_set = MNIST(root=DATASET_PATH, train=False, transform=transform, download=True)
+        # # Loading the test set
+        # test_set = MNIST(root=DATASET_PATH, train=False, transform=transform, download=True)
 
         # We define a set of data loaders that we can use for various purposes later.
         # Note that for actually training a model, we will use different data loaders
@@ -76,7 +94,7 @@ class TrainingPipeline:
             # default_root_dir=os.path.join(self.checkpoint_path, "MNIST"),
             accelerator="gpu" if str(self.device).startswith("cuda") else "cpu",
             devices=1,
-            max_epochs=60,
+            max_epochs=self.epochs,
 
             # For debugging
             # limit_train_batches=10,
@@ -113,4 +131,11 @@ class TrainingPipeline:
         return model
 
 if __name__ == "__main__":
-    TrainingPipeline().fit()
+    class MNISTDatasetBuilder:
+        def training_dataset(self):
+            return MNIST(root=DATASET_PATH, train=True, download=True)
+
+        def validation_dataset(self):
+            return MNIST(root=DATASET_PATH, train=False, download=True)
+    
+    TrainingPipeline().fit(MNISTDatasetBuilder())
