@@ -8,7 +8,7 @@ _tensorflow_tpu_available = _tensorflow_available and importlib.util.find_spec("
 _tf2_available = _tensorflow_available and importlib.util.find_spec("tensorflow.compat.v2") is not None
 
 _torch_available = importlib.util.find_spec("torch") is not None
-_torch_fx_available = importlib.util.find_spec("torch.fx") is not None
+_torch_fx_available = _torch_available and importlib.util.find_spec("torch.fx") is not None
 _torch_geometric_available = importlib.util.find_spec("torch_geometric") is not None
 _torchvision_available = importlib.util.find_spec("torchvision") is not None
 _torchaudio_available = importlib.util.find_spec("torchaudio") is not None
