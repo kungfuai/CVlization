@@ -2,7 +2,7 @@
 from distutils.core import setup
 
 setup(name='cvlization',
-      version='v0.0.6',
+      version='0.1.1',
       description='Training pipelines for Computer Vision',
       author='KUNGFU.AI',
       author_email='zz@kungfu.ai',

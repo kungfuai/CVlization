@@ -13,11 +13,28 @@ from torchvision.datasets import MNIST
 from torchvision import transforms
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
+from lightning.pytorch.loggers import TensorBoardLogger
 # from lightning.pytorch.loggers import MLFlowLogger
 from .lightning import DeepEnergyModel, GenerateCallback, SamplerCallback, OutlierCallback
 
 
 DATASET_PATH = "./data/raw/MNIST"
+
+@dataclass
+class PipelineResult:
+    model_checkpoint_dir: str = None
+    lightning_logs_path: str = None
+    tensorboard_logs_dir: str = None
+    instructions: str = """
+    Once the training starts, you start a tensorboard:
+
+    tensorboard --logdir lightning_logs/version_{pl_version}
+    """
+
+    @property
+    def lightning_module(self):
+        raise NotImplementedError("Need to load the lightning module ")
+
 
 @dataclass
 class TrainingPipeline:
@@ -64,8 +81,8 @@ class TrainingPipeline:
             # For debugging
             # limit_train_batches=10,
             # limit_val_batches=10,
-
             gradient_clip_val=0.1,
+            logger=TensorBoardLogger("./"),
             # logger=MLFlowLogger(experiment_name="MNIST_uva_energy"),
             callbacks=[
                 ModelCheckpoint(save_weights_only=True, mode="min", monitor='val_contrastive_divergence'),
@@ -74,7 +91,8 @@ class TrainingPipeline:
                 OutlierCallback(),
                 LearningRateMonitor("epoch")
             ]
-            )
+        )
+        assert hasattr(trainer.logger.experiment, "add_image"), f"Logger {trainer.logger} does not support adding images. Consider using one that can."
         return trainer
 
     def _create_model(self):
