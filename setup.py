@@ -9,4 +9,6 @@ setup(name='cvlization',
       url='https://github.com/kungfuai/cvlization',
       license='MIT',
       packages=['cvlization'],
+      include_package_data=True,
+      zip_safe=False,
     )
