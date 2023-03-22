@@ -1,8 +1,11 @@
 import logging
 import os
 import random
-from skimage.io import imsave
 import numpy as np
+
+from .utils.import_utils import is_skimage_available
+if is_skimage_available():
+    from skimage.io import imsave
 
 from .data.ml_dataset import MLDataset
 from .specs import DataColumnType

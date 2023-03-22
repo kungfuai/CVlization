@@ -3,8 +3,11 @@ import copy
 from collections import namedtuple, defaultdict
 import time
 import numpy as np
-import pandas as pd
 from functools import singledispatch
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
 
 #####################
 # utils
@@ -71,6 +74,8 @@ class Table:
                 raise
 
     def df(self):
+        if pd is None:
+            raise ImportError("pandas is not installed")
         return pd.DataFrame(
             [{"_".join(p): v for p, v in path_iter(row)} for row in self.log]
         )

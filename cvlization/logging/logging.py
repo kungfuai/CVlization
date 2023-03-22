@@ -2,7 +2,6 @@ import logging
 import logging.handlers
 import sys
 from logging.config import dictConfig
-import coloredlogs
 
 
 DEFAULT_LOGGING = {"version": 1, "disable_existing_loggers": False}
@@ -35,7 +34,14 @@ def configure_logging():
     # logging.getLogger("").handlers.extend(handlers)
     # logging.root.setLevel(logging.INFO)
     # %(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s
-    coloredlogs.install(
-        level=logging.INFO,
-        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)",
-    )
+    try:
+        import coloredlogs
+        coloredlogs.install(
+            level=logging.INFO,
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)",
+        )
+    except ImportError:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)",
+        )
