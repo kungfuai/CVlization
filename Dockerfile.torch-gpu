@@ -1,0 +1,12 @@
+FROM pytorch/pytorch:2.0.0-cuda11.7-cudnn8-runtime
+
+WORKDIR /workspace
+# Install pip packages
+COPY requirements_dev.txt requirements.txt .
+RUN --mount=type=cache,mode=0777,target=/root/.cache pip install --upgrade pip \
+    && pip install -r requirements_dev.txt \
+    && pip install -r requirements.txt
+RUN --mount=type=cache,mode=0777,target=/root/.cache pip install \
+    lightning
+# Copy code
+COPY . .
