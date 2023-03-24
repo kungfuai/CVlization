@@ -5,6 +5,10 @@ Once the training starts, you start a tensorboard:
 
 tensorboard --logdir lightning_logs/version_xxx
 
+Example usage (and documentation):
+
+https://colab.research.google.com/drive/1Cm3CITo9deSV_MrrIMpOn4pTLr2NihRm?authuser=1#scrollTo=Tpsi93eyHjs6
+
 """
 from dataclasses import dataclass
 import os

@@ -1,6 +1,7 @@
 build
 *.egg-info
 .vscode
+logs
 **/__pycache__
 **/.DS_Store
 **/*.pyc
