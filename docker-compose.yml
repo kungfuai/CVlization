@@ -35,6 +35,24 @@ services:
           devices:
             - driver: nvidia
               capabilities: [gpu]
+    
+  diffuser:
+    build:
+      dockerfile: Dockerfile.diffuser-gpu
+      context: .
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - .:/workspace
+      - ./data/container_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
 
   ci:
     build:
