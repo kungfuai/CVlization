@@ -4,7 +4,7 @@ torchmetrics==0.7.0
 torch==1.12.0
 torchvision==0.13.0  # <0.15.0
 timm==0.5.4
-tensorflow>=2
+tensorflow==2.11.1 # tensorflow 2.12 makes a unit test hang (https://github.com/kungfuai/CVlization/actions/runs/4495905507/jobs/7910034342)
 coloredlogs>=15
 scikit-image>=0.16.2
 imgaug==0.4.0
