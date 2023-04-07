@@ -1,0 +1,1 @@
+docker build -t cvlization-torch-gpu -f Dockerfile.torch-gpu .
