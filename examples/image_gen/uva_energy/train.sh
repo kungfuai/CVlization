@@ -1,5 +1,6 @@
 image=cvlization-torch-gpu
-module=cvlization.torch.training_pipeline.image_gen.ebm.uva_energy.pipeline
+module=examples.image_gen.uva_energy.train
 docker run --runtime nvidia --rm \
+    -v $(pwd):/workspace \
     $image \
     python -m $module
