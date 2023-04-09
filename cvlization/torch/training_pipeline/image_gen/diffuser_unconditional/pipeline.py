@@ -252,7 +252,6 @@ class TrainingPipeline:
         args = self.args
         self._configure_logging()
         model = self._create_model()
-        assert self.args.use_ema, "Only EMA is supported for now."
         ema_model = self._create_ema_model(model)
         accelerator = self._prepare_accelerator(ema_model)
         scheduler = self._create_scheduler()
@@ -263,8 +262,7 @@ class TrainingPipeline:
         model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
             model, optimizer, train_dataloader, lr_scheduler
         )
-        if args.use_ema:
-            ema_model.to(accelerator.device)
+        ema_model.to(accelerator.device)
 
         self.model = model
         self.optimizer = optimizer
@@ -322,7 +320,7 @@ class TrainingPipeline:
             checkpointing_steps=args.checkpointing_steps,
             max_train_steps=max_train_steps,
             eval_batch_size=args.eval_batch_size,
-            use_ema=args.use_ema,
+            use_ema=True,
             prediction_type=args.prediction_type,
         )
         return trainer
@@ -342,8 +340,7 @@ class TrainingPipeline:
         if version.parse(accelerate.__version__) >= version.parse("0.16.0"):
             # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
             def save_model_hook(models, weights, output_dir):
-                if args.use_ema:
-                    ema_model.save_pretrained(os.path.join(output_dir, "unet_ema"))
+                ema_model.save_pretrained(os.path.join(output_dir, "unet_ema"))
 
                 for i, model in enumerate(models):
                     model.save_pretrained(os.path.join(output_dir, "unet"))
@@ -352,11 +349,10 @@ class TrainingPipeline:
                     weights.pop()
 
             def load_model_hook(models, input_dir):
-                if args.use_ema:
-                    load_model = EMAModel.from_pretrained(os.path.join(input_dir, "unet_ema"), UNet2DModel)
-                    ema_model.load_state_dict(load_model.state_dict())
-                    ema_model.to(accelerator.device)
-                    del load_model
+                load_model = EMAModel.from_pretrained(os.path.join(input_dir, "unet_ema"), UNet2DModel)
+                ema_model.load_state_dict(load_model.state_dict())
+                ema_model.to(accelerator.device)
+                del load_model
 
                 for i in range(len(models)):
                     # pop models so that they are not loaded again
@@ -393,18 +389,17 @@ class TrainingPipeline:
     def _create_ema_model(self, model):
         # Create EMA for the model.
         args = self.args
-        if args.use_ema:
-            ema_model = EMAModel(
-                model.parameters(),
-                decay=args.ema_max_decay,
-                use_ema_warmup=True,
-                inv_gamma=args.ema_inv_gamma,
-                power=args.ema_power,
-                model_cls=UNet2DModel,
-                model_config=model.config,
-            )
-            self.ema_model = ema_model
-            return ema_model
+        ema_model = EMAModel(
+            model.parameters(),
+            decay=args.ema_max_decay,
+            use_ema_warmup=True,
+            inv_gamma=args.ema_inv_gamma,
+            power=args.ema_power,
+            model_cls=UNet2DModel,
+            model_config=model.config,
+        )
+        self.ema_model = ema_model
+        return ema_model
     
     def _create_scheduler(self):
         # Initialize the scheduler
