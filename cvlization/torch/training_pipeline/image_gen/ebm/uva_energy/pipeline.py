@@ -54,7 +54,7 @@ class TrainingPipeline:
     # Data
     img_shape: tuple = (1, 28, 28)
     train_batch_size: int = 128
-    val_batch_size: int = 256
+    val_batch_size: int = 128
 
     # Optimizer
     lr: float = 1e-4
@@ -75,23 +75,20 @@ class TrainingPipeline:
     def _create_dataloaders(self, dataset_builder):
         train_raw = dataset_builder.training_dataset()
         val_raw = dataset_builder.validation_dataset()
-        transform = transforms.Compose([transforms.ToTensor(),
-                                transforms.Normalize((0.5,), (0.5,))
-                               ])
-
+        transform = transforms.Compose([
+            transforms.Resize(self.img_shape[1:]),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5,), (0.5,))
+        ])
         train_set = TransformedMapDataset(train_raw, image_transform=transform)
         test_set = TransformedMapDataset(val_raw, image_transform=transform)
-        # Loading the training dataset. We need to split it into a training and validation part
-        # train_set = MNIST(root=DATASET_PATH, train=True, transform=transform, download=True)
-
-        # # Loading the test set
-        # test_set = MNIST(root=DATASET_PATH, train=False, transform=transform, download=True)
-
         # We define a set of data loaders that we can use for various purposes later.
         # Note that for actually training a model, we will use different data loaders
         # with a lower batch size.
+        # print("first training example:", train_set[0])
         train_loader = data.DataLoader(train_set, batch_size=self.train_batch_size, shuffle=True,  drop_last=True,  num_workers=4, pin_memory=True)
         test_loader  = data.DataLoader(test_set,  batch_size=self.val_batch_size, shuffle=False, drop_last=False, num_workers=4)
+        # print("train_loader first batch:", next(iter(train_loader)))
         return train_loader, test_loader
 
     def _create_trainer(self):

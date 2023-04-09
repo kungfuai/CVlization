@@ -9,7 +9,12 @@ class TransformedMapDataset:
 
     def __getitem__(self, index):
         example = self._source_dataset[index]
-        image, label = example
+        if isinstance(example, tuple) and len(example) == 2:
+            # For torchvision datasets.
+            image, label = example
+        else:
+            # For HuggingFace datasets.
+            image, label = example["image"], example.get("label", 0)
         transformed_example = self._transform(image), label
         return transformed_example
 

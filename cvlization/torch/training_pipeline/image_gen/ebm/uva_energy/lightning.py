@@ -16,7 +16,7 @@ class Swish(nn.Module):
 
 class CNNModel(nn.Module):
 
-    def __init__(self, hidden_features=32, out_dim=1, **kwargs):
+    def __init__(self, hidden_features=32, out_dim=1, n_channels=1, **kwargs):
         super().__init__()
         # We increase the hidden dimension over layers. Here pre-calculated for simplicity.
         c_hid1 = hidden_features//2
@@ -25,7 +25,7 @@ class CNNModel(nn.Module):
 
         # Series of convolutions and Swish activation functions
         self.cnn_layers = nn.Sequential(
-                nn.Conv2d(1, c_hid1, kernel_size=5, stride=2, padding=4), # [16x16] - Larger padding to get 32x32 image
+                nn.Conv2d(n_channels, c_hid1, kernel_size=5, stride=2, padding=4), # [16x16] - Larger padding to get 32x32 image
                 Swish(),
                 nn.Conv2d(c_hid1, c_hid2, kernel_size=3, stride=2, padding=1), #  [8x8]
                 Swish(),
@@ -33,10 +33,14 @@ class CNNModel(nn.Module):
                 Swish(),
                 nn.Conv2d(c_hid3, c_hid3, kernel_size=3, stride=2, padding=1), # [2x2]
                 Swish(),
-                nn.Flatten(),
-                nn.Linear(c_hid3*4, c_hid3),
+                nn.Conv2d(c_hid3, c_hid3, kernel_size=3, stride=1, padding=1), # [2x2]
                 Swish(),
-                nn.Linear(c_hid3, out_dim)
+                # nn.Flatten(),
+                # nn.Linear(c_hid3*4, c_hid3),
+                # Swish(),
+                # nn.Linear(c_hid3, out_dim)
+                # global pool
+                nn.AdaptiveAvgPool2d(1),
         )
 
     def forward(self, x):
@@ -52,7 +56,7 @@ class DeepEnergyModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.cnn = CNNModel(**CNN_args)
+        self.cnn = CNNModel(n_channels=img_shape[0], **CNN_args)
         # self.cnn.to("cuda")
         self.sampler = Sampler(self.cnn, img_shape=img_shape, sample_size=batch_size)
         self.example_input_array = torch.zeros(1, *img_shape)
