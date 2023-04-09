@@ -51,6 +51,9 @@ class TrainingPipeline:
     # Device
     device: str = "cuda"
 
+    # Model
+    backbone: str = "resnet18" # TODO: not implemented! See lightning.py
+
     # Data
     img_shape: tuple = (1, 28, 28)
     train_batch_size: int = 128
@@ -62,7 +65,7 @@ class TrainingPipeline:
 
     # Persistence
     checkpoint_path: str = None
-    
+    name: str = "uva_energy"
 
     def fit(self, dataset_builder):
         train_loader, val_loader = self._create_dataloaders(dataset_builder)
@@ -102,7 +105,7 @@ class TrainingPipeline:
             # limit_train_batches=10,
             # limit_val_batches=10,
             gradient_clip_val=0.1,
-            logger=TensorBoardLogger("./"),
+            logger=TensorBoardLogger("./", name=self.name),
             # logger=MLFlowLogger(experiment_name="MNIST_uva_energy"),
             callbacks=[
                 ModelCheckpoint(save_weights_only=True, mode="min", monitor='val_contrastive_divergence'),
