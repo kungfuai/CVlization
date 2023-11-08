@@ -1,20 +1,21 @@
+# TODO: move this to training_pipeline/image_classification
 import torch
 from torch import nn
 from ...base_trainer import BaseTrainer
 from ..net.image_classification.davidnet.core import (
-            PiecewiseLinear,
-            Const,
-            union,
-            Timer,
-            preprocess,
-            pad,
-            normalise,
-            transpose,
-            Transform,
-            Crop,
-            Cutout,
-            FlipLR,
-        )
+    PiecewiseLinear,
+    Const,
+    union,
+    Timer,
+    preprocess,
+    pad,
+    normalise,
+    transpose,
+    Transform,
+    Crop,
+    Cutout,
+    FlipLR,
+)
 from ..net.image_classification.davidnet.torch_backend import (
     SGD,
     MODEL,
@@ -29,6 +30,7 @@ from ..net.image_classification.davidnet.torch_backend import (
     cifar10_std,
     DataLoader as DataLoaderDavid,
 )
+
 
 class DavidTrainer(BaseTrainer):
     def __init__(
@@ -48,7 +50,6 @@ class DavidTrainer(BaseTrainer):
     def _training_loop(self):
         from functools import partial
         import numpy as np
-        
 
         batch_size = self.batch_size
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
