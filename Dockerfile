@@ -18,15 +18,13 @@ RUN --mount=type=cache,mode=0777,target=/var/cache/apt apt-get update \
 
 # Install pip packages
 COPY requirements_dev.txt .
-RUN --mount=type=cache,mode=0777,target=/root/.cache pip install --upgrade pip \
-    && pip install -r requirements_dev.txt
 COPY requirements.txt .
 RUN --mount=type=cache,mode=0777,target=/root/.cache pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install -r requirements_dev.txt && pip install -r requirements.txt
 
 # Switch to non-root user
-RUN useradd -m appuser && chown -R appuser /workspace
-USER appuser
+# RUN useradd -m appuser && chown -R appuser /workspace
+# USER appuser
 
 # Copy project files
 COPY . .

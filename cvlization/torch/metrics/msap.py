@@ -36,7 +36,7 @@ def APJ(vert_pred, vert_gt, max_distance, im_ids):
     n_gt = sum(len(gt) for gt in vert_gt)
 
     nd = len(im_ids)
-    tp, fp = np.zeros(nd, dtype=np.float), np.zeros(nd, dtype=np.float)
+    tp, fp = np.zeros(nd, dtype=float), np.zeros(nd, dtype=float)
     hit = [[False for _ in j] for j in vert_gt]
 
     for i in range(nd):
@@ -60,7 +60,7 @@ def APJ(vert_pred, vert_gt, max_distance, im_ids):
 
 def nms_j(heatmap, delta=1):
     heatmap = heatmap.copy()
-    disable = np.zeros_like(heatmap, dtype=np.bool)
+    disable = np.zeros_like(heatmap, dtype=bool)
     for x, y in argsort2d(heatmap):
         for dx, dy in zip(DX, DY):
             xp, yp = x + dx, y + dy
@@ -111,7 +111,7 @@ def vectorized_wireframe_2d_metric(
 
     # staging 2: compute depth metric: SIL/L2
     loss_L1 = loss_L2 = 0
-    hit = np.zeros_like(dpth_gt, np.bool)
+    hit = np.zeros_like(dpth_gt, bool)
     SIL = np.zeros(dpth_pred)
     for i in range(nd):
         if dist[i] < threshold and not hit[choice[i]]:
@@ -131,8 +131,8 @@ def vectorized_wireframe_2d_metric(
 
     # staging 3: compute mAP for edge matching
     edgeset = set([frozenset(e) for e in edge_gt])
-    tp = np.zeros(len(edge_pred), dtype=np.float)
-    fp = np.zeros(len(edge_pred), dtype=np.float)
+    tp = np.zeros(len(edge_pred), dtype=float)
+    fp = np.zeros(len(edge_pred), dtype=float)
     for i, (v0, v1, score) in enumerate(sorted(edge_pred, key=-edge_pred[2])):
         length = LA.norm(vert_gt[v0] - vert_gt[v1], axis=1)
         if frozenset([choice[v0], choice[v1]]) in edgeset:
@@ -160,7 +160,7 @@ def vectorized_wireframe_3d_metric(
     )
     choice = np.argmin(d, 1)
     dist = np.min(d, 1)
-    hit = np.zeros_like(dpth_gt, np.bool)
+    hit = np.zeros_like(dpth_gt, bool)
     for i in range(nd):
         if dist[i] < threshold and not hit[choice[i]]:
             hit[choice[i]] = True
@@ -169,8 +169,8 @@ def vectorized_wireframe_3d_metric(
 
     # staging 2: compute mAP for edge matching
     edgeset = set([frozenset(e) for e in edge_gt])
-    tp = np.zeros(len(edge_pred), dtype=np.float)
-    fp = np.zeros(len(edge_pred), dtype=np.float)
+    tp = np.zeros(len(edge_pred), dtype=float)
+    fp = np.zeros(len(edge_pred), dtype=float)
     for i, (v0, v1, score) in enumerate(sorted(edge_pred, key=-edge_pred[2])):
         length = LA.norm(vert_gt[v0] - vert_gt[v1], axis=1)
         if frozenset([choice[v0], choice[v1]]) in edgeset:
@@ -191,9 +191,9 @@ def msTPFP(line_pred, line_gt, threshold):
     )
     choice = np.argmin(diff, 1)
     dist = np.min(diff, 1)
-    hit = np.zeros(len(line_gt), np.bool)
-    tp = np.zeros(len(line_pred), np.float)
-    fp = np.zeros(len(line_pred), np.float)
+    hit = np.zeros(len(line_gt), bool)
+    tp = np.zeros(len(line_pred), float)
+    fp = np.zeros(len(line_pred), float)
     for i in range(len(line_pred)):
         if dist[i] < threshold and not hit[choice[i]]:
             hit[choice[i]] = True
