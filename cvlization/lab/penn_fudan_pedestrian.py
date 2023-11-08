@@ -19,7 +19,7 @@ class PennFudanPedestrianDatasetBuilder:
     to_torch_tensor: bool = True
     flavor: str = None  # one of None, "torchvision"
     data_dir: str = "./data"
-    preload: bool = False
+    preload: bool = True
     include_masks: bool = True
     label_offset: int = 0
 
