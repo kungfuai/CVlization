@@ -21,7 +21,9 @@ class ModelUtils:
     ] = None  # If specified, the following parameters will be ignored.
     model_spec: ModelSpec = None
     lightning: bool = True
-    loss_function_included_in_model: bool = False  # this is a property of the forward() method of the model
+    loss_function_included_in_model: bool = (
+        False  # this is a property of the forward() method of the model
+    )
 
     # Optimizer
     lr: float = 0.0001
@@ -39,12 +41,14 @@ class ModelUtils:
         if self.data_only:
             # Do nothing.
             return None
-        if self._model_spec_is_provided():
+        if self._model_is_provided():
+            LOGGER.info(f"Using the model provided by the user: {type(self.model)}")
+            return self.model
+        elif self._model_spec_is_provided():
             self.model = self.create_model_from_spec()
             LOGGER.info(f"Model created from spec: {type(self.model)}")
             return self.model
-        elif self._model_is_provided():
-            LOGGER.info(f"Using the model provided by the user: {type(self.model)}")
+
         else:
             raise TypeError(
                 f"model must be a ModelSpec or a Callable object, but got {self.model}"
@@ -62,11 +66,13 @@ class ModelUtils:
 
     def _model_is_provided(self):
         return isinstance(self.model, (nn.Module, LightningModule))
-    
+
     def _ensure_torch_lit_model(self, model):
         if model is not None and callable(model):
             if isinstance(model, TorchLitModel):
-                assert hasattr(model.config, "lr"), f"model.config does not have 'lr' attribute."
+                assert hasattr(
+                    model.config, "lr"
+                ), f"model.config does not have 'lr' attribute."
                 model.config.lr = self.lr
                 return model
             elif isinstance(model, LightningModule):
@@ -107,12 +113,14 @@ class ModelUtils:
             self._loss_function = self._get_or_create_loss_function(self.model).to(
                 self.device
             )
-    
+
     def _get_or_create_loss_function(self, model: TorchLitModel):
         if hasattr(model, "loss_function"):
             return model.loss_function
         else:
-            assert self.model_targets is not None, f"model_targets is None but loss_function is not defined in model."
+            assert (
+                self.model_targets is not None
+            ), f"model_targets is None but loss_function is not defined in model."
             return TorchModelFactory(
                 model_inputs=self.model_spec.get_model_inputs(),
                 model_targets=self.model_spec.get_model_targets(),
@@ -130,9 +138,8 @@ class ModelUtils:
         self.model.forward(inputs)
         # self.model.forward(one_batch)
         self.model.train()  # change back to the training mode
-    
-    def create_model_from_spec(self):
 
+    def create_model_from_spec(self):
         model_inputs = self.get_model_inputs()
         model_targets = self.get_model_targets()
         image_encoder = TorchImageEncoder(
@@ -174,9 +181,10 @@ class ModelUtils:
                     lr_scheduler_kwargs=self.lr_scheduler_kwargs,
                 ),
             )
-        assert isinstance(model, LightningModule), f"model must be a LightningModule, got {type(model)}"
+        assert isinstance(
+            model, LightningModule
+        ), f"model must be a LightningModule, got {type(model)}"
         return model
-
 
     def get_model_inputs(self):
         if self.model_spec:

@@ -1,10 +1,9 @@
 # Adapted from https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
 import logging
 
-from cvlization.specs.ml_framework import MLFramework
 from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.specs.prediction_tasks import InstanceSegmentation
-from cvlization.training_pipeline import TrainingPipeline
+from cvlization.torch.torch_training_pipeline import TorchTrainingPipeline
 from cvlization.lab.experiment import Experiment
 from cvlization.torch.net.instance_segmentation.torchvision import (
     TorchvisionInstanceSegmentationModelFactory,
@@ -23,14 +22,7 @@ class TrainingSession:
         self.num_classes = num_classes = dataset_builder.num_classes
         model = self.create_model()
         training_pipeline = self.create_training_pipeline(model)
-        Experiment(
-            # The interface (inputs and outputs) of the model.
-            prediction_task=InstanceSegmentation(n_categories=num_classes),
-            # Dataset and transforms.
-            dataset_builder=dataset_builder,
-            # Training pipeline: model, trainer, optimizer.
-            training_pipeline=training_pipeline,
-        ).run()
+        training_pipeline.fit(dataset_builder)
 
     def create_model(self):
         # Use TorchvisionDetectionModelFactory.list_models() to get a list of available models.
@@ -42,6 +34,7 @@ class TrainingSession:
             lr=0.0001,
             pretrained=True,
         ).run()
+        assert model is not None, "Model is None."
         return model
 
     def create_dataset(self):
@@ -52,17 +45,15 @@ class TrainingSession:
         return dataset_builder
 
     def create_training_pipeline(self, model):
-        training_pipeline = TrainingPipeline(
-            # Annotating the ml framework helps the training pipeline to use
-            #   appropriate adapters for the dataset.
-            ml_framework=MLFramework.PYTORCH,
+        assert model is not None, "Model is None."
+        training_pipeline = TorchTrainingPipeline(
             model=model,
             # Data loader parameters.
             collate_method="zip",
-            train_batch_size=8,
+            train_batch_size=4,
             val_batch_size=2,
             # Training loop parameters.
-            epochs=50,
+            epochs=10,
             train_steps_per_epoch=100,
             # Optimizer parameters.
             optimizer_name="Adam",
