@@ -24,3 +24,4 @@ mlruns
 checkpoints
 data
 wandb
+/logs
