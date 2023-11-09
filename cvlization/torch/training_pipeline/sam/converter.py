@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from .prompt_generators import PointAndBoxPromptGenerator
-from ..util import (
+from .converter_util import (
     get_centers_and_bounding_boxes,
     get_sam_model,
     segmentation_to_one_hot,

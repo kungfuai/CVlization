@@ -42,10 +42,10 @@ class TorchEmTrainer:
         save_root: Optional[str] = None,
         compile_model: Optional[Union[bool, str]] = None,
     ):
-        if not all(hasattr(loader, "shuffle") for loader in [train_loader, val_loader]):
-            raise ValueError(
-                f"{self.__class__} requires each dataloader to have 'shuffle' attribute."
-            )
+        # if not all(hasattr(loader, "shuffle") for loader in [train_loader, val_loader]):
+        #     raise ValueError(
+        #         f"{self.__class__} requires each dataloader to have 'shuffle' attribute."
+        #     )
 
         self._generate_name = name is None
         self.name = name
@@ -147,7 +147,7 @@ class TorchEmTrainer:
             loader_kwargs = self.init_data[f"{loader_name}_kwargs"]
             loader = torch.utils.data.DataLoader(ds, **loader_kwargs)
             # monkey patch shuffle loader_name to the loader
-            loader.shuffle = loader_kwargs.get("shuffle", False)
+            # loader.shuffle = loader_kwargs.get("shuffle", False)
             self.trainer_kwargs[loader_name] = loader
 
         def load_generic(
@@ -472,7 +472,7 @@ class TorchEmTrainer:
             "best_metric": best_metric,
             "model_state": self.model.state_dict(),
             "optimizer_state": self.optimizer.state_dict(),
-            "init": self.init_data | extra_init_dict,
+            "init": {**self.init_data, **extra_init_dict},
         }
         save_dict.update(**extra_save_dict)
         if self.scaler is not None:
