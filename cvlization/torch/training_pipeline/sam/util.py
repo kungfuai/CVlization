@@ -4,7 +4,6 @@ from collections import OrderedDict
 
 import numpy as np
 import torch
-import torch_em
 
 # this is a fairly brittle way to check if a module is compiled.
 # would be good to find a better solution, ideall something like
@@ -167,7 +166,7 @@ def get_constructor_arguments(obj):
             obj,
             [
                 "batch_size",
-                "shuffle",
+                # "shuffle",
                 "num_workers",
                 "pin_memory",
                 "drop_last",

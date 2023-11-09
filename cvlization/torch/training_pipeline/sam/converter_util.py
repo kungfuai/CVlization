@@ -21,12 +21,11 @@ import torch
 from skimage.measure import regionprops
 from skimage.segmentation import relabel_sequential
 
-# try:
-#     from mobile_sam import sam_model_registry, SamPredictor
+try:
+    from mobile_sam import sam_model_registry, SamPredictor
 
-#     VIT_T_SUPPORT = True
-# except ImportError:
-if True:
+    VIT_T_SUPPORT = True
+except ImportError:
     from segment_anything import sam_model_registry, SamPredictor
 
     VIT_T_SUPPORT = False
@@ -737,12 +736,13 @@ def get_centers_and_bounding_boxes(
     if mode == "p":
         center_coordinates = {prop.label: prop.centroid for prop in properties}
     elif mode == "v":
-        center_coordinates = vigra.filters.eccentricityCenters(
-            segmentation.astype("float32")
-        )
-        center_coordinates = {
-            i: coord for i, coord in enumerate(center_coordinates) if i > 0
-        }
+        raise NotImplementedError("Only skimage regionprops is supported.")
+    #     center_coordinates = vigra.filters.eccentricityCenters(
+    #         segmentation.astype("float32")
+    #     )
+    #     center_coordinates = {
+    #         i: coord for i, coord in enumerate(center_coordinates) if i > 0
+    #     }
 
     bbox_coordinates = {prop.label: prop.bbox for prop in properties}
 
