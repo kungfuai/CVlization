@@ -22,6 +22,7 @@ class PennFudanPedestrianDatasetBuilder:
     preload: bool = True
     include_masks: bool = True
     label_offset: int = 0
+    normalize_with_min_max: bool = True
 
     @property
     def dataset_provider(self):
@@ -65,6 +66,7 @@ class PennFudanPedestrianDatasetBuilder:
             start_idx=0,
             end_idx=30,
             label_offset=self.label_offset,
+            normalize_with_min_max=self.normalize_with_min_max,
             # end_idx=-50,
         )
         if self.preload:
@@ -90,6 +92,7 @@ class PennFudanPedestrianDatasetBuilder:
             start_idx=-20,
             end_idx=None,
             label_offset=self.label_offset,
+            normalize_with_min_max=self.normalize_with_min_max,
         )
         if self.preload:
             ds.load_annotations()
@@ -107,7 +110,6 @@ class PennFudanPedestrianDatasetBuilder:
 
 
 class PennFudanPedestrianDataset:
-
     CLASSES = ("Pedestrian",)
 
     def __init__(
@@ -118,6 +120,7 @@ class PennFudanPedestrianDataset:
         end_idx: int = -50,
         include_masks: bool = True,
         label_offset: int = 0,
+        normalize_with_min_max: bool = True,
     ):
         """
         Data flow: download -> extract -> load_annotations
@@ -130,6 +133,7 @@ class PennFudanPedestrianDataset:
         self.include_masks = include_masks
         self.parent_dir = "PennFudanPed"
         self.label_offset = label_offset
+        self.normalize_with_min_max = normalize_with_min_max
 
     def __getitem__(self, index: int):
         # load images and masks
@@ -141,7 +145,8 @@ class PennFudanPedestrianDataset:
         )
         # img = Image.open(img_path).convert("RGB")
         np_img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float32)
-        np_img = (np_img - np_img.min()) / max(1e-3, np_img.max() - np_img.min())
+        if self.normalize_with_min_max:
+            np_img = (np_img - np_img.min()) / max(1e-3, np_img.max() - np_img.min())
         if self.channels_first:
             np_img = np_img.transpose((2, 0, 1))
         # note that we haven't converted the mask to RGB,
@@ -313,7 +318,9 @@ if __name__ == "__main__":
     """
     python -m cvlization.lab.penn_fudan_pedestrian
     """
-    dsb = PennFudanPedestrianDatasetBuilder(flavor=None, preload=True)
+    dsb = PennFudanPedestrianDatasetBuilder(
+        flavor=None, preload=True, normalize_with_min_max=False
+    )
     # ds = PennFudanPedestrianDataset(start_idx=0, end_idx=12)
     ds = dsb.training_dataset()
     print(len(ds), "examples in the dataset")
@@ -321,7 +328,7 @@ if __name__ == "__main__":
     assert isinstance(example, tuple)
     inputs, targets = example
     img = inputs[0]
-    print("image:", img.shape, img.dtype, type(img))
+    print("image:", img.shape, img.dtype, type(img), img.min(), img.max())
     for j in range(3):
         print(f"target {j}:", targets[j].shape, targets[j].dtype, type(targets[j]))
 

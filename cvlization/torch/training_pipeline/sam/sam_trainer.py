@@ -1,12 +1,20 @@
+import logging
 import os
 import time
 from typing import Optional
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
+
 # from torchvision.utils import make_grid
 
 from .prompt_generators import IterativePromptGenerator
 from .torch_em_trainer import TorchEmTrainer
+
+
+LOGGER = logging.getLogger(__name__)
+# LOGGER.debug = print
+LOGGER.setLevel(logging.INFO)
 
 
 class SamTrainer(TorchEmTrainer):
@@ -36,6 +44,8 @@ class SamTrainer(TorchEmTrainer):
         mse_loss: torch.nn.Module = torch.nn.MSELoss(),
         _sigmoid: torch.nn.Module = torch.nn.Sigmoid(),
         prompt_generator=IterativePromptGenerator(),
+        always_output_single_mask=False,
+        use_single_point_prompt_per_object=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -45,6 +55,8 @@ class SamTrainer(TorchEmTrainer):
         self.n_objects_per_batch = n_objects_per_batch
         self.n_sub_iteration = n_sub_iteration
         self.prompt_generator = prompt_generator
+        self.always_output_single_mask = always_output_single_mask
+        self.use_single_point_prompt_per_object = use_single_point_prompt_per_object
         self._kwargs = kwargs
 
     def _get_prompt_and_multimasking_choices(self, current_iteration):
@@ -102,9 +114,8 @@ class SamTrainer(TorchEmTrainer):
         return n_pos, n_neg, get_boxes, multimask_output
 
     def _get_dice(self, input_, target):
-        """Using the default "DiceLoss" called by the trainer from "torch_em" """
-        dice_loss = self.loss(input_, target)
-        return dice_loss
+        loss = self.loss(input_, target)
+        return loss
 
     def _get_iou(self, pred, true, eps=1e-7):
         """Getting the IoU score for the predicted and true labels"""
@@ -114,7 +125,7 @@ class SamTrainer(TorchEmTrainer):
         iou = overlap / (union + eps)
         return iou
 
-    def _get_net_loss(self, batched_outputs, y, sampled_ids):
+    def _get_net_loss(self, batched_outputs, y, sampled_ids, verbose=False):
         """What do we do here? two **separate** things
         1. compute the mask loss: loss between the predicted and ground-truth masks
             for this we just use the dice of the prediction vs. the gt (binary) mask
@@ -122,12 +133,14 @@ class SamTrainer(TorchEmTrainer):
             match the actual IOU between predicted and (binary) ground-truth mask. And we use L2Loss / MSE for this.
         """
         masks = [m["masks"] for m in batched_outputs]
+
         predicted_iou_values = [m["iou_predictions"] for m in batched_outputs]
         with torch.no_grad():
             mean_model_iou = torch.mean(
                 torch.stack([p.mean() for p in predicted_iou_values])
             )
-
+        if verbose:
+            LOGGER.debug(f"{len(masks)} masks lists, mean_model_iou: {mean_model_iou}")
         mask_loss = 0.0  # this is the loss term for 1.
         iou_regression_loss = 0.0  # this is the loss term for 2.
 
@@ -135,6 +148,10 @@ class SamTrainer(TorchEmTrainer):
         for m_, y_, ids_, predicted_iou_ in zip(
             masks, y, sampled_ids, predicted_iou_values
         ):
+            if verbose:
+                LOGGER.debug(
+                    f"{len(m_)} masks, {len(y_)} y, {len(ids_)} ids, {len(predicted_iou_)} predicted_ious (objects)"
+                )
             per_object_dice_scores, per_object_iou_scores = [], []
 
             # inner loop is over the channels, this corresponds to the different predicted objects
@@ -144,8 +161,9 @@ class SamTrainer(TorchEmTrainer):
 
                 # this is computing the LOSS for 1.)
                 _dice_score = min(
-                    [self._get_dice(p[None], true_obj) for p in predicted_obj]
+                    [self._get_dice(p[None], true_obj * 1.0) for p in predicted_obj]
                 )
+
                 per_object_dice_scores.append(_dice_score)
 
                 # now we need to compute the loss for 2.)
@@ -153,6 +171,24 @@ class SamTrainer(TorchEmTrainer):
                     true_iou = torch.stack(
                         [self._get_iou(p[None], true_obj) for p in predicted_obj]
                     )
+
+                if verbose:
+                    LOGGER.debug(
+                        f"  - {i}: predicted_obj (sigmoid): {predicted_obj.shape}, max(predicted_obj)={predicted_obj.max()}, pred_obj area: {(predicted_obj.detach().cpu().numpy() > 0.5).mean()}, true_obj area: {(y_ == ids_[i]).numpy().astype(float).mean():.4f}, _dice_score: {_dice_score}, true_iou: {true_iou}"
+                    )
+                    # visualize true_obj and predicted_obj
+                    from pathlib import Path
+
+                    output_path = Path(
+                        f"logs/images/iter{self._iteration:03d}_mask_{i}_dice_{_dice_score:.3f}_iou_{true_iou[0]:.3f}.png"
+                    )
+                    output_path.parent.mkdir(exist_ok=True, parents=True)
+                    fig, ax = plt.subplots(1, 2)
+                    ax[0].imshow(true_obj.detach().cpu().numpy()[0])
+                    ax[1].imshow(predicted_obj.detach().cpu().numpy()[0])
+                    plt.savefig(output_path)
+                    plt.close()
+
                 _iou_score = self.mse_loss(true_iou, predicted_iou)
                 per_object_iou_scores.append(_iou_score)
 
@@ -210,6 +246,9 @@ class SamTrainer(TorchEmTrainer):
         multimask_output,
     ):
         # estimating the image inputs to make the computations faster for the decoder
+        LOGGER.debug(
+            f"before preprocessing: image max: {batched_inputs[0]['image'].max()}"
+        )
         input_images = torch.stack(
             [
                 self.model.preprocess(x=x["image"].to(self.device))
@@ -217,6 +256,7 @@ class SamTrainer(TorchEmTrainer):
             ],
             dim=0,
         )
+        LOGGER.debug(f"after preprocessing: image max: {input_images.max()}")
         image_embeddings = self.model.image_embeddings_oft(input_images)
 
         loss, mask_loss, iou_regression_loss, mean_model_iou = 0.0, 0.0, 0.0, 0.0
@@ -225,11 +265,53 @@ class SamTrainer(TorchEmTrainer):
         for i in range(0, num_subiter):
             # we do multimasking only in the first sub-iteration as we then pass single prompt
             # after the first sub-iteration, we don't do multimasking because we get multiple prompts
+
+            if self.use_single_point_prompt_per_object:
+                # For each object instance, multiple point prompts are used. The first few point prompts is a positive point,
+                # the last one is usually a negative point.
+                # In this IF-branch, we only keep the first point prompt in the batched_input.
+                batched_inputs = [
+                    {
+                        k: (
+                            v[:, i : i + 1, ...]
+                            if k in ("point_coords", "point_labels")  # , "boxes")
+                            else v
+                        )
+                        for k, v in inp.items()
+                    }
+                    for inp in batched_inputs
+                ]
+                for batched_input in batched_inputs:
+                    if "point_coords" in batched_input:
+                        assert batched_input["point_coords"].shape[1] == 1
+                        assert batched_input["point_labels"].shape[1] == 1
+
+            # DEBUG: save batched_inputs
+            # import pickle
+            # from pathlib import Path
+
+            # output_path = Path(
+            #     f"logs/images/batched_inputs_iter_{self._iteration}_{i}.pkl"
+            # )
+            # output_path.parent.mkdir(exist_ok=True, parents=True)
+            # with open(output_path, "wb") as f:
+            #     pickle.dump(batched_inputs, f)
+
+            if self.always_output_single_mask:
+                multimask_output = False
+            else:
+                multimask_output = multimask_output if i == 0 else False
             batched_outputs = self.model(
                 batched_inputs,
-                multimask_output=multimask_output if i == 0 else False,
+                multimask_output=multimask_output,
                 image_embeddings=image_embeddings,
             )
+            LOGGER.debug(f"\nsubiter: {i}, batched_outputs: {len(batched_outputs)}")
+            for k, v in batched_inputs[0].items():
+                if k in ["image", "point_coords", "point_labels", "boxes"]:
+                    LOGGER.debug(f"  - input {k}: {v.shape}")
+                if k in ["point_labels", "point_coords"]:
+                    LOGGER.debug(f"  - input {k}: {v}")
 
             # we want to average the loss and then backprop over the net sub-iterations
             (
@@ -237,7 +319,7 @@ class SamTrainer(TorchEmTrainer):
                 net_mask_loss,
                 net_iou_regression_loss,
                 net_mean_model_iou,
-            ) = self._get_net_loss(batched_outputs, y, sampled_ids)
+            ) = self._get_net_loss(batched_outputs, y, sampled_ids, verbose=False)
             loss += net_loss
             mask_loss += net_mask_loss
             iou_regression_loss += net_iou_regression_loss
@@ -285,6 +367,9 @@ class SamTrainer(TorchEmTrainer):
         ):
             # here, we get each object in the pairs and do the point choices per-object
             net_coords, net_labels, _, _ = self.prompt_generator(x2, x1)
+            LOGGER.debug(
+                f"\nnet_coords: {net_coords.shape}, net_labels: {net_labels.shape}, {net_labels}"
+            )
 
             updated_point_coords = (
                 torch.cat([_inp["point_coords"], net_coords], dim=1)
@@ -295,6 +380,9 @@ class SamTrainer(TorchEmTrainer):
                 torch.cat([_inp["point_labels"], net_labels], dim=1)
                 if "point_labels" in _inp.keys()
                 else net_labels
+            )
+            LOGGER.debug(
+                f"updated point labels: {updated_point_labels.shape}, {updated_point_labels}"
             )
 
             _inp["point_coords"] = updated_point_coords
@@ -325,6 +413,9 @@ class SamTrainer(TorchEmTrainer):
                 n_samples = self._update_samples_for_gt_instances(
                     y, self.n_objects_per_batch
                 )
+                LOGGER.debug(
+                    f"x: {x.shape}, y: {y.shape}, n_samples: {n_samples}, max(y) = {torch.amax(y)}"
+                )
 
                 (
                     n_pos,
@@ -332,10 +423,14 @@ class SamTrainer(TorchEmTrainer):
                     get_boxes,
                     multimask_output,
                 ) = self._get_prompt_and_multimasking_choices(self._iteration)
+                LOGGER.debug(
+                    f"n_pos: {n_pos}, n_neg: {n_neg}, multimask_output: {multimask_output}"
+                )
 
                 batched_inputs, sampled_ids = self.convert_inputs(
                     x, y, n_pos, n_neg, get_boxes, n_samples
                 )
+                LOGGER.debug(f"sampled_ids: {sampled_ids}")
 
                 assert len(y) == len(sampled_ids)
                 sampled_binary_y = []
@@ -445,6 +540,13 @@ class SamTrainer(TorchEmTrainer):
                             for i in range(len(y))
                         ]
                     ).to(torch.float32)
+                    # # visualize the sampled binary y
+                    # for i in range(len(sampled_binary_y)):
+                    #     plt.imshow(sampled_binary_y[i].detach().cpu().numpy()[0])
+                    #     # save
+                    #     plt.savefig(f"sampled_binary_y_{i}.png")
+                    #     plt.close()
+                    # raise Exception(f"stop here, sampled_binary_y == {sampled_binary_y.shape}")
 
                     (
                         loss,

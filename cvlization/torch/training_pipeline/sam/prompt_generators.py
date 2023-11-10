@@ -328,7 +328,7 @@ class IterativePromptGenerator(PromptGeneratorBase):
             The updated point prompt coordinates.
             The updated point prompt labels.
         """
-        assert segmentation.shape == prediction.shape
+        assert segmentation.shape == prediction.shape, f"segmentation.shape={segmentation.shape}, prediction.shape={prediction.shape}"
         device = prediction.device
 
         true_object = segmentation.to(device)
