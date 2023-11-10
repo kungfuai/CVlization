@@ -293,7 +293,7 @@ class TorchEmTrainer:
             >>>             self.trainer_kwargs[kwarg_name] = self.init_data["the"] * 10 + self.init_data["answer"]
         """
 
-        def __init__(self, trainer: DefaultTrainer):
+        def __init__(self, trainer):
             self.trainer = trainer
             self.init_data = {}  # to be populated during serialization process
 
@@ -301,8 +301,8 @@ class TorchEmTrainer:
             dumper = getattr(self, f"dump_{kwarg_name}", None)
             if dumper is not None:
                 dumper(kwarg_name)
-            elif kwarg_name.endswith("_loader"):
-                self.dump_data_loader(kwarg_name)
+            # elif kwarg_name.endswith("_loader"):
+            #     self.dump_data_loader(kwarg_name)
             elif kwarg_name.endswith("_class"):
                 self.dump_generic_class(kwarg_name)
             elif not hasattr(self.trainer, kwarg_name):
