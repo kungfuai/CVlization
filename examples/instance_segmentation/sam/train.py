@@ -7,6 +7,7 @@ pip install git+https://github.com/ChaoningZhang/MobileSAM.git
 """
 
 import logging
+import torchvision
 import torch
 from cvlization.data.transformed_map_dataset import TransformedMapDataset
 from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
@@ -49,10 +50,10 @@ def get_dataloaders():
     # TODO: Image has variable sizes. Consider resizing images and masks to a fixed size.
     # train_loader = torch.utils.data.DataLoader(train_ds, batch_size=1, shuffle=True, collate_fn=None)
     # DEBUG
-    # train_ds._source_dataset.base_dataset.annotations = (
-    #     train_ds.source_dataset.base_dataset.annotations[:1]
-    # )
-    # assert len(train_ds) == 1, len(train_ds)
+    train_ds._source_dataset.base_dataset.annotations = (
+        train_ds.source_dataset.base_dataset.annotations[:1]
+    )
+    assert len(train_ds) == 1, len(train_ds)
     first_image = train_ds[0][0]
     assert (
         first_image.max() > 2
@@ -60,12 +61,12 @@ def get_dataloaders():
     train_loader = torch.utils.data.DataLoader(
         train_ds, batch_size=1, shuffle=False, collate_fn=None
     )
-    val_loader = torch.utils.data.DataLoader(
-        val_ds, batch_size=1, shuffle=False, collate_fn=None
-    )
     # val_loader = torch.utils.data.DataLoader(
-    #     train_ds, batch_size=1, shuffle=False, collate_fn=None
+    #     val_ds, batch_size=1, shuffle=False, collate_fn=None
     # )
+    val_loader = torch.utils.data.DataLoader(
+        train_ds, batch_size=1, shuffle=False, collate_fn=None
+    )
     return train_loader, val_loader
 
 
@@ -80,13 +81,20 @@ if __name__ == "__main__":
 
     # Get the segment anything model, the optimizer and the LR scheduler
     # freeze = ["image_encoder", "prompt_encoder", "mask_decoder"]
-    model = get_trainable_sam_model(model_type=model_type, device=device, freeze=None)
-    # model = get_trainable_sam_model(model_type=model_type, device=device, freeze=["image_encoder", "prompt_encoder"])
+    # model = get_trainable_sam_model(model_type=model_type, device=device, freeze=None)
+    # model = get_trainable_sam_model(
+    #     model_type=model_type, device=device, freeze=["image_encoder", "prompt_encoder"]
+    # )
     # model = get_trainable_sam_model(
     #     model_type=model_type, device=device, freeze=["mask_decoder"]
     # )
-    # model = get_trainable_sam_model(model_type=model_type, device=device, freeze=["prompt_encoder", "mask_decoder"])
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-6)
+    # model = get_trainable_sam_model(
+    #     model_type=model_type, device=device, freeze=["prompt_encoder", "mask_decoder"]
+    # )
+    model = get_trainable_sam_model(
+        model_type=model_type, device=device, freeze=["image_encoder"]
+    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.9, patience=10, verbose=True
     )
@@ -96,14 +104,17 @@ if __name__ == "__main__":
 
     # Get the dataloaders
     train_loader, val_loader = get_dataloaders()
+
     trainer = SamTrainer(
         name=checkpoint_name,
+        # loss=torch.nn.BCELoss(), # not working
         loss=DiceLoss(channelwise=False),
         # loss=torch.nn.MSELoss(),
         metric=DiceLoss(),
-        always_output_single_mask=False,
+        always_output_single_mask=True,
         use_single_point_prompt_per_object=True,
-        n_sub_iteration=1,  # 8,
+        use_background_point_as_single_point_prompt=True,
+        n_sub_iteration=8,  # 8,
         mixed_precision=True,
         train_loader=train_loader,
         val_loader=val_loader,

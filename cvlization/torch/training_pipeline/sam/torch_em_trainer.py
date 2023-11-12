@@ -443,7 +443,8 @@ class TorchEmTrainer:
             self.model = auto_compile(self.model, self.compile_model)
 
             self.model.to(self.device)
-            self.loss.to(self.device)
+            if hasattr(self.loss, "to"):
+                self.loss.to(self.device)
 
             # this saves all the information that is necessary
             # to fully load the trainer from the checkpoint
