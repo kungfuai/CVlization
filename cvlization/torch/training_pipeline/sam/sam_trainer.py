@@ -46,6 +46,7 @@ class SamTrainer(TorchEmTrainer):
         prompt_generator=IterativePromptGenerator(),
         always_output_single_mask=False,
         use_single_point_prompt_per_object=True,
+        use_background_point_as_single_point_prompt=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -57,6 +58,9 @@ class SamTrainer(TorchEmTrainer):
         self.prompt_generator = prompt_generator
         self.always_output_single_mask = always_output_single_mask
         self.use_single_point_prompt_per_object = use_single_point_prompt_per_object
+        self.use_background_point_as_single_point_prompt = (
+            use_background_point_as_single_point_prompt
+        )
         self._kwargs = kwargs
 
     def _get_prompt_and_multimasking_choices(self, current_iteration):
@@ -161,7 +165,7 @@ class SamTrainer(TorchEmTrainer):
 
                 # this is computing the LOSS for 1.)
                 _dice_score = min(
-                    [self._get_dice(p[None], true_obj * 1.0) for p in predicted_obj]
+                    [self._get_dice(p[None], (true_obj * 1.0)) for p in predicted_obj]
                 )
 
                 per_object_dice_scores.append(_dice_score)
@@ -180,7 +184,7 @@ class SamTrainer(TorchEmTrainer):
                     from pathlib import Path
 
                     output_path = Path(
-                        f"logs/images/iter{self._iteration:03d}_mask_{i}_dice_{_dice_score:.3f}_iou_{true_iou[0]:.3f}.png"
+                        f"logs/images/iter{self._iteration:03d}_{self._subiter:d}_mask_{i}_dice_{_dice_score:.3f}_iou_{true_iou[0]:.3f}.png"
                     )
                     output_path.parent.mkdir(exist_ok=True, parents=True)
                     fig, ax = plt.subplots(1, 2)
@@ -265,8 +269,20 @@ class SamTrainer(TorchEmTrainer):
         for i in range(0, num_subiter):
             # we do multimasking only in the first sub-iteration as we then pass single prompt
             # after the first sub-iteration, we don't do multimasking because we get multiple prompts
-
-            if self.use_single_point_prompt_per_object:
+            self._subiter = i
+            if self.use_background_point_as_single_point_prompt and i > 0:
+                LOGGER.debug(f"neg_point_coords: {neg_point_coords}")
+                LOGGER.debug(f"neg_point_labels: {neg_point_labels}")
+                batched_inputs = [
+                    {
+                        "image": inp["image"],
+                        "point_coords": neg_point_coords,
+                        "point_labels": neg_point_labels,
+                        "original_size": inp["original_size"],
+                    }
+                    for inp in batched_inputs
+                ]
+            elif self.use_single_point_prompt_per_object:
                 # For each object instance, multiple point prompts are used. The first few point prompts is a positive point,
                 # the last one is usually a negative point.
                 # In this IF-branch, we only keep the first point prompt in the batched_input.
@@ -314,12 +330,20 @@ class SamTrainer(TorchEmTrainer):
                     LOGGER.debug(f"  - input {k}: {v}")
 
             # we want to average the loss and then backprop over the net sub-iterations
+            if i > 0 and self.use_background_point_as_single_point_prompt:
+                # Starting from the 2nd sub iter, we use the background point as the prompt.
+                # So the ground truth mask should be empty.
+                y_with_label = [y_ * 0 for y_ in y]
+            else:
+                y_with_label = y
             (
                 net_loss,
                 net_mask_loss,
                 net_iou_regression_loss,
                 net_mean_model_iou,
-            ) = self._get_net_loss(batched_outputs, y, sampled_ids, verbose=False)
+            ) = self._get_net_loss(
+                batched_outputs, y_with_label, sampled_ids, verbose=False
+            )
             loss += net_loss
             mask_loss += net_mask_loss
             iou_regression_loss += net_iou_regression_loss
@@ -347,9 +371,14 @@ class SamTrainer(TorchEmTrainer):
             masks, logits_masks = torch.stack(masks), torch.stack(logits_masks)
             masks = (masks > 0.5).to(torch.float32)
 
-            self._get_updated_points_per_mask_per_subiter(
-                masks, sampled_binary_y, batched_inputs, logits_masks
-            )
+            if self.use_background_point_as_single_point_prompt:
+                # input: image, a point in the background
+                # output: an empty mask (all zeros)
+                neg_point_coords, neg_point_labels = self._get_negative_example(y)
+            else:
+                self._get_updated_points_per_mask_per_subiter(
+                    masks, sampled_binary_y, batched_inputs, logits_masks
+                )
 
         loss = loss / num_subiter
         mask_loss = mask_loss / num_subiter
@@ -357,6 +386,32 @@ class SamTrainer(TorchEmTrainer):
         mean_model_iou = mean_model_iou / num_subiter
 
         return loss, mask_loss, iou_regression_loss, mean_model_iou
+
+    def _get_negative_example(self, y):
+        # find a point inside the background y == 0
+        point_coords, point_labels = [], []
+        for y_ in y:
+            y_ = y_.squeeze(0)
+            y_ = (y_ == 0).float()
+            # LOGGER.debug(f"y_: {y_.shape}")
+            # dilate
+            from skimage.morphology import dilation, disk
+
+            y_ = dilation(y_.numpy(), disk(7))
+            y_ = torch.from_numpy(y_).to(torch.float32)
+
+            background_pt = torch.where(y_)
+            # randomly pick a point
+            num_background_pts = len(background_pt[0])
+            random_idx = np.random.randint(0, num_background_pts)
+            # get the point
+            random_pt = torch.tensor(
+                [background_pt[0][random_idx], background_pt[1][random_idx]]
+            ).unsqueeze(0)
+            # empty_mask = torch.zeros_like(y_)
+            point_coords.append(random_pt)
+            point_labels.append(torch.tensor([1]))
+        return torch.stack(point_coords), torch.stack(point_labels)
 
     def _get_updated_points_per_mask_per_subiter(
         self, masks, sampled_binary_y, batched_inputs, logits_masks
