@@ -22,11 +22,11 @@ from skimage.measure import regionprops
 from skimage.segmentation import relabel_sequential
 
 try:
-    from mobile_sam import sam_model_registry, SamPredictor
+    from mobile_sam import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 
     VIT_T_SUPPORT = True
 except ImportError:
-    from segment_anything import sam_model_registry, SamPredictor
+    from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 
     VIT_T_SUPPORT = False
 
