@@ -7,7 +7,8 @@ class TransformedMapDataset:
                  image_transform: Callable=None,
                  input_and_target_transform: Callable=None,
                  ):
-        # TODO: support joint transform of image and label
+        # TODO: support chaining of transforms.
+        #   If the source dataset is a TransformedMapDataset, then we can chain the transforms.
         self._source_dataset = source_dataset
         if image_transform is None and input_and_target_transform is None:
             raise ValueError("Either image_transform or input_and_target_transform must be provided.")
