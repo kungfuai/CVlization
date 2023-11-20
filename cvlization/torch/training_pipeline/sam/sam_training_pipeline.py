@@ -52,6 +52,7 @@ class SamTrainingPipeline:
     use_background_point_as_single_point_prompt: bool = (
         True  # whether to use the background point as a single point prompt
     )
+    debug_with_train_example: bool = False  # whether to debug with a train example
 
     def __post_init__(self):
         self.device = torch.device(self.device)
@@ -74,11 +75,13 @@ class SamTrainingPipeline:
         )
         # TODO: Image has variable sizes. Consider resizing images and masks to a fixed size.
         # train_loader = torch.utils.data.DataLoader(train_ds, batch_size=1, shuffle=True, collate_fn=None)
-        # DEBUG
-        train_ds._source_dataset.base_dataset.annotations = (
-            train_ds.source_dataset.base_dataset.annotations[:1]
-        )
-        assert len(train_ds) == 1, len(train_ds)
+        if self.debug_with_train_example:
+            # DEBUG
+            train_ds._source_dataset.base_dataset.annotations = (
+                train_ds.source_dataset.base_dataset.annotations[:1]
+            )
+            val_ds = train_ds
+            assert len(train_ds) == 1, len(train_ds)
         first_image = train_ds[0][0]
         assert (
             first_image.max() > 2
@@ -86,11 +89,8 @@ class SamTrainingPipeline:
         train_loader = torch.utils.data.DataLoader(
             train_ds, batch_size=1, shuffle=False, collate_fn=None
         )
-        # val_loader = torch.utils.data.DataLoader(
-        #     val_ds, batch_size=1, shuffle=False, collate_fn=None
-        # )
         val_loader = torch.utils.data.DataLoader(
-            train_ds, batch_size=1, shuffle=False, collate_fn=None
+            val_ds, batch_size=1, shuffle=False, collate_fn=None
         )
         return train_loader, val_loader
 
@@ -130,6 +130,7 @@ class SamTrainingPipeline:
             n_objects_per_batch=self.n_objects_per_batch,
             compile_model=False,
         )
+        return trainer
 
     def _get_test_example_hard_coded(self, dataset_builder):
         # TODO: this function is for debugging.
