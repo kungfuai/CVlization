@@ -1,0 +1,1 @@
+https://github.com/deforum-art/deforum-stable-diffusion/blob/main/Deforum_Stable_Diffusion.py
