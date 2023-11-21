@@ -14,9 +14,7 @@ from argparse import Namespace
 import time
 import torch
 
-# from cog import BasePredictor, Input, Path
-
-from dreambooth import main
+from .dreambooth import main
 
 
 def run_cmd(command):
@@ -44,7 +42,7 @@ def define_args():
     parser.add_argument(
         "--instance_data",
         type=str,
-        default="instance_data.zip",
+        default="examples/image_gen/dreambooth/instance_data.zip",
         help="A ZIP file containing your training images (JPG, PNG, etc. size not restricted). These images contain your 'subject' that you want the trained model to embed in the output domain for later generating customized scenes beyond the training images. For best results, use images without noise or unrelated objects in the background.",
     )
     parser.add_argument(
