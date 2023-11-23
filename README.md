@@ -133,10 +133,16 @@ but not too small such that customization options are too limited.
 - `lab`: This module contains utilities to make it easy to run and track experiments with the help of popular tools like `ray`, `mlflow`.
 
 
-## Why this repo?
+## Why did we create this repo?
 
 This repo serves 3 purposes:
 
-1. Make it easier to customize and operate computer vision model training for client projects, than if we start from standard tooling like tensorflow, torch, torchvision.
+1. Make it easier to customize and operate computer vision and language model training pipelines for practical applications.
 2. Provide common quality check and diagnostic tools for the model training workflow.
-3. Make it easier to vet new computer vision research, by providing benchmark dataset connectors, and by having an abstraction that can accomodate training scripts in many research repos.
+3. Make it easier to vet new computer vision and language modeling research, by providing consistent interface for benchmark datasets, and by having a consistent interface for training scripts in many research repos.
+
+## Licenses
+
+We plan for the source and binary distribution of the `cvlization` module (installed via `pip`), and all source code and data under the `cvlization/` directory to be derived from software with permissive licenses and commercial friendly.
+
+The source code in the `examples/` directory, however, may contain source code derived from software under copyleft and/or non-commercial licenses. Source code in `examples/` is not distributed when you install `cvlization`.
