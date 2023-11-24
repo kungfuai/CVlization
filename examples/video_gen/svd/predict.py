@@ -123,12 +123,12 @@ class Predictor(BasePredictor):
             SVD_DEFAULT_STEPS,
         )
 
-        self.svd_xt_model = load_model(
-            "svd_xt.yaml",
-            "cuda",
-            SVD_XT_DEFAULT_FRAMES,
-            SVD_XT_DEFAULT_STEPS,
-        )
+        # self.svd_xt_model = load_model(
+        #     "svd_xt.yaml",
+        #     "cuda",
+        #     SVD_XT_DEFAULT_FRAMES,
+        #     SVD_XT_DEFAULT_STEPS,
+        # )
         # self.model = torch.load("./weights.pth")
         # TODO: cache & download open_clip_pytorch_model.bin here
 
