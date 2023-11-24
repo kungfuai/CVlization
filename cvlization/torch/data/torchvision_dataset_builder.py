@@ -131,7 +131,7 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
         raise ValueError(
             f"Cannot find dataset in torchvision: {dataset_classname_lowercase} (case insensitive)"
         )
-    
+
     @property
     def num_classes(self):
         if self.dataset_classname.lower() == "cifar10":
@@ -145,12 +145,20 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
         elif self.dataset_classname.lower() == "voc":
             return 20
         else:
-            raise ValueError(f"Cannot determine num_classes for {self.dataset_classname}")
-    
+            raise ValueError(
+                f"Cannot determine num_classes for {self.dataset_classname}"
+            )
+
     @property
     def num_channels(self):
         # TODO: hard coded for now.
         return 3
+
+    def _check_if_function_takes_argument(self, func, arg_name):
+        import inspect
+
+        args = inspect.getfullargspec(func).args
+        return arg_name in args
 
     def construct_torchvision_dataset(self, dataset_classname, train: bool = True):
         if hasattr(torchvision.datasets, dataset_classname):
@@ -161,7 +169,7 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
             ]
             to_tensor_numpy = lambda x: torchvision.transforms.ToTensor()(x).numpy()
             to_numpy_list = lambda x: [np.array(x)]
-            try:
+            if self._check_if_function_takes_argument(dataset_class, "train"):
                 ds = dataset_class(
                     root=self.data_dir,
                     train=train,
@@ -169,7 +177,7 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
                     transform=to_tensor_numpy_list,
                     target_transform=to_numpy_list,
                 )
-            except:
+            else:
                 target_transform = None
                 if self.dataset_classname.lower().startswith("vocdetection"):
                     target_transform = (
