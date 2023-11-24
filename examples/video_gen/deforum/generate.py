@@ -1,24 +1,67 @@
 import torch
 import random
 import clip
-from IPython import display
+import time
+import gc
+
+# from IPython import display
 from types import SimpleNamespace
-from helpers.save_images import get_output_folder
-from helpers.settings import load_args
-from helpers.render import (
+from .helpers.save_images import get_output_folder
+from .helpers.settings import load_args
+from .helpers.render import (
     render_animation,
     render_input_video,
     render_image_batch,
     render_interpolation,
 )
-from helpers.model_load import make_linear_decode, load_model, get_model_output_paths
-from helpers.aesthetics import load_aesthetics_model
-from helpers.prompts import Prompts
+from .helpers.ffmpeg_helpers import (
+    get_extension_maxframes,
+    get_auto_outdir_timestring,
+    get_ffmpeg_path,
+    make_mp4_ffmpeg,
+    make_gif_ffmpeg,
+    patrol_cycle,
+)
+from .helpers.model_load import make_linear_decode, load_model, get_model_output_paths
+from .helpers.aesthetics import load_aesthetics_model
+from .helpers.prompts import Prompts
+
+
+def PathSetup():
+    models_path = "models"  # @param {type:"string"}
+    configs_path = "examples/video_gen/deforum/configs"  # @param {type:"string"}
+    output_path = "outputs"  # @param {type:"string"}
+    mount_google_drive = True  # @param {type:"boolean"}
+    models_path_gdrive = "/content/drive/MyDrive/AI/models"  # @param {type:"string"}
+    output_path_gdrive = (
+        "/content/drive/MyDrive/AI/StableDiffusion"  # @param {type:"string"}
+    )
+    return locals()
+
+
+root = SimpleNamespace(**PathSetup())
+root.models_path, root.output_path = get_model_output_paths(root)
+
+
+def ModelSetup():
+    map_location = "cuda"  # @param ["cpu", "cuda"]
+    model_config = "v1-inference.yaml"  # @param ["custom","v2-inference.yaml","v2-inference-v.yaml","v1-inference.yaml"]
+    model_checkpoint = "Protogen_V2.2.ckpt"  # @param ["custom","v2-1_768-ema-pruned.ckpt","v2-1_512-ema-pruned.ckpt","768-v-ema.ckpt","512-base-ema.ckpt","Protogen_V2.2.ckpt","v1-5-pruned.ckpt","v1-5-pruned-emaonly.ckpt","sd-v1-4-full-ema.ckpt","sd-v1-4.ckpt","sd-v1-3-full-ema.ckpt","sd-v1-3.ckpt","sd-v1-2-full-ema.ckpt","sd-v1-2.ckpt","sd-v1-1-full-ema.ckpt","sd-v1-1.ckpt", "robo-diffusion-v1.ckpt","wd-v1-3-float16.ckpt"]
+    custom_config_path = ""  # @param {type:"string"}
+    custom_checkpoint_path = ""  # @param {type:"string"}
+    return locals()
+
+
+root.__dict__.update(ModelSetup())
+root.model, root.device = load_model(
+    root, load_on_run_all=True, check_sha256=True, map_location=root.map_location
+)
 
 
 def DeforumAnimArgs():
     # @markdown ####**Animation:**
     animation_mode = "None"  # @param ['None', '2D', '3D', 'Video Input', 'Interpolation'] {type:'string'}
+    # animation_mode = "2D"  # @param ['None', '2D', '3D', 'Video Input', 'Interpolation'] {type:'string'}
     max_frames = 1000  # @param {type:"number"}
     border = "replicate"  # @param ['wrap', 'replicate'] {type:'string'}
 
@@ -288,15 +331,16 @@ if __name__ == "__main__":
     else:
         render_image_batch(root, args, cond, uncond)
 
-    skip_video_for_run_all = True  # @param {type: 'boolean'}
-    create_gif = False  # @param {type: 'boolean'}
+    # skip_video_for_run_all = True  # @param {type: 'boolean'}
+    skip_video_for_run_all = False  # @param {type: 'boolean'}
+    create_gif = True  # @param {type: 'boolean'}
 
     if skip_video_for_run_all == True:
         print(
             "Skipping video creation, uncheck skip_video_for_run_all if you want to run it"
         )
     else:
-        from helpers.ffmpeg_helpers import (
+        from .helpers.ffmpeg_helpers import (
             get_extension_maxframes,
             get_auto_outdir_timestring,
             get_ffmpeg_path,
