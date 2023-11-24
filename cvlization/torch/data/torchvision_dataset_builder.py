@@ -169,7 +169,8 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
             ]
             to_tensor_numpy = lambda x: torchvision.transforms.ToTensor()(x).numpy()
             to_numpy_list = lambda x: [np.array(x)]
-            if self._check_if_function_takes_argument(dataset_class, "train"):
+            print(f"Creating a torchvision dataset: {dataset_classname}")
+            if self._check_if_function_takes_argument(dataset_class.__init__, "train"):
                 ds = dataset_class(
                     root=self.data_dir,
                     train=train,
