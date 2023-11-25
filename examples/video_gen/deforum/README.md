@@ -17,12 +17,16 @@ Then,
 cog predict
 ```
 
+Tested on 3090 (12GB VRAM).
+
+Or, initialize from an image:
+
+```
+cog predict -i use_init=true -i init_image=@<path_to_image>
+```
+
 <!-- ```
 pip install git+https://github.com/openai/CLIP.git
 pip install jsonmerge clean-fid resize-right torchdiffeq torchsde pydantic omegaconf
 pip install open-clip-torch numexpr
 ``` -->
-
-## Running on a GPU with 12GB VRAM
-
-Currently stuck at the ffmpeg step.
