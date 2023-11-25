@@ -7,3 +7,7 @@ Input:
 
 Output:
 - Model weight
+
+## Running on a GPU with 12G VRAM
+
+Currently out of memory.
