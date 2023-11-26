@@ -2,3 +2,4 @@ The license is "[Stable Video License](https://stability.ai/stable-video)", whic
 
 The source code is adapted from Replicate's [cog-svd](https://github.com/replicate/cog-svd) repo.
 
+VRAM requirement: at least 24GB.
