@@ -15,7 +15,8 @@ cd examples/video_gen/deforum
 Download model weights:
 
 ```
-python scripts/download-weights
+pip install tqdm
+python script/download-weights
 ```
 
 Then,
