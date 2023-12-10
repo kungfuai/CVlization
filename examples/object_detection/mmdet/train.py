@@ -1,5 +1,5 @@
-from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
-from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
+from cvlization.dataset.kitti_tiny import KittiTinyDatasetBuilder
+from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.torch.training_pipeline.object_detection.mmdet.pipeline import MMDetObjectDetection
 
 class TrainingSession:

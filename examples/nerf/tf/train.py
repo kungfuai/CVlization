@@ -8,7 +8,7 @@ from cvlization.specs.ml_framework import MLFramework
 from cvlization.specs.prediction_tasks.nerf import Nerf
 from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.experiment import Experiment
-from cvlization.lab.tiny_nerf import TinyNerfDatasetBuilder
+from cvlization.dataset.tiny_nerf import TinyNerfDatasetBuilder
 from cvlization.tensorflow.metrics.psnr import PSNR
 
 

@@ -3,7 +3,7 @@
 
 import os
 from mmseg.datasets import build_dataset
-from cvlization.lab.stanford_background import StanfordBackgroundDatasetBuilder
+from cvlization.dataset.stanford_background import StanfordBackgroundDatasetBuilder
 from cvlization.torch.net.semantic_segmentation.mmseg import (
     MMDatasetAdaptor,
     MMSemanticSegmentationModels,

@@ -1,5 +1,5 @@
 from mmdet.datasets import build_dataset
-from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
+from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.torch.net.instance_segmentation.mmdet import (
     MMInstanceSegmentationModels,
     MMDatasetAdaptor,

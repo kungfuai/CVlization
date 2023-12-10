@@ -1,4 +1,4 @@
-from cvlization.lab.cord_v2 import CordV2DatasetBuilder
+from cvlization.dataset.cord_v2 import CordV2DatasetBuilder
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.pipeline import Donut
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.model import DonutPredictionTask
 

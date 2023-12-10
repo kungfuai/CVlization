@@ -12,7 +12,7 @@ from cvlization.transforms.example_transform import ExampleTransform
 from cvlization.specs.prediction_tasks.semantic_segmentation import SemanticSegmentation
 from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.experiment import Experiment
-from cvlization.lab.stanford_background import StanfordBackgroundDatasetBuilder
+from cvlization.dataset.stanford_background import StanfordBackgroundDatasetBuilder
 from cvlization.torch.net.semantic_segmentation.torchvision import (
     TorchvisionSemanticSegmentationModelFactory,
 )
