@@ -4,7 +4,7 @@
 
 import os
 from mmpose.datasets.builder import build_dataset
-from cvlization.lab.coco_pose_tiny import CocoPoseTinyDatasetBuilder
+from cvlization.dataset.coco_pose_tiny import CocoPoseTinyDatasetBuilder
 from cvlization.torch.net.pose_estimation.mmpose import (
     MMDatasetAdaptor,
     MMPoseModels,

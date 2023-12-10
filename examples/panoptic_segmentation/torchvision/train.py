@@ -1,7 +1,7 @@
 import logging
 
 from cvlization.specs.ml_framework import MLFramework
-from cvlization.lab.kitti_tiny import KittiTinyDatasetBuilder
+from cvlization.dataset.kitti_tiny import KittiTinyDatasetBuilder
 from cvlization.specs.prediction_tasks import ObjectDetection
 from cvlization.training_pipeline import TrainingPipeline
 from cvlization.lab.experiment import Experiment
