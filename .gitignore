@@ -16,3 +16,11 @@ tmp*
 # data files
 data/*
 doc/tmp_notes
+/models
+/outputs
+/*cache
+/cvlization/torch/**/sam/data/
+/examples/**/*output/
+/examples/**/*cache/
+/examples/**/checkpoints/
+/**/*.mp4
