@@ -43,5 +43,5 @@ if __name__ == "__main__":
         device=device,
         n_iterations=args.n_iterations,
         n_sub_iteration=args.n_sub_iteration,
-        debug_with_one_example=args.debug_with_one_example,
+        debug_with_one_training_example=args.debug_with_one_example,
     ).fit(dataset_builder)

@@ -19,19 +19,24 @@ from torchvision import transforms
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
-# from lightning.pytorch.loggers import MLFlowLogger
-# TODO: common utils of cvlization can be moved to a separate package.
-from cvlization.data.transformed_map_dataset import TransformedMapDataset
-from .lightning import DeepEnergyModel, GenerateCallback, SamplerCallback, OutlierCallback
+from cvlization.data.dataset_builder import TransformedMapStyleDataset
+from .lightning import (
+    DeepEnergyModel,
+    GenerateCallback,
+    SamplerCallback,
+    OutlierCallback,
+)
 
 
 DATASET_PATH = "./data/raw/MNIST"
+
 
 @dataclass
 class PipelineResult:
     """TODO: use this to as a return type for the pipeline.
     During fit(), the PipelineResult should be updated.
     """
+
     model_checkpoint_dir: str = None
     lightning_logs_path: str = None
     tensorboard_logs_dir: str = None
@@ -52,7 +57,7 @@ class TrainingPipeline:
     device: str = "cuda"
 
     # Model
-    backbone: str = "resnet18" # TODO: not implemented! See lightning.py
+    backbone: str = "resnet18"  # TODO: not implemented! See lightning.py
 
     # Data
     img_shape: tuple = (1, 28, 28)
@@ -78,19 +83,40 @@ class TrainingPipeline:
     def _create_dataloaders(self, dataset_builder):
         train_raw = dataset_builder.training_dataset()
         val_raw = dataset_builder.validation_dataset()
-        transform = transforms.Compose([
-            transforms.Resize(self.img_shape[1:]),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,))
-        ])
-        train_set = TransformedMapDataset(train_raw, image_transform=transform)
-        test_set = TransformedMapDataset(val_raw, image_transform=transform)
+        transform = transforms.Compose(
+            [
+                transforms.Resize(self.img_shape[1:]),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5,), (0.5,)),
+            ]
+        )
+
+        def transform_example(example):
+            image, target = example
+            image = transform(image)
+            return image, target
+
+        train_set = TransformedMapStyleDataset(train_raw, transform=transform_example)
+        test_set = TransformedMapStyleDataset(val_raw, transform=transform_example)
         # We define a set of data loaders that we can use for various purposes later.
         # Note that for actually training a model, we will use different data loaders
         # with a lower batch size.
         # print("first training example:", train_set[0])
-        train_loader = data.DataLoader(train_set, batch_size=self.train_batch_size, shuffle=True,  drop_last=True,  num_workers=4, pin_memory=True)
-        test_loader  = data.DataLoader(test_set,  batch_size=self.val_batch_size, shuffle=False, drop_last=False, num_workers=4)
+        train_loader = data.DataLoader(
+            train_set,
+            batch_size=self.train_batch_size,
+            shuffle=True,
+            drop_last=True,
+            num_workers=4,
+            pin_memory=True,
+        )
+        test_loader = data.DataLoader(
+            test_set,
+            batch_size=self.val_batch_size,
+            shuffle=False,
+            drop_last=False,
+            num_workers=4,
+        )
         # print("train_loader first batch:", next(iter(train_loader)))
         return train_loader, test_loader
 
@@ -100,7 +126,6 @@ class TrainingPipeline:
             accelerator="gpu" if str(self.device).startswith("cuda") else "cpu",
             devices=1,
             max_epochs=self.epochs,
-
             # For debugging
             # limit_train_batches=10,
             # limit_val_batches=10,
@@ -108,14 +133,20 @@ class TrainingPipeline:
             logger=TensorBoardLogger("./", name=self.name),
             # logger=MLFlowLogger(experiment_name="MNIST_uva_energy"),
             callbacks=[
-                ModelCheckpoint(save_weights_only=True, mode="min", monitor='val_contrastive_divergence'),
+                ModelCheckpoint(
+                    save_weights_only=True,
+                    mode="min",
+                    monitor="val_contrastive_divergence",
+                ),
                 GenerateCallback(every_n_epochs=5),
                 SamplerCallback(every_n_epochs=1),
                 OutlierCallback(),
-                LearningRateMonitor("epoch")
-            ]
+                LearningRateMonitor("epoch"),
+            ],
         )
-        assert hasattr(trainer.logger.experiment, "add_image"), f"Logger {trainer.logger} does not support adding images. Consider using one that can."
+        assert hasattr(
+            trainer.logger.experiment, "add_image"
+        ), f"Logger {trainer.logger} does not support adding images. Consider using one that can."
         return trainer
 
     def _create_model(self):
@@ -131,16 +162,18 @@ class TrainingPipeline:
                 img_shape=self.img_shape,
                 batch_size=self.train_batch_size,
                 lr=self.lr,
-                beta1=0.0
+                beta1=0.0,
             )
         return model
 
+
 if __name__ == "__main__":
+
     class MNISTDatasetBuilder:
         def training_dataset(self):
             return MNIST(root=DATASET_PATH, train=True, download=True)
 
         def validation_dataset(self):
             return MNIST(root=DATASET_PATH, train=False, download=True)
-    
+
     TrainingPipeline().fit(MNISTDatasetBuilder())

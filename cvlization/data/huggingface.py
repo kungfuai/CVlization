@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datasets import load_dataset
-from .transformed_map_dataset import TransformedMapDataset
 
 
 @dataclass
