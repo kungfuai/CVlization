@@ -1,6 +1,20 @@
 import os
-from mmdet.datasets import build_dataset
-from cvlization.lab.coco_panoptic_tiny import CocoPanopticTinyDatasetBuilder
+try:
+    from mmdet.datasets import build_dataset
+except ImportError:
+    print("mmdet not installed")
+    print("For torch 1.11.*:")
+    print("pip install mmdet==2.24.1")
+    print(
+        "pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html"
+    )
+    print("For torch 1.12.*:")
+    print("pip install mmdet==2.25.1")
+    print(
+        "pip install -U mmcv-full==1.6.1 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.12.0/index.html"
+    )
+    raise
+from cvlization.dataset.coco_panoptic_tiny import CocoPanopticTinyDatasetBuilder
 from cvlization.torch.net.panoptic_segmentation.mmdet import (
     MMPanopticSegmentationModels,
     MMDatasetAdaptor,

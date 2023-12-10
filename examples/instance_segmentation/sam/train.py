@@ -8,7 +8,7 @@ pip install git+https://github.com/ChaoningZhang/MobileSAM.git
 import argparse
 import logging
 import torch
-from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
+from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.torch.training_pipeline.sam.sam_training_pipeline import (
     SamTrainingPipeline,
 )

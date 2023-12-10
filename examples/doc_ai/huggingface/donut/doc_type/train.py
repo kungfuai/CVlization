@@ -1,4 +1,4 @@
-from cvlization.lab.rvl_cdip_tiny import RvlCdipTinyDatasetBuilder
+from cvlization.dataset.rvl_cdip_tiny import RvlCdipTinyDatasetBuilder
 from cvlization.torch.training_pipeline.doc_ai.huggingface.donut.pipeline import Donut
 
 
