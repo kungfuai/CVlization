@@ -1,7 +1,7 @@
 # Adapted from https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
 import logging
 
-from cvlization.lab.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
+from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.specs.prediction_tasks import InstanceSegmentation
 from cvlization.torch.torch_training_pipeline import TorchTrainingPipeline
 from cvlization.torch.net.instance_segmentation.torchvision import (

@@ -1,4 +1,4 @@
-from cvlization.lab.york_lines import YorkLinesDatasetBuilder
+from cvlization.dataset.york_lines import YorkLinesDatasetBuilder
 from cvlization.torch.net.line_detection.model_factory import (
     TorchLineDetectionModelFactory,
 )
