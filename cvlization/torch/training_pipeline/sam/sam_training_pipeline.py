@@ -3,7 +3,9 @@ from dataclasses import dataclass
 import os
 import numpy as np
 import torch
-from cvlization.data.transformed_map_dataset import TransformedMapDataset
+
+# from cvlization.data.transformed_map_dataset import TransformedMapDataset
+from cvlization.data.dataset_builder import TransformedMapStyleDataset
 from cvlization.specs.prediction_tasks import InstanceSegmentation
 from cvlization.torch.training_pipeline.sam.sam_trainer import SamTrainer
 from cvlization.torch.training_pipeline.sam.converter import (
@@ -52,7 +54,9 @@ class SamTrainingPipeline:
     use_background_point_as_single_point_prompt: bool = (
         True  # whether to use the background point as a single point prompt
     )
-    debug_with_train_example: bool = False  # whether to debug with a train example
+    debug_with_one_training_example: bool = (
+        False  # whether to debug with a train example
+    )
 
     def __post_init__(self):
         self.device = torch.device(self.device)
@@ -67,18 +71,18 @@ class SamTrainingPipeline:
         train_ds = dataset_builder.training_dataset()
         val_ds = dataset_builder.validation_dataset()
 
-        train_ds = TransformedMapDataset(
-            source_dataset=train_ds, input_and_target_transform=ensure_label_is_tensor
+        train_ds = TransformedMapStyleDataset(
+            base_dataset=train_ds, transform=ensure_label_is_tensor
         )
-        val_ds = TransformedMapDataset(
-            source_dataset=val_ds, input_and_target_transform=ensure_label_is_tensor
+        val_ds = TransformedMapStyleDataset(
+            base_dataset=val_ds, transform=ensure_label_is_tensor
         )
         # TODO: Image has variable sizes. Consider resizing images and masks to a fixed size.
         # train_loader = torch.utils.data.DataLoader(train_ds, batch_size=1, shuffle=True, collate_fn=None)
-        if self.debug_with_train_example:
+        if self.debug_with_one_training_example:
             # DEBUG
-            train_ds._source_dataset.base_dataset.annotations = (
-                train_ds.source_dataset.base_dataset.annotations[:1]
+            train_ds.base_dataset.base_dataset.annotations = (
+                train_ds.base_dataset.base_dataset.annotations[:1]
             )
             val_ds = train_ds
             assert len(train_ds) == 1, len(train_ds)
