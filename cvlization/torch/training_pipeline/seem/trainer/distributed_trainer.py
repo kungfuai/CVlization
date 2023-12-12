@@ -7,7 +7,10 @@
 
 import os
 import logging
-from mpi4py import MPI
+try:
+    from mpi4py import MPI
+except ImportError:
+    MPI = None
 
 import torch
 

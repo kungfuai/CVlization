@@ -25,10 +25,10 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-from mpi4py import MPI
+# from mpi4py import MPI
 from infinibatch import iterators
 
-from .distributed_trainer import DistributedTrainer
+# from .distributed_trainer import DistributedTrainer
 from .utils_trainer import UtilsTrainer
 from .utils.misc import *
 from .utils.serialization import JSONEncoder, filter_jsonable
@@ -36,7 +36,8 @@ from .utils.serialization import JSONEncoder, filter_jsonable
 logger = logging.getLogger(__name__)
 
 
-class DefaultTrainer(UtilsTrainer, DistributedTrainer):
+# class DefaultTrainer(UtilsTrainer, DistributedTrainer):
+class DefaultTrainer(UtilsTrainer):
 
     def __init__(self, opt):
         """

@@ -25,8 +25,8 @@ from ..body import build_xdecoder_head
 from ..modules import sem_seg_postprocess, SetCriterion, HungarianMatcher, bbox_postprocess
 from ..language import build_language_encoder
 from ..language.loss import vl_similarity
-from utils.prompt_engineering import prompt_engineering
-from utils.constants import COCO_PANOPTIC_CLASSES
+from ...utils.prompt_engineering import prompt_engineering
+from ...utils.constants import COCO_PANOPTIC_CLASSES
 
 
 class GeneralizedSEEM(nn.Module):
@@ -363,7 +363,7 @@ class GeneralizedSEEM(nn.Module):
 
         extra = {'lang_logit': self.sem_seg_head.predictor.lang_encoder.logit_scale,
                  'class_embeddings': getattr(self.sem_seg_head.predictor.lang_encoder, '{}_text_embeddings'.format('default')),
-                 'false_positive_mask': extra['false_positive_mask']}
+                 'false_positive_mask': extra.get('false_positive_mask')}
         # bipartite matching-based loss
         self.criterion.losses = self.losses['seg'] # seg criterion losses
 
@@ -1083,6 +1083,7 @@ class GeneralizedSEEM(nn.Module):
         scores = F.softmax(mask_cls, dim=-1)[:, :-1]
         labels = torch.arange(self.sem_seg_head.num_classes, device=self.device).unsqueeze(0).repeat(self.num_queries, 1).flatten(0, 1)
         # scores_per_image, topk_indices = scores.flatten(0, 1).topk(self.num_queries, sorted=False)
+        print("scores", scores.shape)
         scores_per_image, topk_indices = scores.flatten(0, 1).topk(self.test_topk_per_image, sorted=False)
 
         labels_per_image = labels[topk_indices]
