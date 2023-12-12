@@ -1,0 +1,1 @@
+docker run -it --rm seem -v $(pwd):/workspace python -m examples.instance_segmentation.seem.predict

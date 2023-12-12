@@ -1,0 +1,1 @@
+Adapted from https://github.com/UX-Decoder/Segment-Everything-Everywhere-All-At-Once
