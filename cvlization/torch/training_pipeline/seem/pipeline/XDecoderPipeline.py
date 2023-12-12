@@ -23,7 +23,7 @@ from ..trainer.default_trainer import DefaultTrainer
 from ..modeling import build_model
 from ..modeling.utils import get_class_names
 from ..modeling.BaseModel import BaseModel
-from ..datasets import build_evaluator, build_eval_dataloader, build_train_dataloader
+# from ..datasets import build_evaluator, build_eval_dataloader, build_train_dataloader
 from ..utils.distributed import is_main_process
 from ..utils.constants import COCO_PANOPTIC_CLASSES
 from ..trainer.utils.misc import move_batch_to_device, cast_batch_to_half

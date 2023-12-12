@@ -13,7 +13,7 @@ import copy
 import itertools
 from typing import Any, Dict, List, Set, Union
 from datetime import datetime
-from mpi4py import MPI
+# from mpi4py import MPI
 
 import numpy as np
 import torch
@@ -23,7 +23,7 @@ from detectron2.projects.deeplab import build_lr_scheduler
 from fvcore.common.config import CfgNode
 from infinibatch import iterators
 
-from utils.distributed import is_main_process, get_world_size
+from ..utils.distributed import is_main_process, get_world_size
 from .default_trainer import DefaultTrainer
 from .utils.serialization import JSONEncoder, filter_jsonable
 

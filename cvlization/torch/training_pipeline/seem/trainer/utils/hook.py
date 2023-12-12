@@ -15,8 +15,11 @@ def _global_except_hook(exctype, value, traceback):
             sys.__excepthook__(exctype, value, traceback)
 
     finally:
-        import mpi4py.MPI
-        rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+        try:
+            import mpi4py.MPI
+            rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+        except Exception:
+            rank = -1
         logger.warning("******************************************")
         logger.warning("DefaultTrainer:")
         logger.warning(f"   Uncaught exception on rank {rank}.")

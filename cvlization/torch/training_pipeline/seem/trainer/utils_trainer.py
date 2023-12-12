@@ -24,13 +24,13 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-from mpi4py import MPI
+# from mpi4py import MPI
 from infinibatch import iterators
 
 from .distributed_trainer import DistributedTrainer
 from .utils.misc import *
 from .utils.serialization import JSONEncoder, filter_jsonable
-from utils.distributed import get_world_size
+from ..utils.distributed import get_world_size
 
 logger = logging.getLogger(__name__)
 
