@@ -429,9 +429,12 @@ class GeneralizedSEEM(nn.Module):
             
             # instance segmentation inference
             if self.instance_on:
+                print("intance inference is on ===============")
                 if self.task_switch['bbox']:
                     box_pred_result = bbox_postprocess(box_pred_result, input_size, image_size, height, width)
-                instance_r = retry_if_cuda_oom(self.instance_inference)(mask_cls_result, mask_pred_result, box_pred_result)
+                # instance_r = retry_if_cuda_oom(self.instance_inference)(mask_cls_result, mask_pred_result, box_pred_result)
+                instance_r = self.instance_inference(mask_cls_result, mask_pred_result, box_pred_result)
+                print("***** instance_r", instance_r.shape)
                 processed_results[-1]["instances"] = instance_r
 
         return processed_results
@@ -1078,10 +1081,15 @@ class GeneralizedSEEM(nn.Module):
     def instance_inference(self, mask_cls, mask_pred, box_pred):
         # mask_pred is already processed to have the same shape as original input
         image_size = mask_pred.shape[-2:]
-
+        print("instance inference .....")
+        print(f"image_size: {image_size}, mask_cls.shape: {mask_cls.shape}, mask_pred.shape: {mask_pred.shape}")
+        print(f"num_classes: {self.sem_seg_head.num_classes}, num_queries: {self.num_queries}")
+        
         # [Q, K]
         scores = F.softmax(mask_cls, dim=-1)[:, :-1]
         labels = torch.arange(self.sem_seg_head.num_classes, device=self.device).unsqueeze(0).repeat(self.num_queries, 1).flatten(0, 1)
+        print(f"scores softmax:", F.softmax(mask_cls, dim=-1).shape)
+        print(f"labels:", labels.shape)
         # scores_per_image, topk_indices = scores.flatten(0, 1).topk(self.num_queries, sorted=False)
         print("scores", scores.shape)
         scores_per_image, topk_indices = scores.flatten(0, 1).topk(self.test_topk_per_image, sorted=False)
