@@ -1,0 +1,1 @@
+docker run --runtime nvidia -it --rm -v $(pwd):/workspace seem python -m examples.instance_segmentation.seem.predict
