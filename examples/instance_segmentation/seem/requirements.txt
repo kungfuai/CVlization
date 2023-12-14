@@ -1,0 +1,5 @@
+infinibatch>=0.1.1
+timm
+scikit-image
+opencv-python
+kornia
