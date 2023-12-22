@@ -5,6 +5,7 @@ from cvlization.torch.training_pipeline.seem.utils.arguments import load_opt_fro
 
 
 def main():
+    assert torch.cuda.is_available(), "cuda not available"
     opt = load_opt_from_config_files(["cvlization/torch/training_pipeline/seem//configs/seem/focalt_unicl_lang_v1.yaml"])
     prediction_pipeline = XDecoderPipeline(opt)
     print(prediction_pipeline)
