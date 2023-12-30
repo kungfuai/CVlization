@@ -1,3 +1,6 @@
+"""
+TODO: add FID metric calculation.
+"""
 from argparse import ArgumentParser
 from cvlization.torch.training_pipeline.image_gen.ebm.uva_energy.pipeline import TrainingPipeline
 
