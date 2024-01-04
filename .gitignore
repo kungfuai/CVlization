@@ -25,3 +25,5 @@ doc/tmp_notes
 /examples/**/checkpoints/
 /**/*.mp4
 /cog_instance_data/
+/checkpoints
+/data

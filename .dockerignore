@@ -25,3 +25,10 @@ checkpoints
 data
 wandb
 /logs
+/checkpoints
+/data
+*-cache
+/models
+*.ckpt
+*.safetensors
+*.bin

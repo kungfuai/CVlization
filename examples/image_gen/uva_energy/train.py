@@ -2,7 +2,9 @@
 TODO: add FID metric calculation.
 """
 from argparse import ArgumentParser
-from cvlization.torch.training_pipeline.image_gen.ebm.uva_energy.pipeline import TrainingPipeline
+from cvlization.torch.training_pipeline.image_gen.ebm.uva_energy.pipeline import (
+    TrainingPipeline,
+)
 
 
 class MNISTDatasetBuilder:
@@ -17,10 +19,22 @@ class MNISTDatasetBuilder:
 
 if __name__ == "__main__":
     arg_parser = ArgumentParser()
-    arg_parser.add_argument("--dataset", "-d", type=str, default="mnist", help="dataset name")
-    arg_parser.add_argument("--image_shape", "-s", type=str, help="image shape: e.g. 1,28,28", default="1,28,28")
-    arg_parser.add_argument("--epochs", "-e", type=int, default=60, help="number of epochs")
-    arg_parser.add_argument("--batch_size", "-b", type=int, default=128, help="batch size")
+    arg_parser.add_argument(
+        "--dataset", "-d", type=str, default="mnist", help="dataset name"
+    )
+    arg_parser.add_argument(
+        "--image_shape",
+        "-s",
+        type=str,
+        help="image shape: e.g. 1,28,28",
+        default="1,28,28",
+    )
+    arg_parser.add_argument(
+        "--epochs", "-e", type=int, default=60, help="number of epochs"
+    )
+    arg_parser.add_argument(
+        "--batch_size", "-b", type=int, default=128, help="batch size"
+    )
     args = arg_parser.parse_args()
 
     img_shape = tuple(map(int, args.image_shape.split(",")))
@@ -42,8 +56,7 @@ if __name__ == "__main__":
         )
     else:
         raise ValueError(f"Unknown dataset {args.dataset}")
-    
-    
+
     TrainingPipeline(
         img_shape=img_shape,
         epochs=args.epochs,

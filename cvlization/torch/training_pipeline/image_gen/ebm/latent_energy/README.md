@@ -1,0 +1,1 @@
+Similar to the `uva_energy` module, but with latents.

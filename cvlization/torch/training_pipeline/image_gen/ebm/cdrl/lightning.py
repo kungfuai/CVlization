@@ -2,9 +2,12 @@ import random
 import torch
 import torch.nn as nn
 from torch import optim
+import math
 import torchvision
 import lightning.pytorch as pl
+from diffusers import DDPMPipeline, DDPMScheduler, UNet2DModel
 from .sampler import Sampler
+from .generator import TimestepEmbedding, SampleInitializer
 
 
 class Swish(nn.Module):
@@ -13,7 +16,14 @@ class Swish(nn.Module):
 
 
 class CNNModel(nn.Module):
-    def __init__(self, hidden_features=32, out_dim=1, n_channels=1, **kwargs):
+    def __init__(
+        self,
+        hidden_features=32,
+        time_embedding_dim=32,
+        out_dim=1,
+        n_channels=1,
+        **kwargs,
+    ):
         super().__init__()
         # We increase the hidden dimension over layers. Here pre-calculated for simplicity.
         c_hid1 = hidden_features // 2
@@ -34,26 +44,32 @@ class CNNModel(nn.Module):
             Swish(),
             nn.Conv2d(c_hid3, c_hid3, kernel_size=3, stride=1, padding=1),  # [2x2]
             Swish(),
-            # nn.Flatten(),
-            # nn.Linear(c_hid3*4, c_hid3),
-            # Swish(),
-            # nn.Linear(c_hid3, out_dim)
-            # global pool
-            nn.AdaptiveAvgPool2d(1),
         )
+        self.embed_time = TimestepEmbedding(time_embedding_dim)
+        self.pool = nn.AdaptiveAvgPool2d(1)
 
-    def forward(self, x):
+    def forward(self, x, timesteps):
         assert str(x.device).startswith(
             "cuda"
         ), f"inputs to the model must be on the GPU. Got {x.device}"
-        x = self.cnn_layers(x)
+        image_embedding = self.cnn_layers(x)
+        time_embedding = self.embed_time(timesteps)
+        concat_embedding = torch.concat([image_embedding, time_embedding], dim=1)
+        x = self.pool(concat_embedding)
         x = x.squeeze(dim=-1)
         return x
 
 
 class DeepEnergyModel(pl.LightningModule):
     def __init__(
-        self, img_shape, batch_size, alpha=0.1, lr=1e-4, beta1=0.0, **CNN_args
+        self,
+        img_shape,
+        batch_size,
+        diffusion_num_steps=100,
+        alpha=0.1,
+        lr=1e-4,
+        beta1=0.0,
+        **CNN_args,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -62,12 +78,23 @@ class DeepEnergyModel(pl.LightningModule):
         # self.cnn.to("cuda")
         self.sampler = Sampler(self.cnn, img_shape=img_shape, sample_size=batch_size)
         self.example_input_array = torch.zeros(1, *img_shape)
+        self.noise_scheduler = DDPMScheduler(
+            num_train_timesteps=diffusion_num_steps,
+            beta_schedule="linear",
+        )
 
-    def forward(self, x):
+    def forward(self, x, t):
+        """
+        Args:
+            x: input image
+            t: diffusion timestep, or noise level
+        Returns:
+            energy (scalar)
+        """
         assert str(x.device).startswith(
             "cuda"
         ), f"inputs to the model must be on the GPU. Got {x.device}"
-        z = self.cnn(x)
+        z = self.cnn(x, t)
         return z
 
     def configure_optimizers(self):
@@ -81,11 +108,47 @@ class DeepEnergyModel(pl.LightningModule):
         )  # Exponential decay over epochs
         return [optimizer], [scheduler]
 
+    def _generate_noisy_images_from_real_images(self, real_imgs):
+        clean_images = real_imgs
+        # Sample noise that we'll add to the images
+        noise = torch.randn(clean_images.shape).to(clean_images.device)
+        bsz = clean_images.shape[0]
+        # Sample a random timestep for each image
+        timesteps = torch.randint(
+            0,
+            self.noise_scheduler.config.num_train_timesteps,
+            (bsz,),
+            device=clean_images.device,
+        ).long()
+
+        # Add noise to the clean images according to the noise magnitude at each timestep
+        # (this is the forward diffusion process)
+        noisy_images = self.noise_scheduler.add_noise(clean_images, noise, timesteps)
+        return noisy_images, timesteps
+
+    def _run_mcmc_langevin_to_generate_fake_images(
+        self, noisy_imgs, timesteps, num_mcmc_steps=20
+    ):
+        fake_images = self.sampler.sample_new_exmps(
+            noisy_imgs, timesteps, steps=num_mcmc_steps, step_size=10
+        )
+        return fake_images
+
     def training_step(self, batch, batch_idx):
         # We add minimal noise to the original images to prevent the model from focusing on purely "clean" inputs
         real_imgs, _ = batch
-        small_noise = torch.randn_like(real_imgs) * 0.005
-        real_imgs.add_(small_noise).clamp_(min=-1.0, max=1.0)
+        # small_noise = torch.randn_like(real_imgs) * 0.005
+        # real_imgs.add_(small_noise).clamp_(min=-1.0, max=1.0)
+
+        # This is the diffusion step to add noise to data.
+        noisy_imgs, timesteps = self._generate_noisy_images_from_real_images(
+            real_imgs, timesteps
+        )
+
+        # This is the MCMC step to generate fake images.
+        fake_imgs = self._run_mcmc_langevin_to_generate_fake_images(
+            noisy_imgs, timesteps
+        )
 
         # Obtain samples
         fake_imgs = self.sampler.sample_new_exmps(steps=60, step_size=10)
