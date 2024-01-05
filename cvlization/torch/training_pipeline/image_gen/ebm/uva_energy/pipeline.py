@@ -156,8 +156,8 @@ class TrainingPipeline:
                 LearningRateMonitor("epoch"),
             ],
         )
-        assert hasattr(
-            trainer.logger, "log_image"
+        assert hasattr(trainer.logger, "log_image") or hasattr(
+            trainer.logger.experiment, "add_image"
         ), f"Logger {trainer.logger} does not support log_image(). Consider using one that can."
         return trainer
 

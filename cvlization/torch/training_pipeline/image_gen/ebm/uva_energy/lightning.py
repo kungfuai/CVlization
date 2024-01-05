@@ -146,11 +146,18 @@ class GenerateCallback(pl.Callback):
                     range=(-1, 1),
                 )
 
-                trainer.logger.log_image(
-                    key=f"generation_{i}",
-                    images=[grid],
-                    step=trainer.current_epoch,
-                )
+                if hasattr(trainer.logger, "log_image"):
+                    trainer.logger.log_image(
+                        key=f"generation_{i}",
+                        images=[grid],
+                        step=trainer.current_epoch,
+                    )
+                elif hasattr(trainer.logger.experiment, "add_image"):
+                    trainer.logger.experiment.add_image(
+                        f"generation_{i}",
+                        grid,
+                        global_step=trainer.current_epoch,
+                    )
 
     def generate_imgs(self, pl_module):
         pl_module.eval()
@@ -186,11 +193,18 @@ class SamplerCallback(pl.Callback):
             grid = torchvision.utils.make_grid(
                 exmp_imgs, nrow=4, normalize=True, range=(-1, 1)
             )
-            trainer.logger.log_image(
-                key="sampler",
-                images=[grid],
-                step=trainer.current_epoch,
-            )
+            if hasattr(trainer.logger, "log_image"):
+                trainer.logger.log_image(
+                    key="examples",
+                    images=[grid],
+                    step=trainer.current_epoch,
+                )
+            elif hasattr(trainer.logger.experiment, "add_image"):
+                trainer.logger.experiment.add_image(
+                    "examples",
+                    grid,
+                    global_step=trainer.current_epoch,
+                )
             print(f"Saved sampler images to {trainer.logger}")
         else:
             print(f"Skipped saving sampler images to {trainer.logger}")
@@ -211,7 +225,14 @@ class OutlierCallback(pl.Callback):
             rand_out = pl_module.cnn(rand_imgs).mean()
             pl_module.train()
 
-        trainer.logger.log_metrics(
-            metrics={"rand_energy": rand_out},
-            step=trainer.current_epoch,
-        )
+        if hasattr(trainer.logger, "log_metrics"):
+            trainer.logger.log_metrics(
+                metrics={"rand_energy": rand_out},
+                step=trainer.current_epoch,
+            )
+        elif hasattr(trainer.logger.experiment, "add_scalar"):
+            trainer.logger.experiment.add_scalar(
+                "rand_energy",
+                rand_out,
+                global_step=trainer.current_epoch,
+            )
