@@ -32,3 +32,5 @@ wandb
 *.ckpt
 *.safetensors
 *.bin
+/.github
+/build

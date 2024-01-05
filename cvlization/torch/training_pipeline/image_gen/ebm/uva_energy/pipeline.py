@@ -19,7 +19,7 @@ from torchvision.datasets import MNIST
 from torchvision import transforms
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
-from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.loggers import TensorBoardLogger, WandbLogger
 from cvlization.data.dataset_builder import TransformedMapStyleDataset
 from .lightning import (
     DeepEnergyModel,
@@ -61,6 +61,7 @@ class TrainingPipeline:
     img_shape: tuple = (1, 28, 28)
     train_batch_size: int = 128
     val_batch_size: int = 128
+    num_workers: int = 4  # for dataloader
 
     # Optimizer
     lr: float = 1e-4
@@ -69,6 +70,13 @@ class TrainingPipeline:
     # Persistence
     checkpoint_path: str = None
     name: str = "uva_energy"
+    logger: str = "tensorboard"
+
+    def __post_init__(self):
+        assert self.logger in [
+            "tensorboard",
+            "wandb",
+        ], f"Unknown logger {self.logger}. Supported: tensorboard, wandb"
 
     def fit(self, dataset_builder):
         train_loader, val_loader = self._create_dataloaders(dataset_builder)
@@ -108,7 +116,7 @@ class TrainingPipeline:
             batch_size=self.train_batch_size,
             shuffle=True,
             drop_last=True,
-            num_workers=4,
+            num_workers=self.num_workers,
             pin_memory=True,
         )
         test_loader = data.DataLoader(
@@ -116,12 +124,16 @@ class TrainingPipeline:
             batch_size=self.val_batch_size,
             shuffle=False,
             drop_last=False,
-            num_workers=4,
+            num_workers=self.num_workers,
         )
         # print("train_loader first batch:", next(iter(train_loader)))
         return train_loader, test_loader
 
     def _create_trainer(self):
+        if self.logger == "tensorboard":
+            logger = TensorBoardLogger(save_dir="./logs", name=self.name)
+        elif self.logger == "wandb":
+            logger = WandbLogger(save_dir="./logs", project="MNIST_uva_energy")
         trainer = pl.Trainer(
             # default_root_dir=os.path.join(self.checkpoint_path, "MNIST"),
             accelerator="gpu" if str(self.device).startswith("cuda") else "cpu",
@@ -131,8 +143,7 @@ class TrainingPipeline:
             # limit_train_batches=10,
             # limit_val_batches=10,
             gradient_clip_val=0.1,
-            logger=TensorBoardLogger("./logs", name=self.name),
-            # logger=MLFlowLogger(experiment_name="MNIST_uva_energy"),
+            logger=logger,
             callbacks=[
                 ModelCheckpoint(
                     save_weights_only=True,
@@ -146,8 +157,8 @@ class TrainingPipeline:
             ],
         )
         assert hasattr(
-            trainer.logger.experiment, "add_image"
-        ), f"Logger {trainer.logger} does not support adding images. Consider using one that can."
+            trainer.logger, "log_image"
+        ), f"Logger {trainer.logger} does not support log_image(). Consider using one that can."
         return trainer
 
     def _create_model(self):

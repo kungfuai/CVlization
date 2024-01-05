@@ -35,6 +35,9 @@ if __name__ == "__main__":
     arg_parser.add_argument(
         "--batch_size", "-b", type=int, default=128, help="batch size"
     )
+    arg_parser.add_argument(
+        "--logger", "-l", type=str, default="tensorboard", help="logger name"
+    )
     args = arg_parser.parse_args()
 
     img_shape = tuple(map(int, args.image_shape.split(",")))
@@ -62,4 +65,5 @@ if __name__ == "__main__":
         epochs=args.epochs,
         train_batch_size=args.batch_size,
         val_batch_size=args.batch_size,
+        logger=args.logger,
     ).fit(dataset_builder)
