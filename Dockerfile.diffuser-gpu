@@ -5,6 +5,6 @@ WORKDIR /workspace
 # Install pip packages
 RUN --mount=type=cache,mode=0777,target=/root/.cache pip install \
     git+https://github.com/huggingface/diffusers \
-    accelerate datasets wandb
+    accelerate datasets wandb tensorboard lightning
 # diffusers[training]
 ENV DISABLE_TELEMETRY=YES

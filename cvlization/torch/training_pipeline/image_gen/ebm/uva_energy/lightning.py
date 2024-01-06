@@ -41,6 +41,7 @@ class CNNModel(nn.Module):
             # global pool
             nn.AdaptiveAvgPool2d(1),
         )
+        self.final_linear = nn.Linear(c_hid3, out_dim)
 
     def forward(self, x):
         assert str(x.device).startswith(
@@ -48,6 +49,8 @@ class CNNModel(nn.Module):
         ), f"inputs to the model must be on the GPU. Got {x.device}"
         x = self.cnn_layers(x)
         x = x.squeeze(dim=-1)
+        x = x.squeeze(dim=-1)
+        x = self.final_linear(x)
         return x
 
 
@@ -83,7 +86,7 @@ class DeepEnergyModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # We add minimal noise to the original images to prevent the model from focusing on purely "clean" inputs
-        real_imgs, _ = batch
+        real_imgs = batch["image"]
         small_noise = torch.randn_like(real_imgs) * 0.005
         real_imgs.add_(small_noise).clamp_(min=-1.0, max=1.0)
 
@@ -110,7 +113,7 @@ class DeepEnergyModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # For validating, we calculate the contrastive divergence between purely random images and unseen examples
         # Note that the validation/test step of energy-based models depends on what we are interested in the model
-        real_imgs, _ = batch
+        real_imgs = batch["image"]
         fake_imgs = torch.rand_like(real_imgs) * 2 - 1
 
         inp_imgs = torch.cat([real_imgs, fake_imgs], dim=0)

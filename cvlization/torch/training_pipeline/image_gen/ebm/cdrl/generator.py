@@ -4,31 +4,43 @@ from torch import nn
 import math
 
 
-class TimestepEmbedding(nn.Module):
+class SinCosEmbedding(nn.Module):
     def __init__(self, embedding_dim):
-        super(TimestepEmbedding, self).__init__()
+        super(SinCosEmbedding, self).__init__()
         self.embedding_dim = embedding_dim
 
     def forward(self, timesteps):
-        # Create a tensor of positional frequencies
+        # timesteps: [batch_size, n_timesteps]
         half_dim = self.embedding_dim // 2
+        timesteps = timesteps.float().unsqueeze(1)  # [batch_size, 1, n_timesteps]
         emb = math.log(10000) / (half_dim - 1)
         emb = torch.exp(torch.arange(half_dim, dtype=torch.float32) * -emb)
-
-        # Calculate the sinusoidal embeddings
-        emb = timesteps.float().unsqueeze(1) * emb.unsqueeze(0)
+        emb = emb.unsqueeze(0).unsqueeze(-1).to(timesteps.device)  # [1, hidden_dim, 1]
+        emb = timesteps * emb  # [batch_size, hidden_dim, n_timesteps]
         emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=1)
         if self.embedding_dim % 2 == 1:  # zero pad if odd dimension
             emb = torch.nn.functional.pad(emb, (0, 1, 0, 0))
         return emb
 
 
+class LearnedTimestepEmbedding(nn.Module):
+    def __init__(self, num_timesteps, embedding_dim):
+        super().__init__()
+        self.embeddings = nn.Embedding(num_timesteps, embedding_dim)
+
+    def forward(self, timesteps):
+        if timesteps.dim() == 2:
+            timesteps = timesteps.squeeze(1)  # [batch_size, 1] -> [batch_size]
+        return self.embeddings(timesteps)
+
+
 class SampleInitializer(nn.Module):
-    def __init__(self, latent_dim, img_shape, hidden_dim=128):
+    def __init__(self, latent_dim, img_shape, diffusion_num_steps, hidden_dim=128):
         super().__init__()
         self.latent_dim = latent_dim
         self.img_shape = img_shape
         self.hidden_dim = hidden_dim
+        self.diffusion_num_steps = diffusion_num_steps
 
         self.image_encoder = nn.Sequential(
             nn.Conv2d(img_shape[0], hidden_dim, kernel_size=5, stride=2, padding=4),
@@ -40,7 +52,9 @@ class SampleInitializer(nn.Module):
             ),
         )
 
-        self.time_encoder = TimestepEmbedding(hidden_dim)
+        # self.time_encoder = TimestepEmbedding(hidden_dim)
+        # TODO: should we reuse the same embedding as the CnnmModel
+        self.time_encoder = LearnedTimestepEmbedding(diffusion_num_steps, hidden_dim)
 
         self.image_decoder = nn.Sequential(
             [
@@ -65,11 +79,11 @@ class SampleInitializer(nn.Module):
         timesteps: diffusion timesteps (noise levels)
         """
         # convnet
-        x = self.image_encoder(x)
-        timesteps = self.time_encoder(timesteps)
+        x = self.image_encoder(x)  # [batch_size, image_hidden_dim]
+        timesteps = self.time_encoder(timesteps)  # [batch_size, time_hidden_dim]
         # x = x + timesteps
         z = torch.cat([x, timesteps], dim=1)
-        return z
+        return z  # [batch_size, image_hidden_dim + time_hidden_dim]
 
     def decode(self, z, timesteps=None):
         """

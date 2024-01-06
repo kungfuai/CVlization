@@ -14,6 +14,7 @@ TODO: support wandb.
 """
 from dataclasses import dataclass
 import os
+import torch
 import torch.utils.data as data
 from torchvision.datasets import MNIST
 from torchvision import transforms
@@ -101,9 +102,26 @@ class TrainingPipeline:
         )
 
         def transform_example(example):
-            image, target = example
-            image = transform(image)
-            return image, target
+            if isinstance(example, tuple):
+                image, target = example
+                image = transform(image)
+                return {
+                    "image": image,
+                    "label": target,
+                }
+            elif isinstance(example, torch.Tensor):
+                image = example
+                image = transform(image)
+                return {
+                    "image": image,
+                }
+            elif isinstance(example, dict):
+                image = example["image"]
+                image = transform(image)
+                example["image"] = image
+                return example
+            else:
+                raise ValueError(f"Unknown example type {type(example)}")
 
         train_set = TransformedMapStyleDataset(train_raw, transform=transform_example)
         test_set = TransformedMapStyleDataset(val_raw, transform=transform_example)
@@ -133,7 +151,7 @@ class TrainingPipeline:
         if self.logger == "tensorboard":
             logger = TensorBoardLogger(save_dir="./logs", name=self.name)
         elif self.logger == "wandb":
-            logger = WandbLogger(save_dir="./logs", project="MNIST_uva_energy")
+            logger = WandbLogger(save_dir="./logs", project="uva_energy")
         trainer = pl.Trainer(
             # default_root_dir=os.path.join(self.checkpoint_path, "MNIST"),
             accelerator="gpu" if str(self.device).startswith("cuda") else "cpu",
@@ -150,8 +168,8 @@ class TrainingPipeline:
                     mode="min",
                     monitor="val_contrastive_divergence",
                 ),
-                GenerateCallback(every_n_epochs=5),
-                SamplerCallback(every_n_epochs=1),
+                GenerateCallback(every_n_epochs=10),
+                SamplerCallback(every_n_epochs=5),
                 OutlierCallback(),
                 LearningRateMonitor("epoch"),
             ],
@@ -164,7 +182,8 @@ class TrainingPipeline:
     def _create_model(self):
         # Check whether pretrained model exists. If yes, load it and skip training
         if self.checkpoint_path:
-            pretrained_filename = os.path.join(self.checkpoint_path, "MNIST.ckpt")
+            # TODO: this checkpoint path is not used anywhere else.
+            pretrained_filename = os.path.join(self.checkpoint_path, "uva_energy.ckpt")
             if os.path.isfile(pretrained_filename):
                 print("Found pretrained model, loading...")
                 model = DeepEnergyModel.load_from_checkpoint(pretrained_filename)

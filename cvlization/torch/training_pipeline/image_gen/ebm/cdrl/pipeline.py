@@ -62,6 +62,9 @@ class TrainingPipeline:
     train_batch_size: int = 128
     val_batch_size: int = 128
 
+    # Diffusion
+    diffusion_num_steps: int = 5
+
     # Optimizer
     lr: float = 1e-4
     epochs: int = 60
@@ -131,7 +134,7 @@ class TrainingPipeline:
             # limit_train_batches=10,
             # limit_val_batches=10,
             gradient_clip_val=0.1,
-            logger=TensorBoardLogger("./", name=self.name),
+            logger=TensorBoardLogger("./logs", name=self.name),
             # logger=MLFlowLogger(experiment_name="MNIST_uva_energy"),
             callbacks=[
                 ModelCheckpoint(
@@ -164,6 +167,7 @@ class TrainingPipeline:
                 batch_size=self.train_batch_size,
                 lr=self.lr,
                 beta1=0.0,
+                diffusion_num_steps=self.diffusion_num_steps,
             )
         return model
 
@@ -178,4 +182,4 @@ if __name__ == "__main__":
         def validation_dataset(self):
             return MNIST(root=DATASET_PATH, train=False, download=True)
 
-    TrainingPipeline().fit(MNISTDatasetBuilder())
+    TrainingPipeline(diffusion_num_steps=2).fit(MNISTDatasetBuilder())

@@ -1,6 +1,7 @@
 import random
 import torch
 import numpy as np
+from diffusers import DDPMScheduler
 from .generator import SampleInitializer
 
 
@@ -11,6 +12,7 @@ class Sampler:
         img_shape,
         sample_size,
         max_len=8192,
+        diffusion_num_steps=100,
         use_sample_initializer=False,
         device="cuda",
     ):
@@ -26,13 +28,16 @@ class Sampler:
         self.img_shape = img_shape
         self.sample_size = sample_size
         self.max_len = max_len
+        self.diffusion_num_steps = diffusion_num_steps
         self.device = device
         self.examples = [
             (torch.rand((1,) + img_shape) * 2 - 1) for _ in range(self.sample_size)
         ]
         if use_sample_initializer:
             self.sample_initializer = SampleInitializer(
-                latent_dim=32, img_shape=img_shape
+                latent_dim=32,
+                img_shape=img_shape,
+                diffusion_num_steps=diffusion_num_steps,
             )
         else:
             self.sample_initializer = None
@@ -47,6 +52,7 @@ class Sampler:
             step_size - Learning rate nu in the algorithm above
         """
         # Choose 95% of the batch from the buffer, 5% generate from scratch
+        # TODO: noisy_images not used
         n_new = np.random.binomial(self.sample_size, 0.05)
         rand_imgs = torch.rand((n_new,) + self.img_shape) * 2 - 1
         old_imgs = torch.cat(
@@ -61,7 +67,8 @@ class Sampler:
         # Perform MCMC sampling
         inp_imgs = Sampler.generate_samples(
             self.model,
-            inp_imgs,
+            inp_imgs=inp_imgs,
+            timesteps=timesteps,
             sample_initializer=self.sample_initializer,
             steps=steps,
             step_size=step_size,
@@ -79,10 +86,10 @@ class Sampler:
     def generate_samples(
         model,
         inp_imgs,
-        timesteps,
         sample_initializer: SampleInitializer = None,
         steps=60,
         step_size=10,
+        diffusion_num_steps=100,
         return_img_per_step=False,
     ):
         """
@@ -99,6 +106,14 @@ class Sampler:
         #    using a single forward path.
         if sample_initializer is not None:
             inp_imgs = sample_initializer(inp_imgs)
+
+        # Generate the noise levels for the diffusion process
+        noise_scheduler = DDPMScheduler(
+            num_train_timesteps=diffusion_num_steps,
+            beta_schedule="linear",
+        )
+        # TODO: how to get the correct alpha_t?
+        alpha_t = noise_scheduler.alphas
 
         # Before MCMC: set model parameters to "required_grad=False"
         # because we are only interested in the gradients of the input.
@@ -119,28 +134,34 @@ class Sampler:
         # List for storing generations at each step (for later analysis)
         imgs_per_step = []
 
-        # Loop over K (steps)
-        for _ in range(steps):
-            # Part 1: Add noise to the input.
-            noise.normal_(0, 0.005)
-            inp_imgs.data.add_(noise.data)
-            inp_imgs.data.clamp_(min=-1.0, max=1.0)
+        # Loop over T (diffusion steps)
+        for t in list(range(diffusion_num_steps))[::-1]:
+            timesteps = torch.ones(inp_imgs.shape[0], device=inp_imgs.device) * t
+            # Loop over K (MCMC steps)
+            for _ in range(steps):
+                # Part 1: Add noise to the input.
+                noise.normal_(0, 0.005)
+                inp_imgs.data.add_(noise.data)
+                inp_imgs.data.clamp_(min=-1.0, max=1.0)
 
-            # Part 2: calculate gradients for the current input.
-            energy = -model(inp_imgs, timesteps)
-            energy.sum().backward()
-            inp_imgs.grad.data.clamp_(
-                -0.03, 0.03
-            )  # For stabilizing and preventing too high gradients
+                # Part 2: calculate gradients for the current input.
+                energy = -model(inp_imgs, timesteps)
+                energy.sum().backward()
+                inp_imgs.grad.data.clamp_(
+                    -0.03, 0.03
+                )  # For stabilizing and preventing too high gradients
 
-            # Apply gradients to our current samples
-            inp_imgs.data.add_(-step_size * inp_imgs.grad.data)
-            inp_imgs.grad.detach_()
-            inp_imgs.grad.zero_()
-            inp_imgs.data.clamp_(min=-1.0, max=1.0)
+                # Apply gradients to our current samples
+                inp_imgs.data.add_(-step_size * inp_imgs.grad.data)
+                inp_imgs.grad.detach_()
+                inp_imgs.grad.zero_()
+                inp_imgs.data.clamp_(min=-1.0, max=1.0)
 
-            if return_img_per_step:
-                imgs_per_step.append(inp_imgs.clone().detach())
+                # TODO: divide by a scalar alpha_t
+                inp_imgs.data.mul_(1.0 / alpha_t[t])
+
+                if return_img_per_step:
+                    imgs_per_step.append(inp_imgs.clone().detach())
 
         # Reactivate gradients for parameters for training
         for p in model.parameters():

@@ -7,7 +7,7 @@ import torchvision
 import lightning.pytorch as pl
 from diffusers import DDPMPipeline, DDPMScheduler, UNet2DModel
 from .sampler import Sampler
-from .generator import TimestepEmbedding, SampleInitializer
+from .generator import SinCosEmbedding, SampleInitializer, LearnedTimestepEmbedding
 
 
 class Swish(nn.Module):
@@ -22,6 +22,7 @@ class CNNModel(nn.Module):
         time_embedding_dim=32,
         out_dim=1,
         n_channels=1,
+        diffusion_num_steps=100,
         **kwargs,
     ):
         super().__init__()
@@ -42,22 +43,49 @@ class CNNModel(nn.Module):
             Swish(),
             nn.Conv2d(c_hid3, c_hid3, kernel_size=3, stride=2, padding=1),  # [2x2]
             Swish(),
-            nn.Conv2d(c_hid3, c_hid3, kernel_size=3, stride=1, padding=1),  # [2x2]
+            nn.Conv2d(
+                c_hid3, hidden_features, kernel_size=3, stride=1, padding=1
+            ),  # [2x2]
             Swish(),
         )
-        self.embed_time = TimestepEmbedding(time_embedding_dim)
+        self.embed_time = LearnedTimestepEmbedding(
+            embedding_dim=time_embedding_dim, num_timesteps=diffusion_num_steps
+        )
         self.pool = nn.AdaptiveAvgPool2d(1)
+        self.final_linear = nn.Linear(hidden_features + time_embedding_dim, out_dim)
 
     def forward(self, x, timesteps):
+        """
+        args:
+            x: input image, shape is (batch_size, n_channels, height, width)
+            timesteps: diffusion timestep, or noise level, shape is (batch_size, n_timesteps)
+        """
         assert str(x.device).startswith(
             "cuda"
         ), f"inputs to the model must be on the GPU. Got {x.device}"
-        image_embedding = self.cnn_layers(x)
-        time_embedding = self.embed_time(timesteps)
-        concat_embedding = torch.concat([image_embedding, time_embedding], dim=1)
-        x = self.pool(concat_embedding)
-        x = x.squeeze(dim=-1)
-        return x
+        image_embedding = self.cnn_layers(
+            x
+        )  # image_embedding.shape = (batch_size, hidden_features, downsampled_height, downsampled_width)
+        image_embedding = self.pool(
+            image_embedding
+        )  # image_embedding.shape = (batch_size, hidden_features, 1, 1)
+        image_embedding = image_embedding.squeeze(
+            dim=-1
+        )  # image_embedding.shape = (batch_size, hidden_features, 1)
+        image_embedding = image_embedding.squeeze(
+            dim=-1
+        )  # image_embedding.shape = (batch_size, hidden_features)
+        time_embedding = self.embed_time(
+            timesteps.long()
+        )  # time_embedding.shape = (batch_size, time_embedding_dim)
+        # print("image_embedding:", image_embedding.shape)
+        # print("time_embedding:", time_embedding.shape)
+        concat_embedding = torch.concat(
+            [image_embedding, time_embedding], dim=1
+        )  # concat_embedding.shape = (batch_size, hidden_features + time_embedding_dim)
+        # print("concat_embedding:", concat_embedding.shape)
+        energy = self.final_linear(concat_embedding)  # energy.shape = (batch_size, 1)
+        return energy
 
 
 class DeepEnergyModel(pl.LightningModule):
@@ -74,14 +102,30 @@ class DeepEnergyModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.cnn = CNNModel(n_channels=img_shape[0], **CNN_args)
+        self.cnn = CNNModel(
+            n_channels=img_shape[0], diffusion_num_steps=diffusion_num_steps, **CNN_args
+        )
         # self.cnn.to("cuda")
-        self.sampler = Sampler(self.cnn, img_shape=img_shape, sample_size=batch_size)
+        self.diffusion_num_steps = diffusion_num_steps
+        self.sampler = Sampler(
+            self.cnn,
+            img_shape=img_shape,
+            sample_size=batch_size,
+            diffusion_num_steps=diffusion_num_steps,
+        )
         self.example_input_array = torch.zeros(1, *img_shape)
         self.noise_scheduler = DDPMScheduler(
             num_train_timesteps=diffusion_num_steps,
             beta_schedule="linear",
         )
+
+        example_batch_size = 1
+        self.example_input_array = {
+            "x": torch.zeros(example_batch_size, *img_shape),
+            "t": torch.zeros(
+                example_batch_size,
+            ).long(),
+        }
 
     def forward(self, x, t):
         """
@@ -119,18 +163,27 @@ class DeepEnergyModel(pl.LightningModule):
             self.noise_scheduler.config.num_train_timesteps,
             (bsz,),
             device=clean_images.device,
-        ).long()
+        ).long()  # [batch_size]
 
         # Add noise to the clean images according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         noisy_images = self.noise_scheduler.add_noise(clean_images, noise, timesteps)
+        # timesteps shape should be (batch_size, 1)???? TODO: check
         return noisy_images, timesteps
 
     def _run_mcmc_langevin_to_generate_fake_images(
         self, noisy_imgs, timesteps, num_mcmc_steps=20
     ):
-        fake_images = self.sampler.sample_new_exmps(
-            noisy_imgs, timesteps, steps=num_mcmc_steps, step_size=10
+        # fake_images = self.sampler.sample_new_exmps(
+        #     noisy_imgs, timesteps, steps=num_mcmc_steps, step_size=10
+        # )
+        fake_images = self.sampler.generate_samples(
+            model=self.sampler.model,
+            sample_initializer=self.sampler.sample_initializer,
+            inp_imgs=noisy_imgs,
+            steps=num_mcmc_steps,
+            step_size=10,
+            diffusion_num_steps=self.diffusion_num_steps,
         )
         return fake_images
 
@@ -141,9 +194,7 @@ class DeepEnergyModel(pl.LightningModule):
         # real_imgs.add_(small_noise).clamp_(min=-1.0, max=1.0)
 
         # This is the diffusion step to add noise to data.
-        noisy_imgs, timesteps = self._generate_noisy_images_from_real_images(
-            real_imgs, timesteps
-        )
+        noisy_imgs, timesteps = self._generate_noisy_images_from_real_images(real_imgs)
 
         # This is the MCMC step to generate fake images.
         fake_imgs = self._run_mcmc_langevin_to_generate_fake_images(
@@ -151,10 +202,15 @@ class DeepEnergyModel(pl.LightningModule):
         )
 
         # Obtain samples
-        fake_imgs = self.sampler.sample_new_exmps(steps=60, step_size=10)
+        fake_imgs, fake_timesteps = self.sampler.sample_new_exmps(
+            steps=60, step_size=10
+        )
 
         # Predict energy score for all images
+        # TODO: use timesteps as input to the model too
         inp_imgs = torch.cat([real_imgs, fake_imgs], dim=0)
+        real_timesteps = timesteps
+        timesteps = torch.cat([real_timesteps, fake_timesteps], dim=0)
         real_out, fake_out = self.cnn(inp_imgs).chunk(2, dim=0)
 
         # Calculate losses
@@ -177,7 +233,15 @@ class DeepEnergyModel(pl.LightningModule):
         fake_imgs = torch.rand_like(real_imgs) * 2 - 1
 
         inp_imgs = torch.cat([real_imgs, fake_imgs], dim=0)
-        real_out, fake_out = self.cnn(inp_imgs).chunk(2, dim=0)
+        bsz = inp_imgs.shape[0]
+        timesteps = torch.randint(
+            0,
+            self.noise_scheduler.config.num_train_timesteps,
+            (bsz,),
+            device=real_imgs.device,
+        ).long()
+        timesteps = timesteps.unsqueeze(dim=1).repeat(1, inp_imgs.shape[1])
+        real_out, fake_out = self.cnn(inp_imgs, timesteps).chunk(2, dim=0)
 
         cdiv = fake_out.mean() - real_out.mean()
         self.log("val_contrastive_divergence", cdiv)
@@ -219,10 +283,15 @@ class GenerateCallback(pl.Callback):
         )
         start_imgs = start_imgs * 2 - 1
         torch.set_grad_enabled(True)  # Tracking gradients for sampling necessary
+        timesteps = torch.arange(pl_module.hparams["diffusion_num_steps"])
+        # timesteps = timesteps.unsqueeze(dim=0).repeat(self.batch_size, 1)
+        timesteps = timesteps.to(pl_module.device)  # [n_timesteps (batch_size)]
         imgs_per_step = Sampler.generate_samples(
-            pl_module.cnn,
-            start_imgs,
+            model=pl_module.sampler.model,
+            inp_imgs=start_imgs,
+            sample_initializer=pl_module.sampler.sample_initializer,
             steps=self.num_steps,
+            diffusion_num_steps=pl_module.hparams["diffusion_num_steps"],
             step_size=10,
             return_img_per_step=True,
         )
@@ -266,7 +335,15 @@ class OutlierCallback(pl.Callback):
                 (self.batch_size,) + pl_module.hparams["img_shape"]
             ).to(pl_module.device)
             rand_imgs = rand_imgs * 2 - 1.0
-            rand_out = pl_module.cnn(rand_imgs).mean()
+            timesteps = torch.randint(
+                0,
+                pl_module.noise_scheduler.config.num_train_timesteps,
+                (self.batch_size,),
+                device=rand_imgs.device,
+            ).long()
+            timesteps = timesteps.unsqueeze(dim=1).repeat(1, rand_imgs.shape[1])
+            timesteps = timesteps.to(pl_module.device)
+            rand_out = pl_module.cnn(rand_imgs, timesteps).mean()
             pl_module.train()
 
         trainer.logger.experiment.add_scalar(
