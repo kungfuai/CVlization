@@ -56,7 +56,7 @@ class TrainingPipeline:
     device: str = "cuda"
 
     # Model
-    backbone: str = "resnet18"  # TODO: not implemented! See lightning.py
+    backbone: str = "resnet18"  # or "simple", or one of torchvision models
 
     # Data
     img_shape: tuple = (1, 28, 28)
@@ -192,6 +192,7 @@ class TrainingPipeline:
             model = DeepEnergyModel(
                 img_shape=self.img_shape,
                 batch_size=self.train_batch_size,
+                backbone=self.backbone,
                 lr=self.lr,
                 beta1=0.0,
             )

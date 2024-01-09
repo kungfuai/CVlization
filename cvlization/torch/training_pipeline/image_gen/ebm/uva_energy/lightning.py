@@ -4,7 +4,25 @@ import torch.nn as nn
 from torch import optim
 import torchvision
 import lightning.pytorch as pl
+import torch.nn.functional as F
+import torch.nn.utils.spectral_norm as sn
 from .sampler import Sampler
+
+
+class GELU(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return F.gelu(x)
+
+
+class Mish(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x * (torch.tanh(F.softplus(x)))
 
 
 class Swish(nn.Module):
@@ -34,11 +52,9 @@ class CNNModel(nn.Module):
             Swish(),
             nn.Conv2d(c_hid3, c_hid3, kernel_size=3, stride=1, padding=1),  # [2x2]
             Swish(),
-            # nn.Flatten(),
-            # nn.Linear(c_hid3*4, c_hid3),
+            # nn.Flatten(),  # this would fix the input size
+            # nn.Linear(c_hid3 * 4, c_hid3),
             # Swish(),
-            # nn.Linear(c_hid3, out_dim)
-            # global pool
             nn.AdaptiveAvgPool2d(1),
         )
         self.final_linear = nn.Linear(c_hid3, out_dim)
@@ -54,14 +70,60 @@ class CNNModel(nn.Module):
         return x
 
 
+class CNNModelWithBackbone(nn.Module):
+    def __init__(
+        self,
+        model_name="resnet18",
+        pretrained=True,
+        use_swish_instead_of_relu: bool = True,
+        disable_batch_norm: bool = True,
+        **kwargs,
+    ):
+        super().__init__()
+        model_constructor = getattr(torchvision.models, model_name)
+        model = model_constructor(pretrained=pretrained)
+        model.fc = nn.Linear(model.fc.in_features, 1)
+        if use_swish_instead_of_relu:
+            model.relu = Swish()
+        if disable_batch_norm:
+            for m in model.modules():
+                if isinstance(m, nn.BatchNorm2d):
+                    m.eval()
+                    m.weight.requires_grad = False
+                    m.bias.requires_grad = False
+        self.backbone = model
+
+    def forward(self, x):
+        assert str(x.device).startswith(
+            "cuda"
+        ), f"inputs to the model must be on the GPU. Got {x.device}"
+        if x.shape[1] == 1:
+            x = x.repeat(1, 3, 1, 1)
+        x = self.backbone(x)
+        return x
+
+
 class DeepEnergyModel(pl.LightningModule):
     def __init__(
-        self, img_shape, batch_size, alpha=0.1, lr=1e-4, beta1=0.0, **CNN_args
+        self,
+        img_shape,
+        batch_size,
+        backbone: str = "simple",
+        alpha=0.1,
+        lr=1e-4,
+        beta1=0.0,
+        **CNN_args,
     ):
+        # TODO: add energy activation function
         super().__init__()
         self.save_hyperparameters()
 
-        self.cnn = CNNModel(n_channels=img_shape[0], **CNN_args)
+        if backbone == "simple":
+            self.cnn = CNNModel(n_channels=img_shape[0], **CNN_args)
+        else:
+            self.cnn = CNNModelWithBackbone(
+                model_name=backbone, pretrained=True, **CNN_args
+            )
         # self.cnn.to("cuda")
         self.sampler = Sampler(self.cnn, img_shape=img_shape, sample_size=batch_size)
         self.example_input_array = torch.zeros(1, *img_shape)

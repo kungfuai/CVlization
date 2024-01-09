@@ -38,6 +38,9 @@ if __name__ == "__main__":
     arg_parser.add_argument(
         "--logger", "-l", type=str, default="tensorboard", help="logger name"
     )
+    arg_parser.add_argument(
+        "--backbone", "-bb", type=str, default="resnet18", help="backbone name"
+    )
     args = arg_parser.parse_args()
 
     img_shape = tuple(map(int, args.image_shape.split(",")))
@@ -65,5 +68,6 @@ if __name__ == "__main__":
         epochs=args.epochs,
         train_batch_size=args.batch_size,
         val_batch_size=args.batch_size,
+        backbone=args.backbone,
         logger=args.logger,
     ).fit(dataset_builder)
