@@ -26,20 +26,20 @@ import torch.multiprocessing
 import wandb
 from .ebm2 import EBM_notemb, EBM
 
-torch.multiprocessing.set_sharing_strategy("file_system")
+# torch.multiprocessing.set_sharing_strategy("file_system")
 
 # implement diffusion ebm with cooperative learning
 
 ########################## hyper parameters ###################################
 tpu = False
 seed = 3
-batch_size = 64
+batch_size = 128  # 32
 num_workers = 4
 c = 3
 im_sz = 32
 n_interval = 6
 n_updates = 30
-n_blocks = 8
+n_blocks = 8 # 2?
 logsnr_min = -5.1
 logsnr_max = 9.8
 latent_dim = 100
@@ -67,7 +67,7 @@ max_pretrain_pi_iter = 100001
 print_iter = 1
 plot_iter = 500
 ckpt_iter = 50000
-fid_iter = 25000
+fid_iter = 10000  # 25000
 n_fid_samples = 50000
 n_fid_samples_full = 50000
 
@@ -712,16 +712,16 @@ def train(index):
             )
             pi.train()
 
-        if counter > 0 and (counter % ckpt_iter == 0):
-            print("Saving checkpoint")
-            save_dict = {
-                "pi_state_dict": pi.state_dict(),
-                "pi_ema_state_dict": pi_ema.state_dict(),
-                "pi_optimizer": pi_optimizer.state_dict(),
-                "pi_lr_scheduler": pi_lr_scheduler.state_dict(),
-            }
+        # if counter > 0 and (counter % ckpt_iter == 0):
+        #     print("Saving checkpoint")
+        #     save_dict = {
+        #         "pi_state_dict": pi.state_dict(),
+        #         "pi_ema_state_dict": pi_ema.state_dict(),
+        #         "pi_optimizer": pi_optimizer.state_dict(),
+        #         "pi_lr_scheduler": pi_lr_scheduler.state_dict(),
+        #     }
 
-            torch.save(save_dict, os.path.join(ckpt_dir, "{}.pth.tar".format(counter)))
+        #     torch.save(save_dict, os.path.join(ckpt_dir, "{}.pth.tar".format(counter)))
 
 
 if __name__ == "__main__":

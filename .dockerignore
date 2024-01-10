@@ -3,7 +3,7 @@ __pycache__
 *.pyo
 *.pyd
 .Python
-env
+/env/
 pip-log.txt
 pip-delete-this-directory.txt
 .tox
@@ -22,8 +22,7 @@ lightning_logs
 mlruns
 .pytest_cache
 checkpoints
-data
-wandb
+/wandb
 /logs
 /checkpoints
 /data
