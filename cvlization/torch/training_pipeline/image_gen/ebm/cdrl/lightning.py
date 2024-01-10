@@ -181,6 +181,7 @@ class DeepEnergyModel(pl.LightningModule):
             model=self.sampler.model,
             sample_initializer=self.sampler.sample_initializer,
             inp_imgs=noisy_imgs,
+            inp_timesteps=timesteps,
             steps=num_mcmc_steps,
             step_size=10,
             diffusion_num_steps=self.diffusion_num_steps,
@@ -201,17 +202,17 @@ class DeepEnergyModel(pl.LightningModule):
             noisy_imgs, timesteps
         )
 
-        # Obtain samples
-        fake_imgs, fake_timesteps = self.sampler.sample_new_exmps(
-            steps=60, step_size=10
-        )
+        # # Obtain samples
+        # fake_imgs, fake_timesteps = self.sampler.sample_new_exmps(
+        #     steps=60, step_size=10
+        # )
 
         # Predict energy score for all images
         # TODO: use timesteps as input to the model too
         inp_imgs = torch.cat([real_imgs, fake_imgs], dim=0)
-        real_timesteps = timesteps
-        timesteps = torch.cat([real_timesteps, fake_timesteps], dim=0)
-        real_out, fake_out = self.cnn(inp_imgs).chunk(2, dim=0)
+        # real_timesteps = timesteps
+        timesteps = torch.cat([timesteps, timesteps], dim=0)
+        real_out, fake_out = self.cnn(x=inp_imgs, timesteps=timesteps).chunk(2, dim=0)
 
         # Calculate losses
         reg_loss = self.hparams.alpha * (real_out**2 + fake_out**2).mean()
@@ -283,18 +284,20 @@ class GenerateCallback(pl.Callback):
         )
         start_imgs = start_imgs * 2 - 1
         torch.set_grad_enabled(True)  # Tracking gradients for sampling necessary
-        timesteps = torch.arange(pl_module.hparams["diffusion_num_steps"])
+        timesteps = torch.zeros(self.batch_size).to(pl_module.device)
         # timesteps = timesteps.unsqueeze(dim=0).repeat(self.batch_size, 1)
         timesteps = timesteps.to(pl_module.device)  # [n_timesteps (batch_size)]
         imgs_per_step = Sampler.generate_samples(
             model=pl_module.sampler.model,
             inp_imgs=start_imgs,
+            inp_timesteps=timesteps,
             sample_initializer=pl_module.sampler.sample_initializer,
             steps=self.num_steps,
             diffusion_num_steps=pl_module.hparams["diffusion_num_steps"],
             step_size=10,
             return_img_per_step=True,
         )
+        pl_module.sampler.examples = imgs_per_step  # [-1]
         torch.set_grad_enabled(False)
         pl_module.train()
         return imgs_per_step

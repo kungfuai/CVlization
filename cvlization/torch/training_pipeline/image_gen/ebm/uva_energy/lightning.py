@@ -6,6 +6,7 @@ import torchvision
 import lightning.pytorch as pl
 import torch.nn.functional as F
 import torch.nn.utils.spectral_norm as sn
+from torchmetrics.image.fid import FrechetInceptionDistance
 from .sampler import Sampler
 
 
@@ -77,6 +78,7 @@ class CNNModelWithBackbone(nn.Module):
         pretrained=True,
         use_swish_instead_of_relu: bool = True,
         disable_batch_norm: bool = True,
+        adapt_for_small_images: bool = True,
         **kwargs,
     ):
         super().__init__()
@@ -84,13 +86,31 @@ class CNNModelWithBackbone(nn.Module):
         model = model_constructor(pretrained=pretrained)
         model.fc = nn.Linear(model.fc.in_features, 1)
         if use_swish_instead_of_relu:
-            model.relu = Swish()
+            if hasattr(model, "relu"):
+                model.relu = Swish()
+            else:
+                print(
+                    f"Warning: model {model_name} does not have a ReLU layer. Swish activation will not be used."
+                )
         if disable_batch_norm:
+            if hasattr(model, "bn1"):
+                model.bn1 = nn.Identity()
             for m in model.modules():
                 if isinstance(m, nn.BatchNorm2d):
                     m.eval()
                     m.weight.requires_grad = False
                     m.bias.requires_grad = False
+        if adapt_for_small_images:
+            # set stride to 1 for early conv layers
+            # disable maxpooling
+            if hasattr(model, "conv1"):
+                model.conv1.stride = (1, 1)
+                model.conv1.padding = (1, 1)
+                # model.conv1.kernel_size = (3, 3)
+
+            if hasattr(model, "maxpool"):
+                model.maxpool = nn.Identity()
+
         self.backbone = model
 
     def forward(self, x):
@@ -109,6 +129,7 @@ class DeepEnergyModel(pl.LightningModule):
         img_shape,
         batch_size,
         backbone: str = "simple",
+        compute_fid_in_val_step: bool = True,
         alpha=0.1,
         lr=1e-4,
         beta1=0.0,
@@ -118,15 +139,19 @@ class DeepEnergyModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
+        self.compute_fid_in_val_step = compute_fid_in_val_step
         if backbone == "simple":
             self.cnn = CNNModel(n_channels=img_shape[0], **CNN_args)
         else:
             self.cnn = CNNModelWithBackbone(
                 model_name=backbone, pretrained=True, **CNN_args
             )
+        print("Energy model:")
+        print(self.cnn)
         # self.cnn.to("cuda")
         self.sampler = Sampler(self.cnn, img_shape=img_shape, sample_size=batch_size)
         self.example_input_array = torch.zeros(1, *img_shape)
+        self.val_fid = FrechetInceptionDistance(normalize=True)
 
     def forward(self, x):
         assert str(x.device).startswith(
@@ -182,9 +207,30 @@ class DeepEnergyModel(pl.LightningModule):
         real_out, fake_out = self.cnn(inp_imgs).chunk(2, dim=0)
 
         cdiv = fake_out.mean() - real_out.mean()
+
         self.log("val_contrastive_divergence", cdiv)
         self.log("val_fake_out", fake_out.mean())
         self.log("val_real_out", real_out.mean())
+
+        if self.compute_fid_in_val_step:
+            if real_imgs.shape[1] == 1:
+                real_imgs = real_imgs.repeat(1, 3, 1, 1)
+            start_imgs = fake_imgs
+            torch.set_grad_enabled(True)
+            fake_imgs = Sampler.generate_samples(
+                self.cnn,
+                start_imgs,
+                return_img_per_step=False,
+            )
+            torch.set_grad_enabled(False)  # TODO: would this disable training?
+            if fake_imgs.shape[1] == 1:
+                fake_imgs = fake_imgs.repeat(1, 3, 1, 1)
+            self.val_fid.update(real_imgs, real=True)
+            self.val_fid.update(fake_imgs, real=False)
+            self.log("val_fid", self.val_fid.compute())
+
+    # def _update_real_imgs_for_fid(self, real_imgs):
+    #     self._real_imgs = torch.concatenate([self._real_imgs, real_imgs], dim=0)
 
 
 class GenerateCallback(pl.Callback):
@@ -194,6 +240,10 @@ class GenerateCallback(pl.Callback):
         self.vis_steps = vis_steps  # Number of steps within generation to visualize
         self.num_steps = num_steps  # Number of steps to take during generation
         self.every_n_epochs = every_n_epochs  # Only save those images every N epochs (otherwise tensorboard gets quite large)
+
+    def on_validation_epoch_start(self, trainer, pl_module):
+        # reset val_fid
+        pl_module.val_fid.reset()
 
     def on_validation_epoch_end(self, trainer, pl_module):
         # Skip for all other epochs

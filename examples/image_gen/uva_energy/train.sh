@@ -1,4 +1,4 @@
-image=cvlization-torch-gpu
+image=cvlization-ebm
 module=examples.image_gen.uva_energy.train
 
 docker run --runtime nvidia --rm \

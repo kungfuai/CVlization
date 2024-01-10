@@ -67,6 +67,7 @@ class TrainingPipeline:
     # Optimizer
     lr: float = 1e-4
     epochs: int = 60
+    gradient_clip_val: float = 0.1
 
     # Persistence
     checkpoint_path: str = None
@@ -160,7 +161,8 @@ class TrainingPipeline:
             # For debugging
             # limit_train_batches=10,
             # limit_val_batches=10,
-            gradient_clip_val=0.1,
+            # End of debugging
+            gradient_clip_val=self.gradient_clip_val,
             logger=logger,
             callbacks=[
                 ModelCheckpoint(
@@ -168,7 +170,7 @@ class TrainingPipeline:
                     mode="min",
                     monitor="val_contrastive_divergence",
                 ),
-                GenerateCallback(every_n_epochs=10),
+                GenerateCallback(every_n_epochs=5),
                 SamplerCallback(every_n_epochs=5),
                 OutlierCallback(),
                 LearningRateMonitor("epoch"),
