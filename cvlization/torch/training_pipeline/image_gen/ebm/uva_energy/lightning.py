@@ -1,3 +1,4 @@
+import logging
 import random
 import torch
 import torch.nn as nn
@@ -8,6 +9,9 @@ import torch.nn.functional as F
 import torch.nn.utils.spectral_norm as sn
 from torchmetrics.image.fid import FrechetInceptionDistance
 from .sampler import Sampler
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class GELU(nn.Module):
@@ -146,12 +150,14 @@ class DeepEnergyModel(pl.LightningModule):
             self.cnn = CNNModelWithBackbone(
                 model_name=backbone, pretrained=True, **CNN_args
             )
-        print("Energy model:")
-        print(self.cnn)
+        LOGGER.info("Energy model:")
+        LOGGER.info(str(self.cnn))
         # self.cnn.to("cuda")
         self.sampler = Sampler(self.cnn, img_shape=img_shape, sample_size=batch_size)
         self.example_input_array = torch.zeros(1, *img_shape)
-        self.val_fid = FrechetInceptionDistance(normalize=True)
+        self.val_fid = FrechetInceptionDistance(
+            normalize=True, reset_real_features=False
+        )
 
     def forward(self, x):
         assert str(x.device).startswith(
@@ -213,20 +219,38 @@ class DeepEnergyModel(pl.LightningModule):
         self.log("val_real_out", real_out.mean())
 
         if self.compute_fid_in_val_step:
-            if real_imgs.shape[1] == 1:
-                real_imgs = real_imgs.repeat(1, 3, 1, 1)
-            start_imgs = fake_imgs
-            torch.set_grad_enabled(True)
-            fake_imgs = Sampler.generate_samples(
-                self.cnn,
-                start_imgs,
-                return_img_per_step=False,
-            )
-            torch.set_grad_enabled(False)  # TODO: would this disable training?
-            if fake_imgs.shape[1] == 1:
-                fake_imgs = fake_imgs.repeat(1, 3, 1, 1)
-            self.val_fid.update(real_imgs, real=True)
-            self.val_fid.update(fake_imgs, real=False)
+            max_num_samples = 3200  # FID requires at least 2048 examples.
+            if self.val_fid.real_features_num_samples < max_num_samples:
+                # normalize the image to 0-1 range by min-max normalization
+                real_imgs_min = real_imgs.min(dim=0, keepdim=True)[0]
+                real_imgs_max = real_imgs.max(dim=0, keepdim=True)[0]
+                real_imgs = (real_imgs - real_imgs_min) / (
+                    real_imgs_max - real_imgs_min
+                )
+                if real_imgs.shape[1] == 1:
+                    real_imgs = real_imgs.repeat(1, 3, 1, 1)
+                self.val_fid.update(real_imgs, real=True)
+
+            if self.val_fid.fake_features_num_samples < max_num_samples:
+                start_imgs = fake_imgs
+                torch.set_grad_enabled(True)
+                fake_imgs = Sampler.generate_samples(
+                    self.cnn,
+                    start_imgs,
+                    return_img_per_step=False,
+                )
+                torch.set_grad_enabled(False)
+                # normalize the image to 0-1 range by min-max normalization
+                fake_imgs_min = fake_imgs.min(dim=0, keepdim=True)[0]
+                fake_imgs_max = fake_imgs.max(dim=0, keepdim=True)[0]
+                fake_imgs = (fake_imgs - fake_imgs_min) / (
+                    fake_imgs_max - fake_imgs_min
+                )
+                if fake_imgs.shape[1] == 1:
+                    fake_imgs = fake_imgs.repeat(1, 3, 1, 1)
+
+                self.val_fid.update(fake_imgs, real=False)
+
             self.log("val_fid", self.val_fid.compute())
 
     # def _update_real_imgs_for_fid(self, real_imgs):
