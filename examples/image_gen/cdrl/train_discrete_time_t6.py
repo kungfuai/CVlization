@@ -26,8 +26,6 @@ import torch.multiprocessing
 import wandb
 from .ebm2 import EBM_notemb, EBM
 
-wandb.init(project="cdrl")
-
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 # implement diffusion ebm with cooperative learning
@@ -77,8 +75,9 @@ reduce_variance = True  # whether use reduce variance technique
 
 eta = 1.0  # add a coefficient to rescale the ratio term --> enable gradient to flow through
 
-wandb.log(
-    {
+wandb.init(
+    project="cdrl",
+    config={
         "seed": seed,
         "batch_size": batch_size,
         "num_workers": num_workers,
@@ -113,7 +112,7 @@ wandb.log(
         "n_fid_samples_full": n_fid_samples_full,
         "reduce_variance": reduce_variance,
         "eta": eta,
-    }
+    },
 )
 
 if tpu:

@@ -134,6 +134,7 @@ class DeepEnergyModel(pl.LightningModule):
         batch_size,
         backbone: str = "simple",
         compute_fid_in_val_step: bool = True,
+        mcmc_steps: int = 256,
         alpha=0.1,
         lr=1e-4,
         beta1=0.0,
@@ -144,6 +145,7 @@ class DeepEnergyModel(pl.LightningModule):
         self.save_hyperparameters()
 
         self.compute_fid_in_val_step = compute_fid_in_val_step
+        self.mcmc_steps = mcmc_steps
         if backbone == "simple":
             self.cnn = CNNModel(n_channels=img_shape[0], **CNN_args)
         else:
@@ -237,6 +239,7 @@ class DeepEnergyModel(pl.LightningModule):
                 fake_imgs = Sampler.generate_samples(
                     self.cnn,
                     start_imgs,
+                    steps=self.mcmc_steps,
                     return_img_per_step=False,
                 )
                 torch.set_grad_enabled(False)
