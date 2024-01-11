@@ -35,6 +35,7 @@ from diffusers.utils import (
     is_wandb_available,
 )
 from diffusers.utils.import_utils import is_xformers_available
+from .ebm import ScoreNetworkWithEnergy
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -154,29 +155,18 @@ class Trainer:
                 noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
 
                 with accelerator.accumulate(model):
-                    # Predict the noise residual
-                    model_output = model(noisy_images, timesteps).sample
+                    if self.use_ebm:  # EBM
+                        ebm_model = ScoreNetworkWithEnergy(
+                            model, prediction_type=self.prediction_type
+                        )
+                        energy_synth = ebm_model.energy(noisy_images, timesteps)
+                        energy_real = ebm_model.energy(clean_images, timesteps)
+                        loss = (energy_synth - energy_real).sum()
 
-                    if self.use_ebm:
-                        # logger.warning("Turning diffusion model into an EBM")
-                        model_output_synth = model_output.detach()  # stop gradient?
-                        if self.prediction_type == "epsilon":
-                            energy_synth = model_output_synth**2
-                        elif self.prediction_type == "sample":
-                            energy_synth = (model_output_synth - noisy_images) ** 2
-                        else:
-                            raise ValueError(
-                                f"Unsupported prediction type: {self.prediction_type}"
-                            )
-                        # take an average but leave the batch dimension
-                        n_dim = len(energy_synth.shape)
-                        energy_synth = energy_synth.mean(dim=tuple(range(1, n_dim)))
-                        model_output_real = model(clean_images, timesteps).sample
-                        energy_real = (model_output_real - clean_images) ** 2
-                        energy_real = energy_real.mean(dim=tuple(range(1, n_dim)))
-                        loss = (energy_synth - energy_real).mean()
+                    else:  # Diffusion
+                        # Predict the noise residual
+                        model_output = model(noisy_images, timesteps).sample
 
-                    else:
                         if self.prediction_type == "epsilon":
                             loss = F.mse_loss(
                                 model_output, noise
@@ -243,10 +233,18 @@ class Trainer:
                         ema_model.copy_to(unet.parameters())
 
                     # TODO: adapt the pipeline to sample using MCMC
-                    pipeline = DDPMPipeline(
-                        unet=unet,
-                        scheduler=noise_scheduler,
-                    )
+                    if self.use_ebm:
+                        ebm_unet = ScoreNetworkWithEnergy(
+                            unet, prediction_type=self.prediction_type
+                        )
+                        pipeline = ScoreNetworkWithEnergy(
+                            ebm_unet, prediction_type=self.prediction_type
+                        )
+                    else:
+                        pipeline = DDPMPipeline(
+                            unet=unet,
+                            scheduler=noise_scheduler,
+                        )
 
                     generator = torch.Generator(device=pipeline.device).manual_seed(0)
                     # run pipeline in inference (sample random noise and denoise)
