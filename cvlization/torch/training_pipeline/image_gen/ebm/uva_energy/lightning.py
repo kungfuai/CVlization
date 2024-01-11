@@ -221,7 +221,7 @@ class DeepEnergyModel(pl.LightningModule):
         self.log("val_real_out", real_out.mean())
 
         if self.compute_fid_in_val_step:
-            max_num_samples = 3200  # FID requires at least 2048 examples.
+            max_num_samples = 10000  # FID requires at least 2048 examples.
             if self.val_fid.real_features_num_samples < max_num_samples:
                 # normalize the image to 0-1 range by min-max normalization
                 real_imgs_min = real_imgs.min(dim=0, keepdim=True)[0]
@@ -235,14 +235,14 @@ class DeepEnergyModel(pl.LightningModule):
 
             if self.val_fid.fake_features_num_samples < max_num_samples:
                 start_imgs = fake_imgs
-                torch.set_grad_enabled(True)
+
                 fake_imgs = Sampler.generate_samples(
                     self.cnn,
                     start_imgs,
                     steps=self.mcmc_steps,
                     return_img_per_step=False,
                 )
-                torch.set_grad_enabled(False)
+
                 # normalize the image to 0-1 range by min-max normalization
                 fake_imgs_min = fake_imgs.min(dim=0, keepdim=True)[0]
                 fake_imgs_max = fake_imgs.max(dim=0, keepdim=True)[0]
