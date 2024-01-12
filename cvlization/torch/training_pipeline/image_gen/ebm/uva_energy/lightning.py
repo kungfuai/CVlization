@@ -36,6 +36,11 @@ class Swish(nn.Module):
 
 
 class CNNModel(nn.Module):
+    """
+    Outputs negative energy.
+    # TODO: just output energy instead.
+    """
+
     def __init__(self, hidden_features=32, out_dim=1, n_channels=1, **kwargs):
         super().__init__()
         # We increase the hidden dimension over layers. Here pre-calculated for simplicity.

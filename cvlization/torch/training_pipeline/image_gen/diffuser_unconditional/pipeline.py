@@ -159,9 +159,46 @@ class Trainer:
                         ebm_model = ScoreNetworkWithEnergy(
                             model, prediction_type=self.prediction_type
                         )
+
+                        # cdiv_loss = (energy_real - energy_synth).mean()
+                        # ebm_model.net.train()
+
+                        """
+                        https://github.com/zengyi-li/MDSM/blob/master/train.py
+                        x_noisy = x_real + sigmas*torch.randn_like(x_real)
+        
+                        x_noisy = x_noisy.requires_grad_()
+                        E = netE(x_noisy).sum()
+                        grad_x = torch.autograd.grad(E,x_noisy,create_graph=True)[0]
+                        x_noisy.detach()
+                        
+                        optimizerE.zero_grad()
+                        
+                        LS_loss = ((((x_real-x_noisy)/sigmas/sigma02+grad_x/sigmas)**2)/batchSize).sum()
+                        
+                        LS_loss.backward()
+                        """
+                        noisy_images.requires_grad_()  # this needs to happen before energy
                         energy_synth = ebm_model.energy(noisy_images, timesteps)
                         energy_real = ebm_model.energy(clean_images, timesteps)
-                        loss = (energy_synth - energy_real).sum()
+                        grad_x = torch.autograd.grad(
+                            energy_synth.sum(),
+                            noisy_images,
+                            create_graph=True,
+                            # allow_unused=True,
+                        )[0]
+                        noisy_images.detach()
+                        # TODO: need to divide by sigma
+                        cdiv_loss = F.mse_loss(
+                            (clean_images - noisy_images),
+                            grad_x,
+                        )
+                        # loss = cdiv_loss
+                        alpha = 0.01
+                        reg_loss = alpha * (
+                            (energy_synth**2).mean() + (energy_real**2).mean()
+                        )
+                        loss = cdiv_loss + reg_loss
 
                     else:  # Diffusion
                         # Predict the noise residual
@@ -237,8 +274,11 @@ class Trainer:
                         ebm_unet = ScoreNetworkWithEnergy(
                             unet, prediction_type=self.prediction_type
                         )
-                        pipeline = ScoreNetworkWithEnergy(
-                            ebm_unet, prediction_type=self.prediction_type
+                        # TODO: need to use a different scheduler, avoid clipping?
+                        # Also try a different sampling pipeline (refer to the RRR paper)
+                        pipeline = DDPMPipeline(
+                            unet=ebm_unet,
+                            scheduler=noise_scheduler,
                         )
                     else:
                         pipeline = DDPMPipeline(
