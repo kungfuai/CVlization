@@ -98,7 +98,7 @@ def parse_args():
     parser.add_argument(
         "--save_images_epochs",
         type=int,
-        default=10,
+        default=1,
         help="How often to save images during training.",
     )
     parser.add_argument(
@@ -247,7 +247,7 @@ def parse_args():
     parser.add_argument(
         "--checkpointing_steps",
         type=int,
-        default=500,
+        default=50000,
         help=(
             "Save a checkpoint of the training state every X updates. These checkpoints are only suitable for resuming"
             " training using `--resume_from_checkpoint`."
@@ -281,6 +281,19 @@ def parse_args():
         "--use_ebm",
         action="store_true",
         help="Whether or not to use energy based models for training.",
+    )
+    parser.add_argument(
+        "--ebm_objective",
+        type=str,
+        default="score_matching",
+        choices=["score_matching", "maximum_likelihood"],
+        help="Objective of EBM.",
+    )
+    parser.add_argument(
+        "--ebm_regularization_weight",
+        type=float,
+        default=0.0,
+        help="Weight of regularization term in EBM objective.",
     )
 
     args = parser.parse_args()

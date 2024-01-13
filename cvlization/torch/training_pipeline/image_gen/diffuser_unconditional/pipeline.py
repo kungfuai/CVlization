@@ -35,7 +35,7 @@ from diffusers.utils import (
     is_wandb_available,
 )
 from diffusers.utils.import_utils import is_xformers_available
-from .ebm import ScoreNetworkWithEnergy
+from .ebm import ScoreNetworkWithEnergy, Sampler
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -64,11 +64,13 @@ class Trainer:
     prediction_type: str = "epsilon"  # epsilon or sample
     eval_batch_size: int = 32
     checkpointing_steps: int = 5000
-    save_images_epochs: int = 5
+    save_images_epochs: int = 2
     save_model_epochs: int = 20
     max_train_steps: Optional[int] = None
     resume_from_checkpoint: Optional[str] = None
     use_ebm: bool = False
+    ebm_objective: str = "score_matching"  # "maximum_likelihood", "score_matching"
+    ebm_regularization_weight: float = 0.0
 
     def train(self, train_dataloader):
         logger.info("***** Running training *****")
@@ -160,45 +162,64 @@ class Trainer:
                             model, prediction_type=self.prediction_type
                         )
 
-                        # cdiv_loss = (energy_real - energy_synth).mean()
-                        # ebm_model.net.train()
+                        if self.ebm_objective == "maximum_likelihood":
+                            energy_real = ebm_model.energy(clean_images, timesteps)
+                            energy_synth = ebm_model.energy(noisy_images, timesteps)
+                            cdiv_loss = (energy_real - energy_synth).mean()
+                            loss = cdiv_loss
+                            if (self.ebm_regularization_weight or 0) > 0:
+                                reg_loss = self.ebm_regularization_weight * (
+                                    (energy_synth**2).mean()
+                                    + (energy_real**2).mean()
+                                )
+                                loss += reg_loss
 
-                        """
-                        https://github.com/zengyi-li/MDSM/blob/master/train.py
-                        x_noisy = x_real + sigmas*torch.randn_like(x_real)
-        
-                        x_noisy = x_noisy.requires_grad_()
-                        E = netE(x_noisy).sum()
-                        grad_x = torch.autograd.grad(E,x_noisy,create_graph=True)[0]
-                        x_noisy.detach()
-                        
-                        optimizerE.zero_grad()
-                        
-                        LS_loss = ((((x_real-x_noisy)/sigmas/sigma02+grad_x/sigmas)**2)/batchSize).sum()
-                        
-                        LS_loss.backward()
-                        """
-                        noisy_images.requires_grad_()  # this needs to happen before energy
-                        energy_synth = ebm_model.energy(noisy_images, timesteps)
-                        energy_real = ebm_model.energy(clean_images, timesteps)
-                        grad_x = torch.autograd.grad(
-                            energy_synth.sum(),
-                            noisy_images,
-                            create_graph=True,
-                            # allow_unused=True,
-                        )[0]
-                        noisy_images.detach()
-                        # TODO: need to divide by sigma
-                        cdiv_loss = F.mse_loss(
-                            (clean_images - noisy_images),
-                            grad_x,
-                        )
-                        # loss = cdiv_loss
-                        alpha = 0.01
-                        reg_loss = alpha * (
-                            (energy_synth**2).mean() + (energy_real**2).mean()
-                        )
-                        loss = cdiv_loss + reg_loss
+                        elif self.ebm_objective == "score_matching":
+                            """
+                            https://github.com/zengyi-li/MDSM/blob/master/train.py
+                            x_noisy = x_real + sigmas*torch.randn_like(x_real)
+
+                            x_noisy = x_noisy.requires_grad_()
+                            E = netE(x_noisy).sum()
+                            grad_x = torch.autograd.grad(E,x_noisy,create_graph=True)[0]
+                            x_noisy.detach()
+
+                            optimizerE.zero_grad()
+
+                            LS_loss = ((((x_real-x_noisy)/sigmas/sigma02+grad_x/sigmas)**2)/batchSize).sum()
+
+                            LS_loss.backward()
+                            """
+                            noisy_images.requires_grad_()  # this needs to happen before energy
+                            energy_synth = ebm_model.energy(noisy_images, timesteps)
+                            grad_x = torch.autograd.grad(
+                                energy_synth.sum(),
+                                noisy_images,
+                                create_graph=True,
+                                # allow_unused=True,
+                            )[0]
+                            noisy_images.detach()
+                            # TODO: need to divide by sigma
+                            bsz = clean_images.shape[0]
+                            score_mse_loss = (
+                                F.mse_loss(
+                                    (clean_images - noisy_images) * 100,
+                                    -grad_x,
+                                )
+                                / bsz
+                            )
+                            loss = score_mse_loss
+                            if (self.ebm_regularization_weight or 0) > 0:
+                                energy_real = ebm_model.energy(clean_images, timesteps)
+                                reg_loss = self.ebm_regularization_weight * (
+                                    (energy_synth**2).mean()
+                                    + (energy_real**2).mean()
+                                )
+                                loss += reg_loss
+                        else:
+                            raise ValueError(
+                                f"Unsupported EBM objective: {self.ebm_objective}"
+                            )
 
                     else:  # Diffusion
                         # Predict the noise residual
@@ -276,9 +297,15 @@ class Trainer:
                         )
                         # TODO: need to use a different scheduler, avoid clipping?
                         # Also try a different sampling pipeline (refer to the RRR paper)
+                        ebm_noise_scheduler = DDPMScheduler(
+                            num_train_timesteps=noise_scheduler.num_train_timesteps,
+                            beta_schedule=noise_scheduler.beta_schedule,
+                            prediction_type=self.prediction_type,
+                            clip_sample=False,
+                        )
                         pipeline = DDPMPipeline(
                             unet=ebm_unet,
-                            scheduler=noise_scheduler,
+                            scheduler=ebm_noise_scheduler,
                         )
                     else:
                         pipeline = DDPMPipeline(
@@ -286,14 +313,42 @@ class Trainer:
                             scheduler=noise_scheduler,
                         )
 
-                    generator = torch.Generator(device=pipeline.device).manual_seed(0)
-                    # run pipeline in inference (sample random noise and denoise)
-                    images = pipeline(
-                        generator=generator,
-                        batch_size=self.eval_batch_size,
-                        num_inference_steps=self.ddpm_num_inference_steps,
-                        output_type="numpy",
-                    ).images
+                    if self.use_ebm:
+                        ebm_unet = ScoreNetworkWithEnergy(
+                            unet,
+                            prediction_type=self.prediction_type,
+                            as_energy_net=True,
+                        )
+                        sampler = Sampler(
+                            unet,
+                            img_shape=noisy_images.shape[1:],
+                            sample_size=noisy_images.shape[0],
+                            device="cuda",
+                        )
+                        images = sampler.generate_samples(
+                            model=ebm_unet,
+                            inp_imgs=noisy_images,
+                            timesteps=timesteps,
+                            steps=256,  # ?
+                            step_size=10,  # ?
+                        )
+                        images = images.detach().cpu().numpy()
+                        images = images.transpose(0, 2, 3, 1)
+                        # rescale to [0, 1]
+                        images_min = images.min(axis=(1, 2, 3), keepdims=True)
+                        images_max = images.max(axis=(1, 2, 3), keepdims=True)
+                        images = (images - images_min) / (images_max - images_min)
+                    else:
+                        generator = torch.Generator(device=pipeline.device).manual_seed(
+                            0
+                        )
+                        # run pipeline in inference (sample random noise and denoise)
+                        images = pipeline(
+                            generator=generator,
+                            batch_size=self.eval_batch_size,
+                            num_inference_steps=self.ddpm_num_inference_steps,
+                            output_type="numpy",
+                        ).images
 
                     if self.use_ema:
                         ema_model.restore(unet.parameters())
@@ -431,6 +486,7 @@ class TrainingPipeline:
             output_dir=args.output_dir,
             num_epochs=args.num_epochs,
             save_model_epochs=args.save_model_epochs,
+            save_images_epochs=args.save_images_epochs,
             resume_from_checkpoint=args.resume_from_checkpoint,
             train_batch_size=args.train_batch_size,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -443,6 +499,8 @@ class TrainingPipeline:
             use_ema=True,
             prediction_type=args.prediction_type,
             use_ebm=args.use_ebm,
+            ebm_objective=args.ebm_objective,
+            ebm_regularization_weight=args.ebm_regularization_weight,
         )
         return trainer
 

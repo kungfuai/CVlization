@@ -14,7 +14,6 @@ checkpoints/*
 # temporary files
 tmp*
 # data files
-data/*
 doc/tmp_notes
 /models
 /outputs
