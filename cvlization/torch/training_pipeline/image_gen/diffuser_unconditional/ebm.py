@@ -134,6 +134,8 @@ class Sampler:
         """
         # Before MCMC: set model parameters to "required_grad=False"
         # because we are only interested in the gradients of the input.
+        sigma = step_size
+        sigma2 = sigma**2
         is_training = model.training
         model.eval()
         for p in model.parameters():
@@ -154,8 +156,8 @@ class Sampler:
         # Loop over K (steps)
         for _ in range(steps):
             # Part 1: Add noise to the input.
-            noise.normal_(0, 0.005)
-            inp_imgs.data.add_(noise.data)
+            # noise.normal_(0, 0.005)
+            # inp_imgs.data.add_(noise.data)
             if clamp_pixels:
                 inp_imgs.data.clamp_(min=-1.0, max=1.0)
 
@@ -170,7 +172,9 @@ class Sampler:
                 )  # For stabilizing and preventing too high gradients
 
             # Apply gradients to our current samples
-            inp_imgs.data.add_(-step_size * inp_imgs.grad.data)
+            # inp_imgs.data.add_(-step_size * inp_imgs.grad.data)
+            inp_imgs.data.add_(-0.5 * sigma2 * inp_imgs.grad.data)
+            inp_imgs.data.add_(sigma * torch.randn_like(inp_imgs))
             inp_imgs.grad.detach_()
             inp_imgs.grad.zero_()
             if clamp_pixels:

@@ -3,6 +3,7 @@
 
 
 import argparse
+import torchvision
 import inspect
 from dataclasses import dataclass
 import logging
@@ -155,6 +156,7 @@ class Trainer:
                 # Add noise to the clean images according to the noise magnitude at each timestep
                 # (this is the forward diffusion process)
                 noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
+                variances = [noise_scheduler._get_variance(t) for t in timesteps]
 
                 with accelerator.accumulate(model):
                     if self.use_ebm:  # EBM
@@ -203,8 +205,10 @@ class Trainer:
                             bsz = clean_images.shape[0]
                             score_mse_loss = (
                                 F.mse_loss(
-                                    (clean_images - noisy_images) * 100,
-                                    -grad_x,
+                                    (clean_images - noisy_images)
+                                    * 100
+                                    / torch.sqrt(variances),
+                                    -grad_x / torch.sqrt(variances),
                                 )
                                 / bsz
                             )
@@ -325,13 +329,32 @@ class Trainer:
                             sample_size=noisy_images.shape[0],
                             device="cuda",
                         )
-                        images = sampler.generate_samples(
+                        # TODO: this is only one-step denoising with multiple MCMC substeps.
+                        # Need to start from pure noise, and run multiple denoising steps.
+                        imgs_per_step = sampler.generate_samples(
                             model=ebm_unet,
                             inp_imgs=noisy_images,
                             timesteps=timesteps,
                             steps=256,  # ?
-                            step_size=10,  # ?
+                            step_size=0.1,  # ?
+                            return_img_per_step=True,
                         )
+                        step_size = len(imgs_per_step) // 10
+
+                        if self.logger == "wandb":
+                            i = 0
+                            imgs_to_plot = imgs_per_step[step_size - 1 :: step_size, i]
+                            grid = torchvision.utils.make_grid(
+                                imgs_to_plot,
+                                nrow=imgs_to_plot.shape[0],
+                                normalize=True,
+                                range=(-1, 1),
+                            )
+                            wandb.log(
+                                {f"langevin_ex{i}": wandb.Image(grid)},
+                                step=global_step,
+                            )
+                        images = imgs_per_step[-1]
                         images = images.detach().cpu().numpy()
                         images = images.transpose(0, 2, 3, 1)
                         # rescale to [0, 1]
