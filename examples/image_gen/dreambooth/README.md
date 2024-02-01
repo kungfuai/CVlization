@@ -11,11 +11,32 @@ Output:
 Fine tune on images (`instance_data.zip`):
 
 ```
-python -m examples.image_gen.dreambooth.train
+python -m examples.image_gen.dreambooth.train --save_sample_prompt "a happy cat"
 ```
 
 - GPU requirement: at least 24GB VRAM.
 - By default, train 2000 steps with a batch size of 1.
+
+### Expected time and output
+
+On a 3090, it took roughly 10 minutes.
+
+You should expect the following model files organized in subdirectories:
+
+```bash
+>> du -h checkpoints/
+
+8.0K    checkpoints/feature_extractor
+235M    checkpoints/text_encoder
+8.0K    checkpoints/scheduler
+1.7G    checkpoints/unet
+320M    checkpoints/vae
+1.6M    checkpoints/tokenizer
+1.9M    checkpoints/samples
+2.2G    checkpoints/
+```
+
+And if you provide the `--save_sample_prompt` parameter, you can find generated images in `samples/`.
 
 ## Command line arguments
 
