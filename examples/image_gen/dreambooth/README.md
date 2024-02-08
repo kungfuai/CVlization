@@ -6,6 +6,12 @@ Input:
 Output:
 - Model weight
 
+## Install dependencies
+
+```
+pip install -r exmaples/image_gen/dreambooth/requirements.txt
+```
+
 ## Running the fine-tune job
 
 Fine tune on images (`instance_data.zip`):
