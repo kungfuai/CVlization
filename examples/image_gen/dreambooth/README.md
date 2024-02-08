@@ -6,16 +6,22 @@ Input:
 Output:
 - Model weight
 
+## Install dependencies
+
+```
+pip install -r exmaples/image_gen/dreambooth/requirements.txt
+```
+
 ## Running the fine-tune job
 
 Fine tune on images (`instance_data.zip`):
 
 ```
-python -m examples.image_gen.dreambooth.train --save_sample_prompt "a happy cat"
+python -m examples.image_gen.dreambooth.train --save_sample_prompt "a happy sks cat"
 ```
 
 - GPU requirement: at least 24GB VRAM.
-- By default, train 2000 steps with a batch size of 1.
+- By default, train 2000 steps with a batch size of 1. It should take about 10 minutes on a RTX3090.
 
 ### Expected time and output
 
@@ -164,6 +170,11 @@ optional arguments:
   --mixed_precision {no,fp16,fp8,bf16}
                         Whether or not to use mixed precision training.
 ```
+
+## TODO
+
+- Find a better example as training input images (e.g. cartoon, or another more salient style).
+- Try reducing # of steps.
 
 ## Reference
 
