@@ -5,4 +5,4 @@ WORKDIR /workspace
 RUN --mount=type=cache,mode=0777,target=/root/.cache pip install \
     lightning tensorboard datasets
 # Copy code
-COPY . .
+# COPY . .
