@@ -18,3 +18,7 @@ offload_per_layer = 0  # consumes 20.4 GB
 # offload_per_layer = 4  # consumes 12.2 GB
 # offload_per_layer = 5  # consumes  GB
 ```
+
+## Reference
+
+This is adapted from https://github.com/dvmazur/mixtral-offloading.
