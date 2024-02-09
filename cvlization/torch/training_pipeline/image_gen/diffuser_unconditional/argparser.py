@@ -285,7 +285,7 @@ def parse_args():
     parser.add_argument(
         "--ebm_objective",
         type=str,
-        default="score_matching",
+        default="maximum_likelihood",
         choices=["score_matching", "maximum_likelihood"],
         help="Objective of EBM.",
     )

@@ -14,10 +14,12 @@ class ScoreNetworkWithEnergy(torch.nn.Module):
         net,
         prediction_type: str = "epsilon",
         as_energy_net: bool = False,
+        gaussian_sigma: float = None,
         **kwargs,
     ):
         """
         as_energy_net: if True, the network is used as an energy network or as the score network.
+        gaussian_sigma: if not None, the energy reflects a conditional probability p(y|x) \propto \exp{f(y, t) - (x - y)^2 / (2 * sigma^2)}
         """
         super().__init__(**kwargs)
         self.net = net
@@ -27,8 +29,12 @@ class ScoreNetworkWithEnergy(torch.nn.Module):
         self.in_channels = net.in_channels
         self.out_channels = net.out_channels
         self.as_energy_net = as_energy_net
+        self.gaussian_sigma = gaussian_sigma
 
-    def energy(self, x, timesteps, **kwargs):
+    def energy(self, x, timesteps, noisy_x=None, **kwargs):
+        """
+        noisy_x: if not None, the energy reflects a conditional probability p(x|noisy_x) \propto \exp{f(x, t) - (noisy_x - x)^2 / (2 * sigma^2)}
+        """
         model_output = self.net(
             x, timesteps, **kwargs
         ).sample  # .detach()  # stop gradient?
@@ -40,6 +46,11 @@ class ScoreNetworkWithEnergy(torch.nn.Module):
             raise ValueError(f"Unsupported prediction type: {self.prediction_type}")
         dims = list(range(1, energy.ndim))
         energy = energy.sum(dim=dims)
+        if noisy_x is not None and self.gaussian_sigma is not None:
+            energy = (
+                energy
+                + ((x - noisy_x) ** 2).sum(dim=dims) / self.gaussian_sigma**2 / 2
+            )
         return energy  # (batch_size,)
 
     def __call__(self, x, timesteps, create_graph=False, **kwargs):
@@ -116,6 +127,7 @@ class Sampler:
         model,
         inp_imgs,
         timesteps,
+        noisy_x=None,
         steps=60,
         step_size=10,
         return_img_per_step=False,
@@ -164,7 +176,7 @@ class Sampler:
             # Part 2: calculate gradients for the current input.
             # TODO: negation or not?
             # out_imgs = -model(inp_imgs, timesteps)
-            out_imgs = model(inp_imgs, timesteps)
+            out_imgs = model(inp_imgs, timesteps, noisy_x=noisy_x)
             out_imgs.sum().backward()
             if clamp_gradients:
                 inp_imgs.grad.data.clamp_(
@@ -172,9 +184,11 @@ class Sampler:
                 )  # For stabilizing and preventing too high gradients
 
             # Apply gradients to our current samples
-            # inp_imgs.data.add_(-step_size * inp_imgs.grad.data)
-            inp_imgs.data.add_(-0.5 * sigma2 * inp_imgs.grad.data)
-            inp_imgs.data.add_(sigma * torch.randn_like(inp_imgs))
+            inp_imgs.data.add_(-step_size * step_size * inp_imgs.grad.data / 2)
+            inp_imgs.data.add_(step_size * torch.randn_like(inp_imgs))
+
+            # inp_imgs.data.add_(-0.5 * sigma2 * inp_imgs.grad.data)
+            # inp_imgs.data.add_(sigma * torch.randn_like(inp_imgs))
             inp_imgs.grad.detach_()
             inp_imgs.grad.zero_()
             if clamp_pixels:

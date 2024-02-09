@@ -131,6 +131,10 @@ class Trainer:
             )
             progress_bar.set_description(f"Epoch {epoch}")
             for step, batch in enumerate(train_dataloader):
+                # For debug:
+                # if step > 1:
+                #     break
+
                 # Skip steps until we reach the resumed step
                 if (
                     self.resume_from_checkpoint
@@ -156,17 +160,51 @@ class Trainer:
                 # Add noise to the clean images according to the noise magnitude at each timestep
                 # (this is the forward diffusion process)
                 noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
-                variances = [noise_scheduler._get_variance(t) for t in timesteps]
+                # variances = [noise_scheduler._get_variance(t) for t in timesteps]
+                alphas_cumprod = noise_scheduler.alphas_cumprod
+                sigmas = [torch.sqrt(1 - alphas_cumprod[t]) for t in timesteps]
+                sigmas = torch.tensor(sigmas).to(clean_images.device)
 
                 with accelerator.accumulate(model):
                     if self.use_ebm:  # EBM
                         ebm_model = ScoreNetworkWithEnergy(
-                            model, prediction_type=self.prediction_type
+                            model,
+                            prediction_type=self.prediction_type,
+                            gaussian_sigma=sigmas,  # TODO: is this right?
                         )
 
                         if self.ebm_objective == "maximum_likelihood":
-                            energy_real = ebm_model.energy(clean_images, timesteps)
-                            energy_synth = ebm_model.energy(noisy_images, timesteps)
+                            energy_real = ebm_model.energy(
+                                clean_images, 0 * timesteps, noisy_x=noisy_images
+                            )
+
+                            # Generate synth_images using MCMC.
+                            unet = accelerator.unwrap_model(model)
+                            ebm_unet = ScoreNetworkWithEnergy(
+                                unet,
+                                prediction_type=self.prediction_type,
+                                as_energy_net=True,
+                                # TODO: gaussian_sigma should be moved to as an input of the energy forward path
+                                gaussian_sigma=sigmas,  # TODO: is this right?
+                            )
+                            sampler = Sampler(
+                                unet,
+                                img_shape=noisy_images.shape[1:],
+                                sample_size=noisy_images.shape[0],
+                                device="cuda",
+                            )
+                            synth_images = sampler.generate_samples(
+                                model=ebm_unet,
+                                inp_imgs=noisy_images,
+                                timesteps=timesteps,
+                                steps=16,  # ?
+                                step_size=0.05,  # ?
+                                return_img_per_step=False,
+                            )
+                            # Done sampling
+                            energy_synth = ebm_model.energy(
+                                synth_images, 0 * timesteps, noisy_x=noisy_images
+                            )
                             cdiv_loss = (energy_real - energy_synth).mean()
                             loss = cdiv_loss
                             if (self.ebm_regularization_weight or 0) > 0:
@@ -288,7 +326,7 @@ class Trainer:
             # Generate sample images for visual inspection
             if accelerator.is_main_process:
                 if epoch % self.save_images_epochs == 0 or epoch == self.num_epochs - 1:
-                    unet = accelerator.unwrap_model(model)
+                    unet = accelerator.unwrap_model(model)  # also try ema_model
 
                     if self.use_ema:
                         ema_model.store(unet.parameters())
@@ -296,26 +334,27 @@ class Trainer:
 
                     # TODO: adapt the pipeline to sample using MCMC
                     if self.use_ebm:
-                        ebm_unet = ScoreNetworkWithEnergy(
-                            unet, prediction_type=self.prediction_type
-                        )
-                        # TODO: need to use a different scheduler, avoid clipping?
-                        # Also try a different sampling pipeline (refer to the RRR paper)
-                        ebm_noise_scheduler = DDPMScheduler(
-                            num_train_timesteps=noise_scheduler.num_train_timesteps,
-                            beta_schedule=noise_scheduler.beta_schedule,
-                            prediction_type=self.prediction_type,
-                            clip_sample=False,
-                        )
-                        pipeline = DDPMPipeline(
-                            unet=ebm_unet,
-                            scheduler=ebm_noise_scheduler,
-                        )
-                    else:
-                        pipeline = DDPMPipeline(
-                            unet=unet,
-                            scheduler=noise_scheduler,
-                        )
+                        pass
+                    #     ebm_unet = ScoreNetworkWithEnergy(
+                    #         unet, prediction_type=self.prediction_type
+                    #     )
+                    #     # TODO: need to use a different scheduler, avoid clipping?
+                    #     # Also try a different sampling pipeline (refer to the RRR paper)
+                    #     ebm_noise_scheduler = DDPMScheduler(
+                    #         num_train_timesteps=noise_scheduler.num_train_timesteps,
+                    #         beta_schedule=noise_scheduler.beta_schedule,
+                    #         prediction_type=self.prediction_type,
+                    #         clip_sample=False,
+                    #     )
+                    #     pipeline = DDPMPipeline(
+                    #         unet=ebm_unet,
+                    #         scheduler=ebm_noise_scheduler,
+                    #     )
+                    # else:
+                    #     pipeline = DDPMPipeline(
+                    #         unet=unet,
+                    #         scheduler=noise_scheduler,
+                    #     )
 
                     if self.use_ebm:
                         ebm_unet = ScoreNetworkWithEnergy(
@@ -331,6 +370,9 @@ class Trainer:
                         )
                         # TODO: this is only one-step denoising with multiple MCMC substeps.
                         # Need to start from pure noise, and run multiple denoising steps.
+                        if self.ebm_objective == "maximum_likelihood":
+                            timesteps = timesteps * 0
+
                         imgs_per_step = sampler.generate_samples(
                             model=ebm_unet,
                             inp_imgs=noisy_images,
@@ -362,6 +404,10 @@ class Trainer:
                         images_max = images.max(axis=(1, 2, 3), keepdims=True)
                         images = (images - images_min) / (images_max - images_min)
                     else:
+                        pipeline = DDPMPipeline(
+                            unet=unet,
+                            scheduler=noise_scheduler,
+                        )
                         generator = torch.Generator(device=pipeline.device).manual_seed(
                             0
                         )
