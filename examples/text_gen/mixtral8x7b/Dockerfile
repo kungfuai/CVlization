@@ -1,4 +1,6 @@
-FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+# Either cuda12.1 or cuda11.8 works.
+# FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
 
 WORKDIR /workspace
 RUN apt-get update && apt-get install -y git build-essential python3-dev && rm -rf /var/lib/apt/lists/*
