@@ -1,0 +1,1 @@
+docker build -t dit examples/image_gen/dit
