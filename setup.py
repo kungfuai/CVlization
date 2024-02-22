@@ -4,7 +4,7 @@ from setuptools import find_packages
 
 setup(
     name="cvlization",
-    version="0.1.5",
+    version="0.1.6",
     description="Training and inference recipes for Vision, Language and more modalities.",
     author="KUNGFU.AI",
     author_email="zz@kungfu.ai",
