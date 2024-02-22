@@ -6,6 +6,8 @@ bash examples/image_gen/dit/build_data.sh
 bash examples/image_gen/dit/train.sh
 ```
 
+This is tested on GTX 3090. It uses flash attention, which requires sm80 or newer gen GPUs.
+
 ## Model architecture
 
 This is the DIT-XL/2 architecture:
