@@ -6,4 +6,4 @@ docker run --runtime nvidia -it \
     -e "MASTER_ADDR=localhost" \
     -e "MASTER_PORT=29500" \
 	dit \
-	python extract_features.py
+	python extract_features.py --model DiT-XL/2
