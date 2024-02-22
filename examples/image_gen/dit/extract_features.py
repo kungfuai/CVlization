@@ -9,6 +9,7 @@ A minimal training script for DiT using PyTorch DDP.
 """
 import torch
 from tqdm import tqdm
+
 # the first flag below was False when we tested this script but True makes A100 training a lot faster:
 # torch.backends.cuda.matmul.allow_tf32 = True
 # torch.backends.cudnn.allow_tf32 = True
@@ -38,6 +39,7 @@ from diffusers.models import AutoencoderKL
 #                             Training Helper Functions                         #
 #################################################################################
 
+
 @torch.no_grad()
 def update_ema(ema_model, model, decay=0.9999):
     """
@@ -45,7 +47,7 @@ def update_ema(ema_model, model, decay=0.9999):
     """
     ema_params = OrderedDict(ema_model.named_parameters())
     model_params = OrderedDict(model.named_parameters())
-    
+
     for name, param in model_params.items():
         # TODO: Consider applying only to params that require_grad to avoid small numerical changes of pos_embed
         ema_params[name].mul_(decay).add_(param.data, alpha=1 - decay)
@@ -73,9 +75,12 @@ def create_logger(logging_dir):
     if dist.get_rank() == 0:  # real logger
         logging.basicConfig(
             level=logging.INFO,
-            format='[\033[34m%(asctime)s\033[0m] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            handlers=[logging.StreamHandler(), logging.FileHandler(f"{logging_dir}/log.txt")]
+            format="[\033[34m%(asctime)s\033[0m] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler(f"{logging_dir}/log.txt"),
+            ],
         )
         logger = logging.getLogger(__name__)
     else:  # dummy logger (does nothing)
@@ -102,12 +107,15 @@ def center_crop_arr(pil_image, image_size):
     arr = np.array(pil_image)
     crop_y = (arr.shape[0] - image_size) // 2
     crop_x = (arr.shape[1] - image_size) // 2
-    return Image.fromarray(arr[crop_y: crop_y + image_size, crop_x: crop_x + image_size])
+    return Image.fromarray(
+        arr[crop_y : crop_y + image_size, crop_x : crop_x + image_size]
+    )
 
 
 #################################################################################
 #                                  Training Loop                                #
 #################################################################################
+
 
 def main(args):
     """
@@ -117,7 +125,9 @@ def main(args):
 
     # Setup DDP:
     dist.init_process_group("nccl")
-    assert args.global_batch_size % dist.get_world_size() == 0, f"Batch size must be divisible by world size."
+    assert (
+        args.global_batch_size % dist.get_world_size() == 0
+    ), f"Batch size must be divisible by world size."
     rank = dist.get_rank()
     device = rank % torch.cuda.device_count()
     seed = args.global_seed * dist.get_world_size() + rank
@@ -129,38 +139,53 @@ def main(args):
     if rank == 0:
         os.makedirs(args.features_path, exist_ok=True)
         # TODO: replace this with a more general name
-        os.makedirs(os.path.join(args.features_path, 'imagenet256_features'), exist_ok=True)
-        os.makedirs(os.path.join(args.features_path, 'imagenet256_labels'), exist_ok=True)
+        os.makedirs(
+            os.path.join(args.features_path, "imagenet256_features"), exist_ok=True
+        )
+        os.makedirs(
+            os.path.join(args.features_path, "imagenet256_labels"), exist_ok=True
+        )
 
     # Create model:
-    assert args.image_size % 8 == 0, "Image size must be divisible by 8 (for the VAE encoder)."
+    assert (
+        args.image_size % 8 == 0
+    ), "Image size must be divisible by 8 (for the VAE encoder)."
     latent_size = args.image_size // 8
     vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
 
     # Setup data:
-    transform = transforms.Compose([
-        # transforms.Lambda(lambda pil_image: center_crop_arr(pil_image, args.image_size)),
-        transforms.Resize((args.image_size, args.image_size)),
-        # transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True)
-    ])
+    transform = transforms.Compose(
+        [
+            # transforms.Lambda(lambda pil_image: center_crop_arr(pil_image, args.image_size)),
+            transforms.Resize((args.image_size, args.image_size)),
+            # transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True
+            ),
+        ]
+    )
     if args.dataset_name is not None:
         if args.dataset_name == "frgfm/imagenette":
             dataset = load_dataset(args.dataset_name, "320px", split="train")
         else:
             split = "train"
             dataset = load_dataset(args.dataset_name, split=split)
+
+        print(f"dataset: {args.dataset_name}")
+
         def transform_images(examples):
             images = [transform(image.convert("RGB")) for image in examples["image"]]
             # return {"input": images, "target": torch.tensor([0] * len(images), dtype=torch.long)}
             images = torch.stack(images)
-            label = torch.tensor(examples["label"], dtype=torch.long).unsqueeze(1)
+            label = torch.tensor(examples["label"], dtype=torch.long)  # .unsqueeze(1)
             # print(f"images.shape: {images.shape}, {images.dtype}, examples['label']: {label.shape}, {label.dtype}")
             return {"image": images, "label": label}
-        
+
         dataset.set_format(type="torch", columns=["image", "label"])
-        dataset.set_transform(transform_images)  # TODO: this does not seem to take effect!
+        dataset.set_transform(
+            transform_images
+        )  # TODO: this does not seem to take effect!
     else:
         dataset = ImageFolder(args.data_path, transform=transform)
     sampler = DistributedSampler(
@@ -168,16 +193,16 @@ def main(args):
         num_replicas=dist.get_world_size(),
         rank=rank,
         shuffle=False,
-        seed=args.global_seed
+        seed=args.global_seed,
     )
     loader = DataLoader(
         dataset,
-        batch_size = 1,
+        batch_size=1,
         shuffle=False,
         sampler=sampler,
         num_workers=args.num_workers,
         # pin_memory=True,
-        drop_last=True
+        drop_last=True,
     )
 
     train_steps = 0
@@ -186,40 +211,53 @@ def main(args):
         y = batch["label"]
         assert x.dtype == torch.float32, f"Input images must be float32, got {x.dtype}."
         assert y.dtype == torch.long, f"Labels must be long, got {y.dtype}."
-        assert x.shape[1:] == (3, args.image_size, args.image_size), f"Images must be of shape (3, {args.image_size}, {args.image_size}). Got {x.shape[1:]}."
+        assert x.shape[1:] == (
+            3,
+            args.image_size,
+            args.image_size,
+        ), f"Images must be of shape (3, {args.image_size}, {args.image_size}). Got {x.shape[1:]}."
         x = x.to(device)
         y = y.to(device)
         with torch.no_grad():
             # Map input images to latent space + normalize latents:
             x = vae.encode(x).latent_dist.sample().mul_(0.18215)
-            
-        x = x.detach().cpu().numpy()    # (1, 4, 32, 32)
-        # TODO: replace this with a more general name
-        np.save(f'{args.features_path}/imagenet256_features/{train_steps}.npy', x)
 
-        y = y.detach().cpu().numpy()    # (1,)
-        np.save(f'{args.features_path}/imagenet256_labels/{train_steps}.npy', y)
-            
+        x = x.detach().cpu().numpy()  # (1, 4, 32, 32)
+        # TODO: replace this with a more general name
+        np.save(f"{args.features_path}/imagenet256_features/{train_steps}.npy", x)
+
+        y = y.detach().cpu().numpy()  # (1,)
+        assert len(y.shape) == 1, f"Labels must be 1D, got {y.shape}."
+        np.save(f"{args.features_path}/imagenet256_labels/{train_steps}.npy", y)
+
         train_steps += 1
+
 
 def test_dataloader():
     # create a simple dataloader
     dataset = load_dataset("zh-plus/tiny-imagenet", split="train")
-    
+
     def transform_images(examples):
-        images = [transforms.ToTensor()(image.convert("RGB")) for image in examples["image"]]
+        images = [
+            transforms.ToTensor()(image.convert("RGB")) for image in examples["image"]
+        ]
         return torch.stack(images), torch.tensor(examples["label"], dtype=torch.long)
-    
+
     dataset.set_transform(transform_images)
     dataset.set_format(type="torch", columns=["image", "label"])
-    loader  = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=4, drop_last=True)
+    loader = DataLoader(
+        dataset, batch_size=2, shuffle=True, num_workers=4, drop_last=True
+    )
     for batch in loader:
         x = batch["image"]
         y = batch["label"]
         # print("batch:")
         # print(batch)
-        print(f"x.shape: {x.shape}, x.dtype: {x.dtype}, y.shape: {y.shape}, y.dtype: {y.dtype}")
+        print(
+            f"x.shape: {x.shape}, x.dtype: {x.dtype}, y.shape: {y.shape}, y.dtype: {y.dtype}"
+        )
         break
+
 
 if __name__ == "__main__":
     # import sys
@@ -227,17 +265,23 @@ if __name__ == "__main__":
     # sys.exit(0)
     # Default args here will train DiT-XL/2 with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset-name", type=str, default="frgfm/imagenette") # "huggan/flowers-102-categories", "frgfm/imagenette", "zh-plus/tiny-imagenet"
+    parser.add_argument(
+        "--dataset-name", type=str, default="frgfm/imagenette"
+    )  # "huggan/flowers-102-categories", "frgfm/imagenette", "zh-plus/tiny-imagenet"
     parser.add_argument("--data-path", type=str)
     parser.add_argument("--features-path", type=str, default="features")
     parser.add_argument("--results-dir", type=str, default="results")
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2")
+    parser.add_argument(
+        "--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2"
+    )
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--epochs", type=int, default=1400)
     parser.add_argument("--global-batch-size", type=int, default=256)
     parser.add_argument("--global-seed", type=int, default=0)
-    parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
+    parser.add_argument(
+        "--vae", type=str, choices=["ema", "mse"], default="ema"
+    )  # Choice doesn't affect training
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--ckpt-every", type=int, default=50_000)
