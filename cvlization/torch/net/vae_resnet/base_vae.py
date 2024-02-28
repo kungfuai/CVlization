@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 import torch
-from kornia.enhance import normalize, denormalize
-from kornia.augmentation import (
-    AugmentationSequential,
-    RandomHorizontalFlip,
-    RandomResizedCrop,
-)
+
+# from kornia.enhance import normalize, denormalize
+# from kornia.augmentation import (
+#     AugmentationSequential,
+#     RandomHorizontalFlip,
+#     RandomResizedCrop,
+# )
 
 
 class BaseVQVAE(ABC):
@@ -20,11 +21,11 @@ class BaseVQVAE(ABC):
 
         self.image_size = image_size
 
-        self.training_augmentations = AugmentationSequential(
-            RandomResizedCrop((image_size, image_size)),
-            RandomHorizontalFlip(),
-            same_on_batch=False,
-        )
+        # self.training_augmentations = AugmentationSequential(
+        #     RandomResizedCrop((image_size, image_size)),
+        #     RandomHorizontalFlip(),
+        #     same_on_batch=False,
+        # )
 
         # init values for child classes (may never be implemented)
         self.scheduler = None
@@ -54,10 +55,10 @@ class BaseVQVAE(ABC):
         images = torch.clamp(images, 0.0, 1.0)
 
         # training data augmentation
-        if training:
-            images = self.training_augmentations(images)
+        # if training:
+        #     images = self.training_augmentations(images)
 
-        images = normalize(images, torch.tensor(mean), torch.tensor(std))
+        # images = normalize(images, torch.tensor(mean), torch.tensor(std))
         return images
 
     @torch.no_grad()
@@ -74,7 +75,7 @@ class BaseVQVAE(ABC):
         :param std: 3 channels std vector for de-normalization, default to imagenet values
         :return denormalized images in range 0__1
         """
-        images = denormalize(images, torch.tensor(mean), torch.tensor(std))
+        # images = denormalize(images, torch.tensor(mean), torch.tensor(std))
         images = torch.clip(
             images, 0, 1
         )  # if mean,std are correct, should have no effect
