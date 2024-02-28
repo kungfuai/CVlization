@@ -1,4 +1,4 @@
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 import pathlib
 from torchvision.transforms import Compose, ToTensor, Resize
