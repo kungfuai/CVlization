@@ -7,11 +7,12 @@ import math
 import os
 from typing import List, Tuple, Any
 import lightning.pytorch as pl
-from lightning.pytorch import LightningModule
-from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch import LightningModule, LightningDataModule
+from lightning.pytorch.loggers import WandbLogger, MLFlowLogger
 from lightning.pytorch.strategies import DDPStrategy
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 import torch
+from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 from einops import rearrange, pack
 from scheduling_utils.schedulers_cpp import (
@@ -19,6 +20,7 @@ from scheduling_utils.schedulers_cpp import (
     LinearScheduler,
     CosineScheduler,
 )
+from torchvision.transforms import Compose, Resize, ToTensor
 from torchmetrics import MeanSquaredError
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.ssim import StructuralSimilarityIndexMeasure
@@ -29,6 +31,53 @@ from .autoencoder import Encoder, Decoder
 from .loss import VQLPIPS
 from .datamodules import ImageDataModule
 from .base_vae import BaseVQVAE
+
+
+class HuggingFaceDataModule(LightningDataModule):
+    def __init__(self, dataset, batch_size, num_workers):
+        super().__init__()
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+    def setup(self, stage=None):
+        if stage == "fit":
+            self.train_dataset = self.dataset["train"]
+            if "val" in self.dataset:
+                self.val_dataset = self.dataset["val"]
+            elif "validation" in self.dataset:
+                self.val_dataset = self.dataset["validation"]
+            elif "test" in self.dataset:
+                self.val_dataset = self.dataset["test"]
+            else:
+                self.val_dataset = self.dataset["train"]
+        else:
+            self.test_dataset = self.dataset["test"]
+
+    def train_dataloader(self):
+        dl = DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+        )
+        return dl
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+        )
 
 
 class VQVAE(BaseVQVAE, LightningModule):
@@ -98,6 +147,8 @@ class VQVAE(BaseVQVAE, LightningModule):
         :param batch: images B C H W, or tuple if ffcv loader
         :param batch_index: used for logging reconstructions only once per epoch
         """
+        if isinstance(batch, dict):
+            batch = batch["image"]
         images = self.preprocess_batch(batch[0] if isinstance(batch, tuple) else batch)
         x_recon, q_loss, used_indices = self.forward(images)
 
@@ -303,7 +354,8 @@ class VQVAE(BaseVQVAE, LightningModule):
         :param batch: images B C H W, or tuple if ffcv loader
         :param batch_index: used for logging reconstructions only once per epoch
         """
-
+        if isinstance(batch, dict):
+            batch = batch["image"]
         images = self.preprocess_batch(batch[0] if isinstance(batch, tuple) else batch)
         x_recon, q_loss, used_indices = self.forward(images)
 
@@ -567,6 +619,8 @@ class VQVAE(BaseVQVAE, LightningModule):
     def test_step(self, images, _):
 
         # get reconstructions, used_indices
+        if isinstance(images, dict):
+            images = images["image"]
         images = images[0] if isinstance(images, tuple) else images
         reconstructions, _, used_indices = self.forward(self.preprocess_batch(images))
         reconstructions = self.preprocess_visualization(reconstructions)
@@ -684,7 +738,8 @@ class VQVAETrainingPipeline:
         Configuration for the VQVAE training pipeline.
         """
 
-        dataset_path: str
+        dataset_name: str = None
+        dataset_path: str = None
         image_size: int = 256
         # The number of nodes in the distributed training setup.
         num_nodes: int = 1
@@ -709,6 +764,9 @@ class VQVAETrainingPipeline:
         seed: int = 0
         resume_from: str = None
         set_matmul_precision_for_a100: bool = False
+
+        limit_train_batches: float = 1.0
+        limit_val_batches: float = 1.0
 
     def fit(self, dataset_builder=None):
         import wandb
@@ -759,8 +817,12 @@ class VQVAETrainingPipeline:
                     resume="must" if resume else None,
                 )
         else:
-            # logger = WandbLogger(project=project_name, name=run_name, offline=True)
-            pass
+            # logger = MLFlowLogger(
+            #     experiment_name=project_name,
+            #     run_name=run_name,
+            #     tracking_uri="mlruns",
+            # )
+            logger = None
 
         # model params
         image_size = self.config.image_size
@@ -850,17 +912,49 @@ class VQVAETrainingPipeline:
                 )
             )
 
-        # data loading (standard pytorch lightning or ffcv)
-        datamodule = self._create_datamodule(
-            "standard",
-            self.config.dataset_path,
-            image_size,
-            batch_size_per_device,
-            workers,
-            seed,
-            is_dist,
-            mode="train",
-        )
+        if self.config.dataset_name is None:
+            datamodule = self._create_datamodule(
+                "standard",
+                self.config.dataset_path,
+                image_size,
+                batch_size_per_device,
+                workers,
+                seed,
+                is_dist,
+                mode="train",
+            )
+        else:
+            # load huggingface dataset
+            from datasets import load_dataset
+
+            dataset = load_dataset(self.config.dataset_name)
+            torchvision_tf = Compose(
+                [
+                    Resize((image_size, image_size)),
+                    ToTensor(),
+                ]
+            )
+
+            def transforms(examples):
+                # image = (
+                #     examples["image"].convert("RGB").resize((image_size, image_size))
+                # )
+                # return {"image": image}
+                images = [
+                    torchvision_tf(image.convert("RGB")) for image in examples["image"]
+                ]
+                return {"image": images}
+
+            # dataset = dataset.map(transforms)
+            dataset.set_transform(transforms)
+            # dataset.set_format("torch")
+            for example in dataset["train"]:
+                # print(example)
+                print(example["image"].shape)
+                break
+            # raise ValueError("ok")
+            datamodule = HuggingFaceDataModule(dataset, batch_size_per_device, workers)
+            datamodule.setup(stage="fit")
 
         # callbacks
         checkpoint_callback = ModelCheckpoint(
@@ -888,6 +982,8 @@ class VQVAETrainingPipeline:
             logger=logger,
             max_epochs=max_epochs,
             check_val_every_n_epoch=5,
+            limit_train_batches=self.config.limit_train_batches,
+            limit_val_batches=self.config.limit_val_batches,
         )
 
         print(f"[INFO] workers: {workers}")
@@ -992,19 +1088,19 @@ class VQVAETrainingPipeline:
 if __name__ == "__main__":
     """
     CUDA_VISIBLE_DEVICES='0' python -m cvlization.torch.net.vae_resnet.vqvae | tee tmp.log
-
-    Did not check the quality of the model yet.
     """
     config = VQVAETrainingPipeline.Config(
-        dataset_path="data/tmp/",
+        dataset_name="mnist",
+        # dataset_path="data/tmp/",
+        image_size=32,
         num_nodes=1,
         workers=1,
         num_epochs=10,
-        batch_size=16,
-        cumulative_bs=16,
+        batch_size=32,
+        cumulative_bs=32,
         learning_rate=0.0001,
         model_checkpoint_path=None,
-        track=False,
+        track=False,  # using wandb if True
         wandb_project="vqvae",
         run_name="vqvae_run",
         save_path="logs/",
@@ -1012,6 +1108,8 @@ if __name__ == "__main__":
         seed=0,
         resume_from=None,
         set_matmul_precision_for_a100=False,
+        limit_train_batches=0.1,
+        limit_val_batches=0.1,
     )
 
     pipeline = VQVAETrainingPipeline(config)
