@@ -1087,7 +1087,7 @@ class VQVAETrainingPipeline:
 
 if __name__ == "__main__":
     """
-    CUDA_VISIBLE_DEVICES='0' python -m cvlization.torch.net.vae_resnet.vqvae | tee tmp.log
+    CUDA_VISIBLE_DEVICES='0' python -m cvlization.torch.training_pipeline.image_gen.vae_resnet.vqvae | tee tmp.log
     """
     config = VQVAETrainingPipeline.Config(
         dataset_name="mnist",
@@ -1095,7 +1095,7 @@ if __name__ == "__main__":
         image_size=32,
         num_nodes=1,
         workers=1,
-        num_epochs=10,
+        num_epochs=100,
         batch_size=32,
         cumulative_bs=32,
         learning_rate=0.0001,
