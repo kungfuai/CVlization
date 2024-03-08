@@ -66,6 +66,8 @@ class VQVAETrainingPipeline:
             logger=logger,
             **kwargs,
         )
+        if args.watch_gradients:
+            trainer.logger.experiment.watch(self.model)
         # trainer = pl.Trainer.from_argparse_args(
         #     args, callbacks=callbacks, max_steps=20000, **kwargs
         # )
@@ -93,6 +95,7 @@ def main():
     parser.add_argument("--limit_train_batches", type=float, default=1.0)
     parser.add_argument("--limit_val_batches", type=float, default=1.0)
     parser.add_argument("--save_every_n_epochs", type=int, default=1)
+    parser.add_argument("--watch_gradients", action="store_true")
 
     args = parser.parse_args()
 
