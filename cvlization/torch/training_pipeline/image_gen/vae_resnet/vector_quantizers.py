@@ -8,6 +8,9 @@ from einops import rearrange, einsum
 
 
 class BaseVectorQuantizer(ABC, nn.Module):
+    """
+    What does it do? It quantizes the input tensor to a set of discrete values (codebook).
+    """
 
     def __init__(self, num_embeddings: int, embedding_dim: int):
         """
