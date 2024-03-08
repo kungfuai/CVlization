@@ -3,13 +3,24 @@ Adapted from https://github.com/caganselim/flying_mnist/blob/master/flying_mnist
 """
 
 import argparse
-import json
 import numpy as np
+import glob
 import sys
+from tqdm import tqdm
 import os
+from pathlib import Path
 from PIL import Image
 import math
 import torch
+import torch.nn.functional as F
+from torchvision.datasets.video_utils import VideoClips
+
+# suppress this warning:
+# /opt/conda/lib/python3.10/site-packages/torchvision/io/video.py:161: UserWarning: The pts_unit 'pts' gives wrong results. Please use pts_unit 'sec'.
+
+import warnings
+
+warnings.filterwarnings("ignore", message="The pts_unit 'pts' gives wrong results.")
 
 
 def writeFlowFile(filename, uv):
@@ -32,14 +43,79 @@ def writeFlowFile(filename, uv):
 
 class FlyingMNISTDatasetBuilder:
 
-    def __init__(self, opts):
-        self.opts = opts
+    def __init__(
+        self,
+        opts: argparse.Namespace = None,
+        resolution: int = 64,
+        to_generate: bool = False,
+    ):
+        if to_generate:
+            self.opts = opts or prepare_parser().parse_args()
+        else:
+            self.opts = None
+        self.resolution = resolution
+        self.to_generate = to_generate
 
     def training_dataset(self):
-        return FlyingMNISTDataset(self.opts)
+        if self.to_generate:
+            return FlyingMNISTDataset(
+                self.opts, max_videos=1000, to_generate=self.to_generate
+            )
+        default_path = Path("data/flying_mnist/train")
+        if default_path.exists():
+            return FlyingMNISTDataset(
+                self.opts,
+                from_dir=default_path,
+                resolution=self.resolution,
+                to_generate=self.to_generate,
+            )
 
     def validation_dataset(self):
-        return FlyingMNISTDataset(self.opts)
+        if self.to_generate:
+            return FlyingMNISTDataset(
+                self.opts,
+                seed_offset=int(1e6),
+                max_videos=100,
+                to_generate=self.to_generate,
+            )
+        default_path = Path("data/flying_mnist/val")
+        if default_path.exists():
+            return FlyingMNISTDataset(
+                self.opts,
+                from_dir=default_path,
+                resolution=self.resolution,
+                to_generate=self.to_generate,
+            )
+
+
+def preprocess(video, resolution, sequence_length=None):
+    # video: THWC, {0, ..., 255}
+    video = video.permute(0, 3, 1, 2).float() / 255.0  # TCHW
+    t, c, h, w = video.shape
+
+    # temporal crop
+    if sequence_length is not None:
+        assert sequence_length <= t
+        video = video[:sequence_length]
+
+    # scale shorter side to resolution
+    scale = resolution / min(h, w)
+    if h < w:
+        target_size = (resolution, math.ceil(w * scale))
+    else:
+        target_size = (math.ceil(h * scale), resolution)
+    video = F.interpolate(video, size=target_size, mode="bilinear", align_corners=False)
+
+    # center crop
+    t, c, h, w = video.shape
+    w_start = (w - resolution) // 2
+    h_start = (h - resolution) // 2
+    video = video[:, :, h_start : h_start + resolution, w_start : w_start + resolution]
+    video = video.permute(1, 0, 2, 3).contiguous()  # CTHW
+
+    video -= 0.5
+
+    return video
 
 
 class FlyingMNISTDataset:
@@ -48,14 +124,46 @@ class FlyingMNISTDataset:
     """
 
     def __init__(
-        self, opts: dict, max_frames_per_video: int = 100, max_videos: int = 10000
+        self,
+        opts: dict,
+        from_dir: Path = None,
+        max_frames_per_video: int = 100,
+        max_videos: int = 10000,
+        seed_offset: int = 0,
+        resolution: int = 64,
+        to_generate: bool = False,
     ):
+        self.exts = ["avi", "mp4", "webm"]
         self.max_videos = max_videos
         self.max_frames_per_video = max_frames_per_video
+        self.seed_offset = seed_offset
         self.opts = opts
-        self.flying_mnist = FlyingMNIST(opts)
+        self.from_dir = from_dir
+        self.resolution = resolution
+        self.sequence_length = max_frames_per_video
+        self.to_generate = to_generate
+        if to_generate:
+            self.flying_mnist = FlyingMNIST(opts)
+        else:
+            assert (
+                from_dir
+            ), "from_dir must be provided if to_generate is False. Please check if the videos files are in data/flying_mnist/train or data/flying_mnist/val."
+            files = sum(
+                [
+                    glob.glob(str(from_dir / "**" / f"*.{ext}"), recursive=True)
+                    for ext in self.exts
+                ],
+                [],
+            )
+            self.max_videos = len(files)
+            clips = VideoClips(files, self.sequence_length, num_workers=32)
+            self._clips = clips
 
-    def __getitem__(self, idx):
+    def __iter__(self):
+        for idx in range(self.max_videos):
+            yield self[idx]
+
+    def __getitem__(self, idx) -> dict:
         """
         Returns a video of flying MNIST digits.
 
@@ -63,9 +171,18 @@ class FlyingMNISTDataset:
             idx (int): Index of the video.
 
         Returns:
-            np.ndarray: A video of flying MNIST digits. Shape is (T, H, W, C).
+            dict: A dictionary with "video" as the key and a np.array as the value.
+                If the video is loaded from a directory, the np.array has shape (T, C, H, W).
+                And the video is preprocessed for training.
+                If the video is generated on the fly, the np.array has shape (C, T, H, W).
+                The video is not preprocessed, and is suitable for visualization and saving.
         """
+        if self.from_dir is not None:
+            video, _, _, idx = self._clips.get_clip(idx)
+            return dict(video=preprocess(video, self.resolution))
+
         frames = []
+        np.random.seed(idx + self.seed_offset)
         self.flying_mnist.init_env(idx)
         for i in range(self.max_frames_per_video):
             frame = self.flying_mnist.generate_img()
@@ -73,7 +190,7 @@ class FlyingMNISTDataset:
             frame = np.array(frame)
             # print(f"Frame shape: {frame.shape}")
             frames.append(frame)
-        return np.array(frames)
+        return dict(video=np.array(frames))
 
     def __len__(self):
         if self.max_videos is None:
@@ -260,7 +377,7 @@ class FlyingMNIST:
             )
         )
 
-        print(self.coor_list.shape)
+        # print(self.coor_list.shape)
 
         # Velocity init
         direcs = np.pi * (np.random.rand(self.number_of_digits) * 2 - 1)
@@ -336,7 +453,7 @@ class FlyingMNIST:
                 if self.boundary_lookup[i]:
                     continue
 
-                if np.random.rand() < 0.5:
+                if (not self.opts.leaving_digits) or np.random.rand() < 0.5:
                     if x_check:
                         self.veloc[i, 0] *= -1
                     if y_check:
@@ -599,7 +716,7 @@ def prepare_parser():
         "--canv_height", default=512, type=int, help="Canvas image height"
     )
     parser.add_argument(
-        "--canv_width", default=768, type=int, help="Canvas image width"
+        "--canv_width", default=512, type=int, help="Canvas image width"
     )
     parser.add_argument("--use_trn", default=True, help="Use MNIST train set")
     parser.add_argument(
@@ -624,7 +741,7 @@ def prepare_parser():
         "--digit_size_max", default=120, type=int, help="Maximum digit size"
     )
     parser.add_argument(
-        "--leaving_digits", default=True, type=str, help="Allows leaving digits"
+        "--leaving_digits", default=False, type=str, help="Allows leaving digits"
     )
     parser.add_argument("--digits", nargs="+", default=[1, 2, 3, 4, 5, 6, 7, 8, 9, 0])
     parser.add_argument(
@@ -634,18 +751,94 @@ def prepare_parser():
     return parser
 
 
-if __name__ == "__main__":
-    opts = prepare_parser().parse_args()
-    db = FlyingMNISTDatasetBuilder(opts)
-    train_ds = db.training_dataset()
-    print(f"Length of the dataset: {len(train_ds)}")
-    first_video = train_ds[1]
-    print(f"First item: {first_video.shape}")
-    # save all frames
+def save_dataset_to_folder(ds, folder: str = "data/flying_mnist/train"):
     import os
 
-    os.makedirs("frames", exist_ok=True)
-    frames = [f for f in first_video]
-    for j, frame in enumerate(frames):
-        img = Image.fromarray(frame)
-        img.save(f"frames/frame_{j}.png")
+    os.makedirs(folder, exist_ok=True)
+    print(f"Length of the dataset: {len(ds)}")
+    # Saving to a folder: data/flying_mnist/train
+    for j, v in tqdm(enumerate(ds), total=len(ds)):
+        # print(f"video: {v.shape}")
+        if isinstance(v, dict):
+            v = v["video"]
+        frames = [f for f in v]
+        # save to mp4
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        width, height = v.shape[2], v.shape[1]
+        video = cv2.VideoWriter(f"{folder}/{j:05d}.mp4", fourcc, fps, (width, height))
+        for frame in frames:
+            video.write(frame)
+
+        cv2.destroyAllWindows()
+        video.release()
+        # print(f"Saved video: {folder}/{j:05d}.mp4")
+
+
+if __name__ == "__main__":
+    import cv2
+
+    opts = prepare_parser().parse_args()
+    fps = 10
+    db = FlyingMNISTDatasetBuilder(opts, to_generate=True)
+    print("Training dataset:")
+    train_ds = db.training_dataset()
+    # Saving to a folder: data/flying_mnist/train
+    if train_ds.from_dir is None:
+        save_dataset_to_folder(train_ds, folder="data/flying_mnist/train")
+    else:
+        for x in train_ds:
+            print(
+                "video shape:",
+                x["video"].shape,
+                "mean:",
+                x["video"].mean(),
+                "std:",
+                x["video"].std(),
+            )
+            break
+        from torch.utils.data import DataLoader
+
+        loader = DataLoader(train_ds, batch_size=2, shuffle=True, num_workers=1)
+        for x in loader:
+            print(
+                "batch shape:",
+                x["video"].shape,
+                "mean:",
+                x["video"].mean(),
+                "std:",
+                x["video"].std(),
+            )
+            break
+    print("Validation dataset:")
+    val_ds = db.validation_dataset()
+    # Saving to a folder: data/flying_mnist/val
+    if val_ds.from_dir is None:
+        save_dataset_to_folder(val_ds, folder="data/flying_mnist/val")
+    else:
+        for x in val_ds:
+            print(
+                "video shape:",
+                x["video"].shape,
+                "mean:",
+                x["video"].mean(),
+                "std:",
+                x["video"].std(),
+            )
+            break
+        from torch.utils.data import DataLoader
+
+        loader = DataLoader(val_ds, batch_size=2, shuffle=False, num_workers=1)
+        for x in loader:
+            print(
+                "batch shape:",
+                x["video"].shape,
+                "mean:",
+                x["video"].mean(),
+                "std:",
+                x["video"].std(),
+            )
+            break
+
+    # save as gif
+    # import imageio
+    # imageio.mimsave("data/flying_mnist.gif", frames)
