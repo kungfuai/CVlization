@@ -29,7 +29,8 @@ class VQVAE(pl.LightningModule):
         self.pre_vq_conv = SamePadConv3d(args.n_hiddens, args.embedding_dim, 1)
         self.post_vq_conv = SamePadConv3d(args.embedding_dim, args.n_hiddens, 1)
 
-        self.codebook = Codebook(args.n_codes, args.embedding_dim)
+        # self.codebook = Codebook(args.n_codes, args.embedding_dim)
+        self.codebook = Codebook2(args.n_codes, args.embedding_dim)
         self.save_hyperparameters()
 
     @property
@@ -457,3 +458,65 @@ class SamePadConvTranspose3d(nn.Module):
 
     def forward(self, x):
         return self.convt(F.pad(x, self.pad_input))
+
+
+class Codebook2(nn.Module):
+    def __init__(self, n_codes: int, embedding_dim: int, beta: float = 0.25):
+        super(Codebook2, self).__init__()
+        self.num_codebook_vectors = n_codes
+        self.latent_dim = embedding_dim
+        self.beta = beta
+
+        self.embedding = nn.Embedding(self.num_codebook_vectors, self.latent_dim)
+        self.embedding.weight.data.uniform_(
+            -1.0 / self.num_codebook_vectors, 1.0 / self.num_codebook_vectors
+        )
+
+    def forward(self, z):
+        # z is of shape (b, c, t, h, w), c is the embedding dim
+        z = z.permute(0, 2, 3, 4, 1).contiguous()  # (b, t, h, w, c)
+        # print(f"z: {z.shape}")
+        z_flattened = z.view(-1, self.latent_dim)
+        # print(f"b * t * h * w: {z_flattened.shape[0]}")
+
+        # this is the distance between the z and the embeddings
+        d = (
+            torch.sum(z_flattened**2, dim=1, keepdim=True)
+            + torch.sum(self.embedding.weight**2, dim=1)
+            - 2 * (torch.matmul(z_flattened, self.embedding.weight.t()))
+        )  # (b*t*h*w, c)
+        assert d.shape == (z_flattened.shape[0], self.num_codebook_vectors)
+
+        min_encoding_indices = torch.argmin(d, dim=1)
+        z_q = self.embedding(min_encoding_indices).view(z.shape)
+
+        loss = torch.mean((z_q.detach() - z) ** 2) + self.beta * torch.mean(
+            (z_q - z.detach()) ** 2
+        )
+
+        z_q = z + (z_q - z).detach()
+
+        # print(f"z_q: {z_q.shape}")
+        # permute back
+        z_q = z_q.permute(0, 4, 1, 2, 3)  # (b, c, t, h, w)
+
+        # return z_q, min_encoding_indices, loss
+        embedings_st = z_q
+        # print(f"z_q: {z_q.shape}, min_encoding_indices: {min_encoding_indices.shape}")
+        encoding_indices = min_encoding_indices.view(z_q.shape[0], *z_q.shape[2:])
+        commitment_loss = loss
+        perplexity = torch.exp(
+            -torch.mean(
+                torch.sum(
+                    F.one_hot(min_encoding_indices, self.num_codebook_vectors).float()
+                    * F.log_softmax(d, dim=1),
+                    dim=1,
+                )
+            )
+        )
+        return dict(
+            embeddings=embedings_st,
+            encodings=encoding_indices,
+            commitment_loss=commitment_loss,
+            perplexity=perplexity,
+        )
