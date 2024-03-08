@@ -66,7 +66,7 @@ class VQVAETrainingPipeline:
             logger=logger,
             **kwargs,
         )
-        if args.watch_gradients:
+        if args.track and args.watch_gradients:
             trainer.logger.experiment.watch(self.model)
         # trainer = pl.Trainer.from_argparse_args(
         #     args, callbacks=callbacks, max_steps=20000, **kwargs
