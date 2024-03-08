@@ -2,6 +2,7 @@ import math
 import argparse
 import os
 import numpy as np
+from typing import Tuple
 
 import wandb
 from einops import rearrange, pack
@@ -14,6 +15,9 @@ from torchvision.utils import make_grid
 
 from attention import MultiHeadAttention
 from utils import shift_dim
+from cvlization.torch.training_pipeline.image_gen.vae_resnet.vector_quantizers import (
+    BaseVectorQuantizer,
+)
 
 
 class VQVAE(pl.LightningModule):
@@ -30,7 +34,8 @@ class VQVAE(pl.LightningModule):
         self.post_vq_conv = SamePadConv3d(args.embedding_dim, args.n_hiddens, 1)
 
         # self.codebook = Codebook(args.n_codes, args.embedding_dim)
-        self.codebook = Codebook2(args.n_codes, args.embedding_dim)
+        # self.codebook = Codebook2(args.n_codes, args.embedding_dim)
+        self.codebook = Codebook3(args.n_codes, args.embedding_dim)
         self.save_hyperparameters()
 
     @property
@@ -59,10 +64,21 @@ class VQVAE(pl.LightningModule):
         return self.decoder(h)
 
     def forward(self, x):
-        z = self.pre_vq_conv(self.encoder(x))
+        # pre_vq_conv: (B, C, T, H, W) -> (B, C, T, H, W)
+        # print(f"x: {x.shape}")
+        z = self.encoder(x)
+        # print(f"after encoding, z: {z.shape}")
+        # z = self.pre_vq_conv(z)
+        # print(f"z after pre_vq_conv: {z.shape}")
         vq_output = self.codebook(z)
-        x_recon = self.decoder(self.post_vq_conv(vq_output["embeddings"]))
-        recon_loss = F.mse_loss(x_recon, x) / 0.06
+        vq_output["z"] = z
+        z_recon = vq_output["embeddings"]
+        # print(f"z_recon: {z_recon.shape}")
+        # z_recon = self.post_vq_conv(z_recon)
+        x_recon = self.decoder(z_recon)
+        # print(f"x_recon: {x_recon.shape}")
+        recon_loss_weight = 10  # TODO: make this an argument
+        recon_loss = F.mse_loss(x_recon, x) * recon_loss_weight
 
         return recon_loss, x_recon, vq_output
 
@@ -74,6 +90,13 @@ class VQVAE(pl.LightningModule):
         self.log("train/recon_loss", recon_loss, prog_bar=True, on_step=True)
         self.log("train/commitment_loss", commitment_loss, on_step=True)
         self.log("train/loss", loss, on_step=True)
+        self.log("train/perplexity", vq_output["perplexity"], on_step=True)
+        self.log(
+            "train/avg_min_vq_distance", vq_output["avg_min_distance"], on_step=True
+        )
+        self.log("train/z_mean", vq_output["z"].mean(), on_step=True)
+        self.log("train/z_max", vq_output["z"].max(), on_step=True)
+        self.log("train/z_min", vq_output["z"].min(), on_step=True)
 
         # log reconstructions (every 5 epochs, for one batch)
         if batch_idx == 2 and self.current_epoch % 5 == 0:
@@ -207,7 +230,8 @@ class VQVAE(pl.LightningModule):
         parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument("--embedding_dim", type=int, default=256)
         parser.add_argument("--n_codes", type=int, default=2048)
-        parser.add_argument("--n_hiddens", type=int, default=240)
+        # parser.add_argument("--n_hiddens", type=int, default=240)
+        parser.add_argument("--n_hiddens", type=int, default=256)
         parser.add_argument("--n_res_layers", type=int, default=4)
         parser.add_argument("--downsample", nargs="+", type=int, default=(4, 4, 4))
         return parser
@@ -460,7 +484,144 @@ class SamePadConvTranspose3d(nn.Module):
         return self.convt(F.pad(x, self.pad_input))
 
 
+class Codebook3(BaseVectorQuantizer):
+    # adapted from cvlization/torch/training_pipeline/image_gen/vae_resnet/vector_quantizers.py
+    def __init__(
+        self, num_embeddings: int, embedding_dim: int, commitment_cost: float = 0.25
+    ):
+        """
+        Original VectorQuantizer with straight through gradient estimator (loss is optimized on inputs and codebook)
+        :param num_embeddings: size of the latent dictionary (num of embedding vectors).
+        :param embedding_dim: size of a single tensor in dict.
+        :param commitment_cost: scaling factor for e_loss
+        """
+        print(
+            f"***** Creating a quantizer with {num_embeddings} embeddings and {embedding_dim} dimensions"
+        )
+        super().__init__(num_embeddings, embedding_dim)
+
+        self.commitment_cost = commitment_cost
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.IntTensor, float]:
+        """
+        :param x: spatial temporal tensors (output of the Encoder - B,C,T,H,W).
+        :return quantized_x (B,C,T,H,W), encoding_indices (B,T,H,W), loss (float)
+        """
+        b, c, t, h, w = x.shape
+        device = x.device
+
+        # Flat input to vectors of embedding dim = C.
+        flat_x = rearrange(x, "b c t h w -> (b t h w) c")
+
+        # Calculate distances of each vector w.r.t the dict
+        # distances is a matrix (B*H*W, codebook_size)
+        distances = (
+            torch.sum(flat_x**2, dim=1, keepdim=True)
+            + torch.sum(self.codebook.weight**2, dim=1)
+            - 2 * torch.matmul(flat_x, self.codebook.weight.t())
+        )
+
+        # Get indices of the closest vector in dict, and create a mask on the correct indexes
+        # encoding_indices = (num_vectors_in_batch, 1)
+        # Mask = (num_vectors_in_batch, codebook_dim)
+        encoding_indices = torch.argmin(distances, dim=1)
+        encodings = torch.zeros(
+            encoding_indices.shape[0], self.num_embeddings, device=device
+        )
+        encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)  # ?
+
+        # Quantize and un-flat
+        quantized = torch.matmul(encodings, self.codebook.weight)
+
+        # Loss functions
+        e_loss = self.commitment_cost * F.mse_loss(quantized.detach(), flat_x)
+        q_loss = F.mse_loss(quantized, flat_x.detach())
+
+        # during backpropagation quantized = inputs (copy gradient trick)
+        quantized = flat_x + (quantized - flat_x).detach()
+
+        quantized = rearrange(
+            quantized, "(b t h w) c -> b c t h w", b=b, h=h, w=w, t=t, c=c
+        )
+        encoding_indices = rearrange(
+            encoding_indices, "(b t h w)-> b (t h w)", b=b, h=h, w=w, t=t
+        ).detach()
+
+        # return quantized, encoding_indices, q_loss + e_loss
+        embedings_st = quantized
+        commitment_loss = q_loss + e_loss  # ?
+        perplexity = torch.exp(
+            -torch.mean(
+                torch.sum(encodings.float() * F.log_softmax(distances, dim=1), dim=1)
+            )
+        )
+        min_distances = torch.min(distances, dim=1).values
+        avg_min_distance = torch.mean(min_distances)
+        return dict(
+            embeddings=embedings_st,
+            encodings=encoding_indices,
+            commitment_loss=commitment_loss,
+            perplexity=perplexity,
+            avg_min_distance=avg_min_distance,
+        )
+
+    @torch.no_grad()
+    def vec_to_codes(self, x: torch.Tensor) -> torch.IntTensor:
+        """
+        :param x: tensors (output of the Encoder - B,C,T,H,W).
+        :return flat codebook indices (B, T * H * W)
+        """
+        b, c, t, h, w = x.shape
+
+        # Flat input to vectors of embedding dim = C.
+        flat_x = rearrange(x, "b c t h w -> (b t h w) c")
+
+        # Calculate distances of each vector w.r.t the dict
+        # distances is a matrix (B*H*W, codebook_size)
+        distances = (
+            torch.sum(flat_x**2, dim=1, keepdim=True)
+            + torch.sum(self.codebook.weight**2, dim=1)
+            - 2 * torch.matmul(flat_x, self.codebook.weight.t())
+        )
+
+        # Get indices of the closest vector in dict
+        encoding_indices = torch.argmin(distances, dim=1)
+        encoding_indices = rearrange(
+            encoding_indices, "(b t h w) -> b (t h w)", b=b, h=h, w=w, t=t
+        )
+
+        return encoding_indices
+
+    @torch.no_grad()
+    def vec_to_codes_2d(self, x: torch.Tensor) -> torch.IntTensor:
+        """
+        :param x: tensors (output of the Encoder - B,D,H,W).
+        :return flat codebook indices (B, H * W)
+        """
+        b, c, h, w = x.shape
+
+        # Flat input to vectors of embedding dim = C.
+        flat_x = rearrange(x, "b c h w -> (b h w) c")
+
+        # Calculate distances of each vector w.r.t the dict
+        # distances is a matrix (B*H*W, codebook_size)
+        distances = (
+            torch.sum(flat_x**2, dim=1, keepdim=True)
+            + torch.sum(self.codebook.weight**2, dim=1)
+            - 2 * torch.matmul(flat_x, self.codebook.weight.t())
+        )
+
+        # Get indices of the closest vector in dict
+        encoding_indices = torch.argmin(distances, dim=1)
+        encoding_indices = rearrange(
+            encoding_indices, "(b h w) -> b (h w)", b=b, h=h, w=w
+        )
+
+        return encoding_indices
+
+
 class Codebook2(nn.Module):
+    # This is adapted from CVlization/examples/image_gen/vqgan/codebook.py
     def __init__(self, n_codes: int, embedding_dim: int, beta: float = 0.25):
         super(Codebook2, self).__init__()
         self.num_codebook_vectors = n_codes
