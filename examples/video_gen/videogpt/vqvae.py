@@ -18,6 +18,7 @@ from utils import shift_dim
 from cvlization.torch.training_pipeline.image_gen.vae_resnet.vector_quantizers import (
     BaseVectorQuantizer,
 )
+import ae_variants
 
 
 class VQVAE(pl.LightningModule):
@@ -26,16 +27,27 @@ class VQVAE(pl.LightningModule):
         self.args = args
         self.embedding_dim = args.embedding_dim
         self.n_codes = args.n_codes
+        self.network_variant = args.network_variant
 
-        self.encoder = Encoder(args.n_hiddens, args.n_res_layers, args.downsample)
-        self.decoder = Decoder(args.n_hiddens, args.n_res_layers, args.downsample)
+        network_holder = getattr(ae_variants, self.network_variant)(
+            embedding_dim=self.embedding_dim
+        )
+        self.encoder = network_holder["encode"]
+        self.decoder = network_holder["decode"]
+        self.vq = network_holder["vq"]
 
-        self.pre_vq_conv = SamePadConv3d(args.n_hiddens, args.embedding_dim, 1)
-        self.post_vq_conv = SamePadConv3d(args.embedding_dim, args.n_hiddens, 1)
+        # self.encoder = Encoder(args.n_hiddens, args.n_res_layers, args.downsample)
+        # self.decoder = Decoder(args.n_hiddens, args.n_res_layers, args.downsample)
+        # self.encoder = MiniEncoder(self.embedding_dim)
+        # self.decoder = MiniDecoder(self.embedding_dim)
+        # self.simple_conv = nn.Conv3d(3, 3, kernel_size=1, padding=0)
+
+        # self.pre_vq_conv = SamePadConv3d(args.n_hiddens, args.embedding_dim, 1)
+        # self.post_vq_conv = SamePadConv3d(args.embedding_dim, args.n_hiddens, 1)
 
         # self.codebook = Codebook(args.n_codes, args.embedding_dim)
         # self.codebook = Codebook2(args.n_codes, args.embedding_dim)
-        self.codebook = Codebook3(args.n_codes, args.embedding_dim)
+        # self.codebook = Codebook3(args.n_codes, args.embedding_dim)
         self.save_hyperparameters()
 
     @property
@@ -70,17 +82,36 @@ class VQVAE(pl.LightningModule):
         # print(f"after encoding, z: {z.shape}")
         # z = self.pre_vq_conv(z)
         # print(f"z after pre_vq_conv: {z.shape}")
-        vq_output = self.codebook(z)
-        vq_output["z"] = z
-        z_recon = vq_output["embeddings"]
+
+        vq_output = self.vq(z)
+        # vq_output["z"] = z
+        # z_recon = vq_output["embeddings"]
+        if isinstance(vq_output, dict):
+            z_recon = vq_output["z_recon"]
+        else:
+            z_recon = z
+            vq_output = {
+                "commitment_loss": 0,
+                "perplexity": 0,
+                "z": z,
+                "avg_min_distance": 0,
+            }
+
         # print(f"z_recon: {z_recon.shape}")
         # z_recon = self.post_vq_conv(z_recon)
+
         x_recon = self.decoder(z_recon)
+        # x_recon = self.simple_conv(x)
+
         # print(f"x_recon: {x_recon.shape}")
-        recon_loss_weight = 10  # TODO: make this an argument
+        recon_loss_weight = 1.0  # TODO: make this an argument
         recon_loss = F.mse_loss(x_recon, x) * recon_loss_weight
 
         return recon_loss, x_recon, vq_output
+
+    def on_train_start(self) -> None:
+        print(self)
+        return super().on_train_start()
 
     def training_step(self, batch, batch_idx):
         x = batch["video"]
@@ -168,32 +199,30 @@ class VQVAE(pl.LightningModule):
             reconstructions = reconstructions.cpu()
 
         # make sure the pixel values are in the range [0, 1]
+        residual = reconstructions - ground_truths
         ground_truths = (ground_truths - ground_truths.min()) / (
             ground_truths.max() - ground_truths.min() + 1e-6
         )
         reconstructions = (reconstructions - reconstructions.min()) / (
             reconstructions.max() - reconstructions.min() + 1e-6
         )
+        residual = (residual - residual.min()) / (
+            residual.max() - residual.min() + 1e-6
+        )
         ground_truths = (ground_truths * 255).to(torch.uint8)
         reconstructions = (reconstructions * 255).to(torch.uint8)
+        residual = (residual * 255).to(torch.uint8)
 
         # b = min(ground_truths.shape[0], 8)
         b = min(ground_truths.shape[0], 2)
         # b = min(ground_truths.shape[0], 1)
         panel_name = "train" if training else "validation"
 
-        # display, _ = pack(
-        #     [
-        #         self.preprocess_visualization(ground_truths[:b]),
-        #         self.preprocess_visualization(reconstructions[:b]),
-        #     ],
-        #     "* c h w",
-        # )
         # side by side video
-        display = torch.cat([ground_truths[:b], reconstructions[:b]], dim=3)
+        display = torch.cat(
+            [ground_truths[:b], reconstructions[:b], residual[:b]], dim=3
+        )
 
-        # display = make_grid(display, nrow=b)
-        # display = wandb.Image(display)
         display = wandb.Video(data_or_path=display, fps=4, format="mp4")
         self.logger.experiment.log({f"{panel_name}/reconstructions": display})
 
@@ -223,7 +252,7 @@ class VQVAE(pl.LightningModule):
         #     self.logger.experiment.log_artifact(model_artifact)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=3e-4, betas=(0.9, 0.999))
+        return torch.optim.Adam(self.parameters(), lr=self.args.lr, betas=(0.9, 0.999))
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -372,6 +401,92 @@ class Codebook(nn.Module):
     def dictionary_lookup(self, encodings):
         embeddings = F.embedding(encodings, self.embeddings)
         return embeddings
+
+
+class MiniEncoder(nn.Module):
+    """
+    A minimal spatial-temporal encoder for testing purposes.
+    """
+
+    def __init__(self, embedding_dim: int = 256, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # (B, C, T, H, W) -> (B, C, T, H/2, W/2) -> (B, C, T, H/4, W/4) -> (B, C, T/2, H/8, W/8)
+        self.conv0 = nn.Conv3d(
+            3, embedding_dim, kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1)
+        )
+        self.conv_1by1 = nn.Conv3d(
+            3, embedding_dim, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)
+        )
+        self.conv1 = nn.Conv3d(
+            3, 16, kernel_size=3, stride=(1, 2, 2), padding=(1, 1, 1)
+        )
+        self.conv2 = nn.Conv3d(
+            16, 32, kernel_size=3, stride=(1, 2, 2), padding=(1, 1, 1)
+        )
+        self.conv3 = nn.Conv3d(
+            32, embedding_dim, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1)
+        )
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        # return self.conv_1by1(x)
+        return self.conv0(x)
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = self.conv3(x)
+        return x
+
+
+class MiniDecoder(nn.Module):
+    """
+    A minimal spatial-temporal decoder for testing purposes.
+    """
+
+    def __init__(self, embedding_dim: int = 256, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.relu = nn.ReLU()
+
+        self.relu = nn.ReLU()
+        self.u1 = nn.Upsample(scale_factor=(1, 1, 1), mode="trilinear")
+        self.c0 = nn.Conv3d(
+            embedding_dim, 3, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1)
+        )
+        self.c1 = nn.Conv3d(
+            embedding_dim, 32, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1)
+        )
+        self.u2 = nn.Upsample(scale_factor=(1, 2, 2), mode="trilinear")
+        self.c2 = nn.Conv3d(32, 16, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1))
+        self.u3 = nn.Upsample(scale_factor=(1, 2, 2), mode="trilinear")
+        self.c3 = nn.Conv3d(16, 3, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1))
+        self.d0 = nn.ConvTranspose3d(
+            embedding_dim,
+            16,
+            kernel_size=[1, 4, 4],
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+        )
+        self.cd0 = nn.Conv3d(
+            16, 3, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)
+        )
+        self.conv_1by1 = nn.Conv3d(
+            embedding_dim, 3, kernel_size=1, stride=(1, 1, 1), padding=(0, 0, 0)
+        )
+
+    def forward(self, x):
+        # return self.conv_1by1(x)
+        return self.cd0(self.d0(x))
+        return self.c0(self.u2(x))
+        x = self.u1(x)
+        x = self.c1(x)
+        x = self.relu(x)
+        x = self.u2(x)
+        x = self.c2(x)
+        x = self.relu(x)
+        x = self.u3(x)
+        x = self.c3(x)
+        return x
 
 
 class Encoder(nn.Module):
@@ -550,15 +665,13 @@ class Codebook3(BaseVectorQuantizer):
         # return quantized, encoding_indices, q_loss + e_loss
         embedings_st = quantized
         commitment_loss = q_loss + e_loss  # ?
-        perplexity = torch.exp(
-            -torch.mean(
-                torch.sum(encodings.float() * F.log_softmax(distances, dim=1), dim=1)
-            )
-        )
+        avg_probs = torch.mean(encoding_indices.float(), dim=0)
+        perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
         min_distances = torch.min(distances, dim=1).values
         avg_min_distance = torch.mean(min_distances)
         return dict(
-            embeddings=embedings_st,
+            # embeddings=embedings_st,
+            embeddings=x,
             encodings=encoding_indices,
             commitment_loss=commitment_loss,
             perplexity=perplexity,
