@@ -53,8 +53,13 @@ class VQVAETrainingPipeline:
             kwargs = dict(distributed_backend="ddp", gpus=args.gpus)
 
         logger = (
-            WandbLogger(project="videogpt", log_model="all") if args.track else None
+            # WandbLogger(project="videogpt", log_model="all") if args.track else None
+            WandbLogger(project="videogpt", log_model=False)
+            if args.track
+            else None
         )
+        if logger is not None:
+            logger.log_hyperparams(args)
         trainer = pl.Trainer(
             max_epochs=args.epochs,
             # max_steps=args.max_steps,
@@ -78,7 +83,6 @@ def main():
     pl.seed_everything(1234)
 
     parser = argparse.ArgumentParser()
-    # parser = pl.Trainer.add_argparse_args(parser)
     parser = VQVAE.add_model_specific_args(parser)
     parser.add_argument("--dataset", type=str, default="flying_mnist")
     parser.add_argument(
@@ -96,6 +100,10 @@ def main():
     parser.add_argument("--limit_val_batches", type=float, default=1.0)
     parser.add_argument("--save_every_n_epochs", type=int, default=1)
     parser.add_argument("--watch_gradients", action="store_true")
+    parser.add_argument("--lr", type=float, default=0.002)
+    parser.add_argument(
+        "--network_variant", type=str, default="encode111111_decode111111"
+    )
 
     args = parser.parse_args()
 
@@ -103,7 +111,9 @@ def main():
     if args.dataset == "flying_mnist":
         from cvlization.dataset.flying_mnist import FlyingMNISTDatasetBuilder
 
-        dataset_builder = FlyingMNISTDatasetBuilder(resolution=args.resolution)
+        dataset_builder = FlyingMNISTDatasetBuilder(
+            resolution=args.resolution, max_frames_per_video=args.sequence_length
+        )
     else:
         print("Loading from huggingface...")
         from cvlization.dataset.huggingface import HuggingfaceDatasetBuilder
