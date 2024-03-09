@@ -47,6 +47,7 @@ class FlyingMNISTDatasetBuilder:
         self,
         opts: argparse.Namespace = None,
         resolution: int = 64,
+        max_frames_per_video: int = 100,
         to_generate: bool = False,
     ):
         if to_generate:
@@ -55,11 +56,15 @@ class FlyingMNISTDatasetBuilder:
             self.opts = None
         self.resolution = resolution
         self.to_generate = to_generate
+        self.max_frames_per_video = max_frames_per_video
 
     def training_dataset(self):
         if self.to_generate:
             return FlyingMNISTDataset(
-                self.opts, max_videos=1000, to_generate=self.to_generate
+                self.opts,
+                max_videos=1000,
+                to_generate=self.to_generate,
+                max_frames_per_video=self.max_frames_per_video,
             )
         default_path = Path("data/flying_mnist/train")
         if default_path.exists():
@@ -68,6 +73,7 @@ class FlyingMNISTDatasetBuilder:
                 from_dir=default_path,
                 resolution=self.resolution,
                 to_generate=self.to_generate,
+                max_frames_per_video=self.max_frames_per_video,
             )
 
     def validation_dataset(self):
@@ -77,6 +83,7 @@ class FlyingMNISTDatasetBuilder:
                 seed_offset=int(1e6),
                 max_videos=100,
                 to_generate=self.to_generate,
+                max_frames_per_video=self.max_frames_per_video,
             )
         default_path = Path("data/flying_mnist/val")
         if default_path.exists():
@@ -85,6 +92,7 @@ class FlyingMNISTDatasetBuilder:
                 from_dir=default_path,
                 resolution=self.resolution,
                 to_generate=self.to_generate,
+                max_frames_per_video=self.max_frames_per_video,
             )
 
 
