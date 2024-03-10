@@ -4,7 +4,6 @@ import os
 import numpy as np
 from typing import Tuple
 
-import wandb
 from einops import rearrange, pack
 import lightning.pytorch as pl
 import torch
@@ -15,9 +14,6 @@ from torchvision.utils import make_grid
 
 from attention import MultiHeadAttention
 from utils import shift_dim
-from cvlization.torch.training_pipeline.image_gen.vae_resnet.vector_quantizers import (
-    BaseVectorQuantizer,
-)
 import ae_variants
 
 
@@ -29,25 +25,17 @@ class VQVAE(pl.LightningModule):
         self.n_codes = args.n_codes
         self.network_variant = args.network_variant
 
-        network_holder = getattr(ae_variants, self.network_variant)(
-            embedding_dim=self.embedding_dim
+        network = getattr(ae_variants, self.network_variant)(
+            embedding_dim=self.embedding_dim,
+            num_embeddings=self.n_codes,
+            low_utilization_cost=args.low_utilization_cost,
         )
-        self.encoder = network_holder["encode"]
-        self.decoder = network_holder["decode"]
-        self.vq = network_holder["vq"]
+        self.encoder = network["encode"]
+        self.decoder = network["decode"]
+        self.vq = network["vq"]
+        self.train_epoch_usage_count = None
+        self.val_epoch_usage_count = None
 
-        # self.encoder = Encoder(args.n_hiddens, args.n_res_layers, args.downsample)
-        # self.decoder = Decoder(args.n_hiddens, args.n_res_layers, args.downsample)
-        # self.encoder = MiniEncoder(self.embedding_dim)
-        # self.decoder = MiniDecoder(self.embedding_dim)
-        # self.simple_conv = nn.Conv3d(3, 3, kernel_size=1, padding=0)
-
-        # self.pre_vq_conv = SamePadConv3d(args.n_hiddens, args.embedding_dim, 1)
-        # self.post_vq_conv = SamePadConv3d(args.embedding_dim, args.n_hiddens, 1)
-
-        # self.codebook = Codebook(args.n_codes, args.embedding_dim)
-        # self.codebook = Codebook2(args.n_codes, args.embedding_dim)
-        # self.codebook = Codebook3(args.n_codes, args.embedding_dim)
         self.save_hyperparameters()
 
     @property
@@ -92,7 +80,6 @@ class VQVAE(pl.LightningModule):
             z_recon = z
             vq_output = {
                 "commitment_loss": 0,
-                "perplexity": 0,
                 "z": z,
                 "avg_min_distance": 0,
             }
@@ -121,7 +108,6 @@ class VQVAE(pl.LightningModule):
         self.log("train/recon_loss", recon_loss, prog_bar=True, on_step=True)
         self.log("train/commitment_loss", commitment_loss, on_step=True)
         self.log("train/loss", loss, on_step=True)
-        self.log("train/perplexity", vq_output["perplexity"], on_step=True)
         self.log(
             "train/avg_min_vq_distance", vq_output["avg_min_distance"], on_step=True
         )
@@ -133,13 +119,26 @@ class VQVAE(pl.LightningModule):
         if batch_idx == 2 and self.current_epoch % 5 == 0:
             if self.args.track:
                 self.log_reconstructions(x, x_recon, training=True)
+
+        if hasattr(self.vq, "get_codebook_usage"):
+            # update codebook usage
+            # batch index count (use non-deterministic for this operation)
+            # torch.use_deterministic_algorithms(False)
+            used_indices = vq_output["encodings"]
+            used_indices = torch.bincount(
+                used_indices.view(-1), minlength=self.args.n_codes
+            )
+            # torch.use_deterministic_algorithms(True)
+            self.train_epoch_usage_count = (
+                used_indices if self.train_epoch_usage_count is None else +used_indices
+            )
+
         return loss
 
     def validation_step(self, batch, batch_idx):
         x = batch["video"]
         recon_loss, x_recon, vq_output = self.forward(x)
         self.log("val/recon_loss", recon_loss, prog_bar=True)
-        self.log("val/perplexity", vq_output["perplexity"], prog_bar=True)
         self.log("val/commitment_loss", vq_output["commitment_loss"], prog_bar=True)
         self.log("val/x_mean", x.mean())
         self.log("val/x_max", x.max())
@@ -152,6 +151,43 @@ class VQVAE(pl.LightningModule):
         if batch_idx == 2:
             if self.args.track:
                 self.log_reconstructions(x, x_recon, training=False)
+
+        if hasattr(self.vq, "get_codebook_usage"):
+            # update codebook usage
+            used_indices = vq_output["encodings"]
+            used_indices = torch.bincount(
+                used_indices.view(-1), minlength=self.args.n_codes
+            )
+            self.val_epoch_usage_count = (
+                used_indices if self.val_epoch_usage_count is None else +used_indices
+            )
+
+    def on_train_epoch_end(self):
+        if (
+            hasattr(self.vq, "get_codebook_usage")
+            and self.args.reinit_every_n_epochs is not None
+            and self.current_epoch % self.args.reinit_every_n_epochs == 0
+            and self.current_epoch > 0
+        ):
+            self.vq.reinit_unused_codes(
+                self.vq.get_codebook_usage(self.train_epoch_usage_count)[0]
+            )
+
+        self.train_epoch_usage_count = None
+
+    def on_validation_end(self) -> None:
+        if hasattr(self.vq, "get_codebook_usage"):
+            _, perplexity, cb_usage = self.vq.get_codebook_usage(
+                self.val_epoch_usage_count
+            )
+            if hasattr(self.logger.experiment, "log"):
+                self.logger.experiment.log({"val/perplexity": perplexity})
+                self.logger.experiment.log({"val/codebook_usage": cb_usage})
+            elif hasattr(self.logger, "log"):
+                self.logger.log({"val/perplexity": perplexity})
+                self.logger.log({"val/codebook_usage": cb_usage})
+            self.val_epoch_usage_count = None
+        return super().on_validation_end()
 
     @torch.no_grad()
     def preprocess_visualization(
@@ -597,140 +633,6 @@ class SamePadConvTranspose3d(nn.Module):
 
     def forward(self, x):
         return self.convt(F.pad(x, self.pad_input))
-
-
-class Codebook3(BaseVectorQuantizer):
-    # adapted from cvlization/torch/training_pipeline/image_gen/vae_resnet/vector_quantizers.py
-    def __init__(
-        self, num_embeddings: int, embedding_dim: int, commitment_cost: float = 0.25
-    ):
-        """
-        Original VectorQuantizer with straight through gradient estimator (loss is optimized on inputs and codebook)
-        :param num_embeddings: size of the latent dictionary (num of embedding vectors).
-        :param embedding_dim: size of a single tensor in dict.
-        :param commitment_cost: scaling factor for e_loss
-        """
-        print(
-            f"***** Creating a quantizer with {num_embeddings} embeddings and {embedding_dim} dimensions"
-        )
-        super().__init__(num_embeddings, embedding_dim)
-
-        self.commitment_cost = commitment_cost
-
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.IntTensor, float]:
-        """
-        :param x: spatial temporal tensors (output of the Encoder - B,C,T,H,W).
-        :return quantized_x (B,C,T,H,W), encoding_indices (B,T,H,W), loss (float)
-        """
-        b, c, t, h, w = x.shape
-        device = x.device
-
-        # Flat input to vectors of embedding dim = C.
-        flat_x = rearrange(x, "b c t h w -> (b t h w) c")
-
-        # Calculate distances of each vector w.r.t the dict
-        # distances is a matrix (B*H*W, codebook_size)
-        distances = (
-            torch.sum(flat_x**2, dim=1, keepdim=True)
-            + torch.sum(self.codebook.weight**2, dim=1)
-            - 2 * torch.matmul(flat_x, self.codebook.weight.t())
-        )
-
-        # Get indices of the closest vector in dict, and create a mask on the correct indexes
-        # encoding_indices = (num_vectors_in_batch, 1)
-        # Mask = (num_vectors_in_batch, codebook_dim)
-        encoding_indices = torch.argmin(distances, dim=1)
-        encodings = torch.zeros(
-            encoding_indices.shape[0], self.num_embeddings, device=device
-        )
-        encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)  # ?
-
-        # Quantize and un-flat
-        quantized = torch.matmul(encodings, self.codebook.weight)
-
-        # Loss functions
-        e_loss = self.commitment_cost * F.mse_loss(quantized.detach(), flat_x)
-        q_loss = F.mse_loss(quantized, flat_x.detach())
-
-        # during backpropagation quantized = inputs (copy gradient trick)
-        quantized = flat_x + (quantized - flat_x).detach()
-
-        quantized = rearrange(
-            quantized, "(b t h w) c -> b c t h w", b=b, h=h, w=w, t=t, c=c
-        )
-        encoding_indices = rearrange(
-            encoding_indices, "(b t h w)-> b (t h w)", b=b, h=h, w=w, t=t
-        ).detach()
-
-        # return quantized, encoding_indices, q_loss + e_loss
-        embedings_st = quantized
-        commitment_loss = q_loss + e_loss  # ?
-        avg_probs = torch.mean(encoding_indices.float(), dim=0)
-        perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
-        min_distances = torch.min(distances, dim=1).values
-        avg_min_distance = torch.mean(min_distances)
-        return dict(
-            # embeddings=embedings_st,
-            embeddings=x,
-            encodings=encoding_indices,
-            commitment_loss=commitment_loss,
-            perplexity=perplexity,
-            avg_min_distance=avg_min_distance,
-        )
-
-    @torch.no_grad()
-    def vec_to_codes(self, x: torch.Tensor) -> torch.IntTensor:
-        """
-        :param x: tensors (output of the Encoder - B,C,T,H,W).
-        :return flat codebook indices (B, T * H * W)
-        """
-        b, c, t, h, w = x.shape
-
-        # Flat input to vectors of embedding dim = C.
-        flat_x = rearrange(x, "b c t h w -> (b t h w) c")
-
-        # Calculate distances of each vector w.r.t the dict
-        # distances is a matrix (B*H*W, codebook_size)
-        distances = (
-            torch.sum(flat_x**2, dim=1, keepdim=True)
-            + torch.sum(self.codebook.weight**2, dim=1)
-            - 2 * torch.matmul(flat_x, self.codebook.weight.t())
-        )
-
-        # Get indices of the closest vector in dict
-        encoding_indices = torch.argmin(distances, dim=1)
-        encoding_indices = rearrange(
-            encoding_indices, "(b t h w) -> b (t h w)", b=b, h=h, w=w, t=t
-        )
-
-        return encoding_indices
-
-    @torch.no_grad()
-    def vec_to_codes_2d(self, x: torch.Tensor) -> torch.IntTensor:
-        """
-        :param x: tensors (output of the Encoder - B,D,H,W).
-        :return flat codebook indices (B, H * W)
-        """
-        b, c, h, w = x.shape
-
-        # Flat input to vectors of embedding dim = C.
-        flat_x = rearrange(x, "b c h w -> (b h w) c")
-
-        # Calculate distances of each vector w.r.t the dict
-        # distances is a matrix (B*H*W, codebook_size)
-        distances = (
-            torch.sum(flat_x**2, dim=1, keepdim=True)
-            + torch.sum(self.codebook.weight**2, dim=1)
-            - 2 * torch.matmul(flat_x, self.codebook.weight.t())
-        )
-
-        # Get indices of the closest vector in dict
-        encoding_indices = torch.argmin(distances, dim=1)
-        encoding_indices = rearrange(
-            encoding_indices, "(b h w) -> b (h w)", b=b, h=h, w=w
-        )
-
-        return encoding_indices
 
 
 class Codebook2(nn.Module):
