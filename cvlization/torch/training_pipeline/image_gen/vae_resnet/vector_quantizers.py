@@ -109,9 +109,9 @@ class BaseVectorQuantizer(ABC, nn.Module):
         n_unused = unused_codes.shape[0]
 
         # sample according to most used codes.
-        torch.use_deterministic_algorithms(False)
+        # torch.use_deterministic_algorithms(False)
         replacements = torch.multinomial(codebook_usage, n_unused, replacement=True)
-        torch.use_deterministic_algorithms(True)
+        # torch.use_deterministic_algorithms(True)
 
         # update unused codes
         new_codes = self.codebook.weight[replacements]

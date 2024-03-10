@@ -99,6 +99,13 @@ def main():
     parser.add_argument("--limit_train_batches", type=float, default=1.0)
     parser.add_argument("--limit_val_batches", type=float, default=1.0)
     parser.add_argument("--save_every_n_epochs", type=int, default=1)
+    parser.add_argument(
+        "--reinit_every_n_epochs",
+        type=int,
+        default=None,
+        help="reinitialize VQ codebook every n epochs",
+    )
+    parser.add_argument("--low_utilization_cost", type=float, default=0)
     parser.add_argument("--watch_gradients", action="store_true")
     parser.add_argument("--lr", type=float, default=0.002)
     parser.add_argument(
