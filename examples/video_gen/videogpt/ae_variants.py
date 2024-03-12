@@ -8,6 +8,56 @@ from cvlization.torch.training_pipeline.image_gen.vae_resnet.vector_quantizers i
     BaseVectorQuantizer,
 )
 
+class ResidualLayer(nn.Module):
+    """
+    One residual layer inputs:
+    - in_dim : the input dimension
+    - h_dim : the hidden layer dimension
+    - res_h_dim : the hidden dimension of the residual block
+    """
+
+    def __init__(self, in_dim, h_dim, res_h_dim):
+        super().__init__()
+        self.res_block = nn.Sequential(
+            nn.ReLU(),
+            nn.Conv3d(in_dim, res_h_dim, kernel_size=3,
+                      stride=1, padding=1, bias=False),
+            nn.ReLU(),
+            nn.Conv3d(res_h_dim, h_dim, kernel_size=1,
+                      stride=1, bias=False)
+        )
+
+    def forward(self, x):
+        x = x + self.res_block(x)
+        return x
+
+class VariationalEncoder(nn.Module):
+    def __init__(self, encoder_layers):
+        super().__init__()
+        self.encoder_layers_before_last = torch.nn.Sequential(*encoder_layers[:-1])
+
+        self.mu_layer = encoder_layers[-1]
+        # create a layer for the logvar, with the same shape as the mu layer
+        self.sigma_layer = nn.Conv3d(
+            self.mu_layer.in_channels,
+            self.mu_layer.out_channels,
+            kernel_size=self.mu_layer.kernel_size,
+            stride=self.mu_layer.stride,
+            padding=self.mu_layer.padding,
+        )
+
+    
+    def sample(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    
+    def forward(self, x):
+        x = self.encoder_layers_before_last(x)
+        mu = self.mu_layer(x)
+        logvar = self.sigma_layer(x)
+        z = self.sample(mu, logvar)
+        return dict(mu=mu, logvar=logvar, z=z)
 
 def encode111111_decode111111(embedding_dim: int = 8, **kwargs):
     encode = torch.nn.Conv3d(
@@ -94,6 +144,7 @@ def encode133122_decode144122_tanh_vq(
     embedding_dim: int = 8,
     num_embeddings: int = 512,
     low_utilization_cost: float = 0,
+    commitment_cost: float = 0.25,
     **kwargs,
 ):
     encode = torch.nn.Conv3d(
@@ -115,6 +166,7 @@ def encode133122_decode144122_tanh_vq(
         num_embeddings=num_embeddings,
         embedding_dim=embedding_dim,
         low_utilization_cost=low_utilization_cost,
+        commitment_cost=commitment_cost,
     )
     return {
         "encode": encode,
@@ -280,11 +332,61 @@ def encode_decode_spatial4x_a(embedding_dim: int = 8, **kwargs):
         "embedding_dim": embedding_dim,
     }
 
+def vae_spatial4x_a(embedding_dim: int = 8, **kargs):
+    encoder_layers = [
+        torch.nn.Conv3d(
+            3, 16, kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1)
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            16,
+            embedding_dim,
+            kernel_size=(1, 3, 3),
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+        ),
+    ]
+    encode = VariationalEncoder(encoder_layers)
+    tanh = torch.nn.Tanh()
+    decode = torch.nn.Sequential(
+        torch.nn.ConvTranspose3d(
+            embedding_dim,
+            16,
+            kernel_size=[1, 4, 4],
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            16, 16, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            16,
+            16,
+            kernel_size=[1, 4, 4],
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            16, 3, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)
+        ),
+        tanh,
+    )
+    vq = torch.nn.Identity()
+    return {
+        "encode": encode,
+        "decode": decode,
+        "vq": vq,
+        "embedding_dim": embedding_dim,
+    }
 
 def encode_decode_spatial4x_a_vq(
     embedding_dim: int = 8,
     num_embeddings: int = 512,
     low_utilization_cost: float = 0,
+    commitment_cost: float = 0.25,
     **kwargs,
 ):
     encode = torch.nn.Sequential(
@@ -331,6 +433,7 @@ def encode_decode_spatial4x_a_vq(
         num_embeddings=num_embeddings,
         embedding_dim=embedding_dim,
         low_utilization_cost=low_utilization_cost,
+        commitment_cost=commitment_cost,
     )
     return {
         "encode": encode,
@@ -339,6 +442,60 @@ def encode_decode_spatial4x_a_vq(
         "embedding_dim": embedding_dim,
     }
 
+def vae_spatial4x_a_vq(embedding_dim: int = 8, num_embeddings: int = 512, low_utilization_cost: float = 0, commitment_cost: float = 0.25, **kargs):
+    encoder_layers = [
+        torch.nn.Conv3d(
+            3, 16, kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1)
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            16,
+            embedding_dim,
+            kernel_size=(1, 3, 3),
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+        ),
+    ]
+    encode = VariationalEncoder(encoder_layers)
+    tanh = torch.nn.Tanh()
+    decode = torch.nn.Sequential(
+        torch.nn.ConvTranspose3d(
+            embedding_dim,
+            16,
+            kernel_size=[1, 4, 4],
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            16, 16, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            16,
+            16,
+            kernel_size=[1, 4, 4],
+            stride=(1, 2, 2),
+            padding=(0, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            16, 3, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)
+        ),
+        tanh,
+    )
+    vq = VectorQuantizer(
+        num_embeddings=num_embeddings,
+        embedding_dim=embedding_dim,
+        low_utilization_cost=low_utilization_cost,
+        commitment_cost=commitment_cost,
+    )
+    return {
+        "encode": encode,
+        "decode": decode,
+        "vq": vq,
+        "embedding_dim": embedding_dim,
+    }
 
 def s4t4_a(embedding_dim: int = 8, **kwargs):
     encode = torch.nn.Sequential(
@@ -453,10 +610,79 @@ def s4t4_b(embedding_dim: int = 8, **kwargs):
     }
 
 
+def s4t4_c(embedding_dim: int = 8, **kwargs):
+    """
+    Add residual connections to s4t4_b
+    """
+    latent_dims = [32]
+    encode = torch.nn.Sequential(
+        torch.nn.Conv3d(
+            3,
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            embedding_dim,
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        ResidualLayer(embedding_dim, embedding_dim, latent_dims[0]),
+    )
+    tanh = torch.nn.Tanh()
+    decode = torch.nn.Sequential(
+        ResidualLayer(embedding_dim, embedding_dim, latent_dims[0]),
+        torch.nn.ConvTranspose3d(
+            embedding_dim,
+            latent_dims[0],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            3,
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        tanh,
+    )
+    vq = torch.nn.Identity()
+    return {
+        "encode": encode,
+        "decode": decode,
+        "vq": vq,
+        "embedding_dim": embedding_dim,
+    }
+
 def s4t4_b_vq(
     embedding_dim: int = 8,
     num_embeddings: int = 512,
     low_utilization_cost: float = 0,
+    commitment_cost: float = 0.25,
     **kwargs,
 ):
     latent_dims = [32]
@@ -516,6 +742,7 @@ def s4t4_b_vq(
         num_embeddings=num_embeddings,
         embedding_dim=embedding_dim,
         low_utilization_cost=low_utilization_cost,
+        commitment_cost=commitment_cost,
     )
     return {
         "encode": encode,
@@ -524,6 +751,73 @@ def s4t4_b_vq(
         "embedding_dim": embedding_dim,
     }
 
+def vae_s4t4_b_vq(num_embeddings: int = 512, low_utilization_cost: float = 0, commitment_cost: float = 0.25, **kargs):
+    latent_dims = [32]
+    encoder_layers = [
+        torch.nn.Conv3d(
+            3,
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+    ]
+    encode = VariationalEncoder(encoder_layers)
+    tanh = torch.nn.Tanh()
+    decode = torch.nn.Sequential(
+        torch.nn.ConvTranspose3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            3,
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        tanh,
+    )
+    vq = VectorQuantizer(
+        num_embeddings=num_embeddings,
+        embedding_dim=latent_dims[0],
+        low_utilization_cost=low_utilization_cost,
+        commitment_cost=commitment_cost,
+    )
+    return {
+        "encode": encode,
+        "decode": decode,
+        "vq": vq,
+        "embedding_dim": latent_dims[0],
+    }
 
 def encode_decode_spatial8x_a(embedding_dim: int = 8, **kwargs):
     encode = torch.nn.Sequential(
@@ -913,14 +1207,31 @@ class VectorQuantizer(BaseVectorQuantizer):
             codebook_encodings_onto_input = torch.zeros(
                 self.num_embeddings, b * t * h * w, device=device
             )
+            # TODO: fix this!
+            # scatter_:
+            # For 3D tensor,
+            # - If dim == 0, dst[ids[i][j][k]][j][k] = src[i][j][k]
+            # - If dim == 1, dst[i][ids[i][j][k]][k] = src[i][j][k]
+            # - If dim == 2, dst[i][j][ids[i][j][k]] = src[i][j][k]
+            # For 2D tensor,
+            # - If dim == 0, dst[ids[i][j]][j] = src[i][j]
+            # - If dim == 1, dst[i][ids[i][j]] = src[i][j]
+            # We want codebook_encodings_onto_input to be a 2D tensor.
+            # codebook_encodings_onto_input[i][j] = 1 if codebook_indices_onto_input[i] == j else 0
+            # In other words,
+            # codebook_encodings_onto_input[i][indices[j]] = 1
             codebook_encodings_onto_input.scatter_(
-                0, codebook_indices_onto_input.unsqueeze(1), 1
+                dim=1,
+                index=codebook_indices_onto_input.unsqueeze(1),
+                src=torch.ones(
+                    (self.num_embeddings, b * t * h * w), device=device
+                ),
             )
             # flat_x shape is (B*T*H*W, embedding_dim)
             # distances shape is (B*T*H*W, num_embeddings)
-            print(
-                f"flat_x shape is {flat_x.shape}, codebook_encodings_onto_input shape is {codebook_encodings_onto_input.shape}"
-            )
+            # print(
+            #     f"flat_x shape is {flat_x.shape}, codebook_encodings_onto_input shape is {codebook_encodings_onto_input.shape}"
+            # )
             codebook_quantized = torch.matmul(
                 codebook_encodings_onto_input, flat_x
             )  # shape is (num_embeddings, embedding_dim)

@@ -67,7 +67,7 @@ class VQVAETrainingPipeline:
             accumulate_grad_batches=args.accumulate_grad_batches,
             limit_train_batches=args.limit_train_batches,
             limit_val_batches=args.limit_val_batches,
-            log_every_n_steps=20,
+            log_every_n_steps=50,
             logger=logger,
             **kwargs,
         )
@@ -111,8 +111,14 @@ def main():
     parser.add_argument(
         "--network_variant", type=str, default="encode111111_decode111111"
     )
+    parser.add_argument("--kl_loss_weight", type=float, default=1.0)
+    parser.add_argument("--commitment_cost", type=float, default=0.25)
 
     args = parser.parse_args()
+
+    import torch
+    # Do this for 3090
+    torch.set_float32_matmul_precision('medium')
 
     pipeline = VQVAETrainingPipeline(args)
     if args.dataset == "flying_mnist":
