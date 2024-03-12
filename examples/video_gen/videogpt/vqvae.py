@@ -29,12 +29,14 @@ class VQVAE(pl.LightningModule):
             embedding_dim=self.embedding_dim,
             num_embeddings=self.n_codes,
             low_utilization_cost=args.low_utilization_cost,
+            commitment_cost=args.commitment_cost,
         )
         self.encoder = network["encode"]
         self.decoder = network["decode"]
         self.vq = network["vq"]
         self.train_epoch_usage_count = None
         self.val_epoch_usage_count = None
+        self.kl_loss_weight = args.kl_loss_weight
 
         self.save_hyperparameters()
 
@@ -66,7 +68,15 @@ class VQVAE(pl.LightningModule):
     def forward(self, x):
         # pre_vq_conv: (B, C, T, H, W) -> (B, C, T, H, W)
         # print(f"x: {x.shape}")
-        z = self.encoder(x)
+        encoded = self.encoder(x)
+        if isinstance(encoded, dict):
+            z = encoded["z"]
+            mu = encoded["mu"]
+            logvar = encoded["logvar"]
+            kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp()) * self.kl_loss_weight
+        elif isinstance(encoded, torch.Tensor):
+            z = encoded
+            kl_loss = 0
         # print(f"after encoding, z: {z.shape}")
         # z = self.pre_vq_conv(z)
         # print(f"z after pre_vq_conv: {z.shape}")
@@ -94,7 +104,7 @@ class VQVAE(pl.LightningModule):
         recon_loss_weight = 1.0  # TODO: make this an argument
         recon_loss = F.mse_loss(x_recon, x) * recon_loss_weight
 
-        return recon_loss, x_recon, vq_output
+        return recon_loss, kl_loss, x_recon, vq_output
 
     def on_train_start(self) -> None:
         print(self)
@@ -102,11 +112,12 @@ class VQVAE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x = batch["video"]
-        recon_loss, x_recon, vq_output = self.forward(x)
+        recon_loss, kl_loss, x_recon, vq_output = self.forward(x)
         commitment_loss = vq_output["commitment_loss"]
-        loss = recon_loss + commitment_loss
+        loss = recon_loss + commitment_loss + kl_loss
         self.log("train/recon_loss", recon_loss, prog_bar=True, on_step=True)
         self.log("train/commitment_loss", commitment_loss, on_step=True)
+        self.log("train/kl_loss", kl_loss, on_step=True)
         self.log("train/loss", loss, on_step=True)
         self.log(
             "train/avg_min_vq_distance", vq_output["avg_min_distance"], on_step=True
@@ -114,6 +125,7 @@ class VQVAE(pl.LightningModule):
         self.log("train/z_mean", vq_output["z"].mean(), on_step=True)
         self.log("train/z_max", vq_output["z"].max(), on_step=True)
         self.log("train/z_min", vq_output["z"].min(), on_step=True)
+        self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"], on_step=True)
 
         # log reconstructions (every 5 epochs, for one batch)
         if batch_idx == 2 and self.current_epoch % 5 == 0:
@@ -137,9 +149,10 @@ class VQVAE(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x = batch["video"]
-        recon_loss, x_recon, vq_output = self.forward(x)
+        recon_loss, kl_loss, x_recon, vq_output = self.forward(x)
         self.log("val/recon_loss", recon_loss, prog_bar=True)
         self.log("val/commitment_loss", vq_output["commitment_loss"], prog_bar=True)
+        self.log("val/kl_loss", kl_loss)
         self.log("val/x_mean", x.mean())
         self.log("val/x_max", x.max())
         self.log("val/x_min", x.min())
@@ -148,7 +161,7 @@ class VQVAE(pl.LightningModule):
         self.log("val/recon_min", x_recon.min())
 
         # log reconstructions (for one batch)
-        if batch_idx == 2:
+        if batch_idx == 0:
             if self.args.track:
                 self.log_reconstructions(x, x_recon, training=False)
 
@@ -250,8 +263,8 @@ class VQVAE(pl.LightningModule):
         residual = (residual * 255).to(torch.uint8)
 
         # b = min(ground_truths.shape[0], 8)
-        b = min(ground_truths.shape[0], 2)
-        # b = min(ground_truths.shape[0], 1)
+        # b = min(ground_truths.shape[0], 2)
+        b = min(ground_truths.shape[0], 1)
         panel_name = "train" if training else "validation"
 
         # side by side video
@@ -288,7 +301,15 @@ class VQVAE(pl.LightningModule):
         #     self.logger.experiment.log_artifact(model_artifact)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.args.lr, betas=(0.9, 0.999))
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.args.lr, betas=(0.9, 0.999))
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=5, verbose=True
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": lr_scheduler,
+            "monitor": "val/recon_loss",
+        }
 
     @staticmethod
     def add_model_specific_args(parent_parser):
