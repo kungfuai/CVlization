@@ -53,8 +53,8 @@ class VQVAETrainingPipeline:
             kwargs = dict(distributed_backend="ddp", gpus=args.gpus)
 
         logger = (
-            # WandbLogger(project="videogpt", log_model="all") if args.track else None
-            WandbLogger(project="videogpt", log_model=False)
+            WandbLogger(project="videogpt", log_model="all") if args.track else None
+            # WandbLogger(project="videogpt", log_model=False)
             if args.track
             else None
         )
