@@ -1,6 +1,7 @@
 from argparse import ArgumentParser, Namespace
 from latte import Latte_models
 import torch
+import wandb
 from time import time
 from torch import nn
 from einops import rearrange
@@ -60,6 +61,38 @@ def create_diffusion(
         # rescale_timesteps=rescale_timesteps,
     )
 
+
+def log_samples(reconstructions):
+    """
+    Log the reconstructions to wandb.
+
+    :param reconstructions: (B, T, C, H, W) reconstructed videos
+    """
+    import wandb
+
+    # make sure the shape is corect
+    if reconstructions.shape[2] != 3:
+        reconstructions = rearrange(reconstructions, "b t c h w -> b c t h w")
+
+    if reconstructions.device.type != "cpu":
+        reconstructions = reconstructions.cpu()
+
+    # make sure the pixel values are in the range [0, 1]
+    reconstructions = (reconstructions - reconstructions.min()) / (
+        reconstructions.max() - reconstructions.min() + 1e-6
+    )
+    reconstructions = (reconstructions * 255).to(torch.uint8)
+
+    b = min(reconstructions.shape[0], 1)
+    panel_name = "sample"
+
+    # side by side video
+    reconstructions = rearrange(reconstructions, "b c t h w -> c t h (b w)")
+    display = reconstructions
+
+    display = wandb.Video(data_or_path=display, fps=4, format="mp4")
+    wandb.log({f"{panel_name}/samples": display})
+
 def main():
     parser = ArgumentParser()
     parser.add_argument("--model", type=str, default="Latte-S/2")
@@ -72,6 +105,7 @@ def main():
     parser.add_argument("--log_every", type=int, default=10)
     parser.add_argument("--resolution", type=int, default=128)
     parser.add_argument("--batch_size", type=int, default=2)
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--lr_warmup_steps", type=int, default=1000)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
     parser.add_argument("--max_train_steps", type=int, default=100000)
@@ -79,8 +113,14 @@ def main():
     parser.add_argument("--start_clip_iter", type=int, default=1000)
     parser.add_argument("--resume_from_checkpoint", type=str, default=None)
     parser.add_argument("--ckpt_every", type=int, default=1000)
+    parser.add_argument("--sample_every", type=int, default=100)
+    parser.add_argument("--track", action="store_true")
 
     args = parser.parse_args()
+    if args.track:
+        wandb.init(project="flying_mnist")
+        wandb.config.update(args)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = create_dit_model(args)
@@ -108,10 +148,11 @@ def main():
         resolution=args.resolution, max_frames_per_video=args.sequence_length
     )
     train_ds = dataset_builder.training_dataset()
+    val_ds = dataset_builder.validation_dataset()
     loader = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
     print(f"Model Parameters: {sum(p.numel() for p in model.parameters()):,}")
-    opt = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0)
     # Scheduler
     lr_scheduler = get_scheduler(
         name="constant",
@@ -132,6 +173,7 @@ def main():
             assert len(x.shape) == 5
             assert x.shape[1] == 3
             # print("x:", x.shape)
+            # x: torch.Size([2, 3, 4, 256, 256])            
             x = rearrange(x, 'b c f h w -> b f c h w')
             # video_name = video_data['video_name']
             # x = x.to(device)
@@ -140,8 +182,11 @@ def main():
                 # Map input images to latent space + normalize latents:
                 b, _, _, _, _ = x.shape
                 x = rearrange(x, 'b f c h w -> (b f) c h w').contiguous()
-                # print("x:", x.shape)
+                # print("encoder input x:", x.shape)
+                # encoder input x: torch.Size([8, 3, 256, 256])
                 x = vae.encode(x).latent_dist.sample().mul_(0.18215)
+                # print("encoded x:", x.shape, x.dtype)
+                # encoded x: torch.Size([8, 4, 32, 32])
                 x = rearrange(x, '(b f) c h w -> b f c h w', b=b).contiguous()
 
             if args.extras == 78: # text-to-video
@@ -182,6 +227,10 @@ def main():
                 # avg_loss = avg_loss.item() / dist.get_world_size()
                 # logger.info(f"(step={train_steps:07d}) Train Loss: {avg_loss:.4f}, Train Steps/Sec: {steps_per_sec:.2f}")
                 print(f"(step={train_steps:07d}/epoch={epoch:04d}) Train Loss: {avg_loss:.4f}, Gradient Norm: {gradient_norm:.4f}, Train Steps/Sec: {steps_per_sec:.2f}")
+                if args.track:
+                    wandb.log({"train/loss": avg_loss.item()})
+                    wandb.log({"train/gradient_norm": gradient_norm})
+
                 # write_tensorboard(tb_writer, 'Train Loss', avg_loss, train_steps)
                 # write_tensorboard(tb_writer, 'Gradient Norm', gradient_norm, train_steps)
                 # Reset monitoring variables:
@@ -189,6 +238,44 @@ def main():
                 log_steps = 0
                 start_time = time()
             
+            # Generate samples:
+            if args.sample_every > 0 and train_steps % args.sample_every == 0 and train_steps > 0:
+                ae_temporal_stride = 1
+                ae_space_stride = 8
+                resolution = args.resolution
+                latent_size = [int(resolution / ae_space_stride), int(resolution / ae_space_stride)]
+                print("in_channels:", model.in_channels)
+                z = torch.randn(1, int(args.sequence_length), model.in_channels, latent_size[0], latent_size[1], device=device)
+                using_cfg = False
+                if using_cfg:
+                    z = torch.cat([z, z], 0)
+                    y = torch.randint(0, args.num_classes, (1,), device=device)
+                    y_null = torch.tensor([args.num_classes] * 1, device=device)
+                    y = torch.cat([y, y_null], dim=0)
+                    model_kwargs = dict(y=y, cfg_scale=args.cfg_scale)
+                    sample_fn = model.forward_with_cfg
+                else:
+                    sample_fn = model.forward
+                    model_kwargs = dict(y=None)
+                print("sampling...")
+                samples = diffusion.p_sample_loop(
+                    sample_fn, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
+                )
+                # print("samples:", samples.shape)
+                # samples: torch.Size([1, 4, 4, 32, 32])
+                # Decode samples:
+                samples = rearrange(samples, 'b f c h w -> b c f h w')
+                flattened_samples = rearrange(samples, 'b c f h w -> (b f) c h w')
+                decoder_output = vae.decode(flattened_samples)
+                decoded_flattened_samples = decoder_output.sample
+                # print("decoded_flattened_samples:", decoded_flattened_samples.shape)
+                decoded_samples = rearrange(decoded_flattened_samples, '(b f) c h w -> b f c h w', b=1)
+                print("decoded_samples:", decoded_samples.shape, torch.float32)
+                if args.track:
+                    log_samples(decoded_samples)
+                # decoded_samples: torch.Size([1, 4, 3, 256, 256])
+
+
             # Save DiT checkpoint:
             checkpoint_dir = "checkpoints/dit"
             if train_steps % args.ckpt_every == 0 and train_steps > 0:

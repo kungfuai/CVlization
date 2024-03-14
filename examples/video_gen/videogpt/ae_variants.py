@@ -751,7 +751,7 @@ def s4t4_b_vq(
         "embedding_dim": embedding_dim,
     }
 
-def vae_s4t4_b_vq(num_embeddings: int = 512, low_utilization_cost: float = 0, commitment_cost: float = 0.25, **kargs):
+def vae_s4t4_b_vq(embedding_dim: int = 8, num_embeddings: int = 512, low_utilization_cost: float = 0, commitment_cost: float = 0.25, **kargs):
     latent_dims = [32]
     encoder_layers = [
         torch.nn.Conv3d(
@@ -764,7 +764,7 @@ def vae_s4t4_b_vq(num_embeddings: int = 512, low_utilization_cost: float = 0, co
         torch.nn.ReLU(),
         torch.nn.Conv3d(
             latent_dims[0],
-            latent_dims[0],
+            embedding_dim,
             kernel_size=(3, 3, 3),
             stride=(2, 2, 2),
             padding=(1, 1, 1),
@@ -774,7 +774,7 @@ def vae_s4t4_b_vq(num_embeddings: int = 512, low_utilization_cost: float = 0, co
     tanh = torch.nn.Tanh()
     decode = torch.nn.Sequential(
         torch.nn.ConvTranspose3d(
-            latent_dims[0],
+            embedding_dim,
             latent_dims[0],
             kernel_size=[4, 4, 4],
             stride=(2, 2, 2),
@@ -808,7 +808,7 @@ def vae_s4t4_b_vq(num_embeddings: int = 512, low_utilization_cost: float = 0, co
     )
     vq = VectorQuantizer(
         num_embeddings=num_embeddings,
-        embedding_dim=latent_dims[0],
+        embedding_dim=embedding_dim,
         low_utilization_cost=low_utilization_cost,
         commitment_cost=commitment_cost,
     )
