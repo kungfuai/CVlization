@@ -1,5 +1,18 @@
 ## Quickstart
 
+Dataload the Flying MNIST dataset: https://storage.googleapis.com/research-datasets-public/flying_mnist.tar.gz and extract to `<CVlization project root>/data/`. The directory structure should be:
+
+```
+data/
+    flying_mnist/
+        train/00000.mp4
+              ...
+        val/00000.mp4
+            ...
+```
+
+Then
+
 ```bash
 bash examples/video_gen/videogpt/build.sh
 
