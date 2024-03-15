@@ -565,12 +565,15 @@ def Latte_S_4(**kwargs):
 def Latte_S_8(**kwargs):
     return Latte(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
 
+def Latte_T_2(**kwargs):
+    return Latte(depth=2, hidden_size=32 * 3, patch_size=2, num_heads=3, **kwargs)
 
 Latte_models = {
     'Latte-XL/2': Latte_XL_2,  'Latte-XL/4': Latte_XL_4,  'Latte-XL/8': Latte_XL_8,
     'Latte-L/2':  Latte_L_2,   'Latte-L/4':  Latte_L_4,   'Latte-L/8':  Latte_L_8,
     'Latte-B/2':  Latte_B_2,   'Latte-B/4':  Latte_B_4,   'Latte-B/8':  Latte_B_8,
     'Latte-S/2':  Latte_S_2,   'Latte-S/4':  Latte_S_4,   'Latte-S/8':  Latte_S_8,
+    'Latte-T/2':  Latte_T_2,
 }
 
 if __name__ == '__main__':
