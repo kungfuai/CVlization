@@ -9,7 +9,7 @@ bash examples/video_gen/videogpt/train.sh python train_vqvae.py --batch_size 2 -
 # --accumulate_grad_batches 1
 
 # train diffusion model
-bash examples/video_gen/videogpt/train.sh python train_dit.py --batch_size 8 --resolution 256 --sequence_length 4 --learn_sigma --ckpt_every 1000000 --sample_every 100 --log_every 20 --epochs 100 --track
+bash examples/video_gen/videogpt/train.sh python train_dit.py --model "Latte-T/2" --vae_model "zzsi_kungfu/videogpt/model-tjzu02pg:v17" --batch_size 32 --resolution 256 --sequence_length 4 --latent_input_size 64 --ae_temporal_stride 4 --ae_spatial_stride 4 --learn_sigma --ckpt_every 1000000 --sample_every 50 --log_every 20 --epochs 100 --track
 
 
 ```

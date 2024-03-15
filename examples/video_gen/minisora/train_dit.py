@@ -1,4 +1,5 @@
 from argparse import ArgumentParser, Namespace
+import os
 from latte import Latte_models
 import torch
 import wandb
@@ -93,13 +94,45 @@ def log_samples(reconstructions):
     display = wandb.Video(data_or_path=display, fps=4, format="mp4")
     wandb.log({f"{panel_name}/samples": display})
 
+
+def load_model_from_wandb(model_full_name: str = "zzsi_kungfu/videogpt/model-tjzu02pg:v17") -> dict:
+    api = wandb.Api()
+    # skip if the file already exists
+    artifact_dir = f"artifacts/{model_full_name.split('/')[-1]}"
+    if os.path.exists(artifact_dir):
+        print(f"Model already exists at {artifact_dir}")
+    else:
+        artifact_dir = api.artifact(model_full_name).download()
+    # The file is model.ckpt.
+    state_dict = torch.load(artifact_dir + "/model.ckpt")
+    # print(list(state_dict.keys()))
+    hyper_parameters = state_dict["hyper_parameters"]
+    args = hyper_parameters["args"]
+    from vqvae import VQVAE
+    # args = Namespace(**hyper_parameters)
+    # print(args)
+    model = VQVAE(args=args)
+    model.load_state_dict(state_dict["state_dict"])
+    return model
+
+
+def create_vae(wandb_model_name: str = None, hf_model_name: str = "stabilityai/sd-vae-ft-mse") -> AutoencoderKL:
+    if wandb_model_name:
+        vae = load_model_from_wandb(wandb_model_name)
+        return vae
+    vae = AutoencoderKL.from_pretrained(hf_model_name)
+    return vae
+
 def main():
     parser = ArgumentParser()
     parser.add_argument("--model", type=str, default="Latte-S/2")
-    parser.add_argument("--sequence_length", type=int, default=16, help="This can be number of frames or number of video segments where each segment has multiple frames.")
+    parser.add_argument("--vae_model", type=str, default="stabilityai/sd-vae-ft-mse")
+    parser.add_argument("--sequence_length", type=int, default=16, help="This is the latent sequence length. If ae_temporal_stride is 1, then it is the same as the number of video frames.")
     parser.add_argument("--extras", type=int, default=1)  # 1: unconditional
     parser.add_argument("--num_classes", type=int, default=10)
     parser.add_argument("--learn_sigma", action="store_true")
+    parser.add_argument("--ae_spatial_stride", type=int, default=8)
+    parser.add_argument("--ae_temporal_stride", type=int, default=1)
     parser.add_argument("--latent_input_size", type=int, default=32)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--log_every", type=int, default=10)
@@ -129,7 +162,14 @@ def main():
     diffusion = create_diffusion(
         timestep_respacing=""
     )
-    vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse")
+    if ":" in args.vae_model:
+        # it is a wandb model name
+        print("Loading VAE from wandb...")
+        vae = create_vae(wandb_model_name="zzsi_kungfu/videogpt/model-tjzu02pg:v17")
+    else:
+        print("Loading VAE from Hugging Face...")
+        vae = AutoencoderKL.from_pretrained(args.vae_model)
+
     vae = vae.to(device)
     
     train_steps = 0
@@ -145,7 +185,7 @@ def main():
     dataset_builder = FlyingMNISTDatasetBuilder(
         # TODO: this is assuming the VAE is image-based and not video-based
         # If it is video-based VAE, then max_frames_per_video should be sequence_length * vae_temporal_compression_factor
-        resolution=args.resolution, max_frames_per_video=args.sequence_length
+        resolution=args.resolution, max_frames_per_video=args.sequence_length * args.ae_temporal_stride
     )
     train_ds = dataset_builder.training_dataset()
     val_ds = dataset_builder.validation_dataset()
@@ -181,10 +221,22 @@ def main():
             with torch.no_grad():
                 # Map input images to latent space + normalize latents:
                 b, _, _, _, _ = x.shape
-                x = rearrange(x, 'b f c h w -> (b f) c h w').contiguous()
                 # print("encoder input x:", x.shape)
                 # encoder input x: torch.Size([8, 3, 256, 256])
-                x = vae.encode(x).latent_dist.sample().mul_(0.18215)
+                if isinstance(vae, AutoencoderKL):
+                    x = rearrange(x, 'b f c h w -> (b f) c h w').contiguous()
+                    x = vae.encode(x).latent_dist.sample().mul_(0.18215)
+                else:
+                    assert hasattr(vae, "encoder")
+                    x = rearrange(x, 'b f c h w -> b c f h w').contiguous()
+                    encoded = vae.encoder(x)
+                    assert isinstance(encoded, dict)
+                    z = encoded["z"]
+                    z = rearrange(z, 'b d f h w -> (b f) d h w')
+                    # mu = encoded["mu"]
+                    # logvar = encoded["logvar"]
+                    x = z.mul_(0.18215)
+
                 # print("encoded x:", x.shape, x.dtype)
                 # encoded x: torch.Size([8, 4, 32, 32])
                 x = rearrange(x, '(b f) c h w -> b f c h w', b=b).contiguous()
@@ -240,11 +292,12 @@ def main():
             
             # Generate samples:
             if args.sample_every > 0 and train_steps % args.sample_every == 0 and train_steps > 0:
-                ae_temporal_stride = 1
-                ae_space_stride = 8
+                ae_space_stride = args.ae_temporal_stride
                 resolution = args.resolution
+                # TODO: latent_size can be inferred as resolution / ae_space_stride
+                # TODO: make sequence_length the video frame count, and calculate the latent sequence length with ae_temporal_stride
                 latent_size = [int(resolution / ae_space_stride), int(resolution / ae_space_stride)]
-                print("in_channels:", model.in_channels)
+                # print("in_channels:", model.in_channels)
                 z = torch.randn(1, int(args.sequence_length), model.in_channels, latent_size[0], latent_size[1], device=device)
                 using_cfg = False
                 if using_cfg:
@@ -257,7 +310,7 @@ def main():
                 else:
                     sample_fn = model.forward
                     model_kwargs = dict(y=None)
-                print("sampling...")
+                # print("sampling... z:", z.shape)  # z: torch.Size([1, 4, 4, 32, 32])
                 samples = diffusion.p_sample_loop(
                     sample_fn, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
                 )
@@ -265,12 +318,18 @@ def main():
                 # samples: torch.Size([1, 4, 4, 32, 32])
                 # Decode samples:
                 samples = rearrange(samples, 'b f c h w -> b c f h w')
-                flattened_samples = rearrange(samples, 'b c f h w -> (b f) c h w')
-                decoder_output = vae.decode(flattened_samples)
-                decoded_flattened_samples = decoder_output.sample
-                # print("decoded_flattened_samples:", decoded_flattened_samples.shape)
-                decoded_samples = rearrange(decoded_flattened_samples, '(b f) c h w -> b f c h w', b=1)
-                print("decoded_samples:", decoded_samples.shape, torch.float32)
+                if isinstance(vae, AutoencoderKL):
+                    flattened_samples = rearrange(samples, 'b c f h w -> (b f) c h w')
+                    decoder_output = vae.decode(flattened_samples)
+                    decoded_flattened_samples = decoder_output.sample
+                    # print("decoded_flattened_samples:", decoded_flattened_samples.shape)
+                    decoded_samples = rearrange(decoded_flattened_samples, '(b f) c h w -> b f c h w', b=1)
+                else:
+                    assert hasattr(vae, "decoder")
+                    decoded_samples = vae.decoder(samples)
+                    decoded_samples = rearrange(decoded_samples, 'b c f h w -> b f c h w', b=1)
+                    assert decoded_samples.shape[2] == 3
+                print("decoded_samples:", decoded_samples.shape, decoded_samples.dtype)
                 if args.track:
                     log_samples(decoded_samples)
                 # decoded_samples: torch.Size([1, 4, 3, 256, 256])
@@ -293,4 +352,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # m = load_model_from_wandb()
+    # import sys
+    # sys.exit(0)
     main()
