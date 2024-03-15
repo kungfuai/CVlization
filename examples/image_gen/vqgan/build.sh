@@ -1,0 +1,1 @@
+docker build -t vqgan examples/image_gen/vqgan
