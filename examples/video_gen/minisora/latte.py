@@ -566,7 +566,7 @@ def Latte_S_8(**kwargs):
     return Latte(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
 
 def Latte_T_2(**kwargs):
-    return Latte(depth=2, hidden_size=32 * 3, patch_size=2, num_heads=3, **kwargs)
+    return Latte(depth=2, hidden_size=128 * 3, patch_size=2, num_heads=3, **kwargs)
 
 Latte_models = {
     'Latte-XL/2': Latte_XL_2,  'Latte-XL/4': Latte_XL_4,  'Latte-XL/8': Latte_XL_8,
