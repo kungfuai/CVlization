@@ -26,13 +26,18 @@ def extract_token_ids(vae, dataset, batch_size: int = 32, output_device: str = "
     dl = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     for batch in dl:
         x = batch["video"]
+        # print("x:", x.mean())
         assert x.ndim == 5, "videos must have 4 dimensions besides the batch dim"
         assert x.shape[1] == 3, "videos must have 3 channels at dim 1"
         x = x.to(vae.device)
         with torch.no_grad():
             z = vae.encoder(x)
-            token_ids = vae.vec_to_codes(z)
+            # z shape is 
+            # print("z:", z.mean())
+            token_ids = vae.vq.vec_to_codes(z)
+            # print("token_ids:", token_ids.float().mean())
             token_ids = token_ids.to(output_device)  # shape is (b, t * h * w)
             # unbatch
             for token_ids_i in token_ids:
+                # print("token_ids_i:", token_ids_i.float().mean())
                 yield token_ids_i
