@@ -1,2 +1,2 @@
 bash bin/build_torch_gpu.sh
-docker build -t videogpt examples/video_gen/videogpt
+docker build -t minisora examples/video_gen/minisora
