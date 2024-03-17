@@ -393,8 +393,34 @@ def main():
                         print(f"Saved checkpoint to {checkpoint_path}")
 
 
+def extract_token_ids():
+    from cvlization.dataset.flying_mnist import FlyingMNISTDatasetBuilder
+    from latents import extract_token_ids
+    from tqdm import tqdm
+    import numpy as np
+
+    max_frames_per_video = 32
+    db = FlyingMNISTDatasetBuilder(max_frames_per_video=max_frames_per_video, resolution=256)
+    train_ds = db.training_dataset()
+    vae = create_vae(wandb_model_name="zzsi_kungfu/videogpt/model-kbu39ped:v11")
+    vae = vae.to("cuda")
+    all_token_ids = []
+    for j, token_ids in tqdm(enumerate(extract_token_ids(vae, train_ds, batch_size=8, output_device="cpu"))):
+        # print(token_ids.shape, token_ids.dtype)
+        all_token_ids.append(token_ids.numpy().reshape(1, -1))
+        # print("all_token_ids:", all_token_ids[-1].astype(float).mean())
+        # if j > 1:
+        #     break
+    all_token_ids = np.concatenate(all_token_ids, 0)
+    print(all_token_ids.shape, all_token_ids.dtype)
+    print(all_token_ids)
+    # save
+    np.save(f"flying_mnist_tokens_{max_frames_per_video}frames_train.npy", all_token_ids)
+
+
 if __name__ == "__main__":
     # m = load_model_from_wandb()
     # import sys
     # sys.exit(0)
-    main()
+    extract_token_ids()
+    # main()
