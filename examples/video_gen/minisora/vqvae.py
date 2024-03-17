@@ -49,21 +49,20 @@ class VQVAE(pl.LightningModule):
         )
         return tuple([s // d for s, d in zip(input_shape, self.args.downsample)])
 
-    def encode(self, x, include_embeddings=False):
-        h = self.pre_vq_conv(self.encoder(x))
-        print("before vq", h.max(), h.min())
-        vq_output = self.codebook(h)
-        if include_embeddings:
-            return vq_output["encodings"], vq_output["embeddings"]
-        else:
-            return vq_output["encodings"]
+    # def encode(self, x, include_embeddings=False):
+    #     h = self.pre_vq_conv(self.encoder(x))
+    #     print("before vq", h.max(), h.min())
+    #     vq_output = self.codebook(h)
+    #     if include_embeddings:
+    #         return vq_output["encodings"], vq_output["embeddings"]
+    #     else:
+    #         return vq_output["encodings"]
 
-    def decode(self, encodings):
-
-        h = F.embedding(encodings, self.codebook.embeddings)
-        # print('after vq', h.max(), h.min())
-        h = self.post_vq_conv(shift_dim(h, -1, 1))
-        return self.decoder(h)
+    # def decode(self, encodings):
+    #     h = F.embedding(encodings, self.codebook.embeddings)
+    #     # print('after vq', h.max(), h.min())
+    #     h = self.post_vq_conv(shift_dim(h, -1, 1))
+    #     return self.decoder(h)
 
     def forward(self, x):
         # pre_vq_conv: (B, C, T, H, W) -> (B, C, T, H, W)
