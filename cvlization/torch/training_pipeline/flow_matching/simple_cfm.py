@@ -6,7 +6,7 @@ This script demonstrates how to train a conditional normalizing flow using the f
 
 # Sample usage:
 
-python -m zuko.torch.generator.flow_matching.simple_cfm
+python -m cvlization.torch.training_pipeline.flow_matching.simple_cfm
 
 Adapted from https://gist.github.com/francois-rozet/fd6a820e052157f8ac6e2aa39e16c1aa
 """
