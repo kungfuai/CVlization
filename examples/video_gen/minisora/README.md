@@ -27,8 +27,12 @@ bash examples/video_gen/minisora/train.sh python train_dit.py --model "Latte-S/2
 
 # or with a StablilityAI pretrained VAE:
 bash examples/video_gen/minisora/train.sh python train_dit.py --model "Latte-T/2" --batch_size 2 --lr 0.00002 --resolution 256 --sequence_length 4 --latent_input_size 32 --ae_temporal_stride 1 --ae_spatial_stride 8 --learn_sigma --ckpt_every 1000000 --sample_every 100 --log_every 20 --epochs 100 --track
-```
 
+# Instead of training a diffusion model, one can also train a next token predictor.
+bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py
+
+# bash examples/video_gen/minisora/train.sh python sample_latent_nanogpt.py
+```
 
 ## Reference
 
