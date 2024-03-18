@@ -36,4 +36,7 @@ bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py
 
 ## Reference
 
-Adapted from https://github.com/wilson1yan/VideoGPT
+- [Nanogpt](https://github.com/karpathy/nanoGPT)
+- https://github.com/PKU-YuanGroup/Open-Sora-Plan
+- https://github.com/hpcaitech/Open-Sora
+- https://github.com/wilson1yan/VideoGPT
