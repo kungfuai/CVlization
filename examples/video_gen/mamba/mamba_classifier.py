@@ -1,7 +1,7 @@
 
 import torch
 
-from mamba_encoder import MambaEncoder
+from .mamba_encoder import MambaEncoder
 
 class MambaClassifier(torch.nn.Module):
     def __init__(

@@ -1,8 +1,8 @@
 # TODO: Make denpendencies optional as much as possible.
-pytorch-lightning==1.5.9
-torchmetrics==0.7.0
-torch==1.12.0
-torchvision==0.13.0  # <0.15.0
+pytorch-lightning==2.2.1 # Updated Mar 19, 2024
+torch==2.2.1 # Updated Mar 19, 2024
+torchmetrics==1.3.2 # Updated Mar 19, 2024
+torchvision==0.17.1 # Updated Mar 19, 2024
 timm==0.5.4
 tensorflow==2.11.1 # tensorflow 2.12 makes a unit test hang (https://github.com/kungfuai/CVlization/actions/runs/4495905507/jobs/7910034342)
 segment_anything==1.0
