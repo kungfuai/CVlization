@@ -30,7 +30,7 @@ class MambaTrainingPipeline:
         eval_iters: int = 10
         
         # Accelerator
-        device: str = "cuda" if torch.cuda.is_available() else "cpu"
+        device: str = "cuda"
 
         # Logging
         output_dir: str = "logs/nanomamba"
@@ -45,6 +45,7 @@ class MambaTrainingPipeline:
         self.config = config
         output_dir = Path(config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+        self.config.device = "cuda" if torch.cuda.is_available() else "cpu"
     
     def fit(self, dataset_builder: FlatTokenIds):
         self.train_data = dataset_builder.training_dataset()
@@ -53,7 +54,16 @@ class MambaTrainingPipeline:
         assert isinstance(self.val_data, np.ndarray)
         assert self.train_data.dtype in [np.int32, np.int64, np.uint16, np.uint32, np.uint64]
         assert len(self.train_data.shape) == 1, f"Expected 1D array for training data, got {self.train_data.shape}"
-        model = self.model = BigramNeuralNetwork(self.config.vocab_size)
+        self.train_data = torch.tensor(self.train_data, dtype=torch.long)
+        self.val_data = torch.tensor(self.val_data, dtype=torch.long)
+        model = self.model = BigramNeuralNetwork(
+            vocab_size=self.config.vocab_size,
+            block_size=self.config.block_size,
+            n_embed=self.config.n_embed,
+            n_heads=self.config.n_heads,
+            n_layers=self.config.n_layers,
+            device=self.config.device,
+        )
         model.to(self.config.device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.config.lr)
 
@@ -78,7 +88,6 @@ class MambaTrainingPipeline:
                 optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             epoch = checkpoint["epoch"]
 
-        m = model.to(device)
         print("Uses device " + device)
         MODEL_CHECKPOINT = str(output_dir / "model_{iter}.pt")
         losses_data = {"train": [], "test": []}
@@ -206,10 +215,12 @@ class LayerNorm(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, n_heads, head_size, n_embed, dropout=0.2) -> None:
+    def __init__(self, n_heads, head_size, n_embed, block_size, device:str, dropout=0.2) -> None:
         super().__init__()
         self.heads = nn.ModuleList(
-            [SelfAttentionHead(head_size) for _ in range(n_heads)]
+            [SelfAttentionHead(
+                n_embed=n_embed, head_size=head_size, block_size=block_size, device=device, dropout=dropout
+            ) for _ in range(n_heads)]
         )
         self.proj = nn.Linear(n_embed, n_embed)
         self.dropout = nn.Dropout(dropout)
@@ -237,7 +248,7 @@ class FeedForward(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, n_embed, n_heads, d_state=16, d_conv=4, expand=2) -> None:
+    def __init__(self, n_embed, n_heads, device: str, d_state=16, d_conv=4, expand=2) -> None:
         super().__init__()
         self.head_size = n_embed // n_heads
         # self.sa_head = MultiHeadAttention(n_heads, self.head_size)
@@ -247,7 +258,7 @@ class Block(nn.Module):
             d_state=d_state,  # SSM state expansion factor
             d_conv=d_conv,  # Local convolution width
             expand=expand,  # Block expansion factor
-        ).to("cuda")
+        ).to(device)
         self.ffn = FeedForward(n_embed)
         self.ln1 = nn.LayerNorm(n_embed)
         self.ln2 = nn.LayerNorm(n_embed)
@@ -263,11 +274,11 @@ class BigramNeuralNetwork(nn.Module):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
         self.position_embedding_table = nn.Embedding(block_size, n_embed)
-        self.sa_head = MultiHeadAttention(4, int(n_embed / 4))
+        self.sa_head = MultiHeadAttention(n_heads=4, head_size=int(n_embed / 4), n_embed=n_embed, block_size=block_size, device=device)
         self.lm_head = nn.Linear(n_embed, vocab_size)
         self.ffn = FeedForward(n_embed)
         self.blocks = nn.Sequential(
-            *[Block(n_embed, n_heads=n_heads) for _ in range(n_layers)]
+            *[Block(n_embed, n_heads=n_heads, device=device) for _ in range(n_layers)]
         )
         self.device = device
         self.block_size = block_size

@@ -1,5 +1,8 @@
 docker run --runtime nvidia -it \
-	-v $(pwd)/examples/text_gen/nanomamba:/workspace \
+	-v $(pwd):/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
+	-e PYTHONPATH=.:examples/text_gen/nanomamba \
 	nanomamba \
-	python train.py
+	python examples/text_gen/nanomamba/train.py
+
+	# -v $(pwd)/examples/text_gen/nanomamba:/workspace \
