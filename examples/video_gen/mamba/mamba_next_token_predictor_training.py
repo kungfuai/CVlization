@@ -128,7 +128,7 @@ if __name__ == "__main__":
     model = create_model(num_tokens=5120, hidden_dim=128).to("cuda:0")
     batch_size: int = 16
 
-    train_frac = 0.8
+    train_frac = 0.9
     train_size = int(len(data) * train_frac)
     train_data = data[:train_size]
     val_data = data[train_size:]
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         train_epoch_losses.append(epoch_loss)
         epoch_loss = run_val_epoch(model, val_data, batch_size, epoch)
         val_epoch_losses.append(epoch_loss)
-        if epoch >= args.start_plotting_after_epoch:
+        if epoch > args.start_plotting_after_epoch:
             # Remove first epoch cause it messes up the graph.
             train_to_plot = train_epoch_losses[args.start_plotting_after_epoch:]
             val_to_plot = val_epoch_losses[args.start_plotting_after_epoch:]
