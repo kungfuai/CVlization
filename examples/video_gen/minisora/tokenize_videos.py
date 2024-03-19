@@ -46,17 +46,30 @@ def tokenize():
     import numpy as np
 
     max_frames_per_video = 32
+    resolution = 256
     db = FlyingMNISTDatasetBuilder(
-        max_frames_per_video=max_frames_per_video, resolution=256
+        max_frames_per_video=max_frames_per_video, resolution=resolution
     )
     train_ds = db.training_dataset()
     vae = create_vae(wandb_model_name="zzsi_kungfu/videogpt/model-kbu39ped:v11")
+    spatial_compression = 4
+    temporal_compression = 4
     vae = vae.to("cuda")
     all_token_ids = []
     for j, token_ids in tqdm(
-        enumerate(extract_token_ids(vae, train_ds, batch_size=2, output_device="cpu"))
+        enumerate(
+            extract_token_ids(
+                vae,
+                train_ds,
+                batch_size=2,
+                output_device="cpu",
+                latent_sequence_length=max_frames_per_video // temporal_compression,
+                latent_height=resolution // spatial_compression,
+                latent_width=resolution // spatial_compression,
+            )
+        )
     ):
-        # print(token_ids.shape, token_ids.dtype)
+        # print(token_ids.shape)
         all_token_ids.append(token_ids.numpy())  # .reshape(1, -1))
         # print("all_token_ids:", all_token_ids[-1].astype(float).mean())
         # if j > 1:
