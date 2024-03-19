@@ -30,7 +30,8 @@ train_pipe = MambaTrainingPipeline(
         batch_size=32,
         lr=1e-3,
         block_size=128,
-        vocab_size=512,
+        vocab_size=vocab_size+1,
+        device="cpu",
     )
 )
 train_pipe.fit(flat_token_ids)
