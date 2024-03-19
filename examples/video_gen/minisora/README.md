@@ -21,6 +21,9 @@ bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 -
 # --reinit_every_n_epochs 1
 # --accumulate_grad_batches 1
 
+# tokenze the video using vae
+bash examples/video_gen/minisora/train.sh python tokenize.py
+
 # train diffusion model
 # With an VAE trained on flying MNIST:
 bash examples/video_gen/minisora/train.sh python train_dit.py --model "Latte-S/2" --vae_model "zzsi_kungfu/videogpt/model-kbu39ped:v11" --batch_size 2 --num_clips_per_video 10 --lr 0.00002 --resolution 256 --sequence_length 4 --latent_input_size 64 --ae_temporal_stride 4 --ae_spatial_stride 4 --learn_sigma --ckpt_every 1000000 --sample_every 2000 --log_every 20 --epochs 100 --track
