@@ -16,14 +16,13 @@ class FlatTokenIds:
             train_split: proportion of the dataset to use for training
         """
         assert isinstance(token_ids, np.ndarray), "latents must be a numpy array"
-        
+        self.start_token_id = start_token_id
+        self.vocab_size = vocab_size
         if token_ids.ndim == 2:
             n = token_ids.shape[0]
             n_train = int(n * train_split)
             self.train_token_ids = token_ids[:n_train]
             self.val_token_ids = token_ids[n_train:]
-            self.vocab_size = vocab_size
-            self.start_token_id = start_token_id
         elif token_ids.ndim == 1:
             n = token_ids.shape[0]
             n_train = int(n * train_split)
