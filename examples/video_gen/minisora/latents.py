@@ -1,9 +1,12 @@
 from typing import Iterable
 import torch
 from torch.utils.data import DataLoader
+from einops import rearrange
 
 
-def extract_latents(vae, dataset, batch_size: int = 32, output_device: str = "cpu") -> Iterable[torch.Tensor]:
+def extract_latents(
+    vae, dataset, batch_size: int = 32, output_device: str = "cpu"
+) -> Iterable[torch.Tensor]:
     dl = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     for batch in dl:
         x = batch["video"]
@@ -22,7 +25,15 @@ def extract_latents(vae, dataset, batch_size: int = 32, output_device: str = "cp
                 yield z_q_i
 
 
-def extract_token_ids(vae, dataset, batch_size: int = 32, output_device: str = "cpu") -> Iterable[torch.IntTensor]:
+def extract_token_ids(
+    vae,
+    dataset,
+    batch_size: int = 32,
+    latent_sequence_length=None,
+    latent_height=None,
+    latent_width=None,
+    output_device: str = "cpu",
+) -> Iterable[torch.IntTensor]:
     dl = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     for batch in dl:
         x = batch["video"]
@@ -32,11 +43,23 @@ def extract_token_ids(vae, dataset, batch_size: int = 32, output_device: str = "
         x = x.to(vae.device)
         with torch.no_grad():
             z = vae.encoder(x)
-            # z shape is 
+            # z shape is
             # print("z:", z.mean())
             token_ids = vae.vq.vec_to_codes(z)
             # print("token_ids:", token_ids.float().mean())
             token_ids = token_ids.to(output_device)  # shape is (b, t * h * w)
+            if (
+                latent_sequence_length is not None
+                and latent_height is not None
+                and latent_width is not None
+            ):
+                token_ids = rearrange(
+                    token_ids,
+                    "b (t h w) -> b t h w",
+                    t=latent_sequence_length,
+                    h=latent_height,
+                    w=latent_width,
+                )
             # unbatch
             for token_ids_i in token_ids:
                 # print("token_ids_i:", token_ids_i.float().mean())
