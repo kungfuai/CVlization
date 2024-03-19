@@ -159,7 +159,6 @@ val_data = np.concatenate([np.ones((len(val_data), 1), dtype=np.uint16) * VIDEO_
 # train_data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
 # val_data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
 
-# TODO: insert a special token at the beginning of each video
 train_data = train_data.ravel()
 val_data = val_data.ravel()
 

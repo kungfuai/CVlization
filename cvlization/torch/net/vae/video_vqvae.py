@@ -10,11 +10,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
-from torchvision.utils import make_grid
 
-from attention import MultiHeadAttention
-from utils import shift_dim
-import ae_variants
+from cvlization.torch.net.vae import video_vae_components as ae_variants
 
 
 class VQVAE(pl.LightningModule):
@@ -322,46 +319,6 @@ class VQVAE(pl.LightningModule):
         return parser
 
 
-class AxialBlock(nn.Module):
-    def __init__(self, n_hiddens, n_head):
-        super().__init__()
-        kwargs = dict(
-            shape=(0,) * 3,
-            dim_q=n_hiddens,
-            dim_kv=n_hiddens,
-            n_head=n_head,
-            n_layer=1,
-            causal=False,
-            attn_type="axial",
-        )
-        self.attn_w = MultiHeadAttention(attn_kwargs=dict(axial_dim=-2), **kwargs)
-        self.attn_h = MultiHeadAttention(attn_kwargs=dict(axial_dim=-3), **kwargs)
-        self.attn_t = MultiHeadAttention(attn_kwargs=dict(axial_dim=-4), **kwargs)
-
-    def forward(self, x):
-        x = shift_dim(x, 1, -1)
-        x = self.attn_w(x, x, x) + self.attn_h(x, x, x) + self.attn_t(x, x, x)
-        x = shift_dim(x, -1, 1)
-        return x
-
-
-class AttentionResidualBlock(nn.Module):
-    def __init__(self, n_hiddens):
-        super().__init__()
-        self.block = nn.Sequential(
-            nn.BatchNorm3d(n_hiddens),
-            nn.ReLU(),
-            SamePadConv3d(n_hiddens, n_hiddens // 2, 3, bias=False),
-            nn.BatchNorm3d(n_hiddens // 2),
-            nn.ReLU(),
-            SamePadConv3d(n_hiddens // 2, n_hiddens, 1, bias=False),
-            nn.BatchNorm3d(n_hiddens),
-            nn.ReLU(),
-            AxialBlock(n_hiddens, 2),
-        )
-
-    def forward(self, x):
-        return x + self.block(x)
 
 
 class Codebook(nn.Module):
