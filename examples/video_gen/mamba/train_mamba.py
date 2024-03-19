@@ -13,9 +13,6 @@ def load_data() -> torch.Tensor:
     data = np.load("flying_mnist_tokens_32frames_train.npy")
     return torch.tensor(data, dtype=torch.long)
 
-def create_model(num_tokens: int, hidden_dim: int) -> MambaClassifier:
-    return MambaClassifier(num_tokens, hidden_dim, num_tokens)
-
 def calc_loss_for_one_batch(
     model: MambaClassifier,
     sequence: torch.Tensor,
@@ -39,8 +36,8 @@ def calc_loss_for_one_batch(
     """
     # sequence -> (B, L).
     # Remove last token from sequence (last token is a target only).
-    logits = model(sequence[:, :-1]) # (B, L-1, C)
-    targets = sequence[:, 1:] # (B, L-1)
+    logits = model(sequence) # (B, L, n_tokens)
+    targets = sequence # (B, L)
     assert logits.shape[:-1] == targets.shape, f"{logits.shape[:-1]} != {targets.shape}"
 
     # torch cross entropy loss expects (B, C, L) and (B, L) shapes.
@@ -108,28 +105,33 @@ def plot_epochs(train_losses, val_losses, epoch: str):
 
 
 if __name__ == "__main__":
-    """
-    Args:
-    - learning_rate, default 1e-3
-    - epochs, default 10
-    - start plotting after epoch, default = 1
-    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--start_plotting_after_epoch", type=int, default=2)
+    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--train_frac", type=float, default=0.9)
+    parser.add_argument("--patience", type=int, default=5)
+    parser.add_argument("--device", type=str, default="cuda:0")
     args = parser.parse_args()
-
     # print args as json. print in bold green.
     print("Arguments:")
     print(colored(json.dumps(vars(args), indent=4), "cyan"), "\n\n")
 
-    data: torch.Tensor = load_data().to("cuda:0")
-    model = create_model(num_tokens=5120, hidden_dim=128).to("cuda:0")
-    batch_size: int = 16
+    data: torch.Tensor = load_data().to(args.device)
+    model = MambaClassifier(
+        n_tokens=5120,
+        # seq_len=32768,
+        seq_len=data.shape[1],
+        mamba_n_embed=128,
+        mamba_d_state=16,
+        mamba_d_conv=4,
+        mamba_expand=2,
+        n_mamba_layers=1,
+        device=args.device,
+    ).to(args.device)
 
-    train_frac = 0.9
-    train_size = int(len(data) * train_frac)
+    train_size = int(len(data) * args.train_frac)
     train_data = data[:train_size]
     val_data = data[train_size:]
 
@@ -137,10 +139,19 @@ if __name__ == "__main__":
     # run_train_epoch(model, train_data, optimizer, batch_size, 0)
     train_epoch_losses = []
     val_epoch_losses = []
+    def check_save_model():
+        return val_epoch_losses[-1] == min(val_epoch_losses)
+    def check_patience_quit():
+        if len(val_epoch_losses) <= args.patience:
+            return False # Not enough samples.
+        best_val_loss = min(val_epoch_losses) # Best metric.
+        if min(val_epoch_losses[-args.patience:]) > best_val_loss:
+            return True # The last <patience> epochs were worse, so quit.
+        return False
     for epoch in range(args.epochs):
-        epoch_loss = run_train_epoch(model, train_data, optimizer, batch_size, epoch)
+        epoch_loss = run_train_epoch(model, train_data, optimizer, args.batch_size, epoch)
         train_epoch_losses.append(epoch_loss)
-        epoch_loss = run_val_epoch(model, val_data, batch_size, epoch)
+        epoch_loss = run_val_epoch(model, val_data, args.batch_size, epoch)
         val_epoch_losses.append(epoch_loss)
         if epoch > args.start_plotting_after_epoch:
             # Remove first epoch cause it messes up the graph.
@@ -149,6 +160,13 @@ if __name__ == "__main__":
             plot_epochs(train_to_plot, val_to_plot, str(epoch))
         else:
             print(f"(Don't plot until epoch {args.start_plotting_after_epoch})")
+        if check_save_model():
+            print(colored(f"Saving model at epoch {epoch}", "green", "on_grey", attrs=["bold"]))
+            torch.save(model.state_dict(), "mamba_model.pth")
+        elif check_patience_quit():
+            print(colored(f"Early stopping at epoch {epoch}", "yellow", "on_grey", attrs=["bold"]))
+            break
 
     print(colored("EXPERIMENT COMPLETE.", "blue", "on_grey", attrs=["bold"]))
     print("\nBye-bye.")
+

@@ -1,3 +1,4 @@
 mamba-ssm==1.2.0.post1
 asciichartpy==1.5.25
 termcolor
+wandb
