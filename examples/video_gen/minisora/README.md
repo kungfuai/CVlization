@@ -51,7 +51,7 @@ Using spatial temporal DiT (adatped from ColossalAI's OpenSora):
 
 ```
 # This will use a VAE trained on Flying MNIST
-bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 16 --log_every 50 --sample_every 100 --track
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 4 --log_every 10 --sample_every 100 --track
 ```
 
 2. Train an autoregressive transformer-based language model (next token predictor)
