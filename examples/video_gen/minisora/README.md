@@ -1,5 +1,7 @@
 ## Quickstart
 
+### Download data
+
 Dataload the Flying MNIST dataset: https://storage.googleapis.com/research-datasets-public/flying_mnist.tar.gz and extract to `<CVlization project root>/data/`. The directory structure should be:
 
 ```
@@ -11,11 +13,15 @@ data/
             ...
 ```
 
-Then
+### Build a docker image
 
 ```bash
 bash examples/video_gen/minisora/build.sh
+```
 
+### Train a spatial-temporal VQ-VAE and tokenize videos
+
+```
 # train vae model
 bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 --resolution 256 --sequence_length 32 --embedding_dim 4 --n_codes 5120 --limit_train_batches 1.0 --limit_val_batches 0.25 --epochs 100 --save_every_n_epochs 5 --low_utilization_cost 0.1 --network_variant s4t4_b_vq --lr 0.001 --kl_loss_weight 0.01 --commitment_cost 0.25 --track
 # --reinit_every_n_epochs 1
@@ -24,6 +30,8 @@ bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 -
 # tokenze the video using vae
 bash examples/video_gen/minisora/train.sh python tokenize_videos.py
 ```
+
+### Train a latent generative model
 
 Now VAE is trained and videos are tokenized. From this point, you have several options:
 
