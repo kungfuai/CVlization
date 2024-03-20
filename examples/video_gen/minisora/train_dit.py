@@ -108,7 +108,7 @@ def load_model_from_wandb(model_full_name: str = "zzsi_kungfu/videogpt/model-tjz
     # print(list(state_dict.keys()))
     hyper_parameters = state_dict["hyper_parameters"]
     args = hyper_parameters["args"]
-    from vqvae import VQVAE
+    from cvlization.torch.net.vae.video_vqvae import VQVAE
     # args = Namespace(**hyper_parameters)
     # print(args)
     model = VQVAE.load_from_checkpoint(artifact_dir + "/model.ckpt")
