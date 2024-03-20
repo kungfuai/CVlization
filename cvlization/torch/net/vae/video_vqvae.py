@@ -14,6 +14,33 @@ import torch.distributed as dist
 from cvlization.torch.net.vae import video_vae_components as ae_variants
 
 
+def load_model_from_wandb(
+    model_full_name: str = "zzsi_kungfu/videogpt/model-tjzu02pg:v17",
+) -> dict:
+    import wandb
+
+    api = wandb.Api()
+    # skip if the file already exists
+    artifact_dir = f"artifacts/{model_full_name.split('/')[-1]}"
+    if os.path.exists(artifact_dir):
+        print(f"Model already exists at {artifact_dir}")
+    else:
+        artifact_dir = api.artifact(model_full_name).download()
+    # The file is model.ckpt.
+    state_dict = torch.load(artifact_dir + "/model.ckpt")
+    # print(list(state_dict.keys()))
+    hyper_parameters = state_dict["hyper_parameters"]
+    args = hyper_parameters["args"]
+    from cvlization.torch.net.vae.video_vqvae import VQVAE
+
+    # args = Namespace(**hyper_parameters)
+    # print(args)
+    model = VQVAE.load_from_checkpoint(artifact_dir + "/model.ckpt")
+    # model = VQVAE(args=args)
+    # model.load_state_dict(state_dict["state_dict"])
+    return model
+
+
 class VQVAE(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
@@ -46,6 +73,30 @@ class VQVAE(pl.LightningModule):
         )
         return tuple([s // d for s, d in zip(input_shape, self.args.downsample)])
 
+    @classmethod
+    def from_pretrained(cls, model_full_name: str):
+        """
+        Load a pretrained model from wandb.
+
+        :param model_full_name: the full name of the model on wandb. e.g. "zzsi_kungfu/videogpt/model-tjzu02pg:v17"
+        """
+        import wandb
+
+        api = wandb.Api()
+        # skip if the file already exists
+        artifact_dir = f"artifacts/{model_full_name.split('/')[-1]}"
+        if os.path.exists(artifact_dir):
+            print(f"Model already exists at {artifact_dir}")
+        else:
+            artifact_dir = api.artifact(model_full_name).download()
+        # The file is model.ckpt.
+        state_dict = torch.load(artifact_dir + "/model.ckpt")
+        hyper_parameters = state_dict["hyper_parameters"]
+        args = hyper_parameters["args"]
+        model = cls(args=args)
+        model.load_state_dict(state_dict["state_dict"])
+        return model
+
     # def encode(self, x, include_embeddings=False):
     #     h = self.pre_vq_conv(self.encoder(x))
     #     print("before vq", h.max(), h.min())
@@ -69,7 +120,11 @@ class VQVAE(pl.LightningModule):
             z = encoded["z"]
             mu = encoded["mu"]
             logvar = encoded["logvar"]
-            kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp()) * self.kl_loss_weight
+            kl_loss = (
+                -0.5
+                * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                * self.kl_loss_weight
+            )
         elif isinstance(encoded, torch.Tensor):
             z = encoded
             kl_loss = 0
@@ -121,7 +176,9 @@ class VQVAE(pl.LightningModule):
         self.log("train/z_mean", vq_output["z"].mean(), on_step=True)
         self.log("train/z_max", vq_output["z"].max(), on_step=True)
         self.log("train/z_min", vq_output["z"].min(), on_step=True)
-        self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"], on_step=True)
+        self.log(
+            "train/lr", self.trainer.optimizers[0].param_groups[0]["lr"], on_step=True
+        )
 
         # log reconstructions (every 5 epochs, for one batch)
         if batch_idx == 2 and self.current_epoch % 5 == 0:
@@ -297,7 +354,9 @@ class VQVAE(pl.LightningModule):
         #     self.logger.experiment.log_artifact(model_artifact)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.args.lr, betas=(0.9, 0.999))
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=self.args.lr, betas=(0.9, 0.999)
+        )
         lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.5, patience=5, verbose=True
         )
@@ -317,8 +376,6 @@ class VQVAE(pl.LightningModule):
         parser.add_argument("--n_res_layers", type=int, default=4)
         parser.add_argument("--downsample", nargs="+", type=int, default=(4, 4, 4))
         return parser
-
-
 
 
 class Codebook(nn.Module):
