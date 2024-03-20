@@ -103,7 +103,9 @@ config_keys = [
     for k, v in globals().items()
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
-exec(open("nanogpt_configurator.py").read())  # overrides from command line or config file
+exec(
+    open("nanogpt_configurator.py").read()
+)  # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 # -----------------------------------------------------------------------------
 
@@ -151,23 +153,30 @@ ctx = (
 # poor man's data loader
 data_dir = os.path.join("data", dataset)
 data = np.load("flying_mnist_tokens_32frames_train.npy").astype(np.uint16)
+data = data.reshape(len(data), -1)  # flattened for each video
 n = len(data)
 train_n = int(n * 0.8)
 train_data = data[:train_n]
 val_data = data[train_n:]
 # insert a special token at the beginning of each video
 VIDEO_BEGIN_TOKEN = 5121
-train_data = np.concatenate([np.ones((len(train_data), 1), dtype=np.uint16) * VIDEO_BEGIN_TOKEN, train_data], axis=1)
-val_data = np.concatenate([np.ones((len(val_data), 1), dtype=np.uint16) * VIDEO_BEGIN_TOKEN, val_data], axis=1)
+train_data = np.concatenate(
+    [np.ones((len(train_data), 1), dtype=np.uint16) * VIDEO_BEGIN_TOKEN, train_data],
+    axis=1,
+)
+val_data = np.concatenate(
+    [np.ones((len(val_data), 1), dtype=np.uint16) * VIDEO_BEGIN_TOKEN, val_data], axis=1
+)
 # train_data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
 # val_data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
 
 train_data = train_data.ravel()
 val_data = val_data.ravel()
 
+
 def get_batch(split):
     data = train_data if split == "train" else val_data
-    ix = torch.randint(len(data) - block_size, (batch_size,))    
+    ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack(
         [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
     )
@@ -191,14 +200,19 @@ def load_vae():
     global vae
     if vae is None:
         from train_dit import create_vae
+
         vae = create_vae(wandb_model_name="zzsi_kungfu/videogpt/model-kbu39ped:v11")
         vae.eval()
         vae.to(device)
 
+
 def force_cudnn_initialization():
     s = 32
-    dev = torch.device('cuda')
-    torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
+    dev = torch.device("cuda")
+    torch.nn.functional.conv2d(
+        torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev)
+    )
+
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -213,7 +227,7 @@ if os.path.exists(meta_path):
     meta_vocab_size = meta["vocab_size"]
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
-meta_vocab_size = 5120 + 100 # TODO: change me, this is the VQ vocab sizes
+meta_vocab_size = 5120 + 100  # TODO: change me, this is the VQ vocab sizes
 
 # model init
 model_args = dict(
@@ -424,7 +438,7 @@ while True:
         print(
             f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
         )
-    
+
     # log the decoded ground truth codes
     # TODO: this is hardcoded for now
     t = 32 / 4
@@ -432,18 +446,27 @@ while True:
     w = 256 / 4
     if iter_num == 0:
         load_vae()
-        ground_truth_codes = torch.Tensor(val_data[1:32769].astype(np.int64)).long().to(device)  # this is hard coded
-        ground_truth_codes = rearrange(ground_truth_codes, "(b t h w) -> b t h w", b=1, t=int(t), h=int(h), w=int(w))
+        ground_truth_codes = (
+            torch.Tensor(val_data[1:32769].astype(np.int64)).long().to(device)
+        )  # this is hard coded
+        ground_truth_codes = rearrange(
+            ground_truth_codes,
+            "(b t h w) -> b t h w",
+            b=1,
+            t=int(t),
+            h=int(h),
+            w=int(w),
+        )
         assert ground_truth_codes.shape == (1, t, h, w), ground_truth_codes.shape
-        assert isinstance(ground_truth_codes, torch.Tensor), f"expected torch.Tensor, got {type(ground_truth_codes)}"
+        assert isinstance(
+            ground_truth_codes, torch.Tensor
+        ), f"expected torch.Tensor, got {type(ground_truth_codes)}"
         with torch.no_grad():
             z = vae.vq.codes_to_vec(ground_truth_codes)
             assert len(z.shape) == 5
             assert z.shape == (1, 4, t, h, w)
             video = vae.decoder(z)
-            video = (video - video.min()) / (
-                video.max() - video.min() + 1e-6
-            )
+            video = (video - video.min()) / (video.max() - video.min() + 1e-6)
             video = (video * 255).to(torch.uint8)
             video = rearrange(video, "b c t h w -> t c h (b w)")
             assert video.shape[1] == 3, f"shape of video is {video.shape}"
@@ -451,12 +474,19 @@ while True:
             if wandb_log:
                 wandb.log({"sampled/ground_truth_decoded": display})
 
-
     if iter_num % sample_interval == 0 and master_process:
         # sample from the model
         model.eval()
         with torch.no_grad():
-            sampled_codes = model.generate(idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * VIDEO_BEGIN_TOKEN).long().to(device), max_new_tokens=32768, temperature=1, top_k=100, show_progress=True)
+            sampled_codes = model.generate(
+                idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * VIDEO_BEGIN_TOKEN)
+                .long()
+                .to(device),
+                max_new_tokens=32768,
+                temperature=1,
+                top_k=100,
+                show_progress=True,
+            )
             sampled_codes = sampled_codes[0, 1:]
             violating_codes = (sampled_codes > 5119).float().mean()
             print(f"violating codes: {violating_codes.item()}")
@@ -465,22 +495,32 @@ while True:
             # sampled_codes = torch.ones(1, 32768, dtype=torch.long).to(device)
             print("sampled codes:", sampled_codes)
             # print(sampled_codes.min(), sampled_codes.max())
-            sampled_codes = rearrange(sampled_codes[:32768], "(b t h w) -> b t h w", b=1, t=int(t), h=int(h), w=int(w))
+            sampled_codes = rearrange(
+                sampled_codes[:32768],
+                "(b t h w) -> b t h w",
+                b=1,
+                t=int(t),
+                h=int(h),
+                w=int(w),
+            )
             assert sampled_codes.shape == (1, t, h, w), sampled_codes.shape
-            
+
             z = vae.vq.codes_to_vec(sampled_codes)
             assert len(z.shape) == 5
             assert z.shape == (1, 4, t, h, w)
             video = vae.decoder(z)
-            video = (video - video.min()) / (
-                video.max() - video.min() + 1e-6
-            )
+            video = (video - video.min()) / (video.max() - video.min() + 1e-6)
             video = (video * 255).to(torch.uint8)
             video = rearrange(video, "b c t h w -> t c h (b w)")
             display = wandb.Video(video.cpu(), fps=5, format="mp4")
             if wandb_log:
-                wandb.log({"sampled/generated_video": display, "sampled/violating_codes": violating_codes})
-            
+                wandb.log(
+                    {
+                        "sampled/generated_video": display,
+                        "sampled/violating_codes": violating_codes,
+                    }
+                )
+
         model.train()
 
     iter_num += 1
