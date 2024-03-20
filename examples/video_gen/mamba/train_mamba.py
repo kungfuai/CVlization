@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from mamba_classifier import MambaClassifier
+from .mamba_classifier import MambaClassifier
 
 def load_data() -> torch.Tensor:
     data = np.load("flying_mnist_tokens_32frames_train.npy")
