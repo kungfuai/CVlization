@@ -58,6 +58,28 @@ class IDDPM(SpacedDiffusion):
 
         self.cfg_scale = cfg_scale
 
+    def sample_unconditional(
+        self,
+        n_samples: int,
+        model,
+        z_size,
+        device,
+        additional_args=None,
+    ):
+        z = torch.randn(n_samples, *z_size, device=device)
+        # forward = partial(forward_with_cfg, model, cfg_scale=self.cfg_scale)
+        samples = self.p_sample_loop(
+            # forward,
+            model,
+            z.shape,
+            z,
+            clip_denoised=False,
+            model_kwargs=additional_args,
+            progress=True,
+            device=device,
+        )
+        return samples
+
     def sample(
         self,
         model,
@@ -90,6 +112,10 @@ class IDDPM(SpacedDiffusion):
         return samples
 
 
+# def forward(model, x, timestep, **kwargs):
+#     return model(x, timestep, **kwargs)
+
+
 def forward_with_cfg(model, x, timestep, y, cfg_scale, **kwargs):
     # https://github.com/openai/glide-text2im/blob/main/notebooks/text2im.ipynb
     half = x[: len(x) // 2]
@@ -103,15 +129,55 @@ def forward_with_cfg(model, x, timestep, y, cfg_scale, **kwargs):
     return torch.cat([eps, rest], dim=1)
 
 
+def get_args():
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--track", action="store_true", help="Track the experiment in W&B"
+    )
+    parser.add_argument(
+        "--project", type=str, default="flying_mnist", help="W&B project name"
+    )
+    parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
+    parser.add_argument(
+        "--max_steps", type=int, default=1000, help="Max training steps"
+    )
+    parser.add_argument("--log_every", type=int, default=10, help="Log every N steps")
+    parser.add_argument("--depth", type=int, default=6, help="Depth of the model")
+    parser.add_argument(
+        "--hidden_size", type=int, default=768, help="Hidden size of the model"
+    )
+    parser.add_argument(
+        "--patch_size",
+        type=lambda x: tuple(map(int, x.split(","))),
+        default=(1, 2, 2),
+        help="Patch size",
+    )
+    parser.add_argument(
+        "--num_heads", type=int, default=3, help="Number of attention heads"
+    )
+    parser.add_argument(
+        "--sample_every", type=int, default=100, help="Sample every N steps"
+    )
+    parser.add_argument(
+        "--diffusion_steps", type=int, default=1000, help="Number of diffusion steps"
+    )
+    return parser.parse_args()
+
+
 def train_on_latents(
     device="cuda",
     batch_size=2,
     max_steps=1000,
     log_every=10,
+    sample_every=100,
     depth=6,
     hidden_size=768,
     patch_size=(1, 2, 2),
     num_heads=3,
+    diffusion_steps=1000,
+    track=False,
     **kwargs,
 ):
     import numpy as np
@@ -147,10 +213,9 @@ def train_on_latents(
         patch_size=patch_size,
         num_heads=num_heads,
         unconditional=True,
-        **kwargs,
     ).to(device)
     diffusion = IDDPM(
-        num_sampling_steps=1000,
+        num_sampling_steps=diffusion_steps,
     )
     optimizer = torch.optim.Adam(denoiser.parameters(), lr=1e-4)
 
@@ -169,9 +234,51 @@ def train_on_latents(
         optimizer.step()
         optimizer.zero_grad()
 
+        # Callbacks
+
         if i % log_every == 0:
             print(f"Step {i}: {loss.item()}")
+            if track:
+                import wandb
+
+                wandb.log({"train/loss": loss.item()})
+
+        if i % sample_every == 0:
+            with torch.no_grad():
+                samples = diffusion.sample_unconditional(
+                    model=denoiser,
+                    # text_encoder=None,
+                    n_samples=1,
+                    z_size=z.shape[1:],
+                    # prompts=[],  # ["a", "b"],
+                    device=device,
+                    additional_args=None,
+                )
+                # print(samples.shape)
+                # TODO: multiply a scaler factor to latents to make mean = 0, std = 1
+                # decode z into a video
+                assert samples.shape[1:] == z.shape[1:], f"shape of samples is {samples.shape}, shape of z is {z.shape}"
+                video = vae.decoder(samples)
+                video = (video - video.min()) / (video.max() - video.min() + 1e-6)
+                video = (video * 255).to(torch.uint8)
+                video = rearrange(video, "b c t h w -> t c h (b w)")
+                assert video.shape[1] == 3, f"shape of video is {video.shape}"
+                if track:
+                    import wandb
+
+                    display = wandb.Video(video.detach().cpu(), fps=5, format="mp4")
+                    wandb.log(
+                        {
+                            "sampled/generated_video": display,
+                        }
+                    )
 
 
 if __name__ == "__main__":
-    train_on_latents()
+    args = get_args()
+    if args.track:
+        import wandb
+
+        wandb.init(project=args.project)
+        wandb.config.update(args)
+    train_on_latents(**vars(args))
