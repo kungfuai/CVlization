@@ -1,5 +1,8 @@
 """
 Adapted from https://github.com/hpcaitech/Open-Sora/blob/main/opensora/schedulers/iddpm/__init__.py
+
+TODO:
+- estimate MFU
 """
 
 from functools import partial
@@ -163,6 +166,15 @@ def get_args():
     parser.add_argument(
         "--diffusion_steps", type=int, default=1000, help="Number of diffusion steps"
     )
+    parser.add_argument(
+        "--accumulate_grad_batches",
+        type=int,
+        default=1,
+        help="Accumulate gradients every N steps",
+    )
+    parser.add_argument(
+        "--lr", type=float, default=1e-4, help="Learning rate of the optimizer"
+    )
     return parser.parse_args()
 
 
@@ -177,6 +189,8 @@ def train_on_latents(
     patch_size=(1, 2, 2),
     num_heads=3,
     diffusion_steps=1000,
+    accumulate_grad_batches=1,
+    lr=1e-4,
     track=False,
     **kwargs,
 ):
@@ -217,7 +231,7 @@ def train_on_latents(
     diffusion = IDDPM(
         num_sampling_steps=diffusion_steps,
     )
-    optimizer = torch.optim.Adam(denoiser.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(denoiser.parameters(), lr=lr)
 
     # training loop
     for i in range(max_steps):
@@ -231,8 +245,10 @@ def train_on_latents(
         loss = loss_dict["loss"].mean()
         loss.backward()
 
-        optimizer.step()
-        optimizer.zero_grad()
+        if (i + 1) % accumulate_grad_batches == 0:
+		    # Update Optimizer
+            optimizer.step()
+            optimizer.zero_grad()
 
         # Callbacks
 
