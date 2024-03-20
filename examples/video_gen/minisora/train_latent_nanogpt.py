@@ -63,13 +63,16 @@ vae = None
 always_save_checkpoint = False
 
 batch_size = 32
-block_size = 1 * 64 * 64  # context of up to this many tokens
+block_size = 1024  # context of up to this many tokens
+# block_size = 1 * 64 * 64  # context of up to this many tokens
 out_dir = f"logs-latent-nanogpt/batch{batch_size}_block{block_size}"
 
 # baby GPT model :)
-n_layer = 6
+# n_layer = 6
+n_layer = 8
 n_head = 6
-n_embd = 384
+# n_embd = 384
+n_embd = 128 * n_head
 dropout = 0.2
 
 learning_rate = 5e-4  # with baby networks can afford to go a bit higher
