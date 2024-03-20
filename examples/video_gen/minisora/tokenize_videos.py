@@ -70,13 +70,13 @@ def tokenize():
         )
     ):
         # print(token_ids.shape)
-        all_token_ids.append(token_ids.numpy())  # .reshape(1, -1))
+        all_token_ids.append(token_ids.unsqueeze(0).numpy())  # .reshape(1, -1))
         # print("all_token_ids:", all_token_ids[-1].astype(float).mean())
         # if j > 1:
         #     break
     all_token_ids = np.concatenate(all_token_ids, 0)
+    print(all_token_ids[0])
     print(all_token_ids.shape, all_token_ids.dtype)
-    print(all_token_ids)
     # save
     np.save(
         f"flying_mnist_tokens_{max_frames_per_video}frames_train.npy", all_token_ids
