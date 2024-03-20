@@ -22,7 +22,7 @@ bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 -
 # --accumulate_grad_batches 1
 
 # tokenze the video using vae
-bash examples/video_gen/minisora/train.sh python tokenize.py
+bash examples/video_gen/minisora/train.sh python tokenize_videos.py
 
 # train diffusion model
 # With an VAE trained on flying MNIST:
