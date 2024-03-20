@@ -9,8 +9,17 @@ from tqdm import tqdm
 
 from .mamba_classifier import MambaClassifier
 
+# seed numpy's random
+np.random.seed(0)
+
 def load_data() -> torch.Tensor:
     data = np.load("flying_mnist_tokens_32frames_train.npy")
+    assert data.shape == (1000, 8, 64, 64), f"Expected (1000, 8, 64, 64), got {data.shape}"
+    # Move `8` to last dim, then flatten after batch dimension.
+    data = np.moveaxis(data, 1, -1)
+    assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
+    data = data.reshape(-1, 8*64*64)
+    assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
     return torch.tensor(data, dtype=torch.long)
 
 def calc_loss_for_one_batch(
@@ -35,15 +44,20 @@ def calc_loss_for_one_batch(
     (since Mamba is a recurrent model).
     """
     # sequence -> (B, L).
-    # Remove last token from sequence (last token is a target only).
-    logits = model(sequence) # (B, L, n_tokens)
-    targets = sequence # (B, L)
-    assert logits.shape[:-1] == targets.shape, f"{logits.shape[:-1]} != {targets.shape}"
+    # apply randomized zero masking to the sequence.
+    # get an random int between 0 and L-1.
+    # mask everything including and after that index.
+    random_index = np.random.randint(0, sequence.shape[1])
+    sequence[:, random_index:] = 0
+
+    all_logits = model(sequence) # (B, L, n_tokens)
+    random_index_logits = all_logits[:, random_index:random_index+1] # (B, 1, n_tokens)
+    random_index_targets = sequence[:, random_index:random_index+1] # (B, 1)
 
     # torch cross entropy loss expects (B, C, L) and (B, L) shapes.
-    logits = logits.permute(0, 2, 1) # (B, C, L)
+    random_index_logits = random_index_logits.permute(0, 2, 1) # (B, C, L)
     criterion = torch.nn.CrossEntropyLoss()
-    loss = criterion(logits, targets)
+    loss = criterion(random_index_logits, random_index_targets)
 
     return loss
 
@@ -159,7 +173,7 @@ if __name__ == "__main__":
             val_to_plot = val_epoch_losses[args.start_plotting_after_epoch:]
             plot_epochs(train_to_plot, val_to_plot, str(epoch))
         else:
-            print(f"(Don't plot until epoch {args.start_plotting_after_epoch})")
+            print(f"(Don't plot until epoch {args.start_plotting_after_epoch + 1})")
         if check_save_model():
             print(colored(f"Saving model at epoch {epoch}", "green", "on_grey", attrs=["bold"]))
             torch.save(model.state_dict(), "mamba_model.pth")
