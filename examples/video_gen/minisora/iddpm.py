@@ -144,7 +144,7 @@ def get_args():
     )
     parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
     parser.add_argument(
-        "--max_steps", type=int, default=1000, help="Max training steps"
+        "--max_steps", type=int, default=10000, help="Max training steps"
     )
     parser.add_argument("--log_every", type=int, default=10, help="Log every N steps")
     parser.add_argument("--depth", type=int, default=6, help="Depth of the model")
@@ -175,6 +175,9 @@ def get_args():
     parser.add_argument(
         "--lr", type=float, default=1e-4, help="Learning rate of the optimizer"
     )
+    parser.add_argument(
+        "--clip_grad", type=float, default=1.0, help="Clip gradients. Set to None to disable"
+    )
     return parser.parse_args()
 
 
@@ -191,6 +194,7 @@ def train_on_latents(
     diffusion_steps=1000,
     accumulate_grad_batches=1,
     lr=1e-4,
+    clip_grad=None,
     track=False,
     **kwargs,
 ):
@@ -207,6 +211,10 @@ def train_on_latents(
     vae.to(device)
     token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long).to(device)
 
+    # TODO: estimate these values automatically from z
+    latent_multiplier = 9
+    latent_bias = -0.27
+
     with torch.no_grad():
         z = vae.vq.codes_to_vec(token_ids)
         assert len(z.shape) == 5, f"Expected 5D tensor, got {z.shape}"
@@ -214,6 +222,7 @@ def train_on_latents(
             z.shape[2] == token_ids.shape[1]
         ), f"Expected the temporal dimension has size {token_ids.shape[1]}, got {z.shape[2]}"
         # print(z.shape)  # (1000, 4, 8, 64, 64)
+        z = z * latent_multiplier + latent_bias
 
     def get_batch():
         idx = np.random.choice(len(z), batch_size, replace=False)
@@ -247,6 +256,8 @@ def train_on_latents(
 
         if (i + 1) % accumulate_grad_batches == 0:
 		    # Update Optimizer
+            if clip_grad is not None:
+                torch.nn.utils.clip_grad.clip_grad_norm_(denoiser.parameters(), clip_grad)
             optimizer.step()
             optimizer.zero_grad()
 
@@ -274,7 +285,8 @@ def train_on_latents(
                 # TODO: multiply a scaler factor to latents to make mean = 0, std = 1
                 # decode z into a video
                 assert samples.shape[1:] == z.shape[1:], f"shape of samples is {samples.shape}, shape of z is {z.shape}"
-                video = vae.decoder(samples)
+                sampled_z = (samples - latent_bias) / latent_multiplier
+                video = vae.decoder(sampled_z)
                 video = (video - video.min()) / (video.max() - video.min() + 1e-6)
                 video = (video * 255).to(torch.uint8)
                 video = rearrange(video, "b c t h w -> t c h (b w)")
