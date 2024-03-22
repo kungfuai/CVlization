@@ -52,6 +52,9 @@ Using spatial temporal DiT (adatped from ColossalAI's OpenSora):
 ```bash
 # This will use a VAE trained on Flying MNIST
 bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 4 --accumulate_grad_batches 1 --max_steps 100000 --log_every 10 --sample_every 500 --clip_grad 1.0 --track
+
+# or train a larger net
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --max_steps 100000 --log_every 10 --sample_every 500 --diffusion_steps 1000 --clip_grad 1.0 --track
 ```
 
 2. Train an autoregressive transformer-based language model (next token predictor)
@@ -63,7 +66,7 @@ bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py
 
 3. Train a autoregressive MAMBA-based language model
 
-4. Train a flow-matching model
+4. Train a diffusion model with flow-matching
 
 ## Reference
 

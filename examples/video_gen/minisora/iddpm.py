@@ -269,6 +269,12 @@ def train_on_latents(
                 import wandb
 
                 wandb.log({"train/loss": loss.item()})
+                x_mean = x.mean()
+                x_std = x.std()
+                wandb.log({"train/x_mean": x_mean})
+                wandb.log({"train/x_std": x_std})
+                lr = optimizer.param_groups[0]["lr"]
+                wandb.log({"train/lr": lr})
 
         if i % sample_every == 0:
             with torch.no_grad():
