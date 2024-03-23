@@ -2,7 +2,19 @@
 
 ### Download data
 
-Dataload the Flying MNIST dataset: https://storage.googleapis.com/research-datasets-public/flying_mnist.tar.gz and extract to `<CVlization project root>/data/`. The directory structure should be:
+Dataload the Flying MNIST dataset: https://storage.googleapis.com/research-datasets-public/flying_mnist.tar.gz and extract to `<CVlization project root>/data/`.
+
+
+```bash
+mkdir -p data
+cd data
+wget https://storage.googleapis.com/research-datasets-public/flying_mnist.tar.gz
+tar -xzf flying_mnist.tar.gz
+rm flying_mnist.tar.gz
+cd ..
+```
+
+The directory structure should be:
 
 ```
 data/
@@ -19,15 +31,23 @@ data/
 bash examples/video_gen/minisora/build.sh
 ```
 
-### Train a spatial-temporal VQ-VAE and tokenize videos
+### Train a spatial-temporal VQ-VAE
+
+You can skip this step if you want to use a pretrained VAE.
 
 ```bash
 # train vae model
 bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 --resolution 256 --sequence_length 32 --embedding_dim 4 --n_codes 5120 --limit_train_batches 1.0 --limit_val_batches 0.25 --epochs 100 --save_every_n_epochs 5 --low_utilization_cost 0.1 --network_variant s4t4_b_vq --lr 0.001 --kl_loss_weight 0.01 --commitment_cost 0.25 --track
 # --reinit_every_n_epochs 1
 # --accumulate_grad_batches 1
+```
 
-# tokenze the video using vae
+### Use VQ-VAE to tokenize videos
+
+The following script uses a pretrained VAE to tokenize videos. An WANDB API key is needed. If you want to use your own VAE, please adapt the script.
+
+```bash
+# tokenize the video using vae
 bash examples/video_gen/minisora/train.sh python tokenize_videos.py
 ```
 
@@ -61,7 +81,7 @@ bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accum
 
 ```bash
 # Instead of training a diffusion model, one can also train a next token predictor.
-bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py
+bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --wandb_log
 ```
 
 3. Train a autoregressive MAMBA-based language model
