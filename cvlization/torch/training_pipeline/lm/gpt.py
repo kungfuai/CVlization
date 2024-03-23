@@ -192,6 +192,7 @@ class NanoGPTTrainingPipeline:
         assert len(self.train_data.shape) == 2, f"Expected 2D array for training data, got {self.train_data.shape}"
         self.train_data_flattened = self.train_data.ravel()
         self.val_data_flattened = self.val_data.ravel()
+        print(f"block size:", self.config.block_size)
 
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
