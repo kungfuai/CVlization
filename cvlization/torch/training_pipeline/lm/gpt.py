@@ -11,6 +11,7 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 
 import math
 import time
+import pickle
 import numpy as np
 import inspect
 import os
@@ -144,8 +145,20 @@ class NanoGPTTrainingPipeline:
         self.tokens_per_iter = tokens_per_iter
 
     def get_batch(self, split: str):
-        train_data = self.train_data
-        val_data = self.val_data
+        """
+        Get a batch of data for training or validation.
+
+        Args:
+            split (str): The split to get the data from. Can be either "train" or "val".
+
+        Returns:
+            tuple: A tuple containing two tensors: x and y.
+                - x: The input tensor of shape (batch_size, block_size).
+                - y: The target tensor of shape (batch_size, block_size).
+
+        """
+        train_data = self.train_data_flattened
+        val_data = self.val_data_flattened
         block_size = self.config.block_size
         batch_size = self.config.batch_size
         device = self.config.device
@@ -176,7 +189,9 @@ class NanoGPTTrainingPipeline:
         assert isinstance(self.train_data, np.ndarray)
         assert isinstance(self.val_data, np.ndarray)
         assert self.train_data.dtype in [np.int32, np.int64, np.uint16, np.uint32, np.uint64]
-        assert len(self.train_data.shape) == 1, f"Expected 1D array for training data, got {self.train_data.shape}"
+        assert len(self.train_data.shape) == 2, f"Expected 2D array for training data, got {self.train_data.shape}"
+        self.train_data_flattened = self.train_data.ravel()
+        self.val_data_flattened = self.val_data.ravel()
 
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
@@ -234,7 +249,7 @@ class NanoGPTTrainingPipeline:
             # force these config attributes to be equal otherwise we can't even resume training
             # the rest of the attributes (e.g. dropout) can stay as desired from command line
             for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
-                model_args[k] = checkpoint_model_args[k]
+                self.model_args[k] = checkpoint_model_args[k]
             # create the model
             gptconf = GPTConfig(**(self.model_args))
             model = GPT(gptconf)
@@ -255,11 +270,11 @@ class NanoGPTTrainingPipeline:
             model = GPT.from_pretrained(init_from, override_args)
             # read off the created config params, so we can store them into checkpoint correctly
             for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
-                model_args[k] = getattr(model.config, k)
+                self.model_args[k] = getattr(model.config, k)
         # crop down the model block size if desired, using model surgery
         if block_size < model.config.block_size:
             model.crop_block_size(block_size)
-            model_args["block_size"] = (
+            self.model_args["block_size"] = (
                 block_size  # so that the checkpoint will have the right value
             )
         print(model)
@@ -485,11 +500,10 @@ class NanoGPTTrainingPipeline:
             if iter_num == 0:
                 # Decode from the ground truth token ids
                 if master_process and self.config.vae_model_name is not None:
-                    val_data = self.val_data
                     device = self.config.device
                     vae = self.vae
                     ground_truth_codes = (
-                        torch.Tensor(val_data[1:].astype(np.int64)).long().to(device)
+                        torch.Tensor(self.val_data[0, 1:].astype(np.int64)).long().to(device)
                     )  # this is hard coded
                     ground_truth_codes = rearrange(
                         ground_truth_codes,
@@ -522,7 +536,7 @@ class NanoGPTTrainingPipeline:
                     model.eval()
                     with torch.no_grad():
                         sampled_codes = model.generate(
-                            idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * VIDEO_BEGIN_TOKEN)
+                            idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * self.START_TOKEN)
                             .long()
                             .to(device),
                             max_new_tokens=32768,

@@ -46,14 +46,14 @@ class FlatTokenIds:
         Return training dataset as one big sequence of token ids.
         """
         token_ids = self._insert_start_token(self.train_token_ids, self.start_token_id)
-        return token_ids.ravel()
+        return token_ids # .ravel()
     
     def validation_dataset(self):
         """
         Return validation dataset as one big sequence of token ids.
         """
         token_ids = self._insert_start_token(self.val_token_ids, self.start_token_id)
-        return token_ids.ravel()
+        return token_ids # .ravel()
 
 
 
