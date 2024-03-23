@@ -237,6 +237,8 @@ def train_on_latents(
         num_heads=num_heads,
         unconditional=True,
     ).to(device)
+    print("Denoiser:")
+    print(denoiser)
     diffusion = IDDPM(
         num_sampling_steps=diffusion_steps,
     )
