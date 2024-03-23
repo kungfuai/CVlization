@@ -178,6 +178,12 @@ def get_args():
     parser.add_argument(
         "--clip_grad", type=float, default=1.0, help="Clip gradients. Set to None to disable"
     )
+    parser.add_argument(
+        "--latent_frames_to_generate",
+        type=int,
+        default=8,
+        help="Number of latent frames to generate",
+    )
     return parser.parse_args()
 
 
@@ -194,6 +200,7 @@ def train_on_latents(
     diffusion_steps=1000,
     accumulate_grad_batches=1,
     lr=1e-4,
+    latent_frames_to_generate=8,
     clip_grad=None,
     track=False,
     **kwargs,
@@ -226,7 +233,9 @@ def train_on_latents(
 
     def get_batch():
         idx = np.random.choice(len(z), batch_size, replace=False)
-        return torch.Tensor(z[idx]).to(device)
+        j = np.random.choice(z.shape[2] - latent_frames_to_generate, 1)[0]
+        time_idx = np.arange(j, j + latent_frames_to_generate)
+        return torch.Tensor(z[idx, :, j:j+latent_frames_to_generate, :, :]).to(device)
 
     denoiser = STDiT(
         # depth=28, hidden_size=1152, patch_size=(1, 2, 2), num_heads=16, **kwargs
