@@ -33,7 +33,7 @@ def main():
     parser.add_argument("--eval_interval", type=int, default=250)
     parser.add_argument("--eval_iters", type=int, default=100)
     parser.add_argument("--log_interval", type=int, default=10)
-    parser.add_argument("--sample_interval", type=int, default=500)
+    parser.add_argument("--sample_interval", type=int, default=2000)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--n_layer", type=int, default=8)
