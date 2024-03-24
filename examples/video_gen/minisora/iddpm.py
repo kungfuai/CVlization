@@ -231,15 +231,22 @@ def train_on_latents(
         # print(z.shape)  # (1000, 4, 8, 64, 64)
         z = z * latent_multiplier + latent_bias
 
-    def get_batch():
+    def get_batch(latent_frames_to_generate: int):
         idx = np.random.choice(len(z), batch_size, replace=False)
-        j = np.random.choice(z.shape[2] - latent_frames_to_generate, 1)[0]
-        time_idx = np.arange(j, j + latent_frames_to_generate)
-        return torch.Tensor(z[idx, :, j:j+latent_frames_to_generate, :, :]).to(device)
+        if latent_frames_to_generate < z.shape[2]:
+            j = np.random.choice(z.shape[2] - latent_frames_to_generate, 1)[0]
+        else:
+            j = 0
+            latent_frames_to_generate = z.shape[2]
+        batch_z = z[idx, :, j:(j + latent_frames_to_generate), :, :]
+        assert len(batch_z.shape) == 5, f"Expected 5D tensor, got {batch_z.shape}. Shape of z is {z.shape}"
+        assert batch_z.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {batch_z.shape[2]}"
+        return torch.Tensor(batch_z).to(device)
 
     denoiser = STDiT(
         # depth=28, hidden_size=1152, patch_size=(1, 2, 2), num_heads=16, **kwargs
-        input_size=z.shape[2:],
+        # input_size=z.shape[2:],
+        input_size=(latent_frames_to_generate, z.shape[3], z.shape[4]),
         depth=depth,
         hidden_size=hidden_size,
         patch_size=patch_size,
@@ -255,8 +262,10 @@ def train_on_latents(
 
     # training loop
     for i in range(max_steps):
-        x = get_batch()
+        x = get_batch(latent_frames_to_generate)
+        assert x.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {x.shape[2]}"
         t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
+        # print("x:", x.shape, "t:", t.shape, "latent_frames_to_generate:", latent_frames_to_generate)
         loss_dict = diffusion.training_losses(
             model=denoiser, x_start=x, t=t, model_kwargs=None
         )
@@ -293,7 +302,8 @@ def train_on_latents(
                     model=denoiser,
                     # text_encoder=None,
                     n_samples=1,
-                    z_size=z.shape[1:],
+                    # z_size=z.shape[1:],
+                    z_size=(z.shape[1], latent_frames_to_generate, z.shape[3], z.shape[4]),
                     # prompts=[],  # ["a", "b"],
                     device=device,
                     additional_args=None,
@@ -301,7 +311,8 @@ def train_on_latents(
                 # print(samples.shape)
                 # TODO: multiply a scaler factor to latents to make mean = 0, std = 1
                 # decode z into a video
-                assert samples.shape[1:] == z.shape[1:], f"shape of samples is {samples.shape}, shape of z is {z.shape}"
+                assert samples.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {samples.shape[2]}"
+                assert samples.shape[3:] == z.shape[3:], f"shape of samples is {samples.shape}, shape of z is {z.shape}"
                 sampled_z = (samples - latent_bias) / latent_multiplier
                 video = vae.decoder(sampled_z)
                 video = (video - video.min()) / (video.max() - video.min() + 1e-6)
