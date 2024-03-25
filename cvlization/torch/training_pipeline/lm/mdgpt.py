@@ -1,42 +1,33 @@
 """
-Adapted from Andrej's NanoGPT.
-
-Full definition of a GPT Language Model, all of it in this single file.
-References:
-1) the official GPT-2 TensorFlow implementation released by OpenAI:
-https://github.com/openai/gpt-2/blob/master/src/model.py
-2) huggingface/transformers PyTorch implementation:
-https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+Multi-dimensional GPT.
 """
-
-import math
-import time
-import pickle
-import numpy as np
-import inspect
-import os
 from contextlib import nullcontext
 from dataclasses import dataclass
-
+from typing import Tuple
+import os
+import time
+import math
+import pickle
+from einops import rearrange
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.nn import functional as F
+import torch.nn.functional as F
 from torch.distributed import init_process_group, destroy_process_group
-from einops import rearrange
 import wandb
+from .gpt import GPT, GPTConfig, Block, CausalSelfAttention, LayerNorm, MLP
 
-
-class NanoGPTTrainingPipeline:
+class MDGPTTrainingPipeline:
     @dataclass
     class Config:
 
-        log_dir: str = "logs/nanogpt"
+        log_dir: str = "logs/mdgpt"
         wandb_log: bool = False
-        project: str = "nano-gpt"
+        project: str = "mdgpt"
         init_from: str = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
 
         block_size: int = 1024
+        sparse_block_size: int = 128
         vocab_size: int = 5120
         batch_size: int = 32
         n_layer: int = 12
@@ -105,6 +96,7 @@ class NanoGPTTrainingPipeline:
         torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
         self.START_TOKEN = self.config.vocab_size + 1
+        self.IGNORE_TOKEN = self.config.vocab_size + 2
     
     def fit(self, dataset_builder):
         if self.master_process and self.config.wandb_log:
@@ -152,28 +144,122 @@ class NanoGPTTrainingPipeline:
             split (str): The split to get the data from. Can be either "train" or "val".
 
         Returns:
-            tuple: A tuple containing two tensors: x and y.
-                - x: The input tensor of shape (batch_size, block_size).
-                - y: The target tensor of shape (batch_size, block_size).
+            - x_pos: The positional indices of the input tokens. The shape is (batch_size, block_size, position_dim).
+            - x: The input tensor of shape (batch_size, block_size).
+            - y_pos: The positional indices of the target tokens. The shape is (batch_size, position_dim).
+            - y: The target tensor of shape (batch_size, 1).
 
         """
-        train_data = self.train_data_flattened
-        val_data = self.val_data_flattened
+        train_data = self.train_data
+        position_dim = self.position_dim
         block_size = self.config.block_size
         batch_size = self.config.batch_size
         device = self.config.device
         
-        data = train_data if split == "train" else val_data
-        ix = torch.randint(len(data) - block_size, (batch_size,))
-        x = torch.stack(
-            [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
-        )
-        y = torch.stack(
-            [
-                torch.from_numpy((data[i + 1 : i + 1 + block_size]).astype(np.int64))
-                for i in ix
-            ]
-        )
+        data = train_data if split == "train" else self.val_data
+        # TODO: position_dim == 1 vs. > 1 should be handled in different functions
+        # Coordinates of tokens. Shape is the same as data.
+        if position_dim == 1:
+            positions = np.arange(len(data))
+        else:
+            meshgrid_args = [np.arange(s) for s in data.shape[1:]]
+            positions = np.array(
+                np.meshgrid(
+                    *meshgrid_args,
+                    indexing="ij"
+                ),
+            ).transpose(1, 2, 3, 0)  # positions[t, i, j] == [t, i, j]
+
+            # flatten:
+            data = data.reshape(data.shape[0], -1)  # this is the whole video
+            positions = positions.reshape(-1, positions.shape[-1])
+            print(f"data shape: {data.shape}")
+            print(f"positions shape: {positions.shape}")
+
+        
+        # Problem formulation: x_pos, x, y_pos, y?
+        if position_dim == 1:
+            ix = torch.randint(len(data) - block_size, (batch_size,))
+            x = torch.stack(
+                [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
+            )
+        else:
+            # pad the data with ignore tokens if needed
+            end_irow = torch.randint(data.shape[0], (batch_size,))
+            end_ix = torch.randint(data.shape[1], (batch_size,))
+            # use a look back window of block_size, but not exceeding the beginning of the data
+            start_ix = end_ix - block_size
+            x = np.ones((len(start_ix), block_size), dtype=np.int64) * self.IGNORE_TOKEN
+            for i, (s, e) in enumerate(zip(start_ix, end_ix)):
+                src_start = max(0, s)
+                src_end = e
+                dst_start = max(0, -s)
+                dst_end = block_size
+                x[i, dst_start:dst_end] = data[end_irow[i], src_start:src_end]
+            # If x is [28, 3, 556, 132, ...]
+            # x can look like this:
+            # [[IGNORE_TOKEN, 1, 2, 3, 4, 5],
+            #  [IGNORE_TOKEN, 6, 7, 8, 9, 10],
+            #  [IGNORE_TOKEN, IGNORE_TOKEN, 11, 12, 13, 14]]
+            # ]
+            x = torch.from_numpy(x)
+
+        if position_dim == 1:
+            x_pos = torch.stack(
+                [torch.from_numpy((positions[i : i + block_size]).astype(np.int64)) for i in ix]
+            )
+        else:
+            x_pos = np.ones((len(start_ix), block_size, position_dim), dtype=np.int64) * 0
+            for i, (s, e) in enumerate(zip(start_ix, end_ix)):
+                src_start = max(0, s)
+                src_end = e
+                dst_start = max(0, -s)
+                dst_end = block_size
+                x_pos[i, dst_start:dst_end, :] = positions[src_start:src_end, :]
+
+        if position_dim == 1:
+            y = torch.stack(
+                [
+                    torch.from_numpy((
+                        data[i + block_size]
+                    ).astype(np.int64))
+                    for i in ix
+                ]
+            )
+        else:
+            y = torch.stack(
+                [
+                    torch.from_numpy((
+                        data[[row], [e]]
+                    ).astype(np.int64))
+                    for row, e in zip(end_irow, end_ix)
+                ]
+            )
+        if position_dim == 1:
+            y_pos = torch.stack(
+                [
+                    torch.from_numpy((
+                        positions[i + block_size : i + 1 + block_size]
+                    ).astype(np.int64))
+                    for i in ix
+                ]
+            )
+        else:
+            y_pos = torch.stack(
+                [
+                    torch.from_numpy((
+                        positions[[e]]
+                    ).astype(np.int64))
+                    for e in end_ix
+                ]
+            ).squeeze(1)
+        
+        # assert the shapes
+        assert x.shape == (batch_size, block_size), x.shape
+        assert y.shape == (batch_size, 1), y.shape
+        assert x_pos.shape == (batch_size, block_size, position_dim), x_pos.shape
+        assert y_pos.shape == (batch_size, position_dim), y_pos.shape
+        
         if self.device_type == "cuda":
             # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
             x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
@@ -181,19 +267,20 @@ class NanoGPTTrainingPipeline:
             )
         else:
             x, y = x.to(device), y.to(device)
-        return x, y
+        return x_pos, x, y_pos, y
 
     def create_dataloaders(self, dataset_builder):
-        self.train_data = dataset_builder.training_dataset()
+        self.train_data = dataset_builder.training_dataset()  # (B, T, H, W)
         self.val_data = dataset_builder.validation_dataset()
         assert isinstance(self.train_data, np.ndarray)
         assert isinstance(self.val_data, np.ndarray)
         assert self.train_data.dtype in [np.int32, np.int64, np.uint16, np.uint32, np.uint64]
-        assert len(self.train_data.shape) == 2, f"Expected 2D array for training data, got {self.train_data.shape}"
-        self.train_data_flattened = self.train_data.ravel()
-        self.val_data_flattened = self.val_data.ravel()
+        # assert len(self.train_data.shape) == 2, f"Expected 2D array for training data, got {self.train_data.shape}"
+        # self.train_data_flattened = self.train_data.ravel()
+        # self.val_data_flattened = self.val_data.ravel()
         print(f"block size:", self.config.block_size)
-        self.data_seq_len = self.train_data.shape[1]
+        self.position_shape = self.train_data.shape[1:]
+        self.position_dim = len(self.position_shape)
 
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
@@ -230,6 +317,7 @@ class NanoGPTTrainingPipeline:
             bias=bias,
             vocab_size=None,
             dropout=dropout,
+            position_shape=self.position_shape,
         )  # start with model_args from command line
         if init_from == "scratch":
             # init a new model from scratch
@@ -240,8 +328,11 @@ class NanoGPTTrainingPipeline:
                     "defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)"
                 )
             self.model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
-            gptconf = GPTConfig(**(self.model_args))
-            model = GPT(gptconf)
+            self.model_args["sparse_block_size"] = self.config.sparse_block_size
+            self.model_args["start_token"] = self.START_TOKEN
+            self.model_args["ignore_token"] = self.IGNORE_TOKEN
+            gptconf = MDGPTConfig(**(self.model_args))
+            model = MDGPT(gptconf)
         elif init_from == "resume":
             print(f"Resuming training from {out_dir}")
             # resume training from a checkpoint.
@@ -403,7 +494,7 @@ class NanoGPTTrainingPipeline:
         iter_num = 0
         best_val_loss = 1e9
 
-        X, Y = self.get_batch("train")  # fetch the very first batch
+        X_pos, X, Y_pos, Y = self.get_batch("train")  # fetch the very first batch
         t0 = time.time()
         local_iter_num = 0  # number of iterations in the lifetime of this process
         raw_model = model.module if ddp else model  # unwrap DDP container if needed
@@ -460,12 +551,12 @@ class NanoGPTTrainingPipeline:
                         micro_step == gradient_accumulation_steps - 1
                     )
                 with ctx:
-                    logits, loss = model(X, Y)
+                    logits, loss = model(X_pos, X, Y_pos, Y)
                     loss = (
                         loss / gradient_accumulation_steps
                     )  # scale the loss to account for gradient accumulation
                 # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                X, Y = self.get_batch("train")
+                X_pos, X, Y_pos, Y = self.get_batch("train")
                 # backward pass, with gradient scaling if training in fp16
                 scaler.scale(loss).backward()
             # clip the gradient
@@ -495,9 +586,12 @@ class NanoGPTTrainingPipeline:
 
             # log the decoded ground truth codes
             # TODO: this is hardcoded for now
-            t = 32 / 4
-            h = 256 / 4
-            w = 256 / 4
+            # t = 32 / 4
+            # h = 256 / 4
+            # w = 256 / 4
+            t = self.position_shape[0]
+            h = self.position_shape[1]
+            w = self.position_shape[2]
 
             if iter_num == 0:
                 # Decode from the ground truth token ids
@@ -541,21 +635,21 @@ class NanoGPTTrainingPipeline:
                             idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * self.START_TOKEN)
                             .long()
                             .to(device),
-                            max_new_tokens=self.data_seq_len,
+                            max_new_tokens=32768,
                             temperature=1,
                             top_k=100,
                             show_progress=True,
                         )
                         sampled_codes = sampled_codes[0, 1:]
-                        violating_codes = (sampled_codes > self.config.vocab_size - 1).float().mean()
+                        violating_codes = (sampled_codes > 5119).float().mean()
                         print(f"violating codes: {violating_codes.item()}")
-                        sampled_codes[sampled_codes > self.config.vocab_size - 1] = 0
+                        sampled_codes[sampled_codes > 5119] = 0
                         # force_cudnn_initialization()
                         # sampled_codes = torch.ones(1, 32768, dtype=torch.long).to(device)
                         print("sampled codes:", sampled_codes)
                         # print(sampled_codes.min(), sampled_codes.max())
                         sampled_codes = rearrange(
-                            sampled_codes[:self.data_seq_len],
+                            sampled_codes[:32768],
                             "(b t h w) -> b t h w",
                             b=1,
                             t=int(t),
@@ -592,150 +686,29 @@ class NanoGPTTrainingPipeline:
         if ddp:
             destroy_process_group()
 
-class LayerNorm(nn.Module):
-    """LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False"""
-
-    def __init__(self, ndim, bias):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
-
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
-
-
-class CausalSelfAttention(nn.Module):
-
-    def __init__(self, config):
-        super().__init__()
-        assert config.n_embd % config.n_head == 0
-        # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
-        # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_head = config.n_head
-        self.n_embd = config.n_embd
-        self.dropout = config.dropout
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-        if not self.flash:
-            print(
-                "WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0"
-            )
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer(
-                "bias",
-                torch.tril(torch.ones(config.block_size, config.block_size)).view(
-                    1, 1, config.block_size, config.block_size
-                ),
-            )
-
-    def forward(self, x):
-        B, T, C = (
-            x.size()
-        )  # batch size, sequence length, embedding dimensionality (n_embd)
-
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                attn_mask=None,
-                dropout_p=self.dropout if self.training else 0,
-                is_causal=True,
-            )
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = (
-            y.transpose(1, 2).contiguous().view(B, T, C)
-        )  # re-assemble all head outputs side by side
-
-        # output projection
-        y = self.resid_dropout(self.c_proj(y))
-        return y
-
-
-class MLP(nn.Module):
-
-    def __init__(self, config):
-        super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu = nn.GELU()
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
-        self.dropout = nn.Dropout(config.dropout)
-
-    def forward(self, x):
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
-        x = self.dropout(x)
-        return x
-
-
-class Block(nn.Module):
-
-    def __init__(self, config):
-        super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
-
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
-        return x
-
 
 @dataclass
-class GPTConfig:
-    block_size: int = 1024
-    vocab_size: int = (
-        50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
-    )
-    n_layer: int = 12
-    n_head: int = 12
-    n_embd: int = 768
-    dropout: float = 0.0
-    bias: bool = (
-        True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-    )
+class MDGPTConfig(GPTConfig):
+    sparse_block_size: int = 128
+    start_token: int = 5121
+    ignore_token: int = 5122
+    position_shape: Tuple[int, int, int] = (8, 64, 64)
 
 
-class GPT(nn.Module):
+class MDGPT(GPT):
 
     def __init__(self, config):
-        super().__init__()
+        super(GPT, self).__init__()  # Use the grandparent class.
         assert config.vocab_size is not None
         assert config.block_size is not None
+        position_dim = len(config.position_shape)
         self.config = config
-
         self.transformer = nn.ModuleDict(
             dict(
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
-                wpe=nn.Embedding(config.block_size, config.n_embd),
+                wpe=nn.ModuleList(
+                    [nn.Embedding(2*s+1, config.n_embd) for s in config.position_shape]
+                ),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
                 ln_f=LayerNorm(config.n_embd, bias=config.bias),
@@ -758,7 +731,7 @@ class GPT(nn.Module):
                 torch.nn.init.normal_(
                     p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
                 )
-
+        
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
@@ -771,202 +744,150 @@ class GPT(nn.Module):
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
-            n_params -= self.transformer.wpe.weight.numel()
+            n_params -= sum([m.weight.numel() for m in self.transformer.wpe])
         return n_params
 
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    def forward(self, x_pos, x, y_pos, y=None):
+        """
+        Args:
+            x_pos (torch.Tensor): The positional indices of the input tokens. The shape is (batch_size, block_size, position_dim).
+            x (torch.Tensor): The input tokens. The shape is (batch_size, block_size).
+            y_pos (torch.Tensor): The positional indices of the target tokens. The shape is (batch_size, position_dim).
+            y (torch.Tensor): The target tokens. The shape is (batch_size, 1).
+        
+        Returns:
+            torch.Tensor: The logits of the model. The shape is (batch_size, block_size, vocab_size).
+            torch.Tensor: The loss of the model.
+        
+        Context window sparsification:
+            x and x_pos will be re-ordered in axis 1. The re-ordering is based on the
+            distance between y_pos and x_pos. Tie is broken arbitrarily with randomness.
+            The distance should saturate after a certain value, to ensure the furthest tokens
+            have a chance to be included in the context window.
+            In re-ordering, the context tokens closest to y_pos will be placed first.
+            Note that this will often reverse the original order of the tokens in x.
+            The context tokens and their positions are then pruned to the
+            first `sparse_block_size` tokens. Resulting in a speed up of (block_size / sparse_block_size) ^ 2.
+        """
+        
+        #
+        ## Pruning begin
+        #
+        idx_to_ignore = (x == self.config.ignore_token)
+        #  to the loss function to ignore these tokens
+        relative_pos = y_pos.unsqueeze(1) - x_pos
+        print(f"relative_pos shape: {relative_pos.shape}")
+        # TODO: consider weighted Euclidean distance
+        euclidean_dist = torch.norm(relative_pos.float(), dim=-1, keepdim=False)
+        euclidean_dist_exp = torch.exp(-euclidean_dist)
+        # add random perturbation to break ties and to allow for saturation
+        euclidean_dist_exp[euclidean_dist_exp < 1e-6] = 0
+        euclidean_dist_exp += torch.rand_like(euclidean_dist_exp) * 1e-6
+        # For tokens to be ignored, set their similarity to -1
+        euclidean_dist_exp[idx_to_ignore] = -1
+        sorted_idx = torch.argsort(euclidean_dist_exp, dim=1, descending=True)
+        # re-order
+        x_reordered = torch.gather(x, 1, sorted_idx)
+        x_pos_reordered = torch.gather(x_pos, 1, sorted_idx.unsqueeze(-1).expand(-1, -1, x_pos.shape[-1]))
+        relative_pos_reordered = torch.gather(relative_pos, 1, sorted_idx.unsqueeze(-1).expand(-1, -1, relative_pos.shape[-1]))
+        # insert a start token at the beginning of each sequence
+        x_reordered = torch.cat([torch.ones_like(x_reordered[:, :1]) * self.config.start_token, x_reordered], dim=1)
+        x_pos_reordered = torch.cat([torch.zeros_like(x_pos_reordered[:, :1]), x_pos_reordered], dim=1)
+        relative_pos_reordered = torch.cat([torch.zeros_like(relative_pos_reordered[:, :1]), relative_pos_reordered], dim=1)
+        # prune
+        # [3, 4, 10, ignore, ignore, ....]
+        # [logits0 (nearest neighbor), logits1 (1st 2 closest neighbors), logits2, logits3_should_ignore, ...]
+        # All logits are predicting the same future token.
+        x_pruned = x_reordered[:, : self.config.sparse_block_size]
+        relative_pos_pruned = relative_pos_reordered[:, : self.config.sparse_block_size]
+        idx_to_ignore = idx_to_ignore[:, : self.config.sparse_block_size]
+        x_original = x
+        x_pos_original = x_pos
+        position_dim = len(self.config.position_shape)
+        print(f"position_shape: {self.config.position_shape}")
+        #
+        ## Pruning end
+        #
 
-    def forward(self, idx, targets=None):
-        device = idx.device
-        b, t = idx.size()
-        assert (
-            t <= self.config.block_size
-        ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
-
-        # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        x = self.transformer.wte(x_pruned)
+        for d in range(position_dim):
+            offset = self.config.position_shape[d]
+            print(f"d={d}, offset={offset}, relative_pos_pruned shape: {relative_pos_pruned.shape}")
+            print("embedding model:", self.transformer.wpe[d])
+            print(f"input to embedding:", relative_pos_pruned[:, :, d] + offset)
+            # TODO: try absolute value, instead of offsetting
+            x += self.transformer.wpe[d](
+                relative_pos_pruned[:, :, d] + offset
+            )
+        x = self.transformer.drop(x)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
-
-        if targets is not None:
+        print(f"after linear, x shape: {x.shape}")
+        if y is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
+            # y needs to be broadcasted
+            y = y.unsqueeze(1)
+            loss_weight = 1 - idx_to_ignore.float()
             loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
+                logits.view(-1, logits.size(-1)), y.view(-1),
+                weight=loss_weight.view(-1),
+                ignore_index=-1
             )
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
+            # TODO: -1 is not necessarily the last position, use a mask to find the last position.
+            if x.shape[0] == 1:
+                # TODO: prune ignored tokens
+                # x = x[x != self.config.ignore_token]
+                pass
+            else:
+                if (x == self.config.ignore_token).sum() > 0:
+                    print(f"Warning: batch size is not 1, some ignored tokens.")
             logits = self.lm_head(
                 x[:, [-1], :]
             )  # note: using list [-1] to preserve the time dim
             loss = None
-
         return logits, loss
 
-    def crop_block_size(self, block_size):
-        # model surgery to decrease the block size if necessary
-        # e.g. we may load the GPT2 pretrained model checkpoint (block size 1024)
-        # but want to use a smaller block size for some smaller, simpler model
-        assert block_size <= self.config.block_size
-        self.config.block_size = block_size
-        self.transformer.wpe.weight = nn.Parameter(
-            self.transformer.wpe.weight[:block_size]
-        )
-        for block in self.transformer.h:
-            if hasattr(block.attn, "bias"):
-                block.attn.bias = block.attn.bias[:, :, :block_size, :block_size]
-
-    @classmethod
-    def from_pretrained(cls, model_type, override_args=None):
-        assert model_type in {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl"}
-        override_args = override_args or {}  # default to empty dict
-        # only dropout can be overridden see more notes below
-        assert all(k == "dropout" for k in override_args)
-        from transformers import GPT2LMHeadModel
-
-        print("loading weights from pretrained gpt: %s" % model_type)
-
-        # n_layer, n_head and n_embd are determined from model_type
-        config_args = {
-            "gpt2": dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
-            "gpt2-medium": dict(n_layer=24, n_head=16, n_embd=1024),  # 350M params
-            "gpt2-large": dict(n_layer=36, n_head=20, n_embd=1280),  # 774M params
-            "gpt2-xl": dict(n_layer=48, n_head=25, n_embd=1600),  # 1558M params
-        }[model_type]
-        print("forcing vocab_size=50257, block_size=1024, bias=True")
-        config_args["vocab_size"] = 50257  # always 50257 for GPT model checkpoints
-        config_args["block_size"] = 1024  # always 1024 for GPT model checkpoints
-        config_args["bias"] = True  # always True for GPT model checkpoints
-        # we can override the dropout rate, if desired
-        if "dropout" in override_args:
-            print(f"overriding dropout rate to {override_args['dropout']}")
-            config_args["dropout"] = override_args["dropout"]
-        # create a from-scratch initialized minGPT model
-        config = GPTConfig(**config_args)
-        model = GPT(config)
-        sd = model.state_dict()
-        sd_keys = sd.keys()
-        sd_keys = [
-            k for k in sd_keys if not k.endswith(".attn.bias")
-        ]  # discard this mask / buffer, not a param
-
-        # init a huggingface/transformers model
-        model_hf = GPT2LMHeadModel.from_pretrained(model_type)
-        sd_hf = model_hf.state_dict()
-
-        # copy while ensuring all of the parameters are aligned and match in names and shapes
-        sd_keys_hf = sd_hf.keys()
-        sd_keys_hf = [
-            k for k in sd_keys_hf if not k.endswith(".attn.masked_bias")
-        ]  # ignore these, just a buffer
-        sd_keys_hf = [
-            k for k in sd_keys_hf if not k.endswith(".attn.bias")
-        ]  # same, just the mask (buffer)
-        transposed = [
-            "attn.c_attn.weight",
-            "attn.c_proj.weight",
-            "mlp.c_fc.weight",
-            "mlp.c_proj.weight",
-        ]
-        # basically the openai checkpoints use a "Conv1D" module, but we only want to use a vanilla Linear
-        # this means that we have to transpose these weights when we import them
-        assert len(sd_keys_hf) == len(
-            sd_keys
-        ), f"mismatched keys: {len(sd_keys_hf)} != {len(sd_keys)}"
-        for k in sd_keys_hf:
-            if any(k.endswith(w) for w in transposed):
-                # special treatment for the Conv1D weights we need to transpose
-                assert sd_hf[k].shape[::-1] == sd[k].shape
-                with torch.no_grad():
-                    sd[k].copy_(sd_hf[k].t())
-            else:
-                # vanilla copy over the other parameters
-                assert sd_hf[k].shape == sd[k].shape
-                with torch.no_grad():
-                    sd[k].copy_(sd_hf[k])
-
-        return model
-
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
-        # start with all of the candidate parameters
-        param_dict = {pn: p for pn, p in self.named_parameters()}
-        # filter out those that do not require grad
-        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-        # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-        # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
-        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        optim_groups = [
-            {"params": decay_params, "weight_decay": weight_decay},
-            {"params": nodecay_params, "weight_decay": 0.0},
-        ]
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(
-            f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters"
-        )
-        print(
-            f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
-        )
-        # Create AdamW optimizer and use the fused version if it is available
-        fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
-        use_fused = fused_available and device_type == "cuda"
-        extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(
-            optim_groups, lr=learning_rate, betas=betas, **extra_args
-        )
-        print(f"using fused AdamW: {use_fused}")
-
-        return optimizer
-
-    def estimate_mfu(self, fwdbwd_per_iter, dt):
-        """estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS"""
-        # first estimate the number of flops we do per iteration.
-        # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
-        N = self.get_num_params()
-        cfg = self.config
-        L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd // cfg.n_head, cfg.block_size
-        flops_per_token = 6 * N + 12 * L * H * Q * T
-        flops_per_fwdbwd = flops_per_token * T
-        flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
-        # express our flops throughput as ratio of A100 bfloat16 peak flops
-        flops_achieved = flops_per_iter * (1.0 / dt)  # per second
-        flops_promised = 312e12  # A100 GPU bfloat16 peak flops is 312 TFLOPS
-        mfu = flops_achieved / flops_promised
-        return mfu
-
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, show_progress=False):
+    def generate(self, x_pos, x, new_pos, temperature=1.0, top_k=None, show_progress=False):
         """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-        the sequence max_new_tokens times, feeding the predictions back into the model each time.
+        Take a conditioning sequence of indices x and their positions x_pos, to complete
+        the sequence len(new_pos) times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+
+        Args:
+            x_pos (torch.Tensor): The positional indices of the input tokens. The shape is (batch_size, block_size, position_dim).
+            x (torch.Tensor): The input tokens. The shape is (batch_size, block_size).
+            new_pos (torch.Tensor): The positional indices of the new tokens. The shape is (batch_size, max_new_tokens, position_dim).
+            temperature (float): The temperature of the softmax.
+            top_k (int): The number of top-k tokens to sample from.
+            show_progress (bool): Whether to show a progress bar.
         """
+        assert len(x_pos.shape) == 3, f"expected 3D tensor for x_pos, got {x_pos.shape}"
+        assert len(new_pos.shape) == 3, f"expected 3D tensor for new_pos, got {new_pos.shape}"
+        max_new_tokens = new_pos.shape[1]
         if show_progress:
             from tqdm import tqdm
-
+            
             range_to_iterate = tqdm(range(max_new_tokens), mininterval=2)
         else:
             range_to_iterate = range(max_new_tokens)
-        for _ in range_to_iterate:
+        
+        x_pos_updated = x_pos
+        x_updated = x
+        for j in range_to_iterate:
+            y_pos = new_pos[:, j, :].to(x.device)
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = (
-                idx
-                if idx.size(1) <= self.config.block_size
-                else idx[:, -self.config.block_size :]
-            )
+            # idx_cond = (
+            #     idx
+            #     if idx.size(1) <= self.config.block_size
+            #     else idx[:, -self.config.block_size :]
+            # )
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            logits, _ = self(x=x_updated, x_pos=x_pos_updated, y_pos=y_pos)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
@@ -978,6 +899,9 @@ class GPT(nn.Module):
             # sample from the distribution
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
+            # idx = torch.cat((idx, idx_next), dim=1)
+            # update the context
+            x_pos_updated = torch.cat((x_pos_updated, y_pos.unsqueeze(1)), dim=1)
+            x_updated = torch.cat((x_updated, idx_next), dim=1)
 
-        return idx
+        return x_updated

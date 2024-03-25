@@ -81,7 +81,7 @@ bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 8 --accum
 
 ```bash
 # Instead of training a diffusion model, one can also train a next token predictor.
-bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --wandb_log
+bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 2048 --wandb_log
 ```
 
 3. Train a autoregressive MAMBA-based language model
