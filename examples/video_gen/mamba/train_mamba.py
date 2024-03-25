@@ -285,10 +285,10 @@ if __name__ == "__main__":
     for epoch in range(args.epochs):
         epoch_loss = run_train_epoch(model, train_data, optimizer, args.batch_size, epoch)
         # log train_epoch_loss metric to wandb.
-        wandb.log({"train_epoch_loss": epoch_loss})
+        to_log = {"train_epoch_loss": epoch_loss}
         train_epoch_losses.append(epoch_loss)
         epoch_loss = run_val_epoch(model, val_data, args.batch_size, epoch)
-        wandb.log({"val_epoch_loss": epoch_loss})
+        to_log["val_epoch_loss"] = epoch_loss
         if epoch % 10 == 0:
             # Generate a video.
             with torch.no_grad():
@@ -296,11 +296,10 @@ if __name__ == "__main__":
                 val_generated_sequence = generate_sequence(model, val_vid, args.device)
                 train_generated_vid = decode_video(vae, train_generated_sequence.to(vae_device))
                 val_generated_vid = decode_video(vae, val_generated_sequence.to(vae_device))
-                wandb.log({
-                    "train_generated_vid": wandb.Video(train_generated_vid, fps=5, format="mp4"),
-                    "val_generated_vid": wandb.Video(val_generated_vid, fps=5, format="mp4"),
-                })
+                to_log["train_generated_vid"] = wandb.Video(train_generated_vid, fps=5, format="mp4")
+                to_log["val_generated_vid"] = wandb.Video(val_generated_vid, fps=5, format="mp4")
                 print("Generated videos")
+        wandb.log(to_log)
         if epoch_loss == 0.0:
             print(colored(f"Val loss is 0.0 at epoch {epoch}. Quitting.", "yellow", "on_grey", attrs=["bold"]))
             break
