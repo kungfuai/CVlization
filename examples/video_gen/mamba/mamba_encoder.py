@@ -67,11 +67,12 @@ class MambaEncoder(torch.nn.Module):
         assert x.max() < self.n_tokens, \
             f"Max token found ({x.max()}) is >= Num tokens ({self.n_tokens})"
 
-        assert (len(x.shape) == 2) and (x.shape[-1] == self.seq_len), \
-            f"Expected (B, {self.seq_len}), got {x.shape}"
+        x_seq_len = x.shape[-1]
+        assert x_seq_len <= self.seq_len, \
+            f"Input sequence length ({x_seq_len}) is > model sequence length ({self.seq_len})"
 
         pos_emb = self.position_embedding_table(
-            torch.arange(self.seq_len, device=self.device),
+            torch.arange(x_seq_len, device=self.device),
         )
 
         x = self.token_dictionary(x) + pos_emb

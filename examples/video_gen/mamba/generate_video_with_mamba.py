@@ -67,11 +67,6 @@ def generate_sequence(mamba: torch.nn.Module, device: str) -> torch.Tensor:
     input_tensor = torch.zeros(1, 32768).long().to(device)
     pbar = tqdm(range(input_tensor.shape[1]), desc="Generating sequence")
     with torch.no_grad():
-        logits = mamba(input_tensor)
-        # take argmax along last dimension
-        output = torch.argmax(logits, dim=-1)
-        assert output.shape == input_tensor.shape, f"{output.shape} != {input_tensor.shape}"
-        return output.squeeze(0)
         for ix in pbar:
             logits = mamba(input_tensor)
             input_tensor[0, ix] = torch.argmax(logits[0, ix])

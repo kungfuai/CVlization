@@ -29,3 +29,5 @@ artifacts/
 compiled-requirements.txt
 mamba_model.pth
 flying_mnist_tokens_32frames_train.npy
+screenlog.*
+*.pth

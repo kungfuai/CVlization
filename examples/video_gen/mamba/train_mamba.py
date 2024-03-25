@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 import argparse
 
 import asciichartpy
@@ -16,16 +17,17 @@ def load_data() -> torch.Tensor:
     data = np.load("flying_mnist_tokens_32frames_train.npy")
     assert data.shape == (1000, 8, 64, 64), f"Expected (1000, 8, 64, 64), got {data.shape}"
     # Move `8` to last dim, then flatten after batch dimension.
-    data = np.moveaxis(data, 1, -1)
-    assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
-    data = data.reshape(-1, 8*64*64)
-    assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
+    # data = np.moveaxis(data, 1, -1)
+    # assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
+    # data = data.reshape(-1, 8*64*64)
+    # assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
     return torch.tensor(data, dtype=torch.long)
 
-def calc_loss_for_one_batch(
-    model: MambaClassifier,
-    sequence: torch.Tensor,
-) -> torch.Tensor:
+def train_one_batch(
+        model: MambaClassifier,
+        sequence: torch.Tensor,
+        optimizer: Optional[torch.optim.Optimizer],
+) -> float:
     """
     Imagine this sequence:
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -43,23 +45,43 @@ def calc_loss_for_one_batch(
     Try this: average cross entropy for each token in the sequence all at once.
     (since Mamba is a recurrent model).
     """
-    # sequence -> (B, L).
-    # apply randomized zero masking to the sequence.
-    # get an random int between 0 and L-1.
-    # mask everything including and after that index.
-    random_index = np.random.randint(0, sequence.shape[1])
-    sequence[:, random_index:] = 0
-
-    all_logits = model(sequence) # (B, L, n_tokens)
-    random_index_logits = all_logits[:, random_index:random_index+1] # (B, 1, n_tokens)
-    random_index_targets = sequence[:, random_index:random_index+1] # (B, 1)
-
+    assert sequence.shape[1:] == (8, 64, 64), f"Expected (b, 8, 64, 64), got {sequence.shape}"
     # torch cross entropy loss expects (B, C, L) and (B, L) shapes.
-    random_index_logits = random_index_logits.permute(0, 2, 1) # (B, C, L)
-    criterion = torch.nn.CrossEntropyLoss()
-    loss = criterion(random_index_logits, random_index_targets)
+    criterion = torch.nn.CrossEntropyLoss(reduction="mean")
+    total_loss = 0
+    count = 0
+    for ix in range(1, 8):
+        if optimizer is not None:
+            optimizer.zero_grad()
 
-    return loss
+        """
+        For frame 0, targets are from frame 1.
+        etc.
+        For frame 6, targets are from frame 7.
+        """
+        b = sequence.shape[0]
+        model_input = sequence[:, ix-1].view(b, -1) # (B, 64, 64) -> (B, 64*64)
+        targets = sequence[:, ix].view(b, -1) # (B, 64, 64) -> (B, 64*64)
+
+        logits = model(model_input) # (B, 64*64, C)
+
+        """
+        Cross entropy expects logits.shape == (B, C, D1, D2, ...),
+        targets.shape == (B, D1, D2...)
+        """
+        loss = criterion(
+            logits.permute(0, 2, 1), # (B, 64*64, C) -> (B, C, 64*64)
+            targets,
+        )
+
+        if optimizer is not None:
+            loss.backward()
+            optimizer.step()
+
+        total_loss += loss.item()
+        count += 1
+
+    return total_loss / count
 
 def run_train_epoch(
     model: MambaClassifier,
@@ -71,20 +93,21 @@ def run_train_epoch(
     print(f"Training epoch {epoch}")
     model.train()
     pbar = tqdm(range(0, len(data), batch_size), desc=f"Epoch {epoch}")
-    losses = []
+    total_loss = 0
+    count = 0
     for i in pbar:
         batch = data[i:i+batch_size]
-        optimizer.zero_grad()
-        loss = calc_loss_for_one_batch(model, batch)
-        loss.backward()
-        optimizer.step()
-        pbar.set_postfix({"loss": loss.item()})
-        losses.append(loss.item())
-    print(f"Epoch {epoch} average loss: {np.mean(losses)}")
+        batch_loss: float = train_one_batch(model, batch, optimizer=optimizer)
+        pbar.set_postfix({"batch_loss": batch_loss})
+        total_loss += batch_loss
+        count += 1
+    avg_loss = total_loss / count
+
+    print(f"Epoch {epoch} average loss: {avg_loss}")
     print(colored(f"End epoch {epoch} TRAINING", "red", "on_grey", attrs=["bold"]))
     print()
 
-    return np.mean(losses)
+    return avg_loss
 
 def run_val_epoch(
     model: MambaClassifier,
@@ -95,18 +118,22 @@ def run_val_epoch(
     print(f"Validating epoch {epoch}")
     model.eval()
     pbar = tqdm(range(0, len(data), batch_size), desc=f"Epoch {epoch}")
-    losses = []
+    total_loss = 0
+    count = 0
     with torch.no_grad():
         for i in pbar:
             batch = data[i:i+batch_size]
-            loss = calc_loss_for_one_batch(model, batch)
-            pbar.set_postfix({"loss": loss.item()})
-            losses.append(loss.item())
-    print(f"Epoch {epoch} average loss: {np.mean(losses)}")
+            batch_loss: float = train_one_batch(model, batch, optimizer=None)
+            pbar.set_postfix({"loss": batch_loss})
+            total_loss += batch_loss
+            count += 1
+    avg_loss = total_loss / count
+
+    print(f"Epoch {epoch} average loss: {avg_loss}")
     print(colored(f"End epoch {epoch} VALIDATION", "green", "on_grey", attrs=["bold"]))
     print()
 
-    return np.mean(losses)
+    return avg_loss
 
 def plot_epochs(train_losses, val_losses, epoch: str):
     print(f"Epoch {epoch} losses (train = red, val = green)")
@@ -136,7 +163,7 @@ if __name__ == "__main__":
     model = MambaClassifier(
         n_tokens=5120,
         # seq_len=32768,
-        seq_len=data.shape[1],
+        seq_len=int(64*64), # Condition on 1 frame to predict the next frame.
         mamba_n_embed=128,
         mamba_d_state=16,
         mamba_d_conv=4,
@@ -158,15 +185,20 @@ if __name__ == "__main__":
     def check_patience_quit():
         if len(val_epoch_losses) <= args.patience:
             return False # Not enough samples.
-        best_val_loss = min(val_epoch_losses) # Best metric.
-        if min(val_epoch_losses[-args.patience:]) > best_val_loss:
-            return True # The last <patience> epochs were worse, so quit.
+        best_val_loss_idx = np.argmin(val_epoch_losses) # Best metric index.
+        if len(val_epoch_losses) - best_val_loss_idx > args.patience:
+            return True
+        print(f"Epochs since best val loss: {len(val_epoch_losses) - best_val_loss_idx}")
         return False
     for epoch in range(args.epochs):
         epoch_loss = run_train_epoch(model, train_data, optimizer, args.batch_size, epoch)
         train_epoch_losses.append(epoch_loss)
         epoch_loss = run_val_epoch(model, val_data, args.batch_size, epoch)
+        if epoch_loss == 0.0:
+            print(colored(f"Val loss is 0.0 at epoch {epoch}. Quitting.", "yellow", "on_grey", attrs=["bold"]))
+            break
         val_epoch_losses.append(epoch_loss)
+        print(colored(f"Best val loss so far is {min(val_epoch_losses)}.", "yellow"))
         if epoch > args.start_plotting_after_epoch:
             # Remove first epoch cause it messes up the graph.
             train_to_plot = train_epoch_losses[args.start_plotting_after_epoch:]
@@ -177,6 +209,8 @@ if __name__ == "__main__":
         if check_save_model():
             print(colored(f"Saving model at epoch {epoch}", "green", "on_grey", attrs=["bold"]))
             torch.save(model.state_dict(), "mamba_model.pth")
+            # Save optimizer.
+            torch.save(optimizer.state_dict(), "mamba_optimizer.pth")
         elif check_patience_quit():
             print(colored(f"Early stopping at epoch {epoch}", "yellow", "on_grey", attrs=["bold"]))
             break
