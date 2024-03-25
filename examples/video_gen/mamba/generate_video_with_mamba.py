@@ -32,21 +32,25 @@ def load_data() -> torch.Tensor:
     data = np.load("flying_mnist_tokens_32frames_train.npy")
     assert data.shape == (1000, 8, 64, 64), f"Expected (1000, 8, 64, 64), got {data.shape}"
     # Move `8` to last dim, then flatten after batch dimension.
-    data = np.moveaxis(data, 1, -1)
-    assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
-    data = data.reshape(-1, 8*64*64)
-    assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
+    # data = np.moveaxis(data, 1, -1)
+    # assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
+    # data = data.reshape(-1, 8*64*64)
+    # assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
     return torch.tensor(data, dtype=torch.long)
 
-def load_single_val_sample(device: str) -> torch.Tensor:
-    data = load_data()
-    single_sample = data[-1]
-    return single_sample.clone().to(device)
+def load_single_train_sample(data: torch.Tensor) -> torch.Tensor:
+    single_sample = data[0].unsqueeze(0)
+    return single_sample.clone()
+
+def load_single_val_sample(data: torch.Tensor) -> torch.Tensor:
+    single_sample = data[-1].unsqueeze(0)
+    return single_sample.clone()
 
 def load_mamba(device: str) -> torch.nn.Module:
     mamba = MambaClassifier(
         n_tokens=5120,
-        seq_len=32768,
+        # seq_len=32768,
+        seq_len=int(2*64*64),
         mamba_n_embed=128,
         mamba_d_state=16,
         mamba_d_conv=4,
@@ -60,24 +64,31 @@ def load_mamba(device: str) -> torch.nn.Module:
     mamba.eval()
     return mamba
 
-def generate_sequence(mamba: torch.nn.Module, device: str) -> torch.Tensor:
+def generate_sequence(mamba: torch.nn.Module, prompt_sequence: torch.Tensor, device: str) -> torch.Tensor:
     """
     Returns a tensor of shape (1, seq_len).
     """
-    input_tensor = torch.zeros(1, 32768).long().to(device)
-    pbar = tqdm(range(input_tensor.shape[1]), desc="Generating sequence")
+    assert prompt_sequence.shape == (1, 8, 64, 64), f"Expected (1, 8, 64, 64), got {prompt_sequence.shape}"
+    output_video = prompt_sequence[:, :2].to(device) # Prompt with first two clips.
     with torch.no_grad():
-        for ix in pbar:
-            logits = mamba(input_tensor)
-            input_tensor[0, ix] = torch.argmax(logits[0, ix])
-    return input_tensor.squeeze(0)
+        for ix in range(2, 8):
+            assert ix == output_video.shape[1], f"Expected {ix}, got {output_video.shape[1]}"
+            model_input = output_video[:, ix-2:ix].view(1, -1)
+            assert model_input.shape == (1, 2*64*64), f"Expected (1, 2*64*64), got {model_input.shape}"
+            logits = mamba(model_input)[:,-int(64*64):] # (1, 2*64*64, 5120) -> (1, 64*64, 5120)
+            # take the argmax of the last dimension.
+            next_clip = logits.argmax(dim=-1).view(1, 64, 64)
+            assert next_clip.shape == (1, 64, 64), f"Expected (1, 64, 64), got {next_clip.shape}"
+            output_video = torch.cat([output_video, next_clip.unsqueeze(0)], dim=1)
+    assert output_video.shape == (1, 8, 64, 64), f"Expected (1, 8, 64, 64), got {output_video.shape}"
+    return output_video.detach().cpu()
 
-def generate_video(
+def decode_video(
         vae: torch.nn.Module,
         sequence: torch.Tensor,
 ) -> torch.Tensor:
     t, h, w = 8, 64, 64
-    sequence = rearrange(sequence, "(b h w t) -> b t h w", b=1, t=t, h=h, w=w)
+    # sequence = rearrange(sequence, "(b h w t) -> b t h w", b=1, t=t, h=h, w=w)
     assert sequence.shape == (1, t, h, w), f"expected (1, {t}, {h}, {w}), got {sequence.shape}"
     with torch.no_grad():
         z = vae.vq.codes_to_vec(sequence)
@@ -97,17 +108,33 @@ if __name__ == "__main__":
 
     device = "cuda:0"
 
+    data = load_data()
+    train_vid = load_single_train_sample(data)
+    val_vid = load_single_val_sample(data)
+
     vae = load_vae().to(device)
-
     mamba = load_mamba(device).to(device)
-    generated_sequence = generate_sequence(mamba, device)
-    video: torch.Tensor = generate_video(vae, generated_sequence)
-    display = wandb.Video(video, fps=5, format="mp4")
-    wandb.log({"generated_sequence": display})
 
-    val_sample = load_single_val_sample(device)
-    video: torch.Tensor = generate_video(vae, val_sample)
-    display = wandb.Video(video, fps=5, format="mp4")
-    wandb.log({"val_sample": display})
+    gen_seq_from_train = generate_sequence(mamba, train_vid, device)
+    print("Generated sequence from train")
+    gen_seq_from_val = generate_sequence(mamba, val_vid, device)
+    print("Generated sequence from val")
+
+    train_sanity_vid = decode_video(vae, train_vid.to(device))
+    print("Decoded train vid")
+    val_sanity_vid = decode_video(vae, val_vid.to(device))
+    print("Decoded val vid")
+    train_generated_vid = decode_video(vae, gen_seq_from_train.to(device))
+    print("Decoded train generated vid")
+    val_generated_vid = decode_video(vae, gen_seq_from_val.to(device))
+    print("Decoded val generated vid")
+
+    wandb.log({
+        "train_sanity_vid": wandb.Video(train_sanity_vid, fps=5, format="mp4"),
+        "val_sanity_vid": wandb.Video(val_sanity_vid, fps=5, format="mp4"),
+        "train_generated_vid": wandb.Video(train_generated_vid, fps=5, format="mp4"),
+        "val_generated_vid": wandb.Video(val_generated_vid, fps=5, format="mp4"),
+    })
 
     print("Done")
+

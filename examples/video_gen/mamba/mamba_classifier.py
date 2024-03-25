@@ -27,6 +27,9 @@ class MambaClassifier(torch.nn.Module):
             n_mamba_layers=n_mamba_layers,
             device=device,
         )
+        self.dropout = torch.nn.Dropout(0.25)
+        self.norm = torch.nn.LayerNorm(mamba_n_embed)
+        self.relu = torch.nn.ReLU()
         self.fc = torch.nn.Linear(mamba_n_embed, self.n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -34,6 +37,9 @@ class MambaClassifier(torch.nn.Module):
         x.shape == (B, L)
         """
         x = self.encoder(x) # (B, L, D)
+        x = self.dropout(x)
+        x = self.norm(x)
+        x = self.relu(x)
         x = self.fc(x) # (B, L, C)
         assert x.shape[-1] == self.n_classes, \
             f"Expected {self.n_classes} classes, got {x.shape[-1]}"
