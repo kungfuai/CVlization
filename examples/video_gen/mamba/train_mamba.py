@@ -229,16 +229,24 @@ if __name__ == "__main__":
 
     wandb.init(project="mamba_videos")
 
+    mamba_kwargs = {
+        "mamba_n_embed": 256,
+        "mamba_d_state": 16,
+        "mamba_d_conv": 4,
+        "mamba_expand": 4,
+        "n_mamba_layers": 2,
+    }
+
+    # Log args and mamaba_kwargs to wandb.
+    wandb.config.update(vars(args))
+    wandb.config.update(mamba_kwargs)
+
     data: torch.Tensor = load_data().to(args.device)
     model = MambaClassifier(
         n_tokens=5120,
         # seq_len=32768,
         seq_len=int(2*64*64), # Condition on last 2 frames to predict the next frame.
-        mamba_n_embed=128,
-        mamba_d_state=16,
-        mamba_d_conv=4,
-        mamba_expand=2,
-        n_mamba_layers=1,
+        **mamba_kwargs,
         device=args.device,
     ).to(args.device)
 
@@ -292,6 +300,7 @@ if __name__ == "__main__":
                     "train_generated_vid": wandb.Video(train_generated_vid, fps=5, format="mp4"),
                     "val_generated_vid": wandb.Video(val_generated_vid, fps=5, format="mp4"),
                 })
+                print("Generated videos")
         if epoch_loss == 0.0:
             print(colored(f"Val loss is 0.0 at epoch {epoch}. Quitting.", "yellow", "on_grey", attrs=["bold"]))
             break
