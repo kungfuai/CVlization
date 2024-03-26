@@ -97,8 +97,6 @@ bash examples/video_gen/minisora/train.sh python train_latent_mdgpt.py --block_s
 bash examples/video_gen/minisora/train.sh python train_latent_mamba.py --block_size 512
 ```
 
-4. Train a diffusion model with flow-matching
-
 ## Reference
 
 - [Nanogpt](https://github.com/karpathy/nanoGPT)
