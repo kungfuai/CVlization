@@ -60,6 +60,8 @@ class MDGPTTrainingPipeline:
         vae_model_name: str = None
         vocab_size: int = 5120
         meta_vocab_size: int = None
+        start_token: int = 5121
+        ignore_token: int = 5122
 
         # we expect to overfit on this small dataset, so only save when val improves
         always_save_checkpoint: bool = False
@@ -95,8 +97,8 @@ class MDGPTTrainingPipeline:
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
-        self.START_TOKEN = self.config.vocab_size + 1
-        self.IGNORE_TOKEN = self.config.vocab_size + 2
+        self.START_TOKEN = self.config.start_token
+        self.IGNORE_TOKEN = self.config.ignore_token
     
     def fit(self, dataset_builder):
         if self.master_process and self.config.wandb_log:
@@ -173,8 +175,8 @@ class MDGPTTrainingPipeline:
             # flatten:
             data = data.reshape(data.shape[0], -1)  # this is the whole video
             positions = positions.reshape(-1, positions.shape[-1])
-            print(f"data shape: {data.shape}")
-            print(f"positions shape: {positions.shape}")
+            # print(f"data shape: {data.shape}")
+            # print(f"positions shape: {positions.shape}")
 
         
         # Problem formulation: x_pos, x, y_pos, y?
@@ -216,6 +218,7 @@ class MDGPTTrainingPipeline:
                 dst_start = max(0, -s)
                 dst_end = block_size
                 x_pos[i, dst_start:dst_end, :] = positions[src_start:src_end, :]
+            x_pos = torch.from_numpy(x_pos)
 
         if position_dim == 1:
             y = torch.stack(
@@ -265,8 +268,12 @@ class MDGPTTrainingPipeline:
             x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
                 device, non_blocking=True
             )
+            x_pos, y_pos = x_pos.pin_memory().to(device, non_blocking=True), y_pos.pin_memory().to(
+                device, non_blocking=True
+            )
         else:
             x, y = x.to(device), y.to(device)
+            x_pos, y_pos = x_pos.to(device), y_pos.to(device)
         return x_pos, x, y_pos, y
 
     def create_dataloaders(self, dataset_builder):
@@ -461,9 +468,9 @@ class MDGPTTrainingPipeline:
         for split in ["train", "val"]:
             losses = torch.zeros(eval_iters)
             for k in range(eval_iters):
-                X, Y = self.get_batch(split)
+                X_pos, X, Y_pos, Y = self.get_batch(split)
                 with self.ctx:
-                    logits, loss = model(X, Y)
+                    logits, loss = model(X_pos, X, Y_pos, Y)
                 losses[k] = loss.item()
             out[split] = losses.mean()
         model.train()
@@ -599,16 +606,16 @@ class MDGPTTrainingPipeline:
                     device = self.config.device
                     vae = self.vae
                     ground_truth_codes = (
-                        torch.Tensor(self.val_data[0, 1:].astype(np.int64)).long().to(device)
+                        torch.Tensor(self.val_data[0:1, :].astype(np.int64)).long().to(device)
                     )  # this is hard coded
-                    ground_truth_codes = rearrange(
-                        ground_truth_codes,
-                        "(b t h w) -> b t h w",
-                        b=1,
-                        t=int(t),
-                        h=int(h),
-                        w=int(w),
-                    )
+                    # ground_truth_codes = rearrange(
+                    #     ground_truth_codes,
+                    #     "b (t h w) -> b t h w",
+                    #     b=1,
+                    #     t=int(t),
+                    #     h=int(h),
+                    #     w=int(w),
+                    # )
                     assert ground_truth_codes.shape == (1, t, h, w), ground_truth_codes.shape
                     assert isinstance(
                         ground_truth_codes, torch.Tensor
@@ -631,13 +638,23 @@ class MDGPTTrainingPipeline:
                     # sample from the model
                     model.eval()
                     with torch.no_grad():
+                        meshgrid_args = [np.arange(s) for s in self.position_shape]
+                        cond_y_pos = np.array(
+                            np.meshgrid(
+                                *meshgrid_args,
+                                indexing="ij"
+                            ),
+                        ).transpose(1, 2, 3, 0)  # positions[t, i, j] == [t, i, j]
+                        cond_y_pos = cond_y_pos.reshape(1, -1, self.position_dim)
+                        cond_y_pos = torch.from_numpy(cond_y_pos).long().to(device)
                         sampled_codes = model.generate(
-                            idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * self.START_TOKEN)
+                            x_pos=torch.zeros(1, 1, len(self.position_shape)).long().to(device),
+                            x=torch.Tensor(np.ones((1, 1), dtype=np.int32) * self.START_TOKEN)
                             .long()
                             .to(device),
-                            max_new_tokens=32768,
+                            new_pos=cond_y_pos,
                             temperature=1,
-                            top_k=100,
+                            top_k=20,
                             show_progress=True,
                         )
                         sampled_codes = sampled_codes[0, 1:]
@@ -776,7 +793,7 @@ class MDGPT(GPT):
         idx_to_ignore = (x == self.config.ignore_token)
         #  to the loss function to ignore these tokens
         relative_pos = y_pos.unsqueeze(1) - x_pos
-        print(f"relative_pos shape: {relative_pos.shape}")
+        # print(f"relative_pos shape: {relative_pos.shape}")
         # TODO: consider weighted Euclidean distance
         euclidean_dist = torch.norm(relative_pos.float(), dim=-1, keepdim=False)
         euclidean_dist_exp = torch.exp(-euclidean_dist)
@@ -804,7 +821,7 @@ class MDGPT(GPT):
         x_original = x
         x_pos_original = x_pos
         position_dim = len(self.config.position_shape)
-        print(f"position_shape: {self.config.position_shape}")
+        # print(f"position_shape: {self.config.position_shape}")
         #
         ## Pruning end
         #
@@ -812,9 +829,9 @@ class MDGPT(GPT):
         x = self.transformer.wte(x_pruned)
         for d in range(position_dim):
             offset = self.config.position_shape[d]
-            print(f"d={d}, offset={offset}, relative_pos_pruned shape: {relative_pos_pruned.shape}")
-            print("embedding model:", self.transformer.wpe[d])
-            print(f"input to embedding:", relative_pos_pruned[:, :, d] + offset)
+            # print(f"d={d}, offset={offset}, relative_pos_pruned shape: {relative_pos_pruned.shape}")
+            # print("embedding model:", self.transformer.wpe[d])
+            # print(f"input to embedding:", relative_pos_pruned[:, :, d] + offset)
             # TODO: try absolute value, instead of offsetting
             x += self.transformer.wpe[d](
                 relative_pos_pruned[:, :, d] + offset
@@ -823,18 +840,28 @@ class MDGPT(GPT):
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
-        print(f"after linear, x shape: {x.shape}")
+        # print(f"after linear, x shape: {x.shape}")
         if y is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             # y needs to be broadcasted
-            y = y.unsqueeze(1)
-            loss_weight = 1 - idx_to_ignore.float()
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), y.view(-1),
-                weight=loss_weight.view(-1),
-                ignore_index=-1
-            )
+            y = y.expand(-1, logits.shape[1])
+            y = y.unsqueeze(-1)
+            logits_selected = logits[~idx_to_ignore]
+            y_selected = y[~idx_to_ignore]
+            # loss_weight = 1 - idx_to_ignore.float()
+            try:
+                loss = F.cross_entropy(
+                    logits_selected.view(-1, logits_selected.size(-1)),
+                    y_selected.reshape(-1),
+                    # weight=loss_weight.view(-1),
+                    ignore_index=-1
+                )
+            except:
+                print(f"y shape: {y.shape}")
+                print(f"logits shape: {logits.shape}")
+                # print(f"loss_weight shape: {loss_weight.shape}")
+                raise
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             # TODO: -1 is not necessarily the last position, use a mask to find the last position.
