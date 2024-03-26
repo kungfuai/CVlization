@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from tqdm import tqdm
+from einops import rearrange
+import wandb
 from mamba_ssm import Mamba
 from .data_utils import FlatTokenIds
 
@@ -16,132 +18,61 @@ class MambaTrainingPipeline:
     class Config:
         # Data
         block_size: int = 256
-        vocab_size: int = 512
+        vocab_size: int = 5120 + 20
+        start_token: int = 5121
+        position_shape: tuple = (8, 64, 64)
 
         # Optimizer
         lr: float = 1e-3
         batch_size: int = 64
         clip_grad: float = 1.0
+        gradient_accumulation_steps: int = 1
 
         # Training loop
         epochs: int = 100
         max_iters: int = 10000
-        print_iters: int = 100
+        log_interval: int = 100
+        eval_interval: int = 1000
         eval_iters: int = 10
+        sample_interval: int = 1000
         
         # Accelerator
         device: str = "cuda"
 
         # Logging
         output_dir: str = "logs/nanomamba"
+        project: str = "mamba"
+        track: bool = False
         
         # Model
         n_embed: int = 384
         n_heads: int = 6
         n_layers: int = 6
         dropout: float = 0.2
+        vae_model_name: str = None
     
     def __init__(self, config: Config):
         self.config = config
         output_dir = Path(config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         self.config.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.START_TOKEN = self.config.start_token
+        torch.manual_seed(11)
     
     def fit(self, dataset_builder: FlatTokenIds):
-        self.train_data = dataset_builder.training_dataset()
-        self.val_data = dataset_builder.validation_dataset()
-        assert isinstance(self.train_data, np.ndarray)
-        assert isinstance(self.val_data, np.ndarray)
-        assert self.train_data.dtype in [np.int32, np.int64, np.uint16, np.uint32, np.uint64]
-        assert len(self.train_data.shape) == 1, f"Expected 1D array for training data, got {self.train_data.shape}"
-        self.train_data = torch.tensor(self.train_data, dtype=torch.long)
-        self.val_data = torch.tensor(self.val_data, dtype=torch.long)
-        model = self.model = BigramNeuralNetwork(
-            vocab_size=self.config.vocab_size,
-            block_size=self.config.block_size,
-            n_embed=self.config.n_embed,
-            n_heads=self.config.n_heads,
-            n_layers=self.config.n_layers,
-            device=self.config.device,
-        )
-        model.to(self.config.device)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=self.config.lr)
-
-        output_dir = Path(self.config.output_dir)
-        max_iters = self.config.max_iters
-        print_iters = self.config.print_iters
-        eval_iters = self.config.eval_iters
-        device = self.config.device
-
-        # checkpoint = torch.load('model.pt')
-        # model.load_state_dict(checkpoint['model_state_dict'])
-        # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        # epoch = checkpoint['epoch']
-        checkpoint_path = None  # output_dir / "model_40.pt"
-        epoch = 0
-        if checkpoint_path:
-            checkpoint = torch.load(checkpoint_path)
-            print(checkpoint)
-            if checkpoint["model_state_dict"]:
-                model.load_state_dict(checkpoint["model_state_dict"].to(device))
-            if checkpoint["optimizer_state_dict"]:
-                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            epoch = checkpoint["epoch"]
-
-        print("Uses device " + device)
-        MODEL_CHECKPOINT = str(output_dir / "model_{iter}.pt")
-        losses_data = {"train": [], "test": []}
-        for iter in tqdm(range(epoch, max_iters)):
-            if iter % eval_iters == 0:
-                losses = self.estimate_loss()
-                losses_data["train"].append(losses["train"].cpu().numpy())
-                losses_data["test"].append(losses["test"].cpu().numpy())
-                print(
-                    f"Step {iter}, train loss:{losses['train']:.4f}, test loss:{losses['test']:.4f}"
-                )
-
-            # if iter % print_iters == 0:
-            #     losses = self.estimate_loss()
-            #     torch.save(
-            #         {
-            #             "epoch": iter,
-            #             "model_state_dict": model.state_dict(),
-            #             "optimizer_state_dict": optimizer.state_dict(),
-            #             "loss": losses,
-            #         },
-            #         MODEL_CHECKPOINT.format(iter=iter),
-            #     )
-            #     losses_data["train"].append(losses["train"].cpu().numpy())
-            #     losses_data["test"].append(losses["test"].cpu().numpy())
-            #     model.eval()
-            #     with torch.no_grad():
-            #         # Generate from the model:
-            #         output = m.generate(
-            #             torch.zeros((1, 2), dtype=torch.long).to(device).contiguous(), 1000
-            #         )[0].tolist()
-
-            #     print(
-            #         f"Step {iter}, train loss:{losses['train']:.4f}, test loss:{losses['test']:.4f}"
-            #     )
-            #     model.train()
-
-            # Get data
-            xb, yb = self.get_batch("train")
-
-            # Evaluate loss
-            logits, loss = model(xb, yb)
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            if self.config.clip_grad:
-                torch.nn.utils.clip_grad.clip_grad_norm_(model.parameters(), self.config.clip_grad)
-            optimizer.step()
+        if self.config.track:
+            wandb.init(project=self.config.project, config=self.config)
+        self.create_dataloaders(dataset_builder)
+        model = self.create_model()
+        self.create_optimizer()
+        self.training_loop()
 
     def get_batch(self, split):
         # generate targets and context
         if split == "train":
-            data = self.train_data
+            data = self.train_data_flattened
         else:
-            data = self.val_data
+            data = self.val_data_flattened
         block_size = self.config.block_size
         batch_size = self.config.batch_size
         device = self.config.device
@@ -150,6 +81,174 @@ class MambaTrainingPipeline:
         y = torch.stack([data[ind + 1 : ind + block_size + 1] for ind in index])
         return x.to(device), y.to(device)
 
+    def create_dataloaders(self, dataset_builder):
+        self.train_data = dataset_builder.training_dataset()
+        self.val_data = dataset_builder.validation_dataset()
+        assert isinstance(self.train_data, np.ndarray)
+        assert isinstance(self.val_data, np.ndarray)
+        assert self.train_data.dtype in [np.int32, np.int64, np.uint16, np.uint32, np.uint64]
+        print(self.train_data.shape, self.val_data.shape)
+        self.data_seq_len = self.train_data.shape[1]
+        if len(self.train_data.shape) > 1:
+            self.train_data_flattened = self.train_data.ravel()
+            self.val_data_flattened = self.val_data.ravel()
+        self.train_data_flattened = torch.tensor(self.train_data_flattened.astype(np.int32), dtype=torch.long)
+        self.val_data_flattened = torch.tensor(self.val_data_flattened.astype(np.int32), dtype=torch.long)
+
+    def create_model(self):
+        self.model = BigramNeuralNetwork(
+            vocab_size=self.config.vocab_size,
+            block_size=self.config.block_size,
+            n_embed=self.config.n_embed,
+            n_heads=self.config.n_heads,
+            n_layers=self.config.n_layers,
+            device=self.config.device,
+        )
+        self.model.to(self.config.device)
+        if self.config.vae_model_name is not None:
+            self.load_vae()
+        print(self.model)
+        print("Number of parameters:", sum(p.numel() for p in self.model.parameters()))
+        return self.model
+
+    def load_vae(self):
+        if ":" in self.config.vae_model_name:
+            # it is a wandb model
+            from cvlization.torch.net.vae.video_vqvae import VQVAE
+
+            vae = VQVAE.from_pretrained(self.config.vae_model_name)
+        else:
+            # it is a huggingface model
+            from diffusers.models import AutoencoderKL
+
+            vae = AutoencoderKL.from_pretrained(self.config.vae_model_name)
+        
+        vae.eval()
+        vae = vae.to(self.config.device)
+        self.vae = vae
+
+    def create_optimizer(self):
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config.lr)
+
+    def training_loop(self):
+        optimizer = self.optimizer
+        model = self.model
+
+        output_dir = Path(self.config.output_dir)
+        max_iters = self.config.max_iters
+        eval_iters = self.config.eval_iters
+        device = self.config.device
+
+        print("Uses device " + device)
+        losses_data = {"train": [], "test": []}
+
+        t = self.config.position_shape[0]
+        h = self.config.position_shape[1]
+        w = self.config.position_shape[2]
+
+        if self.config.vae_model_name is not None:
+            vae = self.vae
+            ground_truth_codes = torch.from_numpy(self.val_data[0, 1:].astype(int)).long().to(device)
+            ground_truth_codes = rearrange(
+                ground_truth_codes,
+                "(b t h w) -> b t h w",
+                b=1,
+                t=int(t),
+                h=int(h),
+                w=int(w),
+            )
+            assert ground_truth_codes.shape == (1, t, h, w), ground_truth_codes.shape
+            assert isinstance(
+                ground_truth_codes, torch.Tensor
+            ), f"expected torch.Tensor, got {type(ground_truth_codes)}"
+            with torch.no_grad():
+                z = vae.vq.codes_to_vec(ground_truth_codes)
+                assert len(z.shape) == 5
+                assert z.shape == (1, 4, t, h, w)
+                video = vae.decoder(z)
+                video = (video - video.min()) / (video.max() - video.min() + 1e-6)
+                video = (video * 255).to(torch.uint8)
+                video = rearrange(video, "b c t h w -> t c h (b w)")
+                assert video.shape[1] == 3, f"shape of video is {video.shape}"
+                display = wandb.Video(video.detach().cpu(), fps=5, format="mp4")
+                print(f"video shape: {video.shape}")
+                if self.config.track:
+                    wandb.log({"sampled/ground_truth_decoded": display})
+
+        for iter in tqdm(range(0, max_iters)):
+            if iter % self.config.eval_interval == 0:
+                losses = self.estimate_loss()
+                # losses_data["train"].append(losses["train"].cpu().numpy())
+                losses_data["test"].append(losses["test"].cpu().numpy())
+                print(
+                    f"Step {iter}, val loss:{losses['test']:.4f}"
+                )
+                if self.config.track:
+                    wandb.log({"val/loss": losses["test"]})
+
+            # Get data
+            xb, yb = self.get_batch("train")
+
+            # Evaluate loss
+            logits, loss = model(xb, yb)
+            if self.config.track:
+                wandb.log({"train/loss": loss.item()})
+
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            if self.config.clip_grad:
+                torch.nn.utils.clip_grad.clip_grad_norm_(model.parameters(), self.config.clip_grad)
+            optimizer.step()
+
+            if iter % self.config.sample_interval == 0:
+                if self.config.vae_model_name is not None:
+                    model.eval()
+                    with torch.no_grad():
+                        sampled_codes = model.generate(
+                            idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * self.START_TOKEN)
+                            .long()
+                            .to(device),
+                            max_new_tokens=self.data_seq_len,
+                            # temperature=1,
+                            # top_k=100,
+                            show_progress=True,
+                        )
+                        sampled_codes = sampled_codes[0, 1:]
+                        violating_codes = (sampled_codes > self.config.vocab_size - 1).float().mean()
+                        print(f"violating codes: {violating_codes.item()}")
+                        sampled_codes[sampled_codes > self.config.vocab_size - 1] = 0
+                        print("sampled codes:", sampled_codes)
+                        # print(sampled_codes.min(), sampled_codes.max())
+                        sampled_codes = rearrange(
+                            sampled_codes[:self.data_seq_len],
+                            "(b t h w) 1 -> b t h w",
+                            b=1,
+                            t=int(t),
+                            h=int(h),
+                            w=int(w),
+                        )
+                        assert sampled_codes.shape == (1, t, h, w), sampled_codes.shape
+
+                        z = vae.vq.codes_to_vec(sampled_codes)
+                        assert len(z.shape) == 5
+                        assert z.shape == (1, 4, t, h, w)
+                        video = vae.decoder(z)
+                        video = (video - video.min()) / (video.max() - video.min() + 1e-6)
+                        video = (video * 255).to(torch.uint8)
+                        video = rearrange(video, "b c t h w -> t c h (b w)")
+                        display = wandb.Video(video.cpu(), fps=5, format="mp4")
+                        if self.config.track:
+                            wandb.log(
+                                {
+                                    "sampled/generated_video": display,
+                                    "sampled/violating_codes": violating_codes,
+                                }
+                            )
+
+                    model.train()
+
+            if self.config.track:
+                wandb.log({"train/lr": optimizer.param_groups[0]["lr"]})
 
     @torch.no_grad()
     def estimate_loss(self):
@@ -157,9 +256,10 @@ class MambaTrainingPipeline:
         model = self.model
         model.eval()
         eval_iters = self.config.eval_iters
-        for split in ["train", "test"]:
+        for split in ["test"]: # ["train", "test"]:
             losses = torch.zeros(eval_iters)
             for k in range(eval_iters):
+                # X, Y: torch.Size([32, 512]) torch.Size([32, 512])
                 X, Y = self.get_batch(split)
                 logits, loss = model(X, Y)
                 losses[k] = loss.item()
@@ -286,9 +386,15 @@ class BigramNeuralNetwork(nn.Module):
     def forward(self, idx, targets=None):
         # idx = idx[:,-block_size:]
         B, T = idx.shape
+        assert (
+            T <= self.block_size
+        ), f"Cannot forward sequence of length {T}, block size is only {self.block_size}"
+        # print(f"B={B}, T={T}")
+        pos = torch.arange(0, T, dtype=torch.long, device=self.device)
         tok_emb = self.token_embedding_table(idx)  # (B,T,C_e)
         pos_emb = self.position_embedding_table(
-            torch.arange(T, device=self.device)
+            pos
+            # pos[None, :].expand(B, -1)
         )  # (T,C_e)
         x = tok_emb + pos_emb  # (B,T,C_e)
         x = self.blocks(x)  # (B,T,C_e)
@@ -306,9 +412,10 @@ class BigramNeuralNetwork(nn.Module):
     def generate(self, idx, max_new_tokens, show_progress: bool=False):
         # idx is (B,T)
         idx_next = []
-        iterated = tqdm(range(max_new_tokens)) if show_progress else range(max_new_tokens)
+        iterated = tqdm(range(max_new_tokens), mininterval=2) if show_progress else range(max_new_tokens)
         for i in iterated:
             idx_cond = idx[:, -self.block_size:]
+            # print("max idx_cond", idx_cond.max(), "min:", idx_cond.min())
             logits, loss = self(idx_cond)
             last_timestep = logits[:, -1, :]
             probs = F.softmax(last_timestep, dim=1)
