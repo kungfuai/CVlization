@@ -25,7 +25,7 @@ def load_data() -> torch.Tensor:
     # assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
     # data = data.reshape(-1, 8*64*64)
     # assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
-    return torch.tensor(data, dtype=torch.long)
+    return torch.tensor(data[:100], dtype=torch.long)
 
 def train_one_batch(
         model: MambaClassifier,
@@ -57,41 +57,27 @@ def train_one_batch(
     criterion = torch.nn.CrossEntropyLoss(reduction="mean")
     total_loss = 0
     count = 0
-    for ix in range(2, 8):
+    num_steps = 2
+
+    # generate random tokens the same shape as batch sequence.
+    targets = sequence.view(sequence.shape[0], int(8*64*64))
+    values = torch.randint(0, 5120, targets.shape, device=sequence.device)
+
+    for _ in range(num_steps):
         if optimizer is not None:
             optimizer.zero_grad()
-
-        """
-        For 2, model(frame0&1) predicts frame 2.
-        For 3, model(frame1&2) predicts frame 3,
-        etc.
-        For ix=7, model(frame5&6) predicts frame 7.
-        """
-        b = sequence.shape[0]
-        # targets: current clip.
-        targets = sequence[:, ix].view(b, -1) # (B, 64, 64) -> (B, 64*64)
-        # model_input: previous 2 clips.
-        model_input = sequence[:, ix-2:ix].view(b, -1) # (B, 2, 64, 64) -> (B, 2*64*64)
-
-        logits = model(model_input)[:, -int(64*64):] # (B, 2*64*64, C) -> (B, 64*64, C)
-
-        """
-        Cross entropy expects logits.shape == (B, C, D1, D2, ...),
-        targets.shape == (B, D1, D2...)
-        """
-        loss = criterion(
-            logits.permute(0, 2, 1), # (B, 64*64, C) -> (B, C, 64*64)
-            targets,
-        )
-
+        logits = model(values)
+        assert logits.shape == (values.shape[0], 8*64*64, 5120), f"Expected (B, 8*64*64, 5120), got {logits.shape}"
+        # cross entropy loss expects (B, C, L) and (B, L) shapes.
+        loss = criterion(logits.permute(0, 2, 1), targets)
         if optimizer is not None:
             loss.backward()
             optimizer.step()
-
         total_loss += loss.item()
         count += 1
-
-    return total_loss / count
+        values = logits.argmax(dim=-1)
+    avg_loss = total_loss / count
+    return avg_loss
 
 def run_train_epoch(
     model: MambaClassifier,
@@ -154,24 +140,13 @@ def plot_epochs(train_losses, val_losses, epoch: str):
     print(asciichartpy.plot([train_losses, val_losses], config))
     print()
 
-def generate_sequence(mamba: torch.nn.Module, prompt_sequence: torch.Tensor, device: str) -> torch.Tensor:
-    """
-    Returns a tensor of shape (1, seq_len).
-    """
-    assert prompt_sequence.shape == (1, 8, 64, 64), f"Expected (1, 8, 64, 64), got {prompt_sequence.shape}"
-    output_video = prompt_sequence[:, :2].to(device) # Prompt with first two clips.
-    with torch.no_grad():
-        for ix in range(2, 8):
-            assert ix == output_video.shape[1], f"Expected {ix}, got {output_video.shape[1]}"
-            model_input = output_video[:, ix-2:ix].view(1, -1)
-            assert model_input.shape == (1, 2*64*64), f"Expected (1, 2*64*64), got {model_input.shape}"
-            logits = mamba(model_input)[:,-int(64*64):] # (1, 2*64*64, 5120) -> (1, 64*64, 5120)
-            # take the argmax of the last dimension.
-            next_clip = logits.argmax(dim=-1).view(1, 64, 64)
-            assert next_clip.shape == (1, 64, 64), f"Expected (1, 64, 64), got {next_clip.shape}"
-            output_video = torch.cat([output_video, next_clip.unsqueeze(0)], dim=1)
-    assert output_video.shape == (1, 8, 64, 64), f"Expected (1, 8, 64, 64), got {output_video.shape}"
-    return output_video.detach().cpu()
+def generate_sequence(mamba: torch.nn.Module, device: str) -> torch.Tensor:
+    num_steps = 3
+    values = torch.randint(0, 5120, (1, 8*64*64), device=device)
+    for _ in range(num_steps):
+        logits = mamba(values)
+        values = logits.argmax(dim=-1)
+    return values.view(1, 8, 64, 64)
 
 def load_vae() -> torch.nn.Module:
     api = wandb.Api()
@@ -227,14 +202,14 @@ if __name__ == "__main__":
     print("Arguments:")
     print(colored(json.dumps(vars(args), indent=4), "cyan"), "\n\n")
 
-    wandb.init(project="mamba_videos")
+    wandb.init(project="mamba_videos_it")
 
     mamba_kwargs = {
-        "mamba_n_embed": 256,
-        "mamba_d_state": 16,
+        "mamba_n_embed": 512,
+        "mamba_d_state": 32,
         "mamba_d_conv": 4,
-        "mamba_expand": 4,
-        "n_mamba_layers": 2,
+        "mamba_expand": 2,
+        "n_mamba_layers": 4,
     }
 
     # Log args and mamaba_kwargs to wandb.
@@ -244,8 +219,8 @@ if __name__ == "__main__":
     data: torch.Tensor = load_data().to(args.device)
     model = MambaClassifier(
         n_tokens=5120,
-        # seq_len=32768,
-        seq_len=int(2*64*64), # Condition on last 2 frames to predict the next frame.
+        seq_len=32768,
+        # seq_len=int(2*64*64), # Condition on last 2 frames to predict the next frame.
         **mamba_kwargs,
         device=args.device,
     ).to(args.device)
@@ -265,7 +240,7 @@ if __name__ == "__main__":
 
     wandb.log({
         "train_sanity_vid": wandb.Video(train_sanity_vid, fps=5, format="mp4"),
-        "val_sanity_vid": wandb.Video(val_sanity_vid, fps=5, format="mp4"),
+        # "val_sanity_vid": wandb.Video(val_sanity_vid, fps=5, format="mp4"),
     })
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -289,15 +264,15 @@ if __name__ == "__main__":
         train_epoch_losses.append(epoch_loss)
         epoch_loss = run_val_epoch(model, val_data, args.batch_size, epoch)
         to_log["val_epoch_loss"] = epoch_loss
-        if epoch % 10 == 0:
+        if epoch % 1 == 0:
             # Generate a video.
             with torch.no_grad():
-                train_generated_sequence = generate_sequence(model, train_vid, args.device)
-                val_generated_sequence = generate_sequence(model, val_vid, args.device)
+                train_generated_sequence = generate_sequence(model, args.device)
+                # val_generated_sequence = generate_sequence(model, val_vid, args.device)
                 train_generated_vid = decode_video(vae, train_generated_sequence.to(vae_device))
-                val_generated_vid = decode_video(vae, val_generated_sequence.to(vae_device))
+                # val_generated_vid = decode_video(vae, val_generated_sequence.to(vae_device))
                 to_log["train_generated_vid"] = wandb.Video(train_generated_vid, fps=5, format="mp4")
-                to_log["val_generated_vid"] = wandb.Video(val_generated_vid, fps=5, format="mp4")
+                # to_log["val_generated_vid"] = wandb.Video(val_generated_vid, fps=5, format="mp4")
                 print("Generated videos")
         wandb.log(to_log)
         if epoch_loss == 0.0:
