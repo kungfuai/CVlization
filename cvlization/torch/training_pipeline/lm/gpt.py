@@ -69,6 +69,7 @@ class NanoGPTTrainingPipeline:
         vae_model_name: str = None
         vocab_size: int = 5120
         meta_vocab_size: int = None
+        max_tokens_to_sample: int = 128
 
         # we expect to overfit on this small dataset, so only save when val improves
         always_save_checkpoint: bool = False
@@ -189,11 +190,16 @@ class NanoGPTTrainingPipeline:
         assert isinstance(self.train_data, np.ndarray)
         assert isinstance(self.val_data, np.ndarray)
         assert self.train_data.dtype in [np.int32, np.int64, np.uint16, np.uint32, np.uint64]
-        assert len(self.train_data.shape) == 2, f"Expected 2D array for training data, got {self.train_data.shape}"
+        assert len(self.train_data.shape) in [1, 2], f"Expected 1D or 2D array for training data, got {self.train_data.shape}"
         self.train_data_flattened = self.train_data.ravel()
         self.val_data_flattened = self.val_data.ravel()
         print(f"block size:", self.config.block_size)
-        self.data_seq_len = self.train_data.shape[1]
+        # This is the sequence length (max new tokens) to sample.
+        if len(self.train_data.shape) == 2:
+            # TODO: use max_tokens_to_sample from config
+            self.data_seq_len = self.train_data.shape[-1]
+        else:
+            self.data_seq_len = self.config.max_tokens_to_sample
 
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
