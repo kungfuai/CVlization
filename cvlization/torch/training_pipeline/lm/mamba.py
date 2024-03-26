@@ -236,7 +236,8 @@ class MambaTrainingPipeline:
                         video = (video - video.min()) / (video.max() - video.min() + 1e-6)
                         video = (video * 255).to(torch.uint8)
                         video = rearrange(video, "b c t h w -> t c h (b w)")
-                        display = wandb.Video(video.cpu(), fps=5, format="mp4")
+                        video = video.detach().cpu()
+                        display = wandb.Video(video, fps=5, format="mp4")
                         if self.config.track:
                             wandb.log(
                                 {
