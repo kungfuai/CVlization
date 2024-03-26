@@ -789,8 +789,8 @@ if __name__ == "__main__":
 
     opts = prepare_parser().parse_args()
     fps = 10
-    db = FlyingMNISTDatasetBuilder(opts, to_generate=True, max_videos=10000)
-    ds_name = "flying_mnist_11k"
+    db = FlyingMNISTDatasetBuilder(opts, to_generate=True, max_videos=100000)
+    ds_name = "flying_mnist_110k"
     print("Training dataset:")
     train_ds = db.training_dataset()
     # Saving to a folder: data/flying_mnist/train

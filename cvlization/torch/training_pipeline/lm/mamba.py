@@ -18,6 +18,7 @@ class MambaTrainingPipeline:
     class Config:
         # Data
         block_size: int = 256
+        vae_vocab_size: int = 5120
         vocab_size: int = 5120 + 20
         start_token: int = 5121
         position_shape: tuple = (8, 64, 64)
@@ -214,9 +215,9 @@ class MambaTrainingPipeline:
                             show_progress=True,
                         )
                         sampled_codes = sampled_codes[0, 1:]
-                        violating_codes = (sampled_codes > self.config.vocab_size - 1).float().mean()
+                        violating_codes = (sampled_codes > self.config.vae_vocab_size - 1).float().mean()
                         print(f"violating codes: {violating_codes.item()}")
-                        sampled_codes[sampled_codes > self.config.vocab_size - 1] = 0
+                        sampled_codes[sampled_codes > self.config.vae_vocab_size - 1] = 0
                         print("sampled codes:", sampled_codes)
                         # print(sampled_codes.min(), sampled_codes.max())
                         sampled_codes = rearrange(

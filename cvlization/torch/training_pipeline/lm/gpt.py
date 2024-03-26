@@ -65,9 +65,10 @@ class NanoGPTTrainingPipeline:
         eval_interval: int = 250  # keep frequent because we'll overfit
         eval_iters: int = 100
         log_interval: int = 10  # don't print too too often
-        sample_interval: int = 500
+        sample_interval: int = 250
         vae_model_name: str = None
-        vocab_size: int = 5120
+        vae_vocab_size: int = 5120
+        vocab_size: int = 5120 + 3
         meta_vocab_size: int = None
         max_tokens_to_sample: int = 128
 
@@ -224,7 +225,7 @@ class NanoGPTTrainingPipeline:
         if self.config.meta_vocab_size is not None:
             meta_vocab_size = self.config.meta_vocab_size
         else:
-            meta_vocab_size = self.config.vocab_size + 20  # 20 extra tokens for special tokens
+            meta_vocab_size = self.config.vocab_size
         out_dir = self.out_dir
 
         # model init
@@ -553,9 +554,9 @@ class NanoGPTTrainingPipeline:
                             show_progress=True,
                         )
                         sampled_codes = sampled_codes[0, 1:]
-                        violating_codes = (sampled_codes > self.config.vocab_size - 1).float().mean()
+                        violating_codes = (sampled_codes > self.config.vae_vocab_size - 1).float().mean()
                         print(f"violating codes: {violating_codes.item()}")
-                        sampled_codes[sampled_codes > self.config.vocab_size - 1] = 0
+                        sampled_codes[sampled_codes > self.config.vae_vocab_size - 1] = 0
                         # force_cudnn_initialization()
                         # sampled_codes = torch.ones(1, 32768, dtype=torch.long).to(device)
                         print("sampled codes:", sampled_codes)
