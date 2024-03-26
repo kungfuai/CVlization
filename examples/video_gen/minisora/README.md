@@ -86,6 +86,10 @@ bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block
 
 3. Train a autoregressive MAMBA-based language model
 
+```
+bash examples/video_gen/minisora/train.sh python train_latent_mamba.py --block_size 512
+```
+
 4. Train a diffusion model with flow-matching
 
 ## Reference
