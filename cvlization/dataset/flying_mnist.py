@@ -48,6 +48,7 @@ class FlyingMNISTDatasetBuilder:
         opts: argparse.Namespace = None,
         resolution: int = 64,
         max_frames_per_video: int = 100,
+        max_videos: int = 10000,
         to_generate: bool = False,
     ):
         if to_generate:
@@ -57,12 +58,13 @@ class FlyingMNISTDatasetBuilder:
         self.resolution = resolution
         self.to_generate = to_generate
         self.max_frames_per_video = max_frames_per_video
+        self.max_videos = max_videos
 
     def training_dataset(self):
         if self.to_generate:
             return FlyingMNISTDataset(
                 self.opts,
-                max_videos=1000,
+                max_videos=self.max_videos,
                 to_generate=self.to_generate,
                 max_frames_per_video=self.max_frames_per_video,
             )
@@ -81,7 +83,7 @@ class FlyingMNISTDatasetBuilder:
             return FlyingMNISTDataset(
                 self.opts,
                 seed_offset=int(1e6),
-                max_videos=100,
+                max_videos=int(self.max_videos * 0.1),
                 to_generate=self.to_generate,
                 max_frames_per_video=self.max_frames_per_video,
             )
@@ -787,12 +789,13 @@ if __name__ == "__main__":
 
     opts = prepare_parser().parse_args()
     fps = 10
-    db = FlyingMNISTDatasetBuilder(opts, to_generate=True)
+    db = FlyingMNISTDatasetBuilder(opts, to_generate=True, max_videos=10000)
+    ds_name = "flying_mnist_11k"
     print("Training dataset:")
     train_ds = db.training_dataset()
     # Saving to a folder: data/flying_mnist/train
     if train_ds.from_dir is None:
-        save_dataset_to_folder(train_ds, folder="data/flying_mnist/train")
+        save_dataset_to_folder(train_ds, folder=f"data/{ds_name}/train")
     else:
         for x in train_ds:
             print(
@@ -821,7 +824,7 @@ if __name__ == "__main__":
     val_ds = db.validation_dataset()
     # Saving to a folder: data/flying_mnist/val
     if val_ds.from_dir is None:
-        save_dataset_to_folder(val_ds, folder="data/flying_mnist/val")
+        save_dataset_to_folder(val_ds, folder=f"data/{ds_name}/val")
     else:
         for x in val_ds:
             print(
