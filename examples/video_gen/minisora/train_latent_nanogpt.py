@@ -5,23 +5,11 @@ from cvlization.torch.training_pipeline.lm.data_utils import FlatTokenIds
 
 def prepare_data(args):
     data = np.load(args.tokens_input_file).astype(np.uint16)
-    vocab_size = data.max() + 20
+    vae_vocab_size = data.max() + 1
+    vocab_size = data.max() + 3
     VIDEO_BEGIN_TOKEN = data.max() + 1
     data = data.reshape(len(data), -1)  # flattened for each video
-    # n = len(data)
-    # train_n = int(n * 0.8)
-    # train_data = data[:train_n]
-    # val_data = data[train_n:]
-    # # insert a special token at the beginning of each video
-    # VIDEO_BEGIN_TOKEN = 5121
-    # train_data = np.concatenate(
-    #     [np.ones((len(train_data), 1), dtype=np.uint16) * VIDEO_BEGIN_TOKEN, train_data],
-    #     axis=1,
-    # )
-    # val_data = np.concatenate(
-    #     [np.ones((len(val_data), 1), dtype=np.uint16) * VIDEO_BEGIN_TOKEN, val_data], axis=1
-    # )
-    return data, vocab_size, VIDEO_BEGIN_TOKEN
+    return data, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN
 
 
 def main():
@@ -52,7 +40,7 @@ def main():
     parser.add_argument("--wandb_log", action="store_true")
     args = parser.parse_args()
 
-    token_ids, vocab_size, VIDEO_BEGIN_TOKEN = prepare_data(args)
+    token_ids, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN = prepare_data(args)
     print(token_ids.shape)
     dataset_builder = FlatTokenIds(token_ids=token_ids, vocab_size=vocab_size, start_token_id=VIDEO_BEGIN_TOKEN)
     train_pipe = NanoGPTTrainingPipeline(
@@ -60,6 +48,8 @@ def main():
             log_dir=args.log_dir,
             project=args.project,
             vae_model_name=args.vae_model_name,
+            vae_vocab_size=vae_vocab_size,
+            vocab_size=vocab_size,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             eval_interval=args.eval_interval,
             eval_iters=args.eval_iters,
