@@ -28,6 +28,7 @@ import wandb
 
 
 class NanoGPTTrainingPipeline:
+    # TODO: compile the model.
     @dataclass
     class Config:
 
