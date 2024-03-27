@@ -4,6 +4,7 @@ from cvlization.torch.training_pipeline.lm.data_utils import FlatTokenIds
 
 
 def prepare_data(args):
+    print("Loading data from", args.tokens_input_file)
     data = np.load(args.tokens_input_file).astype(np.uint16)
     vae_vocab_size = data.max() + 1
     vocab_size = data.max() + 2
