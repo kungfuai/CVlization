@@ -70,6 +70,7 @@ class NanoGPTTrainingPipeline:
         vae_model_name: str = None
         vae_vocab_size: int = 5120
         vocab_size: int = 5120 + 3
+        start_token: int = 5121
         meta_vocab_size: int = None
         max_tokens_to_sample: int = 128
 
@@ -107,7 +108,7 @@ class NanoGPTTrainingPipeline:
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
-        self.START_TOKEN = self.config.vocab_size + 1
+        self.START_TOKEN = self.config.start_token
     
     def fit(self, dataset_builder):
         if self.master_process and self.config.wandb_log:
@@ -184,6 +185,8 @@ class NanoGPTTrainingPipeline:
             )
         else:
             x, y = x.to(device), y.to(device)
+        assert x.shape == (self.config.batch_size, self.config.block_size)
+        assert y.shape == (self.config.batch_size, self.config.block_size)
         return x, y
 
     def create_dataloaders(self, dataset_builder):
@@ -248,6 +251,7 @@ class NanoGPTTrainingPipeline:
                     "defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)"
                 )
             self.model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
+            print("***** model args:", self.model_args)
             gptconf = GPTConfig(**(self.model_args))
             model = GPT(gptconf)
         elif init_from == "resume":
@@ -379,6 +383,7 @@ class NanoGPTTrainingPipeline:
             losses = torch.zeros(eval_iters)
             for k in range(eval_iters):
                 X, Y = self.get_batch(split)
+                # print(f"estimate_loss(): k={k}, X.shape: {X.shape}, Y.shape: {Y.shape}")
                 with self.ctx:
                     logits, loss = model(X, Y)
                 losses[k] = loss.item()
@@ -647,7 +652,13 @@ class CausalSelfAttention(nn.Module):
         )  # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        try:
+            q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        except:
+            # x.shape: torch.Size([8, 4096, 768]) this is the correct shape
+            # x.shape: torch.Size([1, 1, 768]), n_embd: 768, n_head: 6, c_atten: Linear(in_features=768, out_features=2304, bias=True)
+            print(f"x.shape: {x.shape}, n_embd: {self.n_embd}, n_head: {self.n_head}, c_atten: {self.c_attn}")
+            raise
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(
             1, 2
         )  # (B, nh, T, hs)
@@ -973,6 +984,11 @@ class GPT(nn.Module):
                 if idx.size(1) <= self.config.block_size
                 else idx[:, -self.config.block_size :]
             )
+            
+            # import sys
+            # print("idx_cond max:", idx_cond.max())
+            # sys.exit(0)
+
             # forward the model to get the logits for the index in the sequence
             logits, _ = self(idx_cond)
             # pluck the logits at the final step and scale by desired temperature
