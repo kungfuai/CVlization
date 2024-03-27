@@ -40,14 +40,22 @@ def create_vae(
 
 
 def tokenize():
+    from argparse import ArgumentParser
     from cvlization.dataset.flying_mnist import FlyingMNISTDatasetBuilder
     from latents import extract_token_ids
     from tqdm import tqdm
     import numpy as np
+    
+    parser = ArgumentParser()
+    parser.add_argument("--dataset", type=str, default="flying_mnist", help="Dataset name. E.g. flying_mnist_11k")
+    parser.add_argument("--batch_size", type=int, default=2, help="Batch size for token extraction")
+    args = parser.parse_args()
+    dataset_name = args.dataset
 
     max_frames_per_video = 32
     resolution = 256
     db = FlyingMNISTDatasetBuilder(
+        dataset_name=dataset_name,
         max_frames_per_video=max_frames_per_video, resolution=resolution
     )
     train_ds = db.training_dataset()
@@ -61,7 +69,7 @@ def tokenize():
             extract_token_ids(
                 vae,
                 train_ds,
-                batch_size=2,
+                batch_size=args.batch_size,
                 output_device="cpu",
                 latent_sequence_length=max_frames_per_video // temporal_compression,
                 latent_height=resolution // spatial_compression,
@@ -79,7 +87,7 @@ def tokenize():
     print(all_token_ids.shape, all_token_ids.dtype)
     # save
     np.save(
-        f"flying_mnist_tokens_{max_frames_per_video}frames_train.npy", all_token_ids
+        f"{dataset_name}_tokens_{max_frames_per_video}frames_train.npy", all_token_ids
     )
 
 
