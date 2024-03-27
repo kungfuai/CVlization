@@ -58,7 +58,7 @@ class MDGPTTrainingPipeline:
         log_interval: int = 10  # don't print too too often
         sample_interval: int = 500
         vae_model_name: str = None
-        vocab_size: int = 5120
+        vocab_size: int = 5123
         meta_vocab_size: int = None
         start_token: int = 5121
         ignore_token: int = 5122
@@ -164,13 +164,26 @@ class MDGPTTrainingPipeline:
         if position_dim == 1:
             positions = np.arange(len(data))
         else:
-            meshgrid_args = [np.arange(s) for s in data.shape[1:]]
+            if len(data.shape) == 1:
+                meshgrid_args = [np.arange(data.shape[0])]
+            else:
+                meshgrid_args = [np.arange(s) for s in data.shape[1:]]
             positions = np.array(
                 np.meshgrid(
                     *meshgrid_args,
                     indexing="ij"
                 ),
-            ).transpose(1, 2, 3, 0)  # positions[t, i, j] == [t, i, j]
+            )
+            if len(positions.shape) == 4:
+                positions.transpose(1, 2, 3, 0)  # positions[t, i, j] == [t, i, j]
+            elif len(positions.shape) == 3:
+                positions.transpose(1, 2, 0)
+            elif len(positions.shape) == 2:
+                positions.transpose(1, 0)
+            elif len(positions.shape) == 1:
+                positions = positions[np.newaxis]
+            else:
+                raise ValueError(f"Dimension of positions is {len(positions.shape)}, not supported.")
 
             # flatten:
             data = data.reshape(data.shape[0], -1)  # this is the whole video
@@ -178,7 +191,6 @@ class MDGPTTrainingPipeline:
             # print(f"data shape: {data.shape}")
             # print(f"positions shape: {positions.shape}")
 
-        
         # Problem formulation: x_pos, x, y_pos, y?
         if position_dim == 1:
             ix = torch.randint(len(data) - block_size, (batch_size,))
@@ -210,6 +222,7 @@ class MDGPTTrainingPipeline:
             x_pos = torch.stack(
                 [torch.from_numpy((positions[i : i + block_size]).astype(np.int64)) for i in ix]
             )
+            x_pos = x_pos.unsqueeze(-1)
         else:
             x_pos = np.ones((len(start_ix), block_size, position_dim), dtype=np.int64) * 0
             for i, (s, e) in enumerate(zip(start_ix, end_ix)):
@@ -224,11 +237,12 @@ class MDGPTTrainingPipeline:
             y = torch.stack(
                 [
                     torch.from_numpy((
-                        data[i + block_size]
+                        data[i + block_size, ...]
                     ).astype(np.int64))
                     for i in ix
                 ]
             )
+            y = y.unsqueeze(1)
         else:
             y = torch.stack(
                 [
@@ -242,7 +256,7 @@ class MDGPTTrainingPipeline:
             y_pos = torch.stack(
                 [
                     torch.from_numpy((
-                        positions[i + block_size : i + 1 + block_size]
+                        positions[i + block_size : i + 1 + block_size, ...]
                     ).astype(np.int64))
                     for i in ix
                 ]
@@ -286,7 +300,10 @@ class MDGPTTrainingPipeline:
         # self.train_data_flattened = self.train_data.ravel()
         # self.val_data_flattened = self.val_data.ravel()
         print(f"block size:", self.config.block_size)
-        self.position_shape = self.train_data.shape[1:]
+        if len(self.train_data.shape) == 1:
+            self.position_shape = (self.train_data.shape[0],)
+        else:
+            self.position_shape = self.train_data.shape[1:]
         self.position_dim = len(self.position_shape)
 
     def _try_to_infer_vocab_size(self):
@@ -593,12 +610,10 @@ class MDGPTTrainingPipeline:
 
             # log the decoded ground truth codes
             # TODO: this is hardcoded for now
-            # t = 32 / 4
-            # h = 256 / 4
-            # w = 256 / 4
-            t = self.position_shape[0]
-            h = self.position_shape[1]
-            w = self.position_shape[2]
+            if self.position_dim == 3:
+                t = self.position_shape[0]
+                h = self.position_shape[1]
+                w = self.position_shape[2]
 
             if iter_num == 0:
                 # Decode from the ground truth token ids
@@ -608,15 +623,8 @@ class MDGPTTrainingPipeline:
                     ground_truth_codes = (
                         torch.Tensor(self.val_data[0:1, :].astype(np.int64)).long().to(device)
                     )  # this is hard coded
-                    # ground_truth_codes = rearrange(
-                    #     ground_truth_codes,
-                    #     "b (t h w) -> b t h w",
-                    #     b=1,
-                    #     t=int(t),
-                    #     h=int(h),
-                    #     w=int(w),
-                    # )
-                    assert ground_truth_codes.shape == (1, t, h, w), ground_truth_codes.shape
+                    if self.position_dim == 3:
+                        assert ground_truth_codes.shape == (1, t, h, w), ground_truth_codes.shape
                     assert isinstance(
                         ground_truth_codes, torch.Tensor
                     ), f"expected torch.Tensor, got {type(ground_truth_codes)}"
@@ -719,12 +727,17 @@ class MDGPT(GPT):
         assert config.vocab_size is not None
         assert config.block_size is not None
         position_dim = len(config.position_shape)
+        if position_dim == 1:
+            position_embedding_input_sizes = [1 + config.block_size]
+        else:
+            position_embedding_input_sizes = [2 * s + 1 for s in config.position_shape]
+        print("position_embedding_input_sizes:", position_embedding_input_sizes)
         self.config = config
         self.transformer = nn.ModuleDict(
             dict(
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
                 wpe=nn.ModuleList(
-                    [nn.Embedding(2*s+1, config.n_embd) for s in config.position_shape]
+                    [nn.Embedding(s, config.n_embd) for s in position_embedding_input_sizes]
                 ),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
