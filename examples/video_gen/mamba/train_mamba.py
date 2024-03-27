@@ -17,15 +17,23 @@ from cvlization.torch.net.vae.video_vqvae import VQVAE
 # seed numpy's random
 np.random.seed(0)
 
+IGNORE_TOKEN = 5120
+
+hyperparams = {
+    "num_tokens_to_mask": 4800,
+    "num_seq_gen_steps": 160,
+}
+
 def load_data() -> torch.Tensor:
     data = np.load("flying_mnist_tokens_32frames_train.npy")
     assert data.shape == (1000, 8, 64, 64), f"Expected (1000, 8, 64, 64), got {data.shape}"
+    assert data.max() < IGNORE_TOKEN, f"Expected max token to be ({IGNORE_TOKEN} - 1), got {data.max()}"
     # Move `8` to last dim, then flatten after batch dimension.
     # data = np.moveaxis(data, 1, -1)
     # assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
     # data = data.reshape(-1, 8*64*64)
     # assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
-    return torch.tensor(data[:100], dtype=torch.long)
+    return torch.tensor(data, dtype=torch.long)
 
 def train_one_batch(
         model: MambaClassifier,
@@ -34,50 +42,33 @@ def train_one_batch(
 ) -> float:
     """
     (b, video_dim) -> (b, 8, 64, 64)
-    """
-    """
-    Imagine this sequence:
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-    Next token predictions are:
-    [0] -> 1,
-    [0, 1] -> 2,
-    [0, 1, 2] -> 3,
-    etc.
 
     Classifier model is not a standard classifier - it's going to return
     a tensor of shape (B, L, C) where B is the batch size, L is the sequence length,
     and C is the classification for each item in the sequence.
 
-    Try this: average cross entropy for each token in the sequence all at once.
-    (since Mamba is a recurrent model).
+    Mask random tokens and predict.
     """
     assert sequence.shape[1:] == (8, 64, 64), f"Expected (b, 8, 64, 64), got {sequence.shape}"
-    # torch cross entropy loss expects (B, C, L) and (B, L) shapes.
-    criterion = torch.nn.CrossEntropyLoss(reduction="mean")
-    total_loss = 0
-    count = 0
-    num_steps = 2
+    num_tokens_to_mask = hyperparams["num_tokens_to_mask"]
 
     # generate random tokens the same shape as batch sequence.
     targets = sequence.view(sequence.shape[0], int(8*64*64))
-    values = torch.randint(0, 5120, targets.shape, device=sequence.device)
+    model_input = targets.clone()
+    mask_indices = torch.randint(0, 8*64*64, (num_tokens_to_mask,))
+    model_input[:, mask_indices] = IGNORE_TOKEN
 
-    for _ in range(num_steps):
-        if optimizer is not None:
-            optimizer.zero_grad()
-        logits = model(values)
-        assert logits.shape == (values.shape[0], 8*64*64, 5120), f"Expected (B, 8*64*64, 5120), got {logits.shape}"
-        # cross entropy loss expects (B, C, L) and (B, L) shapes.
-        loss = criterion(logits.permute(0, 2, 1), targets)
-        if optimizer is not None:
-            loss.backward()
-            optimizer.step()
-        total_loss += loss.item()
-        count += 1
-        values = logits.argmax(dim=-1)
-    avg_loss = total_loss / count
-    return avg_loss
+    logits = model(model_input)
+    criterion = torch.nn.CrossEntropyLoss(reduction="mean")
+    # torch cross entropy loss expects (B, C, L) and (B, L) shapes.
+    loss = criterion(logits.permute(0, 2, 1), targets)
+
+    if optimizer is not None:
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    return loss.item()
 
 def run_train_epoch(
     model: MambaClassifier,
@@ -140,12 +131,37 @@ def plot_epochs(train_losses, val_losses, epoch: str):
     print(asciichartpy.plot([train_losses, val_losses], config))
     print()
 
-def generate_sequence(mamba: torch.nn.Module, device: str) -> torch.Tensor:
-    num_steps = 3
-    values = torch.randint(0, 5120, (1, 8*64*64), device=device)
-    for _ in range(num_steps):
-        logits = mamba(values)
-        values = logits.argmax(dim=-1)
+def generate_sequence(mamba: torch.nn.Module, device: str, init_with_random_tokens: bool = False) -> torch.Tensor:
+    """
+    Either initialize with random tokens or use the IGNORE_TOKEN.
+
+    1. Predict tokens.
+    2. Replace all tokens of softmax-proba > 0.5 with the predicted token.
+    Repeat num_steps times, or until no tokens are replaced. (early stopping)
+    """
+    num_steps = hyperparams["num_seq_gen_steps"]
+
+    values = torch.randint(0, IGNORE_TOKEN, (1, 8*64*64), device=device) \
+        if not init_with_random_tokens \
+            else torch.randint(0, IGNORE_TOKEN, (1, 8*64*64), device=device)
+
+    with torch.no_grad():
+        for step in tqdm(range(num_steps), desc="Generating sequence"):
+            logits = mamba(values)
+            # run softmax on all predictions.
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+            predictions = torch.argmax(probs, dim=-1)
+            max_probs = torch.max(probs, dim=-1).values
+            # replace all tokens with max_probs > 0.5 with the predicted token.
+            diff_tokens = torch.sum(
+                (values != predictions) & (max_probs > 0.5),
+            )
+            if diff_tokens == 0:
+                print(f"[Step {step}: Early stopping. No tokens changed.")
+                break
+            values[max_probs > 0.5] = predictions[max_probs > 0.5]
+            print(f"[Step {step}: Replaced {torch.sum(max_probs > 0.5)} tokens, and {diff_tokens} of them changed.")
+
     return values.view(1, 8, 64, 64)
 
 def load_vae() -> torch.nn.Module:
@@ -215,10 +231,11 @@ if __name__ == "__main__":
     # Log args and mamaba_kwargs to wandb.
     wandb.config.update(vars(args))
     wandb.config.update(mamba_kwargs)
+    wandb.config.update(hyperparams)
 
     data: torch.Tensor = load_data().to(args.device)
     model = MambaClassifier(
-        n_tokens=5120,
+        n_tokens=IGNORE_TOKEN + 1, # 5120 tokens + 1 IGNORE.
         seq_len=32768,
         # seq_len=int(2*64*64), # Condition on last 2 frames to predict the next frame.
         **mamba_kwargs,
@@ -264,15 +281,15 @@ if __name__ == "__main__":
         train_epoch_losses.append(epoch_loss)
         epoch_loss = run_val_epoch(model, val_data, args.batch_size, epoch)
         to_log["val_epoch_loss"] = epoch_loss
-        if epoch % 1 == 0:
+        if epoch % 2 == 0:
             # Generate a video.
             with torch.no_grad():
-                train_generated_sequence = generate_sequence(model, args.device)
-                # val_generated_sequence = generate_sequence(model, val_vid, args.device)
-                train_generated_vid = decode_video(vae, train_generated_sequence.to(vae_device))
-                # val_generated_vid = decode_video(vae, val_generated_sequence.to(vae_device))
-                to_log["train_generated_vid"] = wandb.Video(train_generated_vid, fps=5, format="mp4")
-                # to_log["val_generated_vid"] = wandb.Video(val_generated_vid, fps=5, format="mp4")
+                ignore_generated_sequence = generate_sequence(model, args.device, init_with_random_tokens=False)
+                random_generated_sequence = generate_sequence(model, args.device, init_with_random_tokens=True)
+                ignore_generated_vid = decode_video(vae, ignore_generated_sequence.to(vae_device))
+                random_generated_vid = decode_video(vae, random_generated_sequence.to(vae_device))
+                to_log["ignore_generated_vid"] = wandb.Video(ignore_generated_vid, fps=5, format="mp4")
+                to_log["random_generated_vid"] = wandb.Video(random_generated_vid, fps=5, format="mp4")
                 print("Generated videos")
         wandb.log(to_log)
         if epoch_loss == 0.0:
