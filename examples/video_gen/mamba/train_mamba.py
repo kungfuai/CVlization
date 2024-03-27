@@ -20,15 +20,16 @@ np.random.seed(0)
 IGNORE_TOKEN = 5120
 
 hyperparams = {
-    "num_tokens_to_mask": 4800,
-    "num_seq_gen_steps": 160,
-    "gen_prob_thresh": 0.0,
-    "num_data_samples": 200,
+    "num_tokens_to_mask": 3200,
+    "num_seq_gen_steps": 100,
+    "gen_prob_thresh": 0.1,
+    "num_data_samples": 10000,
 }
 
 def load_data() -> torch.Tensor:
-    data = np.load("flying_mnist_tokens_32frames_train.npy")
-    assert data.shape == (1000, 8, 64, 64), f"Expected (1000, 8, 64, 64), got {data.shape}"
+    # data = np.load("flying_mnist_tokens_32frames_train.npy")
+    data = np.load("flying_mnist_11k_tokens_32frames_train.npy")
+    assert data.shape == (10000, 8, 64, 64), f"Expected (1000, 8, 64, 64), got {data.shape}"
     assert data.max() < IGNORE_TOKEN, f"Expected max token to be ({IGNORE_TOKEN} - 1), got {data.max()}"
     # Move `8` to last dim, then flatten after batch dimension.
     # data = np.moveaxis(data, 1, -1)
@@ -223,7 +224,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--start_plotting_after_epoch", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--train_frac", type=float, default=0.9)
+    parser.add_argument("--train_frac", type=float, default=0.95)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--device", type=str, default="cuda:0")
     args = parser.parse_args()
