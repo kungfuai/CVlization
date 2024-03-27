@@ -22,6 +22,8 @@ IGNORE_TOKEN = 5120
 hyperparams = {
     "num_tokens_to_mask": 4800,
     "num_seq_gen_steps": 160,
+    "gen_prob_thresh": 0.0,
+    "num_data_samples": 200,
 }
 
 def load_data() -> torch.Tensor:
@@ -33,7 +35,8 @@ def load_data() -> torch.Tensor:
     # assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
     # data = data.reshape(-1, 8*64*64)
     # assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
-    return torch.tensor(data[:100], dtype=torch.long)
+    n_samples = hyperparams["num_data_samples"]
+    return torch.tensor(data[:n_samples], dtype=torch.long)
 
 def train_one_batch(
         model: MambaClassifier,
@@ -150,7 +153,7 @@ def generate_sequence(mamba: torch.nn.Module, device: str, init_with_random_toke
     assert values.shape == (1, 8*64*64), f"Expected (1, 8*64*64), got {values.shape}"
 
     predictions = None
-    proba_thresh = 0.0
+    proba_thresh = hyperparams["gen_prob_thresh"]
     with torch.no_grad():
         for step in tqdm(range(num_steps), desc="Generating sequence"):
             logits = mamba(values)
