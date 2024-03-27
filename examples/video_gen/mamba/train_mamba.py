@@ -33,7 +33,7 @@ def load_data() -> torch.Tensor:
     # assert data.shape == (1000, 64, 64, 8), f"Expected (1000, 64, 64, 8), got {data.shape}"
     # data = data.reshape(-1, 8*64*64)
     # assert data.shape == (1000, 8*64*64), f"Expected (1000, 8*64*64), got {data.shape}"
-    return torch.tensor(data, dtype=torch.long)
+    return torch.tensor(data[:100], dtype=torch.long)
 
 def train_one_batch(
         model: MambaClassifier,
@@ -141,10 +141,16 @@ def generate_sequence(mamba: torch.nn.Module, device: str, init_with_random_toke
     """
     num_steps = hyperparams["num_seq_gen_steps"]
 
-    values = torch.randint(0, IGNORE_TOKEN, (1, 8*64*64), device=device) \
-        if not init_with_random_tokens \
-            else torch.randint(0, IGNORE_TOKEN, (1, 8*64*64), device=device)
+    if init_with_random_tokens:
+        print("Initializing with random tokens.")
+        values = torch.randint(0, IGNORE_TOKEN, (1, 8*64*64), device=device)
+    else:
+        print("Initializing with IGNORE_TOKEN.")
+        values = torch.full((1, 8*64*64), IGNORE_TOKEN, device=device)
+    assert values.shape == (1, 8*64*64), f"Expected (1, 8*64*64), got {values.shape}"
 
+    predictions = None
+    proba_thresh = 0.0
     with torch.no_grad():
         for step in tqdm(range(num_steps), desc="Generating sequence"):
             logits = mamba(values)
@@ -152,15 +158,19 @@ def generate_sequence(mamba: torch.nn.Module, device: str, init_with_random_toke
             probs = torch.nn.functional.softmax(logits, dim=-1)
             predictions = torch.argmax(probs, dim=-1)
             max_probs = torch.max(probs, dim=-1).values
-            # replace all tokens with max_probs > 0.5 with the predicted token.
+            # replace all tokens with max_probs > proba_thresh with the predicted token.
             diff_tokens = torch.sum(
-                (values != predictions) & (max_probs > 0.5),
+                (values != predictions) & (max_probs > proba_thresh),
             )
             if diff_tokens == 0:
                 print(f"[Step {step}: Early stopping. No tokens changed.")
                 break
-            values[max_probs > 0.5] = predictions[max_probs > 0.5]
-            print(f"[Step {step}: Replaced {torch.sum(max_probs > 0.5)} tokens, and {diff_tokens} of them changed.")
+            values[max_probs > proba_thresh] = predictions[max_probs > proba_thresh]
+            print(f"[Step {step}: Replaced {torch.sum(max_probs > proba_thresh)} tokens, and {diff_tokens} of them changed.")
+
+    # replace any IGNORE_TOKEN with prediction.
+    assert predictions is not None
+    values[values == IGNORE_TOKEN] = predictions[values == IGNORE_TOKEN]
 
     return values.view(1, 8, 64, 64)
 
@@ -206,7 +216,7 @@ def decode_video(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--learning_rate", type=float, default=1e-3)
+    parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--start_plotting_after_epoch", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=1)
