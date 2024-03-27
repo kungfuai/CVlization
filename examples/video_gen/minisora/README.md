@@ -48,7 +48,7 @@ The following script uses a pretrained VAE to tokenize videos. An WANDB API key 
 
 ```bash
 # tokenize the video using vae
-bash examples/video_gen/minisora/train.sh python tokenize_videos.py
+bash examples/video_gen/minisora/train.sh python tokenize_videos.py --dataset flying_mnist_110k --batch_size 8
 ```
 
 ### Train a latent generative model
@@ -88,7 +88,7 @@ A variant of GPT:
 
 ```bash
 # Instead of training a diffusion model, one can also train a next token predictor.
-bash examples/video_gen/minisora/train.sh python train_latent_mdgpt.py --block_size 512 --wandb_log
+bash examples/video_gen/minisora/train.sh python train_latent_mdgpt.py --block_size 512 --sparse_block_size 500 --max_iters 100000000 --wandb_log
 ```
 
 3. Train a autoregressive MAMBA-based language model
