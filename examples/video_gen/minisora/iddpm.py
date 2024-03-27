@@ -184,6 +184,12 @@ def get_args():
         default=8,
         help="Number of latent frames to generate",
     )
+    parser.add_argument(
+        "--tokens_input_file",
+        type=str,
+        default="flying_mnist_tokens_32frames_train.npy",
+        help="Path to the tokenized input file",
+    )
     return parser.parse_args()
 
 
@@ -202,6 +208,7 @@ def train_on_latents(
     lr=1e-4,
     latent_frames_to_generate=8,
     clip_grad=None,
+    tokens_input_file:str = "flying_mnist_tokens_32frames_train.npy",
     track=False,
     **kwargs,
 ):
@@ -210,12 +217,13 @@ def train_on_latents(
     from stdit.model import STDiT
 
     # load from numpy
-    token_ids = np.load("flying_mnist_tokens_32frames_train.npy")
+    token_ids = np.load(tokens_input_file)
     assert len(token_ids.shape) == 4, f"Expected 4D tensor, got {token_ids.shape}"
     # convert token_ids to embeddings
     vae = VQVAE.from_pretrained("zzsi_kungfu/videogpt/model-kbu39ped:v11")
     vae.eval()
     vae.to(device)
+    # TODO: This loads all data into GPU memory! Use a dataloader instead
     token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long).to(device)
 
     # TODO: estimate these values automatically from z
