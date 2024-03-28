@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+from typing import Optional, Union
 import argparse
 import os
 
@@ -12,6 +12,7 @@ import torch
 import wandb
 
 from examples.video_gen.mamba.mamba_classifier import MambaClassifier
+from examples.video_gen.minisora.nanogpt import GPT, GPTConfig
 from cvlization.torch.net.vae.video_vqvae import VQVAE
 
 # seed numpy's random
@@ -20,10 +21,10 @@ np.random.seed(0)
 IGNORE_TOKEN = 5120
 
 hyperparams = {
-    "num_tokens_to_mask": 3200,
+    "num_tokens_to_mask": 100,
     "num_seq_gen_steps": 100,
     "gen_prob_thresh": 0.1,
-    "num_data_samples": 10000,
+    "num_data_samples": 100,
 }
 
 def load_data() -> torch.Tensor:
@@ -40,9 +41,10 @@ def load_data() -> torch.Tensor:
     return torch.tensor(data[:n_samples], dtype=torch.long)
 
 def train_one_batch(
-        model: MambaClassifier,
+        model: Union[MambaClassifier, GPT],
         sequence: torch.Tensor,
         optimizer: Optional[torch.optim.Optimizer],
+        device: str,
 ) -> float:
     """
     (b, video_dim) -> (b, 8, 64, 64)
@@ -56,16 +58,26 @@ def train_one_batch(
     assert sequence.shape[1:] == (8, 64, 64), f"Expected (b, 8, 64, 64), got {sequence.shape}"
     num_tokens_to_mask = hyperparams["num_tokens_to_mask"]
 
+    subsequence = sequence[:, 0] # First clip.
+    assert subsequence.shape == (sequence.shape[0], 64, 64), f"Expected (b, 64, 64), got {subsequence.shape}"
+
     # generate random tokens the same shape as batch sequence.
-    targets = sequence.view(sequence.shape[0], int(8*64*64))
+    targets = subsequence.view(subsequence.shape[0], int(64*64))
     model_input = targets.clone()
-    mask_indices = torch.randint(0, 8*64*64, (num_tokens_to_mask,))
+    mask_indices = torch.randint(0, 64*64, (num_tokens_to_mask,))
     model_input[:, mask_indices] = IGNORE_TOKEN
 
-    logits = model(model_input)
-    criterion = torch.nn.CrossEntropyLoss(reduction="mean")
-    # torch cross entropy loss expects (B, C, L) and (B, L) shapes.
-    loss = criterion(logits.permute(0, 2, 1), targets)
+    if isinstance(model, GPT):
+        logits, loss = model(
+            model_input.to(device),
+            targets=targets.to(device),
+        )
+    else:
+        logits = model(model_input.to(device))
+        assert logits.shape == (sequence.shape[0], 64*64, IGNORE_TOKEN + 1), f"Expected (b, 64*64, IGNORE_TOKEN + 1), got {logits.shape}"
+        criterion = torch.nn.CrossEntropyLoss(reduction="mean")
+        # torch cross entropy loss expects (B, C, L) and (B, L) shapes.
+        loss = criterion(logits.permute(0, 2, 1), targets.to(device))
 
     if optimizer is not None:
         optimizer.zero_grad()
@@ -75,11 +87,12 @@ def train_one_batch(
     return loss.item()
 
 def run_train_epoch(
-    model: MambaClassifier,
+    model: Union[GPT, MambaClassifier],
     data: torch.Tensor,
     optimizer: torch.optim.Optimizer,
     batch_size: int,
     epoch: int,
+    device: str,
 ) -> float:
     print(f"Training epoch {epoch}")
     model.train()
@@ -88,7 +101,7 @@ def run_train_epoch(
     count = 0
     for i in pbar:
         batch = data[i:i+batch_size]
-        batch_loss: float = train_one_batch(model, batch, optimizer=optimizer)
+        batch_loss: float = train_one_batch(model, batch, optimizer=optimizer, device=device)
         pbar.set_postfix({"train_batch_loss": batch_loss})
         total_loss += batch_loss
         count += 1
@@ -101,10 +114,11 @@ def run_train_epoch(
     return avg_loss
 
 def run_val_epoch(
-    model: MambaClassifier,
+    model: Union[GPT, MambaClassifier],
     data: torch.Tensor,
     batch_size: int,
     epoch: int,
+    device: str,
 ) -> float:
     print(f"Validating epoch {epoch}")
     model.eval()
@@ -114,7 +128,7 @@ def run_val_epoch(
     with torch.no_grad():
         for i in pbar:
             batch = data[i:i+batch_size]
-            batch_loss: float = train_one_batch(model, batch, optimizer=None)
+            batch_loss: float = train_one_batch(model, batch, optimizer=None, device=device)
             pbar.set_postfix({"val_batch_loss": batch_loss})
             total_loss += batch_loss
             count += 1
@@ -147,11 +161,11 @@ def generate_sequence(mamba: torch.nn.Module, device: str, init_with_random_toke
 
     if init_with_random_tokens:
         print("Initializing with random tokens.")
-        values = torch.randint(0, IGNORE_TOKEN, (1, 8*64*64), device=device)
+        values = torch.randint(0, IGNORE_TOKEN, (1, 64*64), device=device)
     else:
         print("Initializing with IGNORE_TOKEN.")
-        values = torch.full((1, 8*64*64), IGNORE_TOKEN, device=device)
-    assert values.shape == (1, 8*64*64), f"Expected (1, 8*64*64), got {values.shape}"
+        values = torch.full((1, 64*64), IGNORE_TOKEN, device=device)
+    assert values.shape == (1, 64*64), f"Expected (1, 64*64), got {values.shape}"
 
     predictions = None
     proba_thresh = hyperparams["gen_prob_thresh"]
@@ -176,7 +190,11 @@ def generate_sequence(mamba: torch.nn.Module, device: str, init_with_random_toke
     assert predictions is not None
     values[values == IGNORE_TOKEN] = predictions[values == IGNORE_TOKEN]
 
-    return values.view(1, 8, 64, 64)
+    assert values.shape == (1, 64*64), f"Expected (1, 64*64), got {values.shape}"
+    # repeat 8 times on new axis.
+    values = values.view(1, 64, 64).repeat(8, 1, 1).unsqueeze(0)
+    assert values.shape == (1, 8, 64, 64), f"Expected (1, 8, 64, 64), got {values.shape}"
+    return values
 
 def load_vae() -> torch.nn.Module:
     api = wandb.Api()
@@ -224,9 +242,9 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--start_plotting_after_epoch", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--train_frac", type=float, default=0.95)
+    parser.add_argument("--train_frac", type=float, default=0.9)
     parser.add_argument("--patience", type=int, default=5)
-    parser.add_argument("--device", type=str, default="cuda:0")
+    parser.add_argument("--device", type=str, default="cuda:1")
     args = parser.parse_args()
     # print args as json. print in bold green.
     print("Arguments:")
@@ -247,13 +265,20 @@ if __name__ == "__main__":
     wandb.config.update(mamba_kwargs)
     wandb.config.update(hyperparams)
 
-    data: torch.Tensor = load_data().to(args.device)
-    model = MambaClassifier(
-        n_tokens=IGNORE_TOKEN + 1, # 5120 tokens + 1 IGNORE.
-        seq_len=32768,
-        # seq_len=int(2*64*64), # Condition on last 2 frames to predict the next frame.
-        **mamba_kwargs,
-        device=args.device,
+    data: torch.Tensor = load_data()
+    # model = MambaClassifier(
+    #     n_tokens=IGNORE_TOKEN + 1, # 5120 tokens + 1 IGNORE.
+    #     seq_len=32768,
+    #     # seq_len=int(2*64*64), # Condition on last 2 frames to predict the next frame.
+    #     **mamba_kwargs,
+    #     device=args.device,
+    # ).to(args.device)
+    model = GPT(
+        GPTConfig(
+            block_size=4096,
+            vocab_size=IGNORE_TOKEN + 1,
+            dropout=0.1,
+        ),
     ).to(args.device)
 
     vae_device = "cuda:1" # args.device
@@ -264,10 +289,10 @@ if __name__ == "__main__":
     val_data = data[train_size:]
 
     train_vid = data[0].unsqueeze(0)
-    val_vid = val_data[0].unsqueeze(0)
+    # val_vid = val_data[0].unsqueeze(0)
 
     train_sanity_vid = decode_video(vae, train_vid.to(vae_device))
-    val_sanity_vid = decode_video(vae, val_vid.to(vae_device))
+    # val_sanity_vid = decode_video(vae, val_vid.to(vae_device))
 
     wandb.log({
         "train_sanity_vid": wandb.Video(train_sanity_vid, fps=5, format="mp4"),
@@ -289,11 +314,11 @@ if __name__ == "__main__":
         print(f"Epochs since best val loss: {len(val_epoch_losses) - best_val_loss_idx}")
         return False
     for epoch in range(args.epochs):
-        epoch_loss = run_train_epoch(model, train_data, optimizer, args.batch_size, epoch)
+        epoch_loss = run_train_epoch(model, train_data, optimizer, args.batch_size, epoch=epoch, device=args.device)
         # log train_epoch_loss metric to wandb.
         to_log = {"train_epoch_loss": epoch_loss}
         train_epoch_losses.append(epoch_loss)
-        epoch_loss = run_val_epoch(model, val_data, args.batch_size, epoch)
+        epoch_loss = run_val_epoch(model, val_data, args.batch_size, epoch=epoch, device=args.device)
         to_log["val_epoch_loss"] = epoch_loss
         if epoch % 2 == 0:
             # Generate a video.
