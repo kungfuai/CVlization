@@ -23,8 +23,8 @@ IGNORE_TOKEN = 5120
 hyperparams = {
     "num_tokens_to_mask": 100,
     "num_seq_gen_steps": 100,
-    "gen_prob_thresh": 0.1,
-    "num_data_samples": 100,
+    "gen_prob_thresh": 0.01,
+    "num_data_samples": 1000,
 }
 
 def load_data() -> torch.Tensor:
@@ -171,7 +171,7 @@ def generate_sequence(mamba: torch.nn.Module, device: str, init_with_random_toke
     proba_thresh = hyperparams["gen_prob_thresh"]
     with torch.no_grad():
         for step in tqdm(range(num_steps), desc="Generating sequence"):
-            logits = mamba(values)
+            logits = mamba(values)[0]
             # run softmax on all predictions.
             probs = torch.nn.functional.softmax(logits, dim=-1)
             predictions = torch.argmax(probs, dim=-1)
