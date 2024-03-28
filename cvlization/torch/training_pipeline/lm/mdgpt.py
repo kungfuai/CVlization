@@ -78,11 +78,12 @@ class MDGPTTrainingPipeline:
         self.out_dir = (
             f"{config.log_dir}/batch{config.batch_size}_block{config.block_size}"
         )
-        self.dtype = (
-            "bfloat16"
-            if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-            else "float16"
-        )  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+        # self.dtype = (
+        #     "bfloat16"
+        #     if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+        #     else "float16"
+        # )  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+        self.dtype = "float32"
 
         self.ptdtype = {
             "float32": torch.float32,
@@ -179,7 +180,7 @@ class MDGPTTrainingPipeline:
         # TODO: position_dim == 1 vs. > 1 should be handled in different functions
         # Coordinates of tokens. Shape is the same as data.
         if position_dim == 1:
-            positions = np.arange(len(data))
+            positions = np.arange(len(data), dtype=np.int64)
         else:
             # flatten:
             data = data.reshape(data.shape[0], -1)  # this is the whole video
@@ -194,11 +195,12 @@ class MDGPTTrainingPipeline:
         assert (
             len(data.shape) == 2
         ), f"Expected 2D array for training data, got {data.shape}"
-        # Insert the start token
-        data = np.concatenate(
-            [np.ones((data.shape[0], 1), dtype=data.dtype) * self.START_TOKEN, data],
-            axis=1,
-        )
+
+        # # Insert the start token (optional)
+        # data = np.concatenate(
+        #     [np.ones((data.shape[0], 1), dtype=data.dtype) * self.START_TOKEN, data],
+        #     axis=1,
+        # )
 
         # Insert the ignore token at the beginning
         data_with_ignore_token = np.concatenate(
@@ -207,12 +209,15 @@ class MDGPTTrainingPipeline:
         )
 
         irow = np.random.randint(data.shape[0], size=batch_size)
-        ix = torch.randint(data.shape[1] - block_size, (batch_size,))
+        ix = torch.randint(data.shape[1] - block_size - 2, (batch_size,)) + 1
         target_pos = [
             torch.from_numpy(positions[col, ...]) for row, col in zip(irow, ix)
         ]
         y_pos = target_pos = torch.stack(target_pos).unsqueeze(1).int()
         if self.relative_pos_lut is not None:
+            assert (
+                ix.max() < self.relative_pos_lut.shape[1]
+            ), f"ix.max()={ix.max()}, data.shape={data.shape}, relative_pos_lut.shape={self.relative_pos_lut.shape}"
             relative_pos = [self.relative_pos_lut[i, ...] for i in ix]
         else:
             relative_pos = [
@@ -259,6 +264,16 @@ class MDGPTTrainingPipeline:
         else:
             x, y = x.to(device), y.to(device)
             x_pos, y_pos = x_pos.to(device), y_pos.to(device)
+
+        # print(
+        #     f"max relative_pos={(y_pos.unsqueeze(1) - x_pos).max()}, x={x.max()}, y={y.max()}"
+        # )
+        # print(
+        #     f"min relative_pos={(y_pos.unsqueeze(1) - x_pos).min()}, x={x.min()}, y={y.min()}"
+        # )
+        assert (y_pos.unsqueeze(1) - x_pos).max() <= self.config.sparse_block_size
+        assert x.max() < self.config.vocab_size
+        assert y.max() < self.config.vocab_size
         return x_pos, x, y_pos, y
 
     def create_dataloaders(self, dataset_builder):
@@ -480,6 +495,7 @@ class MDGPTTrainingPipeline:
         # initialize a GradScaler. If enabled=False scaler is a no-op
         dtype = self.dtype
         self.scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
+        print(f"GradScaler enabled: {dtype == 'float16'}")
 
     def create_optimizer(self):
         model = self.model
@@ -490,6 +506,7 @@ class MDGPTTrainingPipeline:
         device_type = self.device_type
         init_from = self.config.init_from
         # optimizer
+        print(f"creating optimizer with lr {learning_rate}")
         optimizer = model.configure_optimizers(
             weight_decay, learning_rate, (beta1, beta2), device_type
         )
@@ -705,7 +722,7 @@ class MDGPTTrainingPipeline:
                         if wandb_log:
                             wandb.log({"sampled/ground_truth_decoded": display})
 
-            if (iter_num % sample_interval == 0) and master_process:
+            if ((iter_num + 1) % sample_interval == 0) and master_process:
                 # sample from the model
                 model.eval()
                 max_new_tokens = self.config.block_size
@@ -901,6 +918,13 @@ class MDGPT(GPT):
 
         # init all weights
         self.apply(self._init_weights)
+
+        # Check the embedding weights
+        for i, wpe in enumerate(self.transformer.wpe):
+            print(
+                f"embedding {i} weight mean, std:", wpe.weight.mean(), wpe.weight.std()
+            )
+
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
@@ -910,6 +934,14 @@ class MDGPT(GPT):
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def get_num_params(self, non_embedding=True):
         """
@@ -961,9 +993,7 @@ class MDGPT(GPT):
         assert (
             x.max() < self.config.vocab_size
         ), f"x.max(): {x.max()}, vocab_size: {self.config.vocab_size}"
-        assert (
-            relative_pos.max() < self.transformer.wpe[0].num_embeddings
-        ), f"x_pos.max(): {relative_pos.max()}, block_size: {self.config.block_size}, {self.transformer.wpe[0]}"
+
         input_x = x
 
         # if y is not None:
@@ -971,7 +1001,18 @@ class MDGPT(GPT):
         #         f"x={x[0].cpu().numpy().ravel()},\ny={y[0].cpu().numpy().ravel()},\nrelative_pos={relative_pos[0].cpu().numpy().ravel()}"
         #     )
 
+        # if self.transformer.wte.weight.isnan().sum() > 0:
+        #     print(
+        #         "Nan detected in wte:",
+        #         self.transformer.wte.weight.isnan().sum().item(),
+        #         "nan values",
+        #     )
+        #     raise ValueError("Nan detected in wte weights")
         x = self.transformer.wte(x)
+        # if x.isnan().sum() > 0:
+        #     print("Nan detected in x after wte:", x.isnan().sum().item(), "nan values")
+        #     print(f"x: {x}")
+        #     raise ValueError("Nan detected in x after wte")
         position_dim = len(self.config.position_shape)
         for d in range(position_dim):
             offset = self.config.position_shape[d]
@@ -979,13 +1020,25 @@ class MDGPT(GPT):
             # print("embedding model:", self.transformer.wpe[d])
             # print(f"input to embedding:", relative_pos_pruned[:, :, d] + offset)
             # TODO: try absolute value, instead of offsetting
+            assert (
+                relative_pos[:, :, d].max() < self.transformer.wpe[d].num_embeddings
+            ), f"x_pos.max(): {relative_pos.max()}, block_size: {self.config.block_size}, {self.transformer.wpe[0]}"
             x += self.transformer.wpe[d](relative_pos[:, :, d] + offset) / float(
                 position_dim
             )
+        # if x.isnan().sum() > 0:
+        #     print("Nan detected in x after wpe")
+        #     print(f"x: {x}")
+        #     raise ValueError("Nan detected in x after wpe")
         x = self.transformer.drop(x)
         for block in self.transformer.h:
             x = block(x)
+        # if x.isnan().sum() > 0:
+        #     print("Nan detected in x after block")
+        #     print(f"x: {x}")
+        #     raise ValueError("Nan detected in x after block")
         x = self.transformer.ln_f(x)
+
         # print(f"after linear, x shape: {x.shape}")
         if y is not None:
             # if we are given some desired targets also calculate the loss
@@ -999,19 +1052,35 @@ class MDGPT(GPT):
             y = y.unsqueeze(-1)
             # print(f"y shape 1: {y.shape}")
 
-            # logits_selected = logits
-            # y_selected = y
-            logits_selected = logits[~idx_to_ignore]
-            y_selected = y[~idx_to_ignore]
+            logits_selected = logits
+            y_selected = y.clone()
+            y_selected[idx_to_ignore] = -1
 
             # print(f"logits_selected shape: {logits_selected.shape}")
             # print(f"y_selected shape: {y_selected.shape}")
             try:
+                logits_selected = logits_selected.view(-1, logits_selected.size(-1))
+                y_selected = y_selected.view(-1)
+                # print(
+                #     f"y_selected shape: {y_selected.shape}, logits_selected shape: {logits_selected.shape}"
+                # )
+                # print(f"y_selected: {y_selected.cpu().numpy().ravel()[:5]}")
+                # print(f"logits_selected: {logits_selected.cpu().numpy()[:2, :5]}")
                 loss = F.cross_entropy(
-                    logits_selected.view(-1, logits_selected.size(-1)),
-                    y_selected.reshape(-1),
+                    logits_selected,
+                    y_selected,
                     ignore_index=-1,
                 )
+                if loss.isnan():
+                    print("Nan loss detected")
+                    print(f"input_x: {input_x.detach().cpu().numpy().ravel()}")
+                    print(f"x: {x.detach().cpu().numpy().ravel()}")
+                    print(
+                        f"relative_pos: {relative_pos.detach().cpu().numpy().ravel()}"
+                    )
+                    print(f"y_selected: {y_selected.detach().cpu().numpy()}")
+                    print(f"logits_selected: {logits_selected.detach().cpu().numpy()}")
+                    raise ValueError("Nan loss detected")
             except:
                 print(f"y shape: {y.shape}")
                 print(f"logits shape: {logits.shape}")

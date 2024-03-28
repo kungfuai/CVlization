@@ -12,6 +12,9 @@ config = {
 assert "dataset" in globals(), "Please specify the dataset to use"
 # print(config)
 
+# config["batch_size"] = 1
+# config["learning_rate"] = 3e-4
+
 # attempt to derive vocab_size from the dataset
 data_dir = os.path.join("data", dataset)
 meta_path = os.path.join(data_dir, "meta.pkl")

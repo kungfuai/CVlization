@@ -59,7 +59,9 @@ class NanoGPTTrainingPipeline:
         decay_lr: bool = True  # whether to decay the learning rate
         warmup_iters: int = 2000  # how many steps to warm up for
         lr_decay_iters: int = 600000  # should be ~= max_iters per Chinchilla
-        min_lr: float = 1e-5  # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+        min_lr: float = (
+            1e-5  # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+        )
         # DDP settings
         backend: str = "nccl"  # 'nccl', 'gloo', etc.
 
@@ -78,22 +80,26 @@ class NanoGPTTrainingPipeline:
         always_save_checkpoint: bool = False
         compile: bool = True  # use PyTorch 2.0 to compile the model to be faster
         eval_only = False  # if True, script exits right after the first eval
-    
+
     def __init__(self, config: Config):
         self.config = config
-        self.out_dir = f"{config.log_dir}/batch{config.batch_size}_block{config.block_size}"
+        self.out_dir = (
+            f"{config.log_dir}/batch{config.batch_size}_block{config.block_size}"
+        )
         self.dtype = (
             "bfloat16"
             if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
             else "float16"
         )  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-        
+
         self.ptdtype = {
             "float32": torch.float32,
             "bfloat16": torch.bfloat16,
             "float16": torch.float16,
         }[self.dtype]
-        device_type = "cuda" if "cuda" in config.device else "cpu"  # for later use in torch.autocast
+        device_type = (
+            "cuda" if "cuda" in config.device else "cpu"
+        )  # for later use in torch.autocast
         self.device_type = device_type
         self.ctx = (
             nullcontext()
@@ -103,13 +109,13 @@ class NanoGPTTrainingPipeline:
         self._setup_io()
         if self.master_process:
             os.makedirs(self.out_dir, exist_ok=True)
-        
+
         torch.manual_seed(1337 + self.seed_offset)
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
         self.START_TOKEN = self.config.start_token
-    
+
     def fit(self, dataset_builder):
         if self.master_process and self.config.wandb_log:
             wandb.init(project=self.config.project, config=self.config)
@@ -118,7 +124,7 @@ class NanoGPTTrainingPipeline:
         self.create_grad_scaler()
         self.create_optimizer()
         self.training_loop()
-    
+
     def _setup_io(self):
         """
         various inits, derived attributes, I/O setup
@@ -133,7 +139,9 @@ class NanoGPTTrainingPipeline:
             ddp_world_size = int(os.environ["WORLD_SIZE"])
             device = f"cuda:{ddp_local_rank}"
             torch.cuda.set_device(device)
-            self.master_process = ddp_rank == 0  # this process will do logging, checkpointing etc.
+            self.master_process = (
+                ddp_rank == 0
+            )  # this process will do logging, checkpointing etc.
             self.seed_offset = ddp_rank  # each process gets a different seed
             # world_size number of processes will be training simultaneously, so we can scale
             # down the desired gradient accumulation iterations per process proportionally
@@ -144,7 +152,12 @@ class NanoGPTTrainingPipeline:
             self.master_process = True
             self.seed_offset = 0
             ddp_world_size = 1
-        tokens_per_iter = self.config.gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+        tokens_per_iter = (
+            self.config.gradient_accumulation_steps
+            * ddp_world_size
+            * batch_size
+            * block_size
+        )
         print(f"tokens per iteration will be: {tokens_per_iter:,}")
         self.tokens_per_iter = tokens_per_iter
 
@@ -166,7 +179,7 @@ class NanoGPTTrainingPipeline:
         block_size = self.config.block_size
         batch_size = self.config.batch_size
         device = self.config.device
-        
+
         data = train_data if split == "train" else val_data
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack(
@@ -194,8 +207,17 @@ class NanoGPTTrainingPipeline:
         self.val_data = dataset_builder.validation_dataset()
         assert isinstance(self.train_data, np.ndarray)
         assert isinstance(self.val_data, np.ndarray)
-        assert self.train_data.dtype in [np.int32, np.int64, np.uint16, np.uint32, np.uint64]
-        assert len(self.train_data.shape) in [1, 2], f"Expected 1D or 2D array for training data, got {self.train_data.shape}"
+        assert self.train_data.dtype in [
+            np.int32,
+            np.int64,
+            np.uint16,
+            np.uint32,
+            np.uint64,
+        ]
+        assert len(self.train_data.shape) in [
+            1,
+            2,
+        ], f"Expected 1D or 2D array for training data, got {self.train_data.shape}"
         self.train_data_flattened = self.train_data.ravel()
         self.val_data_flattened = self.val_data.ravel()
         print(f"block size:", self.config.block_size)
@@ -250,7 +272,9 @@ class NanoGPTTrainingPipeline:
                 print(
                     "defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)"
                 )
-            self.model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
+            self.model_args["vocab_size"] = (
+                meta_vocab_size if meta_vocab_size is not None else 50304
+            )
             print("***** model args:", self.model_args)
             gptconf = GPTConfig(**(self.model_args))
             model = GPT(gptconf)
@@ -262,7 +286,14 @@ class NanoGPTTrainingPipeline:
             checkpoint_model_args = checkpoint["model_args"]
             # force these config attributes to be equal otherwise we can't even resume training
             # the rest of the attributes (e.g. dropout) can stay as desired from command line
-            for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
+            for k in [
+                "n_layer",
+                "n_head",
+                "n_embd",
+                "block_size",
+                "bias",
+                "vocab_size",
+            ]:
                 self.model_args[k] = checkpoint_model_args[k]
             # create the model
             gptconf = GPTConfig(**(self.model_args))
@@ -283,7 +314,14 @@ class NanoGPTTrainingPipeline:
             override_args = dict(dropout=dropout)
             model = GPT.from_pretrained(init_from, override_args)
             # read off the created config params, so we can store them into checkpoint correctly
-            for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
+            for k in [
+                "n_layer",
+                "n_head",
+                "n_embd",
+                "block_size",
+                "bias",
+                "vocab_size",
+            ]:
                 self.model_args[k] = getattr(model.config, k)
         # crop down the model block size if desired, using model surgery
         if block_size < model.config.block_size:
@@ -308,11 +346,10 @@ class NanoGPTTrainingPipeline:
             from diffusers.models import AutoencoderKL
 
             vae = AutoencoderKL.from_pretrained(self.config.vae_model_name)
-        
+
         vae.eval()
         vae = vae.to(self.config.device)
         self.vae = vae
-
 
     def _load_model_from_wandb(self, model_full_name: str):
         # TODO: move this to a separate module
@@ -326,7 +363,7 @@ class NanoGPTTrainingPipeline:
         else:
             artifact_dir = api.artifact(model_full_name).download()
         # The file is model.ckpt.
-        # print(list(state_dict.keys()))        
+        # print(list(state_dict.keys()))
         model = VQVAE.load_from_checkpoint(artifact_dir + "/model.ckpt")
         return model
 
@@ -352,7 +389,6 @@ class NanoGPTTrainingPipeline:
         self.checkpoint = None  # free up memory
         self.optimizer = optimizer
         return optimizer
-
 
     # learning rate decay scheduler (cosine with warmup)
     def get_lr(self, it):
@@ -500,8 +536,12 @@ class NanoGPTTrainingPipeline:
                 # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
                 lossf = loss.item() * gradient_accumulation_steps
                 if local_iter_num >= 5:  # let the training loop settle a bit
-                    mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
-                    running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+                    mfu = raw_model.estimate_mfu(
+                        batch_size * gradient_accumulation_steps, dt
+                    )
+                    running_mfu = (
+                        mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+                    )
                 print(
                     f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
                 )
@@ -518,7 +558,9 @@ class NanoGPTTrainingPipeline:
                     device = self.config.device
                     vae = self.vae
                     ground_truth_codes = (
-                        torch.Tensor(self.val_data[0, 1:].astype(np.int64)).long().to(device)
+                        torch.Tensor(self.val_data[0, 1:].astype(np.int64))
+                        .long()
+                        .to(device)
                     )  # this is hard coded
                     ground_truth_codes = rearrange(
                         ground_truth_codes,
@@ -528,7 +570,12 @@ class NanoGPTTrainingPipeline:
                         h=int(h),
                         w=int(w),
                     )
-                    assert ground_truth_codes.shape == (1, t, h, w), ground_truth_codes.shape
+                    assert ground_truth_codes.shape == (
+                        1,
+                        t,
+                        h,
+                        w,
+                    ), ground_truth_codes.shape
                     assert isinstance(
                         ground_truth_codes, torch.Tensor
                     ), f"expected torch.Tensor, got {type(ground_truth_codes)}"
@@ -537,7 +584,9 @@ class NanoGPTTrainingPipeline:
                         assert len(z.shape) == 5
                         assert z.shape == (1, 4, t, h, w)
                         video = vae.decoder(z)
-                        video = (video - video.min()) / (video.max() - video.min() + 1e-6)
+                        video = (video - video.min()) / (
+                            video.max() - video.min() + 1e-6
+                        )
                         video = (video * 255).to(torch.uint8)
                         video = rearrange(video, "b c t h w -> t c h (b w)")
                         assert video.shape[1] == 3, f"shape of video is {video.shape}"
@@ -551,7 +600,9 @@ class NanoGPTTrainingPipeline:
                     model.eval()
                     with torch.no_grad():
                         sampled_codes = model.generate(
-                            idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * self.START_TOKEN)
+                            idx=torch.Tensor(
+                                np.ones((1, 1), dtype=np.int32) * self.START_TOKEN
+                            )
                             .long()
                             .to(device),
                             max_new_tokens=self.data_seq_len,
@@ -560,15 +611,22 @@ class NanoGPTTrainingPipeline:
                             show_progress=True,
                         )
                         sampled_codes = sampled_codes[0, 1:]
-                        violating_codes = (sampled_codes > self.config.vae_vocab_size - 1).float().mean()
+                        violating_codes = (
+                            (sampled_codes > self.config.vae_vocab_size - 1)
+                            .float()
+                            .mean()
+                        )
                         print(f"violating codes: {violating_codes.item()}")
-                        sampled_codes[sampled_codes > self.config.vae_vocab_size - 1] = 0
+                        sampled_codes[
+                            sampled_codes > self.config.vae_vocab_size - 1
+                        ] = 0
                         # force_cudnn_initialization()
                         # sampled_codes = torch.ones(1, 32768, dtype=torch.long).to(device)
                         print("sampled codes:", sampled_codes)
                         # print(sampled_codes.min(), sampled_codes.max())
+                        assert self.data_seq_len == t * h * w, f"{self.data_seq_len} != {t*h*w}"
                         sampled_codes = rearrange(
-                            sampled_codes[:self.data_seq_len],
+                            sampled_codes[: self.data_seq_len],
                             "(b t h w) -> b t h w",
                             b=1,
                             t=int(t),
@@ -581,7 +639,9 @@ class NanoGPTTrainingPipeline:
                         assert len(z.shape) == 5
                         assert z.shape == (1, 4, t, h, w)
                         video = vae.decoder(z)
-                        video = (video - video.min()) / (video.max() - video.min() + 1e-6)
+                        video = (video - video.min()) / (
+                            video.max() - video.min() + 1e-6
+                        )
                         video = (video * 255).to(torch.uint8)
                         video = rearrange(video, "b c t h w -> t c h (b w)")
                         display = wandb.Video(video.cpu(), fps=5, format="mp4")
@@ -601,9 +661,10 @@ class NanoGPTTrainingPipeline:
             # termination conditions
             if iter_num > max_iters:
                 break
-        
+
         if ddp:
             destroy_process_group()
+
 
 class LayerNorm(nn.Module):
     """LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False"""
@@ -657,7 +718,9 @@ class CausalSelfAttention(nn.Module):
         except:
             # x.shape: torch.Size([8, 4096, 768]) this is the correct shape
             # x.shape: torch.Size([1, 1, 768]), n_embd: 768, n_head: 6, c_atten: Linear(in_features=768, out_features=2304, bias=True)
-            print(f"x.shape: {x.shape}, n_embd: {self.n_embd}, n_head: {self.n_head}, c_atten: {self.c_attn}")
+            print(
+                f"x.shape: {x.shape}, n_embd: {self.n_embd}, n_head: {self.n_head}, c_atten: {self.c_attn}"
+            )
             raise
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(
             1, 2
@@ -741,6 +804,9 @@ class GPTConfig:
     bias: bool = (
         True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     )
+    reversed: bool = (
+        False  # whether to reverse the input sequence and predict just the last token
+    )
 
 
 class GPT(nn.Module):
@@ -802,6 +868,15 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, idx, targets=None):
+        if self.config.reversed:
+            idx = torch.flip(idx.clone(), dims=[1]).contiguous()
+            # use the last target value, repeated, as the targets
+            if targets is not None:
+                # seq_len = targets.size(1)
+                # targets = targets[:, -1].unsqueeze(-1).expand(-1, seq_len).contiguous()
+                targets[:, :-1] = -1
+                # targets[:, 10:] = -1
+
         device = idx.device
         b, t = idx.size()
         assert (
@@ -965,7 +1040,9 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, show_progress=False):
+    def generate(
+        self, idx, max_new_tokens, temperature=1.0, top_k=None, show_progress=False
+    ):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -984,7 +1061,7 @@ class GPT(nn.Module):
                 if idx.size(1) <= self.config.block_size
                 else idx[:, -self.config.block_size :]
             )
-            
+
             # import sys
             # print("idx_cond max:", idx_cond.max())
             # sys.exit(0)
