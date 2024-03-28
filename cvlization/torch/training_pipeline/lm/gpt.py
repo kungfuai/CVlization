@@ -624,9 +624,10 @@ class NanoGPTTrainingPipeline:
                         # sampled_codes = torch.ones(1, 32768, dtype=torch.long).to(device)
                         print("sampled codes:", sampled_codes)
                         # print(sampled_codes.min(), sampled_codes.max())
-                        assert self.data_seq_len == t * h * w, f"{self.data_seq_len} != {t*h*w}"
+                        assert self.data_seq_len >= t * h * w, f"{self.data_seq_len} < {t*h*w} not enough tokens sampled"
+                        n_ = int(t * h * w)
                         sampled_codes = rearrange(
-                            sampled_codes[: self.data_seq_len],
+                            sampled_codes[:n_],
                             "(b t h w) -> b t h w",
                             b=1,
                             t=int(t),
