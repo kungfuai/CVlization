@@ -4,6 +4,13 @@ import pickle
 from cvlization.torch.training_pipeline.lm.gpt import NanoGPTTrainingPipeline
 
 config_keys = NanoGPTTrainingPipeline.Config.__annotations__.keys()
+# add the default values to the global namespace
+example_config = NanoGPTTrainingPipeline.Config()
+for k, v in NanoGPTTrainingPipeline.Config.__annotations__.items():
+    if k in ["meta_vocab_size"]:
+        continue
+    default_value = example_config.__getattribute__(k)
+    globals()[k] = default_value
 exec(open("configurator.py").read())  # overrides from command line or config file
 _globals = globals()
 config = {

@@ -76,6 +76,13 @@ class NanoGPTTrainingPipeline:
         meta_vocab_size: int = None
         max_tokens_to_sample: int = 128
 
+        # sparse context window
+        sparse_context_window: bool = False
+        context_stride: int = 2
+        context_stride_start: int = (
+            32  # only do sparse context window before (block_size - context_stride_start)
+        )
+
         # we expect to overfit on this small dataset, so only save when val improves
         always_save_checkpoint: bool = False
         compile: bool = True  # use PyTorch 2.0 to compile the model to be faster
@@ -200,6 +207,81 @@ class NanoGPTTrainingPipeline:
             x, y = x.to(device), y.to(device)
         assert x.shape == (self.config.batch_size, self.config.block_size)
         assert y.shape == (self.config.batch_size, self.config.block_size)
+
+        # make the context window sparse in the beginning of the sequence
+        if self.config.sparse_context_window:
+            sparse_idx = np.concatenate(
+                [
+                    np.arange(
+                        0,
+                        block_size - self.config.context_stride_start,
+                        self.config.context_stride,
+                    ),
+                    np.arange(
+                        block_size - self.config.context_stride_start, block_size
+                    ),
+                ]
+            )
+            x = x[:, sparse_idx]
+            y = y[:, sparse_idx]
+
+        # For debugging.
+        # Treatment 1
+        # x = torch.flip(
+        #     x, [1]
+        # )  # This combined with the following line (treatment 2) will make the loss nan.
+        # Treatment 2
+        # y[:, :-1] = -1  # This alone will make the training inefficient but still works.
+        # Treatment 3
+        # x[:, -1] = x[:, 0]  # This combined with treatment 1 and 2 fixes the nan issue.
+        return x, y
+
+    def get_batch_sparse(self, split: str):
+        """
+        Get a batch of data for training or validation.
+
+        Args:
+            split (str): The split to get the data from. Can be either "train" or "val".
+
+        Returns:
+            tuple: A tuple containing two tensors: x and y.
+                - x: The input tensor of shape (batch_size, block_size).
+                - y: The target tensor of shape (batch_size, block_size).
+
+        """
+        train_data = self.train_data_flattened
+        val_data = self.val_data_flattened
+        block_size = self.config.block_size
+        batch_size = self.config.batch_size
+        device = self.config.device
+
+        data = train_data if split == "train" else val_data
+        ix = torch.randint(len(data) - block_size, (batch_size,))
+        x = torch.stack(
+            [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
+        )
+        y = torch.stack(
+            [
+                torch.from_numpy((data[i + 1 : i + 1 + block_size]).astype(np.int64))
+                for i in ix
+            ]
+        )
+        if self.device_type == "cuda":
+            # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
+            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
+                device, non_blocking=True
+            )
+        else:
+            x, y = x.to(device), y.to(device)
+
+        # make the context window sparse in the beginning of the sequence
+        sparse_idx = np.concatenate(
+            [np.arange(0, block_size - 32, 1), np.arange(block_size - 32, block_size)]
+        )
+        x = x[:, sparse_idx]
+        y = y[:, sparse_idx]
+        # assert x.shape == (self.config.batch_size, self.config.block_size)
+        # assert y.shape == (self.config.batch_size, self.config.block_size)
         return x, y
 
     def create_dataloaders(self, dataset_builder):
@@ -325,6 +407,9 @@ class NanoGPTTrainingPipeline:
                 self.model_args[k] = getattr(model.config, k)
         # crop down the model block size if desired, using model surgery
         if block_size < model.config.block_size:
+            print(
+                f"cropping model block size from {model.config.block_size} to {block_size}"
+            )
             model.crop_block_size(block_size)
             self.model_args["block_size"] = (
                 block_size  # so that the checkpoint will have the right value
@@ -624,7 +709,9 @@ class NanoGPTTrainingPipeline:
                         # sampled_codes = torch.ones(1, 32768, dtype=torch.long).to(device)
                         print("sampled codes:", sampled_codes)
                         # print(sampled_codes.min(), sampled_codes.max())
-                        assert self.data_seq_len >= t * h * w, f"{self.data_seq_len} < {t*h*w} not enough tokens sampled"
+                        assert (
+                            self.data_seq_len >= t * h * w
+                        ), f"{self.data_seq_len} < {t*h*w} not enough tokens sampled"
                         n_ = int(t * h * w)
                         sampled_codes = rearrange(
                             sampled_codes[:n_],
@@ -884,6 +971,8 @@ class GPT(nn.Module):
             t <= self.config.block_size
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
+        # if self.config.reversed:
+        #     pos = torch.flip(pos, dims=[0]).contiguous()
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
