@@ -44,7 +44,7 @@ bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 -
 
 To train a VAE without quantization (more suitable for diffusion):
 ```bash
-bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 --resolution 256 --sequence_length 32 --embedding_dim 4 --n_codes 5120 --limit_train_batches 1.0 --limit_val_batches 0.25 --epochs 100 --save_every_n_epochs 5 --low_utilization_cost 0.1 --network_variant vae_s4t4_b --lr 0.001 --kl_loss_weight 0.1 --commitment_cost 0.25 --track
+bash examples/video_gen/minisora/train.sh python train_vqvae.py --dataset flying_mnist_11k --batch_size 2 --resolution 256 --sequence_length 4 --embedding_dim 4 --n_codes 5120 --limit_train_batches 1.0 --limit_val_batches 0.025 --epochs 100 --save_every_n_epochs 5 --low_utilization_cost 0.1 --network_variant s4t4_b --lr 0.001 --kl_loss_weight 0.001 --commitment_cost 0.25 --track
 ```
 
 ### Use VAE to tokenize videos
