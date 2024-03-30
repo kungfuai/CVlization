@@ -45,11 +45,12 @@ def main():
     torch.set_float32_matmul_precision('medium')
 
     pipeline = VQVAETrainingPipeline(args)
-    if args.dataset == "flying_mnist":
+    if args.dataset.startswith("flying_mnist"):
         from cvlization.dataset.flying_mnist import FlyingMNISTDatasetBuilder
 
         dataset_builder = FlyingMNISTDatasetBuilder(
-            resolution=args.resolution, max_frames_per_video=args.sequence_length
+            resolution=args.resolution, max_frames_per_video=args.sequence_length,
+            dataset_name=args.dataset
         )
     else:
         print("Loading from huggingface...")
