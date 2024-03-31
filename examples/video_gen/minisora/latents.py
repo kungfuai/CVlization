@@ -55,7 +55,10 @@ def extract_latents(
             z = vae.encoder(x)
             vq_output = vae.vq(z)
             if isinstance(vq_output, dict):
-                z_q = vq_output["z_recon"]
+                if "z_recon" in vq_output:
+                    z_q = vq_output["z_recon"]
+                elif "z" in vq_output:
+                    z_q = vq_output["z"]
             else:
                 z_q = vq_output
             # unbatch
