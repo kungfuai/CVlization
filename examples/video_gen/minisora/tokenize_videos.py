@@ -1,48 +1,7 @@
-import os
-import torch
-import wandb
-from diffusers.models import AutoencoderKL
-from cvlization.torch.net.vae.video_vqvae import VQVAE
-
-
-def load_model_from_wandb(
-    model_full_name: str = "zzsi_kungfu/videogpt/model-tjzu02pg:v17",
-) -> dict:
-    api = wandb.Api()
-    # skip if the file already exists
-    artifact_dir = f"artifacts/{model_full_name.split('/')[-1]}"
-    if os.path.exists(artifact_dir):
-        print(f"Model already exists at {artifact_dir}")
-    else:
-        artifact_dir = api.artifact(model_full_name).download()
-    # The file is model.ckpt.
-    state_dict = torch.load(artifact_dir + "/model.ckpt")
-    # print(list(state_dict.keys()))
-    hyper_parameters = state_dict["hyper_parameters"]
-    args = hyper_parameters["args"]
-
-    # args = Namespace(**hyper_parameters)
-    # print(args)
-    model = VQVAE.load_from_checkpoint(artifact_dir + "/model.ckpt")
-    # model = VQVAE(args=args)
-    # model.load_state_dict(state_dict["state_dict"])
-    return model
-
-
-def create_vae(
-    wandb_model_name: str = None, hf_model_name: str = "stabilityai/sd-vae-ft-mse"
-) -> AutoencoderKL:
-    if wandb_model_name:
-        vae = load_model_from_wandb(wandb_model_name)
-        return vae
-    vae = AutoencoderKL.from_pretrained(hf_model_name)
-    return vae
-
-
 def tokenize():
     from argparse import ArgumentParser
     from cvlization.dataset.flying_mnist import FlyingMNISTDatasetBuilder
-    from latents import extract_token_ids
+    from latents import extract_token_ids, create_vae
     from tqdm import tqdm
     import numpy as np
     

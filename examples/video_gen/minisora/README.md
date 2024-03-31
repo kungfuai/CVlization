@@ -47,9 +47,14 @@ To train a VAE without quantization (more suitable for diffusion):
 bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 --resolution 256 --sequence_length 32 --embedding_dim 4 --n_codes 5120 --limit_train_batches 1.0 --limit_val_batches 0.25 --epochs 150 --save_every_n_epochs 5 --low_utilization_cost 0.1 --network_variant vae_s4t4_b --lr 0.001 --kl_loss_weight 0.1 --commitment_cost 0.25 --track
 ```
 
-### Use VAE to tokenize videos
+### Use VAE to extract latents or tokenize videos
 
-The following script uses a pretrained VAE to tokenize videos. An WANDB API key is needed. If you want to use your own VAE, please adapt the script.
+The following script uses a pretrained VAE to extract latents or tokenize videos. An WANDB API key is needed. If you want to use your own VAE, please adapt the script.
+
+```bash
+# extract latents from the video using vae
+bash examples/video_gen/minisora/train.sh python latents.py --dataset flying_mnist --batch_size 8
+```
 
 ```bash
 # tokenize the video using vae
@@ -86,7 +91,7 @@ bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accum
 
 ```bash
 # Instead of training a diffusion model, one can also train a next token predictor.
-bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 4096 --tokens_input_file flying_mnist_11k_tokens_32frames_train.npy --sample_interval 2000 --batch_size 8 --gradient_accumulation_steps 4 --wandb_log
+bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 512 --tokens_input_file flying_mnist_11k_tokens_32frames_train.npy --sample_interval 2000 --batch_size 8 --gradient_accumulation_steps 4 --wandb_log
 ```
 
 A variant of GPT:
