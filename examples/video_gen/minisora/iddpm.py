@@ -7,6 +7,7 @@ TODO:
 
 from functools import partial
 import torch
+import wandb
 from einops import rearrange
 import iddpm_scheduler.gaussian_diffusion as gd
 from iddpm_scheduler.respace import SpacedDiffusion, space_timesteps
@@ -190,6 +191,18 @@ def get_args():
         default="flying_mnist_tokens_32frames_train.npy",
         help="Path to the tokenized input file",
     )
+    parser.add_argument(
+        "--latents_input_file",
+        type=str,
+        default="data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
+        help="Path to the latents input file",
+    )
+    parser.add_argument(
+        "--vae",
+        type=str,
+        default="zzsi_kungfu/videogpt/model-kbu39ped:v11",
+        help="VAE model name",
+    )
     return parser.parse_args()
 
 
@@ -208,7 +221,9 @@ def train_on_latents(
     lr=1e-4,
     latent_frames_to_generate=8,
     clip_grad=None,
+    vae:str = "zzsi_kungfu/videogpt/model-kbu39ped:v11",
     tokens_input_file:str = "flying_mnist_tokens_32frames_train.npy",
+    latents_input_file:str = "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
     track=False,
     **kwargs,
 ):
@@ -216,27 +231,45 @@ def train_on_latents(
     from cvlization.torch.net.vae.video_vqvae import VQVAE
     from stdit.model import STDiT
 
+    model_id = vae.split("/")[-1].split(":")[0]
     # load from numpy
-    token_ids = np.load(tokens_input_file)
-    assert len(token_ids.shape) == 4, f"Expected 4D tensor, got {token_ids.shape}"
+    if latents_input_file is not None:
+        latents = np.load(latents_input_file)
+        assert model_id in latents_input_file, f"Expected model_id {model_id} in {latents_input_file}"
+        token_ids = None
+        assert len(latents.shape) == 5, f"Expected 5D tensor, got {latents.shape}"
+    elif tokens_input_file is not None:
+        token_ids = np.load(tokens_input_file)
+        latents = None
+        assert len(token_ids.shape) == 4, f"Expected 4D tensor, got {token_ids.shape}"
+        assert model_id in tokens_input_file, f"Expected model_id {model_id} in {tokens_input_file}"
     # convert token_ids to embeddings
-    vae = VQVAE.from_pretrained("zzsi_kungfu/videogpt/model-kbu39ped:v11")
+    # TODO: support huggingface models
+    vae = VQVAE.from_pretrained(vae)
     vae.eval()
     vae.to(device)
-    # TODO: This loads all data into GPU memory! Use a dataloader instead
-    token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long).to(device)
 
-    # TODO: estimate these values automatically from z
-    latent_multiplier = 9
-    latent_bias = -0.27
-
-    with torch.no_grad():
-        z = vae.vq.codes_to_vec(token_ids)
+    if latents is None and token_ids is not None:
+        with torch.no_grad():
+            # TODO: This loads all data into GPU memory! Use a dataloader instead
+            token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long).to(device)
+            # TODO: estimate these values automatically from z
+            latent_multiplier = 9
+            latent_bias = -0.27
+            z = vae.vq.codes_to_vec(token_ids)
+            assert len(z.shape) == 5, f"Expected 5D tensor, got {z.shape}"
+            assert (
+                z.shape[2] == token_ids.shape[1]
+            ), f"Expected the temporal dimension has size {token_ids.shape[1]}, got {z.shape[2]}"
+            # print(z.shape)  # (1000, 4, 8, 64, 64)
+            z = z * latent_multiplier + latent_bias
+    else:
+        z = torch.tensor(latents, dtype=torch.float32).to(device)
         assert len(z.shape) == 5, f"Expected 5D tensor, got {z.shape}"
-        assert (
-            z.shape[2] == token_ids.shape[1]
-        ), f"Expected the temporal dimension has size {token_ids.shape[1]}, got {z.shape[2]}"
-        # print(z.shape)  # (1000, 4, 8, 64, 64)
+        assert z.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {z.shape[2]}"
+        # Compute latent multiplier and bias to make the mean 0 and std 1
+        latent_multiplier = 1 / z.std()
+        latent_bias = -z.mean() * latent_multiplier
         z = z * latent_multiplier + latent_bias
 
     def get_batch(latent_frames_to_generate: int):
@@ -281,6 +314,22 @@ def train_on_latents(
         # Backward & update
         loss = loss_dict["loss"].mean()
         loss.backward()
+
+        if i == 0:
+            # Decode the ground truth latents
+            with torch.no_grad():
+                video = vae.decoder(z[:1])
+            video = (video - video.min()) / (
+                video.max() - video.min() + 1e-6
+            )
+            video = (video * 255).to(torch.uint8)
+            video = rearrange(video, "b c t h w -> t c h (b w)")
+            assert video.shape[1] == 3, f"shape of video is {video.shape}"
+            
+            if track:
+                import wandb
+                display = wandb.Video(video.detach().cpu(), fps=5, format="mp4")
+                wandb.log({"sampled/ground_truth_decoded": display})
 
         if (i + 1) % accumulate_grad_batches == 0:
 		    # Update Optimizer
