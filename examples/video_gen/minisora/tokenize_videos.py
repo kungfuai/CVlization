@@ -4,6 +4,7 @@ def tokenize():
     from latents import extract_token_ids, create_vae
     from tqdm import tqdm
     import numpy as np
+    from pathlib import Path
     
     parser = ArgumentParser()
     parser.add_argument("--dataset", type=str, default="flying_mnist", help="Dataset name. E.g. flying_mnist_11k")
@@ -44,9 +45,11 @@ def tokenize():
     all_token_ids = np.concatenate(all_token_ids, 0)
     print(all_token_ids[0])
     print(all_token_ids.shape, all_token_ids.dtype)
+    model_id = args.vae.split("/")[-1].split(":")[0]
     # save
+    Path("data/latents").mkdir(exist_ok=True, parents=True)
     np.save(
-        f"{dataset_name}_tokens_{max_frames_per_video}frames_train.npy", all_token_ids
+        f"data/latents/{dataset_name}__{model_id}_tokens_{max_frames_per_video}frames_train.npy", all_token_ids
     )
 
 

@@ -145,7 +145,7 @@ def main():
             )
         )
     ):
-        assert latents.ndim == 3
+        assert latents.ndim == 4, f"Latents must have 4 dimensions besides the batch dim, got {latents.shape}"
         all_latents.append(latents.unsqueeze(0).numpy())  # .reshape(1, -1))
         # print("all_token_ids:", all_token_ids[-1].astype(float).mean())
         # if j > 1:
@@ -153,10 +153,11 @@ def main():
     all_latents = np.concatenate(all_latents, 0)
     print(all_latents[0])
     print(all_latents.shape, all_latents.dtype)
+    model_id = args.vae.split("/")[-1].split(":")[0]
     # save
     Path("data/latents").mkdir(exist_ok=True, parents=True)
     np.save(
-        f"data/latents/{dataset_name}_latents_{max_frames_per_video}frames_train.npy", all_latents
+        f"data/latents/{dataset_name}__{model_id}_latents_{max_frames_per_video}frames_train.npy", all_latents
     )
 
 

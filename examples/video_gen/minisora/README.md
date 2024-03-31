@@ -58,7 +58,7 @@ bash examples/video_gen/minisora/train.sh python latents.py --dataset flying_mni
 
 ```bash
 # tokenize the video using vae
-bash examples/video_gen/minisora/train.sh python tokenize_videos.py --dataset flying_mnist_110k --batch_size 8
+bash examples/video_gen/minisora/train.sh python tokenize_videos.py --dataset flying_mnist --batch_size 8
 ```
 
 ### Train a latent generative model
@@ -81,10 +81,10 @@ Using spatial temporal DiT (adatped from ColossalAI's OpenSora):
 
 ```bash
 # This will use a VAE trained on Flying MNIST
-bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 4 --accumulate_grad_batches 1 --max_steps 100000 --log_every 10 --sample_every 500 --clip_grad 1.0 --track
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 4 --accumulate_grad_batches 8 --latent_frames_to_generate 8 --max_steps 1000000 --log_every 100 --sample_every 2000 --clip_grad 1.0 --tokens_input_file data/latents/flying_mnist_tokens_32frames_train.npy --track
 
 # or train a larger net
-bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 100 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 4 --tokens_input_file flying_mnist_11k_tokens_32frames_train.npy --track
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 100 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 4 --tokens_input_file data/latents/flying_mnist_tokens_32frames_train.npy --track
 ```
 
 2. Train an autoregressive transformer-based language model (next token predictor)
