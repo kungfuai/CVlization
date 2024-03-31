@@ -140,6 +140,7 @@ class FlyingMNISTDataset:
         opts: dict,
         from_dir: Path = None,
         max_frames_per_video: int = 100,
+        frames_between_clips: int = 100,
         max_videos: int = 10000,
         seed_offset: int = 0,
         resolution: int = 64,
@@ -150,6 +151,8 @@ class FlyingMNISTDataset:
         self.max_frames_per_video = max_frames_per_video
         self.seed_offset = seed_offset
         self.opts = opts
+        # Note: intentionally setting frames_between_clips to a large enough number so that only 1 clip is taken from a 100 video.
+        self.frames_between_clips = frames_between_clips
         self.from_dir = from_dir
         self.resolution = resolution
         self.sequence_length = max_frames_per_video
@@ -168,7 +171,7 @@ class FlyingMNISTDataset:
                 [],
             )
             self.max_videos = len(files)
-            clips = VideoClips(files, self.sequence_length, num_workers=32)
+            clips = VideoClips(files, self.sequence_length, num_workers=32, frames_between_clips=self.frames_between_clips)
             self._clips = clips
 
     def __iter__(self):
@@ -205,6 +208,8 @@ class FlyingMNISTDataset:
         return dict(video=np.array(frames))
 
     def __len__(self):
+        if not self.to_generate and hasattr(self, "_clips"):
+            return self._clips.num_clips()
         if self.max_videos is None:
             return None
         assert isinstance(
