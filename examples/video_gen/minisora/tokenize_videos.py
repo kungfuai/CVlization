@@ -9,8 +9,10 @@ def tokenize():
     parser = ArgumentParser()
     parser.add_argument("--dataset", type=str, default="flying_mnist", help="Dataset name. E.g. flying_mnist_11k")
     parser.add_argument("--batch_size", type=int, default=2, help="Batch size for token extraction")
+    parser.add_argument("--vae", type=str, default="zzsi_kungfu/videogpt/model-kbu39ped:v11", help="VAE model name")
     args = parser.parse_args()
     dataset_name = args.dataset
+    model_id = args.vae.split("/")[-1].split(":")[0]
 
     max_frames_per_video = 32
     resolution = 256
@@ -19,7 +21,10 @@ def tokenize():
         max_frames_per_video=max_frames_per_video, resolution=resolution
     )
     train_ds = db.training_dataset()
-    vae = create_vae(wandb_model_name="zzsi_kungfu/videogpt/model-kbu39ped:v11")
+    if ":" in args.vae:
+        vae = create_vae(wandb_model_name=args.vae)
+    else:
+        vae = create_vae(hf_model_name=args.vae)
     spatial_compression = 4
     temporal_compression = 4
     vae = vae.to("cuda")
@@ -45,7 +50,7 @@ def tokenize():
     all_token_ids = np.concatenate(all_token_ids, 0)
     print(all_token_ids[0])
     print(all_token_ids.shape, all_token_ids.dtype)
-    model_id = args.vae.split("/")[-1].split(":")[0]
+    
     # save
     Path("data/latents").mkdir(exist_ok=True, parents=True)
     np.save(
