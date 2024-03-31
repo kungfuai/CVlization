@@ -1,5 +1,6 @@
-# A python library for accessible computer vision research and development
+# Practical and sample-efficient training pipelines for vision, language and more modalities
 
+Dedicated to training recipes without requiring huge amount of data or thousand-node A100/H100/H200 clusters.
 
 ## Requirements
 
