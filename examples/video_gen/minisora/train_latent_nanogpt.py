@@ -73,6 +73,9 @@ def main():
             beta2=args.beta2,
             warmup_iters=args.warmup_iters,
             wandb_log=args.wandb_log,
+            sparse_context_window=args.sparse_context_window,
+            context_stride=args.context_stride,
+            context_stride_start=args.context_stride_start,
         )
     )
     train_pipe.fit(dataset_builder)
