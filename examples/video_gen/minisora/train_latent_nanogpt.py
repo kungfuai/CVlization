@@ -38,6 +38,9 @@ def main():
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
     parser.add_argument("--vae_model_name", type=str, default="zzsi_kungfu/videogpt/model-kbu39ped:v11")
     parser.add_argument("--tokens_input_file", type=str, default="flying_mnist_tokens_32frames_train.npy")
+    parser.add_argument("--sparse_context_window", action="store_true")
+    parser.add_argument("--context_stride", type=int, default=2)
+    parser.add_argument("--context_stride_start", type=int, default=32)
     parser.add_argument("--wandb_log", action="store_true")
     args = parser.parse_args()
 
