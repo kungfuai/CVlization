@@ -232,6 +232,7 @@ def train_on_latents(
     from stdit.model import STDiT
 
     model_id = vae.split("/")[-1].split(":")[0]
+    print(f"model_id: {model_id}")
     # load from numpy
     if latents_input_file is not None:
         latents = np.load(latents_input_file)
