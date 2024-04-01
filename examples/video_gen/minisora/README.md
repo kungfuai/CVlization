@@ -91,7 +91,7 @@ bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accum
 
 ```bash
 # Instead of training a diffusion model, one can also train a next token predictor.
-bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 512 --tokens_input_file flying_mnist_tokens_32frames_train.npy --sample_interval 2000 --batch_size 8 --gradient_accumulation_steps 4 --wandb_log
+bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 512 --tokens_input_file data/latents/flying_mnist__model-kbu39ped_tokens_32frames_train.npy --sample_interval 2000 --batch_size 8 --gradient_accumulation_steps 4 --sparse_context_window --context_stride 2 --context_stride_start 256 --wandb_log
 ```
 
 A variant of GPT:
