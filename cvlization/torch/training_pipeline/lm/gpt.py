@@ -416,6 +416,8 @@ class NanoGPTTrainingPipeline:
             )
         print(model)
         model.to(device)
+        if self.config.compile:
+            model = torch.compile(model)
         self.model = model
 
         if self.master_process and self.config.vae_model_name is not None:
