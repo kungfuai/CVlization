@@ -297,6 +297,7 @@ def train_on_latents(
     ).to(device)
     print("Denoiser:")
     print(denoiser)
+    print(f"Number of parameters: {sum(p.numel() for p in denoiser.parameters())}")
     diffusion = IDDPM(
         num_sampling_steps=diffusion_steps,
     )
@@ -360,7 +361,6 @@ def train_on_latents(
                     model=denoiser,
                     # text_encoder=None,
                     n_samples=1,
-                    # z_size=z.shape[1:],
                     z_size=(z.shape[1], latent_frames_to_generate, z.shape[3], z.shape[4]),
                     # prompts=[],  # ["a", "b"],
                     device=device,
