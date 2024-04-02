@@ -227,6 +227,8 @@ class NanoGPTTrainingPipeline:
 
         # For debugging.
         # Treatment 1
+        # This is so that the model can learn to predict the final token, using varying context window lengths:
+        #  with only the nearest neighbor, and then the 2 nearest neighbors, then 3, ...
         # x = torch.flip(
         #     x, [1]
         # )  # This combined with the following line (treatment 2) will make the loss nan.

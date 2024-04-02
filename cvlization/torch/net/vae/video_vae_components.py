@@ -1015,6 +1015,251 @@ def s8t8_a(embedding_dim: int = 8, **kwargs):
         "embedding_dim": embedding_dim,
     }
 
+def s8t8_b(embedding_dim: int = 8, **kwargs):
+    latent_dims = [32, 64]
+    encode = torch.nn.Sequential(
+        torch.nn.Conv3d(
+            3,
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[1],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            latent_dims[1],
+            embedding_dim,
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+    )
+    tanh = torch.nn.Tanh()
+    decode = torch.nn.Sequential(
+        torch.nn.ConvTranspose3d(
+            embedding_dim,
+            latent_dims[1],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[1],
+            latent_dims[1],
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            latent_dims[1],
+            latent_dims[0],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            latent_dims[0],
+            3,
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        tanh,
+    )
+    vq = torch.nn.Identity()
+    return {
+        "encode": encode,
+        "decode": decode,
+        "vq": vq,
+        "embedding_dim": embedding_dim,
+    }
+
+def vae_s8t8_b(embedding_dim: int = 8, num_embeddings: int = 512, low_utilization_cost: float = 0, commitment_cost: float = 0.25, **kargs):
+    latent_dims = [32, 64]
+    encoder_layers = [
+        torch.nn.Conv3d(
+            3,
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[1],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            latent_dims[1],
+            embedding_dim,
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+    ]
+    encode = VariationalEncoder(encoder_layers)
+    tanh = torch.nn.Tanh()
+    decode = torch.nn.Sequential(
+        torch.nn.ConvTranspose3d(
+            embedding_dim,
+            latent_dims[1],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[1],
+            latent_dims[1],
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            latent_dims[1],
+            latent_dims[0],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            latent_dims[0],
+            3,
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        tanh,
+    )
+    vq = torch.nn.Identity()
+    return {
+        "encode": encode,
+        "decode": decode,
+        "vq": vq,
+        "embedding_dim": latent_dims[0],
+    }
+
+def s8t8_b_vq(
+    embedding_dim: int = 8,
+    num_embeddings: int = 512,
+    low_utilization_cost: float = 0,
+    commitment_cost: float = 0.25,
+    **kwargs,
+):
+    latent_dims = [32, 64]
+    encode = torch.nn.Sequential(
+        torch.nn.Conv3d(
+            3,
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[1],
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.ReLU(),
+        torch.nn.Conv3d(
+            latent_dims[1],
+            embedding_dim,
+            kernel_size=(3, 3, 3),
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+    )
+    tanh = torch.nn.Tanh()
+    decode = torch.nn.Sequential(
+        torch.nn.ConvTranspose3d(
+            embedding_dim,
+            latent_dims[1],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[1],
+            latent_dims[1],
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            latent_dims[1],
+            latent_dims[0],
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.Conv3d(
+            latent_dims[0],
+            latent_dims[0],
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+            padding=(1, 1, 1),
+        ),
+        torch.nn.LeakyReLU(),
+        torch.nn.ConvTranspose3d(
+            latent_dims[0],
+            3,
+            kernel_size=[4, 4, 4],
+            stride=(2, 2, 2),
+            padding=(1, 1, 1),
+        ),
+        tanh,
+    )
+    vq = VectorQuantizer(
+        num_embeddings=num_embeddings,
+        embedding_dim=embedding_dim,
+        low_utilization_cost=low_utilization_cost,
+        commitment_cost=commitment_cost,
+    )
+    return {
+        "encode": encode,
+        "decode": decode,
+        "vq": vq,
+        "embedding_dim": latent_dims[0],
+    }
 
 def encode_decode_spatial16x_a(embedding_dim: int = 8, **kwargs):
     encode = torch.nn.Sequential(
