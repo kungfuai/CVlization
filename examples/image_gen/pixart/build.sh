@@ -1,0 +1,1 @@
+docker build -t pixart examples/image_gen/pixart
