@@ -56,10 +56,11 @@ def extract_latents(
             if vae_is_for_image:
                 # flatten the spatial dimensions
                 x = rearrange(x, "b c t h w -> (b t) c h w")
-            z = vae.encoder(x)
+            z = vae.encode(x)
             if hasattr(z, "latent_dist"):
                 # AutoencoderKL
                 z = z.latent_dist.sample()
+                print("z:", z.shape)
             elif hasattr(vae, "vq"):
                 vq_output = vae.vq(z)
                 if isinstance(vq_output, dict):
@@ -69,14 +70,15 @@ def extract_latents(
                         z_q = vq_output["z"]
                 else:
                     z_q = vq_output
-            else:
-                z_q = z
+                z = z_q
+            
             if vae_is_for_image:
                 # unflatten the spatial dimensions
-                z_q = rearrange(z_q, "(b t) c h w -> b c t h w", t=t)
+                z = rearrange(z, "(b t) c h w -> b c t h w", t=t)
+                
             # unbatch
-            for z_q_i in z_q.to(output_device):
-                yield z_q_i
+            for z_i in z.to(output_device):
+                yield z_i
 
 
 def extract_token_ids(
