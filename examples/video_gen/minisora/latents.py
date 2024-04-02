@@ -43,24 +43,37 @@ def create_vae(
     return vae
 
 def extract_latents(
-    vae, dataset, batch_size: int = 32, output_device: str = "cpu"
+    vae, dataset, batch_size: int = 32, output_device: str = "cpu", vae_is_for_image: bool = False
 ) -> Iterable[torch.Tensor]:
     dl = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     for batch in dl:
         x = batch["video"]
         assert x.ndim == 5, "videos must have 4 dimensions besides the batch dim"
         assert x.shape[1] == 3, "videos must have 3 channels at dim 1"
+        t = x.shape[2]
         x = x.to(vae.device)
         with torch.no_grad():
+            if vae_is_for_image:
+                # flatten the spatial dimensions
+                x = rearrange(x, "b c t h w -> (b t) c h w")
             z = vae.encoder(x)
-            vq_output = vae.vq(z)
-            if isinstance(vq_output, dict):
-                if "z_recon" in vq_output:
-                    z_q = vq_output["z_recon"]
-                elif "z" in vq_output:
-                    z_q = vq_output["z"]
+            if hasattr(z, "latent_dist"):
+                # AutoencoderKL
+                z = z.latent_dist.sample()
+            elif hasattr(vae, "vq"):
+                vq_output = vae.vq(z)
+                if isinstance(vq_output, dict):
+                    if "z_recon" in vq_output:
+                        z_q = vq_output["z_recon"]
+                    elif "z" in vq_output:
+                        z_q = vq_output["z"]
+                else:
+                    z_q = vq_output
             else:
-                z_q = vq_output
+                z_q = z
+            if vae_is_for_image:
+                # unflatten the spatial dimensions
+                z_q = rearrange(z_q, "(b t) c h w -> b c t h w", t=t)
             # unbatch
             for z_q_i in z_q.to(output_device):
                 yield z_q_i
@@ -145,6 +158,7 @@ def main():
                 train_ds,
                 batch_size=args.batch_size,
                 output_device="cpu",
+                vae_is_for_image="stabilityai" in args.vae
             )
         )
     ):
