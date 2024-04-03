@@ -157,8 +157,7 @@ def train(args):
                                 lr_scheduler=lr_scheduler
                                 )
                 
-            latent_scale_factor = 0.18  # TODO: this is hard coded, and suits the particular VAE
-            # Very likely you will find this hard coded number somewhere else too.
+            latent_scale_factor = config.scale_factor
             if epoch == 1:
                 # generate ground truth decoded images
                 with torch.no_grad():
