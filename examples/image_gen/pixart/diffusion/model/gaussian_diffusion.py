@@ -281,6 +281,7 @@ class GaussianDiffusion:
 
         B, C = x.shape[:2]
         assert t.shape == (B,)
+        assert x.shape[0] > 0, f"In GaussianDiffusion.p_mean_variance, x {x.shape} must have a nonzero batch size."
         model_output = model(x, t, **model_kwargs)
         if isinstance(model_output, tuple):
             model_output, extra = model_output
@@ -489,6 +490,7 @@ class GaussianDiffusion:
             device = next(model.parameters()).device
         assert isinstance(shape, (tuple, list))
         img = noise if noise is not None else th.randn(*shape, device=device)
+        assert img.shape[0] > 0, f"In GaussianDiffusion.p_sample_loop_progressive, shape {shape} must have a batch dimension."
         indices = list(range(self.num_timesteps))[::-1]
 
         if progress:

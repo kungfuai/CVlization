@@ -364,7 +364,7 @@ class CaptionEmbedder(nn.Module):
 
     def forward(self, caption, train, force_drop_ids=None):
         if train:
-            assert caption.shape[2:] == self.y_embedding.shape
+            assert caption.shape[2:] == self.y_embedding.shape, f"caption shape {caption.shape[2:]} != {self.y_embedding.shape}, y_embedding shape"
         use_dropout = self.uncond_prob > 0
         if (train and use_dropout) or (force_drop_ids is not None):
             caption = self.token_drop(caption, force_drop_ids)

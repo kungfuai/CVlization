@@ -138,6 +138,8 @@ def main():
     parser.add_argument("--vae", type=str, default="zzsi_kungfu/videogpt/model-kbu39ped:v11", help="VAE model name")
     args = parser.parse_args()
     dataset_name = args.dataset
+    model_id = args.vae.split("/")[-1].split(":")[0]
+    print(f"Extracting latents for {dataset_name} using {args.vae}")
 
     max_frames_per_video = 32
     resolution = 256
@@ -172,7 +174,6 @@ def main():
     all_latents = np.concatenate(all_latents, 0)
     print(all_latents[0])
     print(all_latents.shape, all_latents.dtype)
-    model_id = args.vae.split("/")[-1].split(":")[0]
     # save
     Path("data/latents").mkdir(exist_ok=True, parents=True)
     np.save(

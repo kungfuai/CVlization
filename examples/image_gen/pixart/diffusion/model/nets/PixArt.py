@@ -45,6 +45,8 @@ class PixArtBlock(nn.Module):
 
     def forward(self, x, y, t, mask=None, **kwargs):
         B, N, C = x.shape
+        if B == 0:
+            raise ValueError("Batch size must be greater than 0. Got x of shape:", x.shape)
 
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (self.scale_shift_table[None] + t.reshape(B, 6, -1)).chunk(6, dim=1)
         x = x + self.drop_path(gate_msa * self.attn(t2i_modulate(self.norm1(x), shift_msa, scale_msa)).reshape(B, N, C))
@@ -112,6 +114,7 @@ class PixArt(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N, 1, 120, C) tensor of class labels
         """
+        assert x.shape[0] > 0, f"Batch size must be greater than 0. Got x of shape {x.shape}"
         x = x.to(self.dtype)
         timestep = timestep.to(self.dtype)
         y = y.to(self.dtype)
