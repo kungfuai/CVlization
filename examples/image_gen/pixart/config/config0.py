@@ -29,12 +29,12 @@ gradient_clip = 1.0
 auto_lr = dict(rule='sqrt')
 
 # we use different weight decay with the official implementation since it results better result
-optimizer = dict(type='AdamW', lr=1e-4, weight_decay=3e-2, eps=1e-10)
+optimizer = dict(type='AdamW', lr=5e-5, weight_decay=3e-2, eps=1e-10)
 lr_schedule = 'constant'
-lr_schedule_args = dict(num_warmup_steps=500)
+lr_schedule_args = dict(num_warmup_steps=1000)
 
-save_image_epochs = 10
-save_model_epochs = 100
+save_image_epochs = 1
+save_model_epochs = 20
 save_model_steps=1000000
 
 sample_posterior = True
