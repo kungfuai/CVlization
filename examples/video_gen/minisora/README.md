@@ -53,7 +53,7 @@ The following script uses a pretrained VAE to extract latents or tokenize videos
 
 ```bash
 # extract latents from the video using vae
-bash examples/video_gen/minisora/train.sh python latents.py --dataset flying_mnist --batch_size 8 --vae stabilityai/sd-vae-ft-mse # zzsi_kungfu/videogpt/model-nilqq143:v14
+bash examples/video_gen/minisora/train.sh python latents.py --dataset flying_mnist --batch_size 1 --vae stabilityai/sd-vae-ft-mse # zzsi_kungfu/videogpt/model-nilqq143:v14
 ```
 
 ```bash

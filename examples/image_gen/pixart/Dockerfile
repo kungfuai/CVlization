@@ -17,3 +17,4 @@ RUN apt-get update && \
 ADD requirements.txt .
 
 RUN pip install -r requirements.txt
+RUN pip install wandb==0.16.*
