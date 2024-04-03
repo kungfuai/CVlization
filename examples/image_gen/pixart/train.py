@@ -3,6 +3,7 @@ import datetime
 import os
 import sys
 import time
+from tqdm import tqdm
 import types
 import warnings
 from copy import deepcopy
@@ -47,7 +48,8 @@ def ema_update(model_dest: nn.Module, model_src: nn.Module, rate):
         assert p_src is not p_dest
         p_dest.data.mul_(rate).add_((1 - rate) * p_src.data)
 
-def train():
+def train(args):
+    print("Report to", args.report_to)
     if config.get('debug_nan', False):
         DebugUnderflowOverflow(model)
         logger.info('NaN debugger registered. Start to detect overflow during training.')
@@ -63,7 +65,10 @@ def train():
     for epoch in range(start_epoch + 1, config.num_epochs + 1):
         data_time_start= time.time()
         data_time_all = 0
-        for step, batch in enumerate(train_dataloader):
+        for step, batch in tqdm(enumerate(train_dataloader)):
+            # TODO: remove this line, which is only for debug
+            # if step > 5:
+            #     break
             data_time_all += time.time() - data_time_start
             if load_vae_feat:
                 z = batch[0]
@@ -79,6 +84,8 @@ def train():
             y = batch[1]
             y_mask = batch[2]
             data_info = batch[3]
+            # print("clean_images.shape", clean_images.shape)
+            # print("y.shape", y.shape)
 
             # Sample a random timestep for each image
             bs = clean_images.shape[0]
@@ -111,7 +118,7 @@ def train():
                 # avg_loss = sum(loss_buffer) / len(loss_buffer)
                 log_buffer.average()
                 info = f"Step/Epoch [{(epoch-1)*len(train_dataloader)+step+1}/{epoch}][{step + 1}/{len(train_dataloader)}]:total_eta: {eta}, " \
-                       f"epoch_eta:{eta_epoch}, time_all:{t:.3f}, time_data:{t_d:.3f}, lr:{lr:.3e}, s:({model.module.h}, {model.module.w}), "
+                       f"epoch_eta:{eta_epoch}, time_all:{t:.3f}, time_data:{t_d:.3f}, lr:{lr:.3e}" # , s:({model.module.h}, {model.module.w}), "
                 info += ', '.join([f"{k}:{v:.4f}" for k, v in log_buffer.output.items()])
                 logger.info(info)
                 last_tic = time.time()
@@ -149,6 +156,46 @@ def train():
                                 optimizer=optimizer,
                                 lr_scheduler=lr_scheduler
                                 )
+                
+            latent_scale_factor = 0.18  # TODO: this is hard coded, and suits the particular VAE
+            # Very likely you will find this hard coded number somewhere else too.
+            if epoch == 1:
+                # generate ground truth decoded images
+                with torch.no_grad():
+                    # print("clean images mean:", clean_images.mean(), "std:", clean_images.std())
+                    
+                    decoder_output = vae.decode(clean_images[:1] / latent_scale_factor)
+                    decoded_images = decoder_output.sample
+                    decoded_images = (decoded_images - decoded_images.min()) / (decoded_images.max() - decoded_images.min())
+                    print(f"decoded_images.shape: {decoded_images.shape}")
+                if args.report_to == "wandb":
+                    # log images to wandb
+                    print("logging to wandb")
+                    import wandb
+                    
+                    accelerator.log({"images/ground_truth_decoded": wandb.Image(decoded_images)}, step=global_step + start_step)
+
+            if epoch % config.save_image_epochs == 0:
+                # generate samples
+                z = torch.randn(clean_images.shape, device=clean_images.device)[:1]
+                assert z.shape[0] == 1, f"z.shape: {z.shape}"
+                with torch.no_grad():
+                    sampled_latents = train_diffusion.p_sample_loop(
+                        model.forward,
+                        shape=z.shape,
+                        noise=z,                    
+                        clip_denoised=False,
+                        model_kwargs=dict(y=y[:1], mask=y_mask[:1], cfg_scale=1),
+                        progress=True,
+                        device=clean_images.device
+                    )
+                    decoder_output = vae.decode(sampled_latents / latent_scale_factor)
+                    decoded_images = decoder_output.sample
+                    if args.report_to == "wandb":
+                        # log images to wandb
+                        import wandb
+                        accelerator.log({"images/sample_decoded": wandb.Image(decoded_images)}, step=global_step + start_step)
+
         synchronize()
 
 
@@ -174,7 +221,7 @@ def parse_args():
     parser.add_argument(
         "--tracker_project_name",
         type=str,
-        default="text2image-fine-tune",
+        default="pixart",
         help=(
             "The `project_name` argument passed to Accelerator.init_trackers for"
             " more information see https://huggingface.co/docs/accelerate/v0.17.0/en/package_reference/accelerator#accelerate.Accelerator"
@@ -248,6 +295,7 @@ if __name__ == '__main__':
     logger.info(f"Initializing: {init_train} for training")
     image_size = config.image_size  # @param [256, 512, 1024]
     latent_size = int(image_size) // 8
+    print("latent_size", latent_size)
     pred_sigma = getattr(config, 'pred_sigma', True)
     learn_sigma = getattr(config, 'learn_sigma', True) and pred_sigma
     model_kwargs={"window_block_indexes": config.window_block_indexes, "window_size": config.window_size,
@@ -274,8 +322,8 @@ if __name__ == '__main__':
         logger.warning(f'Unexpected keys: {unexpected}')
 
     ema_update(model_ema, model, 0.)
-    if not config.data.load_vae_feat:
-        vae = AutoencoderKL.from_pretrained(config.vae_pretrained).cuda()
+    # if not config.data.load_vae_feat:
+    vae = AutoencoderKL.from_pretrained(config.vae_pretrained).cuda()
 
     # prepare for FSDP clip grad norm calculation
     if accelerator.distributed_type == DistributedType.FSDP:
@@ -284,7 +332,13 @@ if __name__ == '__main__':
 
     # build dataloader
     set_data_root(config.data_root)
-    dataset = build_dataset(config.data, resolution=image_size, aspect_ratio_type=config.aspect_ratio_type)
+    # dataset = build_dataset(config.data, resolution=image_size, aspect_ratio_type=config.aspect_ratio_type)
+    from flying_mnist_frames import FlyingMNISTImageLatentsBuilder
+
+    # db = FlyingMNISTImageLatentsBuilder("data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy")
+    db = FlyingMNISTImageLatentsBuilder("data/latents/flying_mnist__sd-vae-ft-mse_latents_32frames_train.npy")
+    train_ds = db.training_dataset()
+    dataset = train_ds
     if config.multi_scale:
         batch_sampler = AspectRatioBatchSampler(sampler=RandomSampler(dataset), dataset=dataset,
                                                 batch_size=config.train_batch_size, aspect_ratios=dataset.aspect_ratio, drop_last=True,
@@ -330,4 +384,4 @@ if __name__ == '__main__':
     # objects in the same order you gave them to the prepare method.
     model, model_ema = accelerator.prepare(model, model_ema)
     optimizer, train_dataloader, lr_scheduler = accelerator.prepare(optimizer, train_dataloader, lr_scheduler)
-    train()
+    train(args)

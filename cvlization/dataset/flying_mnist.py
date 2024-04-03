@@ -49,6 +49,7 @@ class FlyingMNISTDatasetBuilder:
         dataset_name: str = "flying_mnist",
         resolution: int = 64,
         max_frames_per_video: int = 100,
+        frames_between_clips: int = 100,
         max_videos: int = 10000,
         to_generate: bool = False,
     ):
@@ -61,6 +62,7 @@ class FlyingMNISTDatasetBuilder:
         self.max_frames_per_video = max_frames_per_video
         self.max_videos = max_videos
         self.dataset_name = dataset_name
+        self.frames_between_clips = frames_between_clips
 
     def training_dataset(self):
         if self.to_generate:
@@ -78,6 +80,7 @@ class FlyingMNISTDatasetBuilder:
                 resolution=self.resolution,
                 to_generate=self.to_generate,
                 max_frames_per_video=self.max_frames_per_video,
+                frames_between_clips=self.frames_between_clips,
             )
 
     def validation_dataset(self):
@@ -97,6 +100,7 @@ class FlyingMNISTDatasetBuilder:
                 resolution=self.resolution,
                 to_generate=self.to_generate,
                 max_frames_per_video=self.max_frames_per_video,
+                frames_between_clips=self.frames_between_clips,
             )
 
 
