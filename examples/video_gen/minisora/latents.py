@@ -60,7 +60,7 @@ def extract_latents(
             if hasattr(z, "latent_dist"):
                 # AutoencoderKL
                 z = z.latent_dist.sample()
-                print("z:", z.shape)
+                # print("z:", z.shape)
             elif hasattr(vae, "vq"):
                 vq_output = vae.vq(z)
                 if isinstance(vq_output, dict):
