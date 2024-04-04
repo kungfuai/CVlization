@@ -335,7 +335,7 @@ if __name__ == '__main__':
     from flying_mnist_frames import FlyingMNISTImageLatentsBuilder
 
     # db = FlyingMNISTImageLatentsBuilder("data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy")
-    db = FlyingMNISTImageLatentsBuilder("data/latents/flying_mnist__sd-vae-ft-mse_latents_32frames_train.npy")
+    db = FlyingMNISTImageLatentsBuilder(config.latents_input_file)
     train_ds = db.training_dataset()
     dataset = train_ds
     if config.multi_scale:
