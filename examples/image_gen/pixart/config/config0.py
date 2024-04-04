@@ -60,3 +60,5 @@ work_dir = '/cache/exps/'
 s3_work_dir = None
 
 seed = 43
+# latents_input_file = "data/latents/flying_mnist__sd-vae-ft-mse_latents_32frames_train.npy"
+latents_input_file = "data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy"
