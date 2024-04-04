@@ -84,7 +84,10 @@ Using spatial temporal DiT (adatped from ColossalAI's OpenSora):
 bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 4 --accumulate_grad_batches 8 --latent_frames_to_generate 8 --diffusion_steps 1000 --max_steps 1000000 --log_every 50 --sample_every 2000 --clip_grad 1.0 --vae zzsi_kungfu/videogpt/model-nilqq143:v14 --latents_input_file data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy --track
 
 # or train a larger net
-bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 50 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 8 --tokens_input_file data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy --vae zzsi_kungfu/videogpt/model-nilqq143:v14 --track
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 50 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 8 --latents_input_file data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy --vae zzsi_kungfu/videogpt/model-nilqq143:v14 --track
+
+# or train with stablediffusion VAE
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 50 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 8 --latents_input_file data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy --vae stabilityai/sd-vae-ft-mse --track
 ```
 
 2. Train an autoregressive transformer-based language model (next token predictor)
