@@ -235,10 +235,11 @@ def train_on_latents(
     print(f"model_id: {model_id}")
     # load from numpy
     if latents_input_file is not None:
-        latents = np.load(latents_input_file)
+        latents = np.load(latents_input_file, mmap_mode="r")
         assert model_id in latents_input_file, f"Expected model_id {model_id} in {latents_input_file}"
         token_ids = None
         assert len(latents.shape) == 5, f"Expected 5D tensor, got {latents.shape}"
+        print(f"Loaded latents from {latents_input_file}. Shape: {latents.shape}")
     elif tokens_input_file is not None:
         token_ids = np.load(tokens_input_file)
         latents = None
@@ -273,7 +274,7 @@ def train_on_latents(
             orig_z = z
             z = z * latent_multiplier + latent_bias
     else:
-        z = torch.tensor(latents, dtype=torch.float32).to(device)
+        z = torch.tensor(latents, dtype=torch.float32)
         assert len(z.shape) == 5, f"Expected 5D tensor, got {z.shape}"
         # assert z.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {z.shape[2]}"
         # Compute latent multiplier and bias to make the mean 0 and std 1
@@ -340,12 +341,13 @@ def train_on_latents(
         if i == 0:
             # Decode the ground truth latents
             with torch.no_grad():
+                orig_z_first = orig_z[:1].to(device)
                 if isinstance(vae, VQVAE):
-                    video = vae.decode(orig_z[:1])
+                    video = vae.decode(orig_z_first)
                 else:
                     # It is a huggingface AutoencoderKL model
                     t = z.shape[2]
-                    video = vae.decode(rearrange(orig_z[:1], "b c t h w -> (b t) c h w"))
+                    video = vae.decode(rearrange(orig_z_first, "b c t h w -> (b t) c h w"))
                     video = video.sample
                     video = rearrange(video, "(b t) c h w -> b c t h w", t=t)
             video = (video - video.min()) / (
