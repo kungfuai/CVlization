@@ -245,8 +245,13 @@ def train_on_latents(
         assert len(token_ids.shape) == 4, f"Expected 4D tensor, got {token_ids.shape}"
         assert model_id in tokens_input_file, f"Expected model_id {model_id} in {tokens_input_file}"
     # convert token_ids to embeddings
-    # TODO: support huggingface models
-    vae = VQVAE.from_pretrained(vae)
+    if ":" in vae:
+        # It is a wandb model. Load it using VQVAE.from_pretrained
+        vae = VQVAE.from_pretrained(vae)
+    else:
+        # It is a huggingface model. diffusers.models.AutoencoderKL
+        from diffusers.models import AutoencoderKL
+        vae = AutoencoderKL.from_pretrained(vae)
     vae.eval()
     vae.to(device)
 
@@ -255,22 +260,26 @@ def train_on_latents(
             # TODO: This loads all data into GPU memory! Use a dataloader instead
             token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long).to(device)
             # TODO: estimate these values automatically from z
-            latent_multiplier = 9
-            latent_bias = -0.27
+            # latent_multiplier = 9
+            # latent_bias = -0.27
             z = vae.vq.codes_to_vec(token_ids)
             assert len(z.shape) == 5, f"Expected 5D tensor, got {z.shape}"
             assert (
                 z.shape[2] == token_ids.shape[1]
             ), f"Expected the temporal dimension has size {token_ids.shape[1]}, got {z.shape[2]}"
             # print(z.shape)  # (1000, 4, 8, 64, 64)
+            latent_multiplier = 1 / z.std()
+            latent_bias = -z.mean() * latent_multiplier
+            orig_z = z
             z = z * latent_multiplier + latent_bias
     else:
         z = torch.tensor(latents, dtype=torch.float32).to(device)
         assert len(z.shape) == 5, f"Expected 5D tensor, got {z.shape}"
-        assert z.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {z.shape[2]}"
+        # assert z.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {z.shape[2]}"
         # Compute latent multiplier and bias to make the mean 0 and std 1
         latent_multiplier = 1 / z.std()
         latent_bias = -z.mean() * latent_multiplier
+        orig_z = z
         z = z * latent_multiplier + latent_bias
 
     def get_batch(latent_frames_to_generate: int):
@@ -297,10 +306,21 @@ def train_on_latents(
     ).to(device)
     print("Denoiser:")
     print(denoiser)
-    print(f"Number of parameters: {sum(p.numel() for p in denoiser.parameters())}")
+    num_params = sum(p.numel() for p in denoiser.parameters())
+    print(f"Number of parameters: {num_params / 1_000_000:.2f} Million")
+    # save to wandb
+    if track:
+        import wandb
+
+        wandb.config.update(
+            {
+                "num_params": num_params,
+            }
+        )
     diffusion = IDDPM(
         num_sampling_steps=diffusion_steps,
     )
+
     optimizer = torch.optim.Adam(denoiser.parameters(), lr=lr)
 
     # training loop
@@ -320,7 +340,14 @@ def train_on_latents(
         if i == 0:
             # Decode the ground truth latents
             with torch.no_grad():
-                video = vae.decoder(z[:1])
+                if isinstance(vae, VQVAE):
+                    video = vae.decode(orig_z[:1])
+                else:
+                    # It is a huggingface AutoencoderKL model
+                    t = z.shape[2]
+                    video = vae.decode(rearrange(orig_z[:1], "b c t h w -> (b t) c h w"))
+                    video = video.sample
+                    video = rearrange(video, "(b t) c h w -> b c t h w", t=t)
             video = (video - video.min()) / (
                 video.max() - video.min() + 1e-6
             )
@@ -372,7 +399,15 @@ def train_on_latents(
                 assert samples.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {samples.shape[2]}"
                 assert samples.shape[3:] == z.shape[3:], f"shape of samples is {samples.shape}, shape of z is {z.shape}"
                 sampled_z = (samples - latent_bias) / latent_multiplier
-                video = vae.decoder(sampled_z)
+                if isinstance(vae, VQVAE):
+                    video = vae.decode(sampled_z)
+                else:
+                    # It is a huggingface AutoencoderKL model
+                    t = sampled_z.shape[2]
+                    # sampled_z = sampled_z / 0.18
+                    video = vae.decode(rearrange(sampled_z, "b c t h w -> (b t) c h w"))
+                    video = video.sample
+                    video = rearrange(video, "(b t) c h w -> b c t h w", t=t)
                 video = (video - video.min()) / (video.max() - video.min() + 1e-6)
                 video = (video * 255).to(torch.uint8)
                 video = rearrange(video, "b c t h w -> t c h (b w)")
