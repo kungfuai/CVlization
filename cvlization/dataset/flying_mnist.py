@@ -46,8 +46,11 @@ class FlyingMNISTDatasetBuilder:
     def __init__(
         self,
         opts: argparse.Namespace = None,
+        dataset_name: str = "flying_mnist",
         resolution: int = 64,
         max_frames_per_video: int = 100,
+        frames_between_clips: int = 100,
+        max_videos: int = 10000,
         to_generate: bool = False,
     ):
         if to_generate:
@@ -57,16 +60,19 @@ class FlyingMNISTDatasetBuilder:
         self.resolution = resolution
         self.to_generate = to_generate
         self.max_frames_per_video = max_frames_per_video
+        self.max_videos = max_videos
+        self.dataset_name = dataset_name
+        self.frames_between_clips = frames_between_clips
 
     def training_dataset(self):
         if self.to_generate:
             return FlyingMNISTDataset(
                 self.opts,
-                max_videos=1000,
+                max_videos=self.max_videos,
                 to_generate=self.to_generate,
                 max_frames_per_video=self.max_frames_per_video,
             )
-        default_path = Path("data/flying_mnist/train")
+        default_path = Path(f"data/{self.dataset_name}/train")
         if default_path.exists():
             return FlyingMNISTDataset(
                 self.opts,
@@ -74,6 +80,7 @@ class FlyingMNISTDatasetBuilder:
                 resolution=self.resolution,
                 to_generate=self.to_generate,
                 max_frames_per_video=self.max_frames_per_video,
+                frames_between_clips=self.frames_between_clips,
             )
 
     def validation_dataset(self):
@@ -81,11 +88,11 @@ class FlyingMNISTDatasetBuilder:
             return FlyingMNISTDataset(
                 self.opts,
                 seed_offset=int(1e6),
-                max_videos=100,
+                max_videos=int(self.max_videos * 0.1),
                 to_generate=self.to_generate,
                 max_frames_per_video=self.max_frames_per_video,
             )
-        default_path = Path("data/flying_mnist/val")
+        default_path = Path(f"data/{self.dataset_name}/val")
         if default_path.exists():
             return FlyingMNISTDataset(
                 self.opts,
@@ -93,6 +100,7 @@ class FlyingMNISTDatasetBuilder:
                 resolution=self.resolution,
                 to_generate=self.to_generate,
                 max_frames_per_video=self.max_frames_per_video,
+                frames_between_clips=self.frames_between_clips,
             )
 
 
@@ -136,6 +144,7 @@ class FlyingMNISTDataset:
         opts: dict,
         from_dir: Path = None,
         max_frames_per_video: int = 100,
+        frames_between_clips: int = 100,
         max_videos: int = 10000,
         seed_offset: int = 0,
         resolution: int = 64,
@@ -146,6 +155,8 @@ class FlyingMNISTDataset:
         self.max_frames_per_video = max_frames_per_video
         self.seed_offset = seed_offset
         self.opts = opts
+        # Note: intentionally setting frames_between_clips to a large enough number so that only 1 clip is taken from a 100 video.
+        self.frames_between_clips = frames_between_clips
         self.from_dir = from_dir
         self.resolution = resolution
         self.sequence_length = max_frames_per_video
@@ -164,7 +175,7 @@ class FlyingMNISTDataset:
                 [],
             )
             self.max_videos = len(files)
-            clips = VideoClips(files, self.sequence_length, num_workers=32)
+            clips = VideoClips(files, self.sequence_length, num_workers=32, frames_between_clips=self.frames_between_clips)
             self._clips = clips
 
     def __iter__(self):
@@ -201,6 +212,8 @@ class FlyingMNISTDataset:
         return dict(video=np.array(frames))
 
     def __len__(self):
+        if not self.to_generate and hasattr(self, "_clips"):
+            return self._clips.num_clips()
         if self.max_videos is None:
             return None
         assert isinstance(
@@ -787,12 +800,13 @@ if __name__ == "__main__":
 
     opts = prepare_parser().parse_args()
     fps = 10
-    db = FlyingMNISTDatasetBuilder(opts, to_generate=True)
+    db = FlyingMNISTDatasetBuilder(opts, to_generate=True, max_videos=100000)
+    ds_name = "flying_mnist_110k"
     print("Training dataset:")
     train_ds = db.training_dataset()
     # Saving to a folder: data/flying_mnist/train
     if train_ds.from_dir is None:
-        save_dataset_to_folder(train_ds, folder="data/flying_mnist/train")
+        save_dataset_to_folder(train_ds, folder=f"data/{ds_name}/train")
     else:
         for x in train_ds:
             print(
@@ -821,7 +835,7 @@ if __name__ == "__main__":
     val_ds = db.validation_dataset()
     # Saving to a folder: data/flying_mnist/val
     if val_ds.from_dir is None:
-        save_dataset_to_folder(val_ds, folder="data/flying_mnist/val")
+        save_dataset_to_folder(val_ds, folder=f"data/{ds_name}/val")
     else:
         for x in val_ds:
             print(
