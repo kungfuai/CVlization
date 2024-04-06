@@ -8,6 +8,9 @@ RUN pip install diffusers==0.26.3 timm==0.9.16
 RUN pip install xformers==0.0.25  # needed by ColossalAI open-sora (STDiT denoising model)
 RUN pip install mamba-ssm==1.2.* causal-conv1d==1.2.*  # this does not work on *-runtime base images
 RUN pip install accelerate==0.28.*
+# For flash-attn:
+# RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# RUN pip install flash-attn==2.5.*
 # TODO: move this above
 # RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
 # RUN pip install opencv-python==4.9.*
