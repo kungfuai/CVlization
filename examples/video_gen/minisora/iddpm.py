@@ -203,6 +203,11 @@ def get_args():
         default="zzsi_kungfu/videogpt/model-kbu39ped:v11",
         help="VAE model name",
     )
+    parser.add_argument(
+        "--enable_flashattn",
+        action="store_true",
+        help="Enable FlashAttention in the denoiser",
+    )
     return parser.parse_args()
 
 
@@ -224,6 +229,7 @@ def train_on_latents(
     vae:str = "zzsi_kungfu/videogpt/model-kbu39ped:v11",
     tokens_input_file:str = "flying_mnist_tokens_32frames_train.npy",
     latents_input_file:str = "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
+    enable_flashattn=False,
     track=False,
     **kwargs,
 ):
@@ -282,6 +288,8 @@ def train_on_latents(
         latent_bias = -z.mean() * latent_multiplier
         orig_z = z
         z = z * latent_multiplier + latent_bias
+    
+    assert z.shape[1] == 4, f"Expected latent dimension of 4, got {z.shape[1]}"
 
     def get_batch(latent_frames_to_generate: int):
         idx = np.random.choice(len(z), batch_size, replace=False)
@@ -295,6 +303,7 @@ def train_on_latents(
         assert batch_z.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {batch_z.shape[2]}"
         return torch.Tensor(batch_z).to(device)
 
+    # TODO: with flash attn, got RuntimeError: Input type (c10::Half) and bias type (float) should be the same
     denoiser = STDiT(
         # depth=28, hidden_size=1152, patch_size=(1, 2, 2), num_heads=16, **kwargs
         # input_size=z.shape[2:],
@@ -304,6 +313,8 @@ def train_on_latents(
         patch_size=patch_size,
         num_heads=num_heads,
         unconditional=True,
+        enable_flashattn=enable_flashattn,
+        dtype=torch.float16 if enable_flashattn else torch.float32,
     ).to(device)
     print("Denoiser:")
     print(denoiser)
