@@ -40,7 +40,7 @@ def main():
 
     dataset_builder = DatasetBuilder()
     print(f"block_size = {block_size}")
-    sparse_block_size = 128
+    sparse_block_size = 256 # 32
     pipeline_config = MDGPTTrainingPipeline.Config(
         vocab_size=meta_vocab_size + 5,
         meta_vocab_size=meta_vocab_size + 5,
