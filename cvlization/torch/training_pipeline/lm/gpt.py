@@ -37,9 +37,13 @@ class NanoGPTTrainingPipeline:
         project: str = "nano-gpt"
         init_from: str = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
 
+        # Data
         block_size: int = 1024
         vocab_size: int = 5120
         batch_size: int = 32
+        flatten_tokens: bool = False
+
+        # Model
         n_layer: int = 12
         n_head: int = 12
         n_embd: int = 768
@@ -85,7 +89,7 @@ class NanoGPTTrainingPipeline:
 
         # we expect to overfit on this small dataset, so only save when val improves
         always_save_checkpoint: bool = False
-        compile: bool = True  # use PyTorch 2.0 to compile the model to be faster
+        compile: bool = False  # use PyTorch 2.0 to compile the model to be faster
         eval_only = False  # if True, script exits right after the first eval
 
     def __init__(self, config: Config):
@@ -181,23 +185,38 @@ class NanoGPTTrainingPipeline:
                 - y: The target tensor of shape (batch_size, block_size).
 
         """
-        train_data = self.train_data_flattened
-        val_data = self.val_data_flattened
+        if self.config.flatten_tokens:
+            train_data = self.train_data_flattened
+            val_data = self.val_data_flattened
+        else:
+            train_data = self.train_data
+            val_data = self.val_data
         block_size = self.config.block_size
         batch_size = self.config.batch_size
         device = self.config.device
 
         data = train_data if split == "train" else val_data
-        ix = torch.randint(len(data) - block_size, (batch_size,))
-        x = torch.stack(
-            [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
-        )
-        y = torch.stack(
-            [
-                torch.from_numpy((data[i + 1 : i + 1 + block_size]).astype(np.int64))
-                for i in ix
-            ]
-        )
+        if len(data.shape) == 2:
+            # batch x sequence len
+            irow = torch.randint(data.shape[0], (batch_size,))
+            ix = torch.randint(data.shape[1] - block_size, (batch_size,))
+            x = torch.stack([
+                torch.from_numpy(data[i, i1 : i1 + block_size].astype(np.int64)) for i, i1 in zip(irow, ix)
+            ])
+            y = torch.stack([
+                torch.from_numpy(data[i, i1 + 1 : i1 + 1 + block_size].astype(np.int64)) for i, i1 in zip(irow, ix)
+            ])
+        else:
+            ix = torch.randint(len(data) - block_size, (batch_size,))
+            x = torch.stack(
+                [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
+            )
+            y = torch.stack(
+                [
+                    torch.from_numpy((data[i + 1 : i + 1 + block_size]).astype(np.int64))
+                    for i in ix
+                ]
+            )
         if self.device_type == "cuda":
             # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
             x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
@@ -205,8 +224,8 @@ class NanoGPTTrainingPipeline:
             )
         else:
             x, y = x.to(device), y.to(device)
-        assert x.shape == (self.config.batch_size, self.config.block_size)
-        assert y.shape == (self.config.batch_size, self.config.block_size)
+        assert x.shape == (self.config.batch_size, self.config.block_size), f"x.shape: {x.shape}"
+        assert y.shape == (self.config.batch_size, self.config.block_size), f"y.shape: {y.shape}"
 
         # make the context window sparse in the beginning of the sequence
         if self.config.sparse_context_window:
@@ -302,8 +321,11 @@ class NanoGPTTrainingPipeline:
             1,
             2,
         ], f"Expected 1D or 2D array for training data, got {self.train_data.shape}"
-        self.train_data_flattened = self.train_data.ravel()
-        self.val_data_flattened = self.val_data.ravel()
+
+        if self.config.flatten_tokens:
+            self.train_data_flattened = self.train_data.ravel()
+            self.val_data_flattened = self.val_data.ravel()
+
         print(f"block size:", self.config.block_size)
         # This is the sequence length (max new tokens) to sample.
         if len(self.train_data.shape) == 2:

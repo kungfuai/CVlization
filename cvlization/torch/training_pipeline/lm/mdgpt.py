@@ -1,5 +1,7 @@
 """
 Multi-dimensional GPT.
+
+TODO: use non-causal attention.
 """
 
 from contextlib import nullcontext
@@ -173,6 +175,7 @@ class MDGPTTrainingPipeline:
         train_data = self.train_data
         position_dim = self.position_dim
         block_size = self.config.block_size
+        sparse_block_size = self.config.sparse_block_size
         batch_size = self.config.batch_size
         device = self.config.device
 
@@ -182,6 +185,13 @@ class MDGPTTrainingPipeline:
         if position_dim == 1:
             positions = np.arange(len(data), dtype=np.int64)
         else:
+            meshgrid_args = [np.arange(s) for s in train_data.shape[1:]]
+            positions = np.array(
+                np.meshgrid(*meshgrid_args, indexing="ij"),
+            )
+            orig_shape = tuple(range(len(positions.shape)))
+            transposed_shape = orig_shape[1:] + (orig_shape[0],)
+            positions = positions.transpose(*transposed_shape)
             # flatten:
             data = data.reshape(data.shape[0], -1)  # this is the whole video
             positions = positions.reshape(-1, positions.shape[-1])
@@ -210,24 +220,28 @@ class MDGPTTrainingPipeline:
 
         irow = np.random.randint(data.shape[0], size=batch_size)
         ix = torch.randint(data.shape[1] - block_size - 2, (batch_size,)) + 1
+        # print("positions:", positions.shape)
         target_pos = [
             torch.from_numpy(positions[col, ...]) for row, col in zip(irow, ix)
         ]
         y_pos = target_pos = torch.stack(target_pos).unsqueeze(1).int()
         if self.relative_pos_lut is not None:
             assert (
-                ix.max() < self.relative_pos_lut.shape[1]
+                ix.max() < self.relative_pos_lut.shape[0]
             ), f"ix.max()={ix.max()}, data.shape={data.shape}, relative_pos_lut.shape={self.relative_pos_lut.shape}"
             relative_pos = [self.relative_pos_lut[i, ...] for i in ix]
         else:
+            # This means the data is probably 1D.
+            # TODO: randomly set the first few context tokens to IGNORE_TOKEN.
+            #   This is to simulate cold-start: very few context tokens.
             relative_pos = [
-                torch.from_numpy(np.arange(0, block_size).reshape(-1, 1) + 1)
+                sparse_block_size - torch.from_numpy(np.arange(0, sparse_block_size).reshape(-1, 1))
                 for i in ix
             ]
         relative_pos = torch.stack(relative_pos)
         # print("relative_pos shape:", relative_pos.shape)
         # print("target_pos shape:", target_pos.shape)
-        x_pos = (target_pos.unsqueeze(1) - relative_pos).int()
+        x_pos = (target_pos - relative_pos).int()
         sparse_block_size = self.config.sparse_block_size
         if self.context_idx_lut is not None:
             x = [
@@ -240,11 +254,15 @@ class MDGPTTrainingPipeline:
                 context_idx = np.arange(col - sparse_block_size, col)
                 context_idx[context_idx < 0] = -1
                 x_ = data_with_ignore_token[row][context_idx + 1]
+                # print("y_pos:", y_pos[i].numpy().ravel())
+                # print("context_idx for x:", context_idx[-10:] + 1)
+                # print("x_pos:", x_pos[i].numpy().ravel()[-10:])
                 x.append(x_)
 
-        x = torch.stack([torch.from_numpy(x_) for x_ in x]).long()
-        y = [data[row : row + 1, col : col + 1] for (row, col) in zip(irow, ix)]
-        y = torch.stack([torch.from_numpy(y_) for y_ in y]).squeeze(-1).long()
+        x = torch.stack([torch.from_numpy(x_.astype(np.int32)) for x_ in x]).long()
+        y = [data[row : row + 1, col] for (row, col) in zip(irow, ix)]
+        y = torch.stack([torch.from_numpy(y_.astype(np.int32)) for y_ in y]).long()
+        y_pos = y_pos.squeeze(1)
 
         # assert the shapes
         assert x.shape == (batch_size, sparse_block_size), x.shape
@@ -308,7 +326,7 @@ class MDGPTTrainingPipeline:
         position_dim = self.position_dim
 
         if len(train_data.shape) == 1:
-            if len(train_data) > 1e5:
+            if len(train_data) > 1e3:
                 print(
                     "Not precomputing sparse context window for 1D dataset with long sequences. This will be slow."
                 )
@@ -677,7 +695,7 @@ class MDGPTTrainingPipeline:
                         mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
                     )
                 print(
-                    f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
+                    f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, y_pos_min {Y_pos.min()}, y_pos_max {Y_pos.max()}"
                 )
 
             # log the decoded ground truth codes
@@ -1041,51 +1059,70 @@ class MDGPT(GPT):
 
         # print(f"after linear, x shape: {x.shape}")
         if y is not None:
-            # if we are given some desired targets also calculate the loss
-            idx_to_ignore = input_x == self.config.ignore_token
-            # print(f"idx_to_ignore shape: {idx_to_ignore.shape}, {idx_to_ignore.sum()}")
-            logits = self.lm_head(x)
-            # print(f"logits shape: {logits.shape}")
-            # y needs to be broadcasted
-            # print(f"y shape 0: {y.shape}")
-            y = y.expand(-1, logits.shape[1])
-            y = y.unsqueeze(-1)
-            # print(f"y shape 1: {y.shape}")
-
-            logits_selected = logits
-            y_selected = y.clone()
-            y_selected[idx_to_ignore] = -1
-
-            # print(f"logits_selected shape: {logits_selected.shape}")
-            # print(f"y_selected shape: {y_selected.shape}")
-            try:
-                logits_selected = logits_selected.view(-1, logits_selected.size(-1))
-                y_selected = y_selected.view(-1)
-                # print(
-                #     f"y_selected shape: {y_selected.shape}, logits_selected shape: {logits_selected.shape}"
-                # )
-                # print(f"y_selected: {y_selected.cpu().numpy().ravel()[:5]}")
-                # print(f"logits_selected: {logits_selected.cpu().numpy()[:2, :5]}")
-                loss = F.cross_entropy(
-                    logits_selected,
-                    y_selected,
-                    ignore_index=-1,
+            # Only predict using the last token
+            logits = self.lm_head(
+                x[:, -1, :]
+            )
+            loss = F.cross_entropy(
+                logits,
+                y.squeeze(-1),
+                ignore_index=-1,
+            )
+            if loss.isnan():
+                print("Nan loss detected")
+                print(f"input_x: {input_x.detach().cpu().numpy().ravel()}")
+                print(f"x: {x.detach().cpu().numpy().ravel()}")
+                print(
+                    f"relative_pos: {relative_pos.detach().cpu().numpy().ravel()}"
                 )
-                if loss.isnan():
-                    print("Nan loss detected")
-                    print(f"input_x: {input_x.detach().cpu().numpy().ravel()}")
-                    print(f"x: {x.detach().cpu().numpy().ravel()}")
-                    print(
-                        f"relative_pos: {relative_pos.detach().cpu().numpy().ravel()}"
+
+            if False:
+                # ===========================================
+                # if we are given some desired targets also calculate the loss
+                idx_to_ignore = input_x == self.config.ignore_token
+                # print(f"idx_to_ignore shape: {idx_to_ignore.shape}, {idx_to_ignore.sum()}")
+                logits = self.lm_head(x)
+                # print(f"logits shape: {logits.shape}")
+                # y needs to be broadcasted
+                # print(f"y shape 0: {y.shape}")
+                y = y.expand(-1, logits.shape[1])
+                y = y.unsqueeze(-1)
+                # print(f"y shape 1: {y.shape}")
+
+                logits_selected = logits
+                y_selected = y.clone()
+                y_selected[idx_to_ignore] = -1
+
+                # print(f"logits_selected shape: {logits_selected.shape}")
+                # print(f"y_selected shape: {y_selected.shape}")
+                try:
+                    logits_selected = logits_selected.view(-1, logits_selected.size(-1))
+                    y_selected = y_selected.view(-1)
+                    # print(
+                    #     f"y_selected shape: {y_selected.shape}, logits_selected shape: {logits_selected.shape}"
+                    # )
+                    # print(f"y_selected: {y_selected.cpu().numpy().ravel()[:5]}")
+                    # print(f"logits_selected: {logits_selected.cpu().numpy()[:2, :5]}")
+                    loss = F.cross_entropy(
+                        logits_selected,
+                        y_selected,
+                        ignore_index=-1,
                     )
-                    print(f"y_selected: {y_selected.detach().cpu().numpy()}")
-                    print(f"logits_selected: {logits_selected.detach().cpu().numpy()}")
-                    raise ValueError("Nan loss detected")
-            except:
-                print(f"y shape: {y.shape}")
-                print(f"logits shape: {logits.shape}")
-                # print(f"loss_weight shape: {loss_weight.shape}")
-                raise
+                    if loss.isnan():
+                        print("Nan loss detected")
+                        print(f"input_x: {input_x.detach().cpu().numpy().ravel()}")
+                        print(f"x: {x.detach().cpu().numpy().ravel()}")
+                        print(
+                            f"relative_pos: {relative_pos.detach().cpu().numpy().ravel()}"
+                        )
+                        print(f"y_selected: {y_selected.detach().cpu().numpy()}")
+                        print(f"logits_selected: {logits_selected.detach().cpu().numpy()}")
+                        raise ValueError("Nan loss detected")
+                except:
+                    print(f"y shape: {y.shape}")
+                    print(f"logits shape: {logits.shape}")
+                    # print(f"loss_weight shape: {loss_weight.shape}")
+                    raise
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             # TODO: -1 is not necessarily the last position, use a mask to find the last position.
