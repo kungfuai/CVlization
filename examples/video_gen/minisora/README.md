@@ -1,3 +1,7 @@
+## Overview
+
+Train a Sora-like model, but with small scope, high quality and low cost.
+
 ## Quickstart
 
 ### Download data
