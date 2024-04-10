@@ -33,19 +33,20 @@ def main():
 
     class DatasetBuilder:
         def training_dataset(self):
-            return train_data.astype(np.int32)[:1000]
+            return train_data.astype(np.int32)[:]
 
         def validation_dataset(self):
             return val_data.astype(np.int32)
 
     dataset_builder = DatasetBuilder()
     print(f"block_size = {block_size}")
+    sparse_block_size = 128
     pipeline_config = MDGPTTrainingPipeline.Config(
         vocab_size=meta_vocab_size + 5,
         meta_vocab_size=meta_vocab_size + 5,
         start_token=meta_vocab_size + 1,
         ignore_token=meta_vocab_size + 2,
-        sparse_block_size=block_size,
+        sparse_block_size=sparse_block_size,
         # n_layer=6,
         # n_head=6,
         # n_embd=384,
@@ -55,7 +56,7 @@ def main():
     )
     pipeline_config.batch_size = 64
     # pipeline_config.learning_rate = 1e-4
-    pipeline_config.log_interval = 1
+    # pipeline_config.log_interval = 1
     # pipeline_config.grad_clip = 0.5
     train_pipe = MDGPTTrainingPipeline(
         pipeline_config,
