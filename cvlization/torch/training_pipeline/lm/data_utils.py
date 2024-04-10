@@ -54,6 +54,3 @@ class FlatTokenIds:
         """
         token_ids = self._insert_start_token(self.val_token_ids, self.start_token_id)
         return token_ids # .ravel()
-
-
-
