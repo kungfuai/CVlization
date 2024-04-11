@@ -918,9 +918,6 @@ class GPTConfig:
     bias: bool = (
         True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     )
-    reversed: bool = (
-        False  # whether to reverse the input sequence and predict just the last token
-    )
 
 
 class GPT(nn.Module):
@@ -982,14 +979,6 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, idx, targets=None):
-        if self.config.reversed:
-            idx = torch.flip(idx.clone(), dims=[1]).contiguous()
-            # use the last target value, repeated, as the targets
-            if targets is not None:
-                # seq_len = targets.size(1)
-                # targets = targets[:, -1].unsqueeze(-1).expand(-1, seq_len).contiguous()
-                targets[:, :-1] = -1
-                # targets[:, 10:] = -1
 
         device = idx.device
         b, t = idx.size()
@@ -997,8 +986,6 @@ class GPT(nn.Module):
             t <= self.config.block_size
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
-        # if self.config.reversed:
-        #     pos = torch.flip(pos, dims=[0]).contiguous()
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
@@ -1011,6 +998,10 @@ class GPT(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
+
+            # TODO: for debug
+            # targets[:, :-1] = -1
+
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
