@@ -318,7 +318,7 @@ class MDGPTTrainingPipeline:
             self.position_shape = (self.config.sparse_block_size,)
         else:
             self.position_shape = self.train_data.shape[1:]
-        self.position_dim = len(self.position_shape)
+        self.position_dim = self.train_data.shape[-1] if len(self.train_data.shape) > 1 else 1
 
     def precompute_sparse_context_window(self):
         # precompute the sparse context window for each position
@@ -345,6 +345,8 @@ class MDGPTTrainingPipeline:
                 meshgrid_args = [np.arange(train_data.shape[0])]
             else:
                 meshgrid_args = [np.arange(s) for s in train_data.shape[1:]]
+            # print("train_data:", train_data.shape, "position_dim:", position_dim)
+            # print("meshgrid_args:", meshgrid_args)
             positions = np.array(
                 np.meshgrid(*meshgrid_args, indexing="ij"),
             )
@@ -352,7 +354,7 @@ class MDGPTTrainingPipeline:
             transposed_shape = orig_shape[1:] + (orig_shape[0],)
             positions = positions.transpose(*transposed_shape)
 
-        # print("positions shape:", positions.shape)
+        print("positions shape:", positions.shape, "position_dim:", position_dim)
         positions_flat = positions.reshape(-1, position_dim)
         self.relative_pos_lut, self.context_idx_lut = precompute_context_windows(
             positions_flat=positions_flat,
@@ -830,7 +832,9 @@ def find_sparse_context_window(
     # using the L2 distance
     # look back at most block_size points
     if target_idx == 0:
-        return np.zeros((sparse_block_size,)), np.zeros((sparse_block_size, positions.shape[-1]))
+        position_dim = positions.shape[-1]
+        assert position_dim == 3, f"position_dim={position_dim}"
+        return -1 * np.ones((sparse_block_size,)), -1 * np.ones((sparse_block_size, position_dim))
     start_idx = max(0, target_idx - block_size)
     target_position = positions[target_idx]
     # print("target pos:", target_position)
@@ -1165,32 +1169,37 @@ class MDGPT(GPT):
     ):
         batch_size = 1  # TODO: this is hardcoded
         device = self.transformer.wte.weight.device
+
+        target_pos = len(x)  # target_pos should be 0 if x is empty
+                             # this should happen before the start token is inserted
         
         if len(x) == 0:
             x.append(torch.from_numpy(np.array([self.config.start_token])).to(device))
 
-        target_pos = len(x)
 
-        print(f"x len: {len(x)}")
+        # print(f"x len: {len(x)}")
+        # print("x:", x)
         whole_seq_len = len(x) + max_new_tokens
-        print(f"whole_seq_len: {whole_seq_len}")
+        # print(f"whole_seq_len: {whole_seq_len}")
 
         if len(self.config.position_shape) == 1:
             assert (
                 max_new_tokens is not None
             ), f"max_new_tokens should not be None for 1D sequence"
             positions = np.arange(whole_seq_len).reshape(-1, 1)
-        else:
-            print("Ignoring max_new_tokens for generating multi-dimensional data")
-            meshgrid_args = [np.arange(s) for s in self.config.position_shape]
-            positions = np.array(
-                np.meshgrid(
-                    *meshgrid_args,
-                    indexing="ij",
-                )
-            )
+        # else:
+        #     print("Ignoring max_new_tokens for generating multi-dimensional data")
+        #     meshgrid_args = [np.arange(s) for s in self.config.position_shape]
+        #     positions = np.array(
+        #         np.meshgrid(
+        #             *meshgrid_args,
+        #             indexing="ij",
+        #         )
+        #     )
 
         target_indices_to_print = [0, 9]
+        print("target_pos:", target_pos)
+        print("max_new_tokens:", max_new_tokens)
         for target_idx in range(target_pos, target_pos + max_new_tokens):
             if target_idx in target_indices_to_print:
                 print("=" * 80)
@@ -1205,8 +1214,8 @@ class MDGPT(GPT):
             # )
             context_token_idx = self.context_idx_lut[target_idx]
             relative_pos = self.relative_pos_lut[target_idx]
-            print("context_token_idx:", context_token_idx)
-            # print("relative_pos:", relative_pos)
+            # print("context_token_idx:", context_token_idx)
+            # print("relative_pos:", relative_pos.shape)
             assert len(relative_pos.shape) in [2, 3], f"relative_pos shape: {relative_pos.shape}"
             assert context_token_idx.min() >= -1, f"context_token_idx.min(): {context_token_idx.min()}"
             # valid_idx = context_token_idx >= 0
@@ -1243,17 +1252,15 @@ class MDGPT(GPT):
                     context_token_idx.int() + 1
                 )  # position 0 is reserved for ignore token
                 x_concat = torch.cat(x, dim=0)
-                if True or (target_idx in target_indices_to_print):
-                    print(f"x_concat: {x_concat.cpu().numpy()}, shape is {x_concat.shape}")
+                # if (target_idx in target_indices_to_print):
+                #     print(f"x_concat: {x_concat.cpu().numpy()}, shape is {x_concat.shape}")
 
                 assert context_token_idx.min() >= 0, f"context_token_idx.min(): {context_token_idx.min()}"
-                print("context_token_idx:", context_token_idx)
+                # print("context_token_idx:", context_token_idx)
                 cond_x = x_concat[context_token_idx]
-                print("cond_x:", cond_x)
+                # print("cond_x:", cond_x)
 
-            print(f"cond_x before rearange: {cond_x.cpu().numpy()}")
             cond_x = rearrange(cond_x, "(b t) -> b t", b=batch_size)
-            print(f"cond_x after rearange: {cond_x.cpu().numpy()}")
             if isinstance(relative_pos, np.ndarray):
                 relative_pos = torch.from_numpy(relative_pos)
             relative_pos = relative_pos.unsqueeze(0)  # add batch dimension
@@ -1263,17 +1270,16 @@ class MDGPT(GPT):
             if len(y_pos.shape) == 1:
                 y_pos = y_pos.unsqueeze(0)
             assert len(y_pos.shape) == 2, f"y_pos shape: {y_pos.shape}"
+            # print(
+            #     f"cond_x: {cond_x.shape}, cond_y_pos: {cond_y_pos.shape}, relative_pos: {relative_pos.shape}"
+            # )
             cond_x_pos = cond_y_pos - relative_pos
 
-            print(
-                f"cond_x_pos: {cond_x_pos.shape}, cond_x: {cond_x.shape}, y_pos: {y_pos.shape}"
-            )
-            if True or (target_idx in target_indices_to_print):
-                print(f"cond_x: {cond_x}")
-                print(f"cond_x_pos: {cond_x_pos}")
+            if (target_idx in target_indices_to_print):
+                print(f"cond_x (last 5): {cond_x[-5:, -5:, ...]}")
+                print(f"cond_x_pos (last 5): {cond_x_pos[-5:, -5:, ...]}")
                 print(f"y_pos: {y_pos}")
-                import sys
-                sys.exit(0)
+                
             logits, _ = self.forward(
                 x_pos=cond_x_pos.long().to(device),
                 x=cond_x.long().to(device),
