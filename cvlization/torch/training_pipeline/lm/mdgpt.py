@@ -30,11 +30,22 @@ class MDGPTTrainingPipeline:
         wandb_log: bool = False
         project: str = "mdgpt"
         init_from: str = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
+        batch_size: int = 32
 
+        # Context window
         block_size: int = 1024
         sparse_block_size: int = 128
+        position_epsilon: float = 1e-2
+
+        # Tokenizer
         vocab_size: int = 5120
-        batch_size: int = 32
+        vae_vocab_size: int = 5120
+        vae_model_name: str = None
+        meta_vocab_size: int = None
+        start_token: int = 5121
+        ignore_token: int = 5122
+
+        # Model
         n_layer: int = 12
         n_head: int = 12
         n_embd: int = 768
@@ -64,16 +75,14 @@ class MDGPTTrainingPipeline:
         eval_iters: int = 100
         log_interval: int = 10  # don't print too too often
         sample_interval: int = 500
-        vae_model_name: str = None
-        vocab_size: int = 5123
-        meta_vocab_size: int = None
-        start_token: int = 5121
-        ignore_token: int = 5122
+        
 
         # we expect to overfit on this small dataset, so only save when val improves
         always_save_checkpoint: bool = False
         compile: bool = True  # use PyTorch 2.0 to compile the model to be faster
-        eval_only = False  # if True, script exits right after the first eval
+        eval_only: bool = False  # if True, script exits right after the first eval
+
+        debug: bool = False
 
     def __init__(self, config: Config):
         self.config = config
@@ -180,6 +189,8 @@ class MDGPTTrainingPipeline:
         device = self.config.device
 
         data = train_data if split == "train" else self.val_data
+
+        # TODO: the positions only need to be computed once.
         # TODO: position_dim == 1 vs. > 1 should be handled in different functions
         # Coordinates of tokens. Shape is the same as data.
         if position_dim == 1:
@@ -194,9 +205,11 @@ class MDGPTTrainingPipeline:
             positions = positions.transpose(*transposed_shape)
             # flatten:
             data = data.reshape(data.shape[0], -1)  # this is the whole video
-            positions = positions.reshape(-1, positions.shape[-1])
+            positions_flattened = positions.reshape(-1, positions.shape[-1])
             # print(f"data shape: {data.shape}")
-            # print(f"positions shape: {positions.shape}")
+            # print(f"positions_flattened shape: {positions_flattened.shape}")
+            # print("relative_pos_lut:", self.relative_pos_lut.shape)
+            # print("context_idx_lut:", self.context_idx_lut.shape)
 
         # Problem formulation: x_pos, x, y_pos, y?
         # Randomly sample a target index for each example in the batch
@@ -206,12 +219,6 @@ class MDGPTTrainingPipeline:
             len(data.shape) == 2
         ), f"Expected 2D array for training data, got {data.shape}"
 
-        # # Insert the start token (optional)
-        # data = np.concatenate(
-        #     [np.ones((data.shape[0], 1), dtype=data.dtype) * self.START_TOKEN, data],
-        #     axis=1,
-        # )
-
         # Insert the ignore token at the beginning
         data_with_ignore_token = np.concatenate(
             [np.ones((data.shape[0], 1), dtype=data.dtype) * self.IGNORE_TOKEN, data],
@@ -219,11 +226,16 @@ class MDGPTTrainingPipeline:
         )
 
         irow = np.random.randint(data.shape[0], size=batch_size)
-        ix = torch.randint(data.shape[1] - block_size - 2, (batch_size,)) + 1
-        # print("positions:", positions.shape)
+        ix = torch.randint(positions_flattened.shape[0], (batch_size,))
         target_pos = [
-            torch.from_numpy(positions[col, ...]) for row, col in zip(irow, ix)
+            torch.from_numpy(positions_flattened[col, :]) for row, col in zip(irow, ix)
         ]
+        # for debug
+        if False:
+            print("*" * 60)
+            print("irow:", irow[0], "ix:", ix[0])
+            assert len(data.shape) == 2
+            print("x (last 5):", data[irow[0], ix[0]-5:ix[0]], "y:", data[irow[0], ix[0]])
         y_pos = target_pos = torch.stack(target_pos).unsqueeze(1).int()
         if self.relative_pos_lut is not None:
             assert (
@@ -246,6 +258,7 @@ class MDGPTTrainingPipeline:
         x_pos = (target_pos - relative_pos).int()
         sparse_block_size = self.config.sparse_block_size
         if self.context_idx_lut is not None:
+            assert data_with_ignore_token.shape == (data.shape[0], data.shape[1] + 1), f"data_with_ignore_token.shape={data_with_ignore_token.shape}, data.shape={data.shape}"
             x = [
                 data_with_ignore_token[row][self.context_idx_lut[col] + 1]
                 for (row, col) in zip(irow, ix)
@@ -273,6 +286,14 @@ class MDGPTTrainingPipeline:
         assert x_pos.shape == (batch_size, sparse_block_size, position_dim), x_pos.shape
         assert y_pos.shape == (batch_size, position_dim), f"y_pos.shape={y_pos.shape}, position_dim={position_dim}, batch_size={batch_size}"
         assert x.dtype == torch.long, f"expected long tensor, got {x.dtype}"
+
+        # for debug, print first 5 tokens
+        if self.config.debug:
+            print("===========================")
+            print("x:", x[0, :5])
+            print("y:", y[0])
+            print("y_pos:", y_pos[0])
+            print("x_pos:", x_pos[0, :5])
 
         if self.device_type == "cuda":
             # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
@@ -314,19 +335,13 @@ class MDGPTTrainingPipeline:
         # self.val_data_flattened = self.val_data.ravel()
         print(f"block size:", self.config.block_size)
         # position_shape determines the size of embeddings for positional indices
-        if len(self.train_data.shape) == 1:
-            self.position_shape = (self.config.sparse_block_size,)
-        else:
-            self.position_shape = self.train_data.shape[1:]
-        self.position_dim = self.train_data.shape[-1] if len(self.train_data.shape) > 1 else 1
-
+        
     def precompute_sparse_context_window(self):
         # precompute the sparse context window for each position
         # this is a one-time operation that will speed up training
         block_size = self.config.block_size
         sparse_block_size = self.config.sparse_block_size
         train_data = self.train_data
-        position_dim = self.position_dim
 
         if len(train_data.shape) == 1:
             if len(train_data) > 1e3:
@@ -338,12 +353,16 @@ class MDGPTTrainingPipeline:
                 return
             train_data = train_data.reshape(1, -1)
 
-        if position_dim == 1:
+        if len(train_data) in [1, 2]:  # TODO: revisit this
+            # This means the training data is either a long sequence or
+            # of a batch of 1D sequences.
             positions = np.arange(train_data.shape[-1])
+            self.position_dim = 1
         else:
             if len(train_data.shape) == 1:
                 meshgrid_args = [np.arange(train_data.shape[0])]
             else:
+                # This assumes train_data has a shape like (B, T, H, W)
                 meshgrid_args = [np.arange(s) for s in train_data.shape[1:]]
             # print("train_data:", train_data.shape, "position_dim:", position_dim)
             # print("meshgrid_args:", meshgrid_args)
@@ -353,6 +372,8 @@ class MDGPTTrainingPipeline:
             orig_shape = tuple(range(len(positions.shape)))
             transposed_shape = orig_shape[1:] + (orig_shape[0],)
             positions = positions.transpose(*transposed_shape)
+            self.position_shape = positions.shape[:-1]
+            position_dim = self.position_dim = len(self.position_shape)
 
         print("positions shape:", positions.shape, "position_dim:", position_dim)
         positions_flat = positions.reshape(-1, position_dim)
@@ -360,6 +381,7 @@ class MDGPTTrainingPipeline:
             positions_flat=positions_flat,
             block_size=block_size,
             sparse_block_size=sparse_block_size,
+            position_epsilon=self.config.position_epsilon,
         )
         self.relative_pos_lut = torch.from_numpy(self.relative_pos_lut)
         self.context_idx_lut = torch.from_numpy(self.context_idx_lut)
@@ -749,18 +771,20 @@ class MDGPTTrainingPipeline:
             if ((iter_num + 1) % sample_interval == 0) and master_process:
                 # sample from the model
                 model.eval()
-                max_new_tokens = self.config.block_size
+                # TODO: this is hard coded for 3D positions (time, height, width)
+                max_new_tokens = int(t) * int(h) * int(w)
                 with torch.no_grad():
                     sampled_codes = model.generate(
                         [],
                         max_new_tokens,
+                        show_progress=True,
                     )
                     sampled_codes = sampled_codes[0, 1:]
 
                 if self.config.vae_model_name is not None:
                     idx_violating = sampled_codes > (self.config.vae_vocab_size - 1)
                     violating_codes = idx_violating.float().mean()
-                    print(f"violating codes: {violating_codes.item()}")
+                    print(f"violating codes: {violating_codes.item()}. vae_vocab_size={self.config.vae_vocab_size}")
                     sampled_codes[idx_violating] = 0
                     # force_cudnn_initialization()
                     # sampled_codes = torch.ones(1, 32768, dtype=torch.long).to(device)
@@ -780,14 +804,15 @@ class MDGPTTrainingPipeline:
                         w=int(w),
                     )
                     assert sampled_codes.shape == (1, t, h, w), sampled_codes.shape
-
+                    print(f"sampled_codes max={sampled_codes.max()}, min={sampled_codes.min()}")
                     z = vae.vq.codes_to_vec(sampled_codes)
                     assert len(z.shape) == 5
                     assert z.shape == (1, 4, t, h, w)
                     video = vae.decoder(z)
                     video = (video - video.min()) / (video.max() - video.min() + 1e-6)
                     video = (video * 255).to(torch.uint8)
-                    video = rearrange(video, "b c t h w -> t c h (b w)")
+                    print("video before rearange:", video.shape)
+                    video = rearrange(video, "b c t h w -> t c h (b w)", c=3, b=1)
                     display = wandb.Video(video.cpu(), fps=5, format="mp4")
                     if wandb_log:
                         wandb.log(
@@ -815,6 +840,7 @@ class MDGPTConfig(GPTConfig):
     sparse_block_size: int = 128
     start_token: int = 5121
     ignore_token: int = 5122
+    # Position shape is the shape of the positional indices.
     position_shape: Tuple[int, int, int] = (8, 64, 64)
 
 
@@ -833,8 +859,8 @@ def find_sparse_context_window(
     # look back at most block_size points
     if target_idx == 0:
         position_dim = positions.shape[-1]
-        assert position_dim == 3, f"position_dim={position_dim}"
-        return -1 * np.ones((sparse_block_size,)), -1 * np.ones((sparse_block_size, position_dim))
+        assert position_dim < 5, f"position_dim={position_dim}, positions.shape={positions.shape}"
+        return -1 * np.ones((sparse_block_size,)), 0 * np.ones((sparse_block_size, position_dim))
     start_idx = max(0, target_idx - block_size)
     target_position = positions[target_idx]
     # print("target pos:", target_position)
@@ -873,7 +899,7 @@ def pad_seq(context_idx, sparse_block_size, value=-1):
     return padded
 
 
-def precompute_context_windows(positions_flat, block_size, sparse_block_size):
+def precompute_context_windows(positions_flat, block_size, sparse_block_size, position_epsilon=1e-1):
     """
     Note! To use context_idx, you need to first insert an "ignore token" at the start of the positions and tokens for each example.
     And you need to use context_idx + 1.
@@ -894,6 +920,7 @@ def precompute_context_windows(positions_flat, block_size, sparse_block_size):
             positions_flat,
             block_size,
             sparse_block_size,
+            position_epsilon=position_epsilon,
         )
         # print(f"context_token_idx.shape={context_token_idx.shape}, relative_pos.shape={relative_pos.shape}")
         relative_pos_padded = np.concatenate(
@@ -904,7 +931,7 @@ def precompute_context_windows(positions_flat, block_size, sparse_block_size):
             axis=0,
         )
         # print(f"relative_pos_padded.shape={relative_pos_padded.shape}, sparse_block_size={sparse_block_size}")
-        context_token_idx_padded = pad_seq(context_token_idx, sparse_block_size)  # + 1
+        context_token_idx_padded = pad_seq(context_token_idx, sparse_block_size)
 
         relative_pos_lut.append(relative_pos_padded)
         context_token_idx_lut.append(context_token_idx_padded)
@@ -926,7 +953,6 @@ class MDGPT(GPT):
         assert (
             config.ignore_token < config.vocab_size
         ), f"ignore_token: {config.ignore_token}, vocab_size: {config.vocab_size}"
-        position_dim = len(config.position_shape)
         print("position_shape:", config.position_shape)
         position_embedding_input_sizes = [2 * s + 1 for s in config.position_shape]
         print("position_embedding_input_sizes:", position_embedding_input_sizes)
@@ -1020,73 +1046,43 @@ class MDGPT(GPT):
             first `sparse_block_size` tokens. Resulting in a speed up of (block_size / sparse_block_size) ^ 2.
         """
 
-        if x.shape[0] == 1:
-            # Perform this trick to save some computation when batch_size is 1
-            idx_to_ignore = x == self.config.ignore_token
-            if (~idx_to_ignore).sum() > 0:
-                x = x[~idx_to_ignore]
-                x_pos = x_pos[~idx_to_ignore]
-                if len(x.shape) == 1:
-                    x = x.unsqueeze(0)
-                if len(x_pos.shape) == 2:
-                    x_pos = x_pos.unsqueeze(0)
+        # First, reverse the order such that the nearest tokens are last.
+        x = x.flip(1)
+        x_pos = x_pos.flip(1)
 
         relative_pos = y_pos.unsqueeze(1) - x_pos
+        # print("relative_pos:", relative_pos.shape, "x:", x.shape)
         assert (
             x.max() < self.config.vocab_size
         ), f"x.max(): {x.max()}, vocab_size: {self.config.vocab_size}"
 
         input_x = x
 
-        # if y is not None:
-        #     print(
-        #         f"x={x[0].cpu().numpy().ravel()},\ny={y[0].cpu().numpy().ravel()},\nrelative_pos={relative_pos[0].cpu().numpy().ravel()}"
-        #     )
-
-        # if self.transformer.wte.weight.isnan().sum() > 0:
-        #     print(
-        #         "Nan detected in wte:",
-        #         self.transformer.wte.weight.isnan().sum().item(),
-        #         "nan values",
-        #     )
-        #     raise ValueError("Nan detected in wte weights")
         x = self.transformer.wte(x)
-        # if x.isnan().sum() > 0:
-        #     print("Nan detected in x after wte:", x.isnan().sum().item(), "nan values")
-        #     print(f"x: {x}")
-        #     raise ValueError("Nan detected in x after wte")
         position_dim = len(self.config.position_shape)
         for d in range(position_dim):
             offset = self.config.position_shape[d]
-            # print(f"d={d}, offset={offset}, relative_pos_pruned shape: {relative_pos_pruned.shape}")
-            # print("embedding model:", self.transformer.wpe[d])
-            # print(f"input to embedding:", relative_pos_pruned[:, :, d] + offset)
             # TODO: try absolute value, instead of offsetting
             assert (
                 relative_pos[:, :, d].max() < self.transformer.wpe[d].num_embeddings
-            ), f"x_pos.max(): {relative_pos.max()}, block_size: {self.config.block_size}, {self.transformer.wpe[0]}"
-            x += self.transformer.wpe[d](relative_pos[:, :, d] + offset) / float(
+            ), f"relative_pos.max(): {relative_pos.max()}, block_size: {self.config.block_size}, {self.transformer.wpe[d]}, num_embeddings: {self.transformer.wpe[d].num_embeddings}"
+            relative_pos_with_offset = relative_pos[:, :, d] + offset
+            # print(f"x: {x.shape}, relative_pos_with_offset: {relative_pos_with_offset.shape}, position_dim: {position_dim}")
+            x += self.transformer.wpe[d](relative_pos_with_offset) / float(
                 position_dim
             )
-        # if x.isnan().sum() > 0:
-        #     print("Nan detected in x after wpe")
-        #     print(f"x: {x}")
-        #     raise ValueError("Nan detected in x after wpe")
+        
         x = self.transformer.drop(x)
         for block in self.transformer.h:
             x = block(x)
-        # if x.isnan().sum() > 0:
-        #     print("Nan detected in x after block")
-        #     print(f"x: {x}")
-        #     raise ValueError("Nan detected in x after block")
         x = self.transformer.ln_f(x)
 
-        # print(f"after linear, x shape: {x.shape}")
         if y is not None:
             # Only predict using the last token
             logits = self.lm_head(
                 x[:, -1, :]
             )
+            y[y==self.config.ignore_token] = -1
             loss = F.cross_entropy(
                 logits,
                 y.squeeze(-1),
@@ -1174,33 +1170,26 @@ class MDGPT(GPT):
                              # this should happen before the start token is inserted
         
         if len(x) == 0:
-            x.append(torch.from_numpy(np.array([self.config.start_token])).to(device))
+            x = torch.from_numpy(np.array([self.config.start_token])).to(device).unsqueeze(0)
 
 
         # print(f"x len: {len(x)}")
         # print("x:", x)
-        whole_seq_len = len(x) + max_new_tokens
+        # whole_seq_len = len(x) + max_new_tokens
         # print(f"whole_seq_len: {whole_seq_len}")
 
         if len(self.config.position_shape) == 1:
             assert (
                 max_new_tokens is not None
             ), f"max_new_tokens should not be None for 1D sequence"
-            positions = np.arange(whole_seq_len).reshape(-1, 1)
-        # else:
-        #     print("Ignoring max_new_tokens for generating multi-dimensional data")
-        #     meshgrid_args = [np.arange(s) for s in self.config.position_shape]
-        #     positions = np.array(
-        #         np.meshgrid(
-        #             *meshgrid_args,
-        #             indexing="ij",
-        #         )
-        #     )
 
         target_indices_to_print = [0, 9]
-        print("target_pos:", target_pos)
-        print("max_new_tokens:", max_new_tokens)
-        for target_idx in range(target_pos, target_pos + max_new_tokens):
+        # print("target_pos:", target_pos)
+        # print("max_new_tokens:", max_new_tokens)
+        iterated = range(target_pos, target_pos + max_new_tokens)
+        if show_progress:
+            iterated = tqdm(iterated)
+        for target_idx in iterated:
             if target_idx in target_indices_to_print:
                 print("=" * 80)
                 print(
@@ -1217,7 +1206,8 @@ class MDGPT(GPT):
             # print("context_token_idx:", context_token_idx)
             # print("relative_pos:", relative_pos.shape)
             assert len(relative_pos.shape) in [2, 3], f"relative_pos shape: {relative_pos.shape}"
-            assert context_token_idx.min() >= -1, f"context_token_idx.min(): {context_token_idx.min()}"
+            # assert context_token_idx.min() >= -1, f"context_token_idx.min(): {context_token_idx.min()}"
+
             # valid_idx = context_token_idx >= 0
             # context_token_idx = context_token_idx[valid_idx]
             # relative_pos = relative_pos[valid_idx]
@@ -1251,16 +1241,18 @@ class MDGPT(GPT):
                 context_token_idx = (
                     context_token_idx.int() + 1
                 )  # position 0 is reserved for ignore token
-                x_concat = torch.cat(x, dim=0)
-                # if (target_idx in target_indices_to_print):
-                #     print(f"x_concat: {x_concat.cpu().numpy()}, shape is {x_concat.shape}")
 
-                assert context_token_idx.min() >= 0, f"context_token_idx.min(): {context_token_idx.min()}"
+                x_concat = x
+
+                if (target_idx in target_indices_to_print):
+                    print(f"x_concat: {x_concat}, shape is {x_concat.shape}")
+
+                # assert context_token_idx.min() >= 0, f"context_token_idx.min(): {context_token_idx.min()}"
                 # print("context_token_idx:", context_token_idx)
-                cond_x = x_concat[context_token_idx]
-                # print("cond_x:", cond_x)
+                cond_x = x_concat[:, context_token_idx]
+                # print("cond_x:", cond_x.shape, "x_concat:", x_concat.shape, "context_token_idx:", context_token_idx.shape)
 
-            cond_x = rearrange(cond_x, "(b t) -> b t", b=batch_size)
+            # cond_x = rearrange(cond_x, "(b t) -> b t", b=batch_size)
             if isinstance(relative_pos, np.ndarray):
                 relative_pos = torch.from_numpy(relative_pos)
             relative_pos = relative_pos.unsqueeze(0)  # add batch dimension
@@ -1276,8 +1268,9 @@ class MDGPT(GPT):
             cond_x_pos = cond_y_pos - relative_pos
 
             if (target_idx in target_indices_to_print):
-                print(f"cond_x (last 5): {cond_x[-5:, -5:, ...]}")
-                print(f"cond_x_pos (last 5): {cond_x_pos[-5:, -5:, ...]}")
+                print(f"cond_x (first 5): {cond_x[:, :5, ...]}")
+                print(f"cond_x_pos (first 5): {cond_x_pos[:, :5, ...]}")
+                print(f"relative pos (first 5):", relative_pos[:, :5, ...])
                 print(f"y_pos: {y_pos}")
                 
             logits, _ = self.forward(
@@ -1291,12 +1284,17 @@ class MDGPT(GPT):
                 logits[logits < v[-1]] = -float("Inf")
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
-            x.append(idx_next.detach())
+            idx_next = idx_next.unsqueeze(0)
+            # print(f"x:", x.shape, "idx_next:", idx_next.shape)
+            x_shape = x.shape
+            x = torch.cat((x, idx_next), dim=1)
+            assert len(x.shape) == len(x_shape), f"before: {x_shape}, after: {x.shape}"
+            # x.append(idx_next.detach())
             if target_idx in target_indices_to_print:
                 print(f"idx_next: {idx_next.detach().cpu().numpy()}")
 
-        x = torch.cat(x, dim=0)
-        x = x.unsqueeze(0)
+        # x = torch.cat(x, dim=0)
+        # x = x.unsqueeze(0)
         return x
 
     @torch.no_grad()

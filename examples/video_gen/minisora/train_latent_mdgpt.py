@@ -7,21 +7,23 @@ def prepare_data(args):
     vocab_size = data.max() + 3
     VIDEO_BEGIN_TOKEN = data.max() + 1
     IGNORE_TOKEN = data.max() + 2
+    vae_vocab_size = data.max()
     # data = data.reshape(len(data), -1)  # flattened for each video
-    return data, vocab_size, VIDEO_BEGIN_TOKEN, IGNORE_TOKEN
+    return data, vocab_size, vae_vocab_size, VIDEO_BEGIN_TOKEN, IGNORE_TOKEN
 
 class SimplePassthroughDatasetBuilder:
-    def __init__(self, token_ids, vocab_size, VIDEO_BEGIN_TOKEN):
+    def __init__(self, token_ids, vocab_size, VIDEO_BEGIN_TOKEN, num_latent_frames=32):
         self.token_ids = token_ids
         self.vocab_size = vocab_size
         self.start_token = VIDEO_BEGIN_TOKEN
         self.n_train = int(len(token_ids) * 0.8)
+        self.num_latent_frames = num_latent_frames
 
     def training_dataset(self):
-        return self.token_ids[: self.n_train]
+        return self.token_ids[: self.n_train][:, :self.num_latent_frames, ...]
 
     def validation_dataset(self):
-        return self.token_ids[self.n_train:]
+        return self.token_ids[self.n_train:][:, :self.num_latent_frames, ...]
     
 
 
@@ -48,14 +50,15 @@ def main():
     parser.add_argument("--min_lr", type=float, default=1e-4)
     parser.add_argument("--beta2", type=float, default=0.99)
     parser.add_argument("--warmup_iters", type=int, default=100)
+    parser.add_argument("--num_latent_frames", type=int, default=32)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
     parser.add_argument("--vae_model_name", type=str, default="zzsi_kungfu/videogpt/model-kbu39ped:v11")
     parser.add_argument("--tokens_input_file", type=str, default="flying_mnist_tokens_32frames_train.npy")
     parser.add_argument("--wandb_log", action="store_true")
     args = parser.parse_args()
 
-    token_ids, vocab_size, VIDEO_BEGIN_TOKEN, IGNORE_TOKEN = prepare_data(args)
-    db = SimplePassthroughDatasetBuilder(token_ids, vocab_size, VIDEO_BEGIN_TOKEN)
+    token_ids, vocab_size, vae_vocab_size, VIDEO_BEGIN_TOKEN, IGNORE_TOKEN = prepare_data(args)
+    db = SimplePassthroughDatasetBuilder(token_ids, vocab_size, VIDEO_BEGIN_TOKEN, num_latent_frames=args.num_latent_frames)
     print(token_ids.shape)
     train_pipe = MDGPTTrainingPipeline(
         config=MDGPTTrainingPipeline.Config(
@@ -64,6 +67,7 @@ def main():
             vae_model_name=args.vae_model_name,
             vocab_size=vocab_size,
             meta_vocab_size=vocab_size,
+            vae_vocab_size=vae_vocab_size,
             start_token=VIDEO_BEGIN_TOKEN,
             ignore_token=IGNORE_TOKEN,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
