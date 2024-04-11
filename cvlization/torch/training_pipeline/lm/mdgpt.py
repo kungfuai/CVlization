@@ -19,8 +19,103 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributed import init_process_group, destroy_process_group
 import wandb
-from .gpt import GPT, GPTConfig, Block, CausalSelfAttention, LayerNorm, MLP
+from .gpt import GPT, GPTConfig, LayerNorm, MLP
 
+
+class SelfAttention(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        # key, query, value projections for all heads, but in a batch
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        # output projection
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # regularization
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
+        self.dropout = config.dropout
+        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
+        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
+        if not self.flash:
+            print(
+                "WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0"
+            )
+            # causal mask to ensure that attention is only applied to the left in the input sequence
+            self.register_buffer(
+                "bias",
+                torch.tril(torch.ones(config.block_size, config.block_size)).view(
+                    1, 1, config.block_size, config.block_size
+                ),
+            )
+
+    def forward(self, x):
+        B, T, C = (
+            x.size()
+        )  # batch size, sequence length, embedding dimensionality (n_embd)
+
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        try:
+            q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        except:
+            # x.shape: torch.Size([8, 4096, 768]) this is the correct shape
+            # x.shape: torch.Size([1, 1, 768]), n_embd: 768, n_head: 6, c_atten: Linear(in_features=768, out_features=2304, bias=True)
+            print(
+                f"x.shape: {x.shape}, n_embd: {self.n_embd}, n_head: {self.n_head}, c_atten: {self.c_attn}"
+            )
+            raise
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
+            1, 2
+        )  # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
+            1, 2
+        )  # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
+            1, 2
+        )  # (B, nh, T, hs)
+
+        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        if self.flash:
+            # efficient attention using Flash Attention CUDA kernels
+            y = torch.nn.functional.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                attn_mask=None,
+                dropout_p=self.dropout if self.training else 0,
+                is_causal=False,
+            )
+        else:
+            # manual implementation of attention
+            raise NotImplementedError("regular self attention currently requires flash-attn")
+            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_dropout(att)
+            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = (
+            y.transpose(1, 2).contiguous().view(B, T, C)
+        )  # re-assemble all head outputs side by side
+
+        # output projection
+        y = self.resid_dropout(self.c_proj(y))
+        return y
+
+class Block(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        self.attn = SelfAttention(config)
+        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        self.mlp = MLP(config)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x
 
 class MDGPTTrainingPipeline:
     @dataclass
@@ -445,6 +540,7 @@ class MDGPTTrainingPipeline:
             self.model_args["sparse_block_size"] = self.config.sparse_block_size
             self.model_args["start_token"] = self.START_TOKEN
             self.model_args["ignore_token"] = self.IGNORE_TOKEN
+            self.model_args["position_shape"] = self.position_shape
             gptconf = MDGPTConfig(**(self.model_args))
             model = MDGPT(gptconf)
         elif init_from == "resume":
@@ -841,7 +937,7 @@ class MDGPTConfig(GPTConfig):
     start_token: int = 5121
     ignore_token: int = 5122
     # Position shape is the shape of the positional indices.
-    position_shape: Tuple[int, int, int] = (8, 64, 64)
+    position_shape: Tuple[int, int, int] = None
 
 
 def find_sparse_context_window(
@@ -849,18 +945,35 @@ def find_sparse_context_window(
 ):
     """
     Given a target index, find up to `sparse_block_size` closest points to the target index.
+    The neighborhood is defined on the position grid of N points.
+
+    Args:
+        target_idx: int, an integer between 0 and N-1 (inclusive). For a 3D position (t, r, c),
+        inside the grid of size (T, H, W), the target_idx would be t * H * W + r * W + c.
+        positions: (N, position_dim)
+        block_size: int, the maximum number of points to look back.
+        sparse_block_size: int, the number of points to return.
+        position_epsilon: float, the noise to add to the position to break ties.
+    
+    Returns:
+        context_token_idx: (sparse_block_size,), the indices of the closest points to the target_idx.
+            Each idx can take values between -1 and N-1 (inclusive). -1 indicates an invalid idx.
+        relative_pos: (sparse_block_size, position_dim), the relative position of the context_token_idx
+            with respect to the target_idx. When target_idx is 0, the relative_pos is 0 for all
+            context_token_idx. relative_pos can be determined by context_token_idx, target_idx and positions.
     """
-    # positions: (N, position_dim)
-    # target_idx: (position_dim,)
-    # block_size: int
-    # returns: (sparse_block_size, position_dim)
-    # find the block_size closest points to the target_idx
-    # using the L2 distance
-    # look back at most block_size points
     if target_idx == 0:
+        # This is the very first position. There is no prior positions to look back on.
         position_dim = positions.shape[-1]
         assert position_dim < 5, f"position_dim={position_dim}, positions.shape={positions.shape}"
-        return -1 * np.ones((sparse_block_size,)), 0 * np.ones((sparse_block_size, position_dim))
+        context_token_idx = -1 * np.ones((sparse_block_size,))
+        relative_pos = 0 * np.ones((sparse_block_size, position_dim))
+        return context_token_idx, relative_pos
+    
+    # The look-back context window is from target_idx - block_size to target_idx.
+    # When target_idx - block_size is negative, we start from 0.
+    # From the context window up to size `block_size`, we will pick `sparse_block_size` closest positions.
+    # So the actual sparse context window will be of size `sparse_block_size`.
     start_idx = max(0, target_idx - block_size)
     target_position = positions[target_idx]
     # print("target pos:", target_position)
@@ -870,21 +983,30 @@ def find_sparse_context_window(
     distances_exponential = np.exp(-distances)
     position_dim = positions.shape[1]
     if position_dim > 1:
+        # For multi-dimensional positions, add some noise to break ties.
+        # This is because there are multiple ways to order the points in multi-dimensional space.
+        # For 1-D positions, this is not necessary.
         distances_exponential += (
             np.random.rand(*distances_exponential.shape) * position_epsilon
         )
 
+    # Now, order the distances from smallest to largest.
     # print(distances.shape)
     # print("distances:", distances_exponential)
     sorted_indices = np.argsort(-distances_exponential)
     # print("sorted indices:", sorted_indices)
+
     try:
         context_token_idx = np.arange(start_idx, target_idx)[
             sorted_indices[:sparse_block_size]
         ]
+        # TODO: just do context_token_idx = sorted_indices[:sparse_block_size] + start_idx
+        assert np.all(context_token_idx == sorted_indices[:sparse_block_size] + start_idx)
     except:
         print(f"sorted_indices={sorted_indices[:sparse_block_size]}, start_idx={start_idx}, target_idx={target_idx}")
         raise
+
+    # Determine the relative position of the context_token_idx with respect to the target_idx.
     relative_pos = target_position - positions[context_token_idx]
     assert len(relative_pos.shape) in [2, 3], f"relative_pos.shape={relative_pos.shape}, target_position.shape={target_position.shape}, positions.shape={positions.shape}, context_token_idx.shape={context_token_idx.shape}, start_idx={start_idx}, target_idx={target_idx}, block_size={block_size}, sparse_block_size={sparse_block_size}"
     return context_token_idx, relative_pos
@@ -905,11 +1027,14 @@ def precompute_context_windows(positions_flat, block_size, sparse_block_size, po
     And you need to use context_idx + 1.
     This way, a token idx of 0 is reserved for the ignore token at the beginning of the sequence.
     The real idx starts from 1.
+
+    Returns:
+        relative_pos_lut: (N, sparse_block_size, position_dim), the relative position of the context_token_idx
+            with respect to the target_idx. When target_idx is 0, the relative_pos is 0 for all
+            context_token_idx. relative_pos can be determined by context_token_idx, target_idx and positions.
+        context_token_idx_lut: (N, sparse_block_size), the indices of the closest points to the target_idx.
+            Each idx can take values between -1 and N-1 (inclusive). -1 indicates an invalid idx.
     """
-    # positions_flat_padded = np.concatenate(
-    #     [np.ones((1, 3), dtype=np.int64) * 0, positions_flat],
-    #     axis=0,
-    # )
 
     relative_pos_lut = []
     context_token_idx_lut = []
@@ -931,7 +1056,7 @@ def precompute_context_windows(positions_flat, block_size, sparse_block_size, po
             axis=0,
         )
         # print(f"relative_pos_padded.shape={relative_pos_padded.shape}, sparse_block_size={sparse_block_size}")
-        context_token_idx_padded = pad_seq(context_token_idx, sparse_block_size)
+        context_token_idx_padded = pad_seq(context_token_idx, sparse_block_size, value=-1)
 
         relative_pos_lut.append(relative_pos_padded)
         context_token_idx_lut.append(context_token_idx_padded)
@@ -1045,12 +1170,16 @@ class MDGPT(GPT):
             The context tokens and their positions are then pruned to the
             first `sparse_block_size` tokens. Resulting in a speed up of (block_size / sparse_block_size) ^ 2.
         """
-
         # First, reverse the order such that the nearest tokens are last.
         x = x.flip(1)
         x_pos = x_pos.flip(1)
 
+        assert len(y_pos.shape) == 2
         relative_pos = y_pos.unsqueeze(1) - x_pos
+        # The L2 norm of relative_pos should decrease.
+        l2_relative_pos = torch.norm(relative_pos.float(), dim=-1)
+        assert l2_relative_pos[0, -1] <= max(1, l2_relative_pos[0, -2]), f"l2_relative_pos: {l2_relative_pos}, {l2_relative_pos.shape}, x_pos: {x_pos}, y_pos: {y_pos}"
+
         # print("relative_pos:", relative_pos.shape, "x:", x.shape)
         assert (
             x.max() < self.config.vocab_size
@@ -1272,7 +1401,10 @@ class MDGPT(GPT):
                 print(f"cond_x_pos (first 5): {cond_x_pos[:, :5, ...]}")
                 print(f"relative pos (first 5):", relative_pos[:, :5, ...])
                 print(f"y_pos: {y_pos}")
-                
+            
+            sparse_block_size = len(context_token_idx)
+            # print("sparse block_size:", sparse_block_size)
+            assert cond_x.shape == (batch_size, sparse_block_size), f"cond_x shape: {cond_x.shape}"
             logits, _ = self.forward(
                 x_pos=cond_x_pos.long().to(device),
                 x=cond_x.long().to(device),
