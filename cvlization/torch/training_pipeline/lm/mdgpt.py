@@ -294,10 +294,10 @@ class MDGPTTrainingPipeline:
                 assert len(x_pos.shape) == 2, f"x_pos.shape: {x_pos.shape}"
         # update the target idx
         self.target_idx += 1
-        if self.target_idx >= self.config.block_size:
+        tokens_in_each_frame = self.train_data_orig.shape[2] * self.train_data_orig.shape[3]
+        if self.target_idx > tokens_in_each_frame:
             self.target_idx = 1
-            # TODO: make pos_offset less random. It should only fall on the beginning of each frame.
-            tokens_in_each_frame = self.train_data_orig.shape[2] * self.train_data_orig.shape[3]
+            # pos_offset is not totally random. It should only fall on the beginning of each frame.
             frame_offset = torch.randint(self.train_data_orig.shape[1] - block_size // tokens_in_each_frame, (1,)).item()
             self.pos_offset = frame_offset * tokens_in_each_frame
             # self.pos_offset = torch.randint(data.shape[1] - block_size, (1,)).item()
