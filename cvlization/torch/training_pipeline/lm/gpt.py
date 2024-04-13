@@ -121,7 +121,9 @@ class NanoGPTTrainingPipeline:
         if self.master_process:
             os.makedirs(self.out_dir, exist_ok=True)
 
-        torch.manual_seed(1337 + self.seed_offset)
+        seed = 1337 + self.seed_offset
+        print(f"setting random seed to {seed}")
+        torch.manual_seed(seed)
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
@@ -134,6 +136,7 @@ class NanoGPTTrainingPipeline:
         self.create_model()
         self.create_grad_scaler()
         self.create_optimizer()
+        print(torch.randint(100, (1,)))
         self.training_loop()
 
     def _setup_io(self):
@@ -200,6 +203,7 @@ class NanoGPTTrainingPipeline:
             # batch x sequence len
             irow = torch.randint(data.shape[0], (batch_size,))
             ix = torch.randint(data.shape[1] - block_size, (batch_size,))
+            # print(ix)
             x = torch.stack([
                 torch.from_numpy(data[i, i1 : i1 + block_size].astype(np.int64)) for i, i1 in zip(irow, ix)
             ])
@@ -441,6 +445,7 @@ class NanoGPTTrainingPipeline:
         print(model)
         model.to(device)
         if self.config.compile:
+            print("compiling the model...")
             model = torch.compile(model)
         self.model = model
 
@@ -482,6 +487,7 @@ class NanoGPTTrainingPipeline:
         # initialize a GradScaler. If enabled=False scaler is a no-op
         dtype = self.dtype
         self.scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
+        print(f"GradScaler enabled: {dtype == 'float16'}")
 
     def create_optimizer(self):
         model = self.model
@@ -492,6 +498,7 @@ class NanoGPTTrainingPipeline:
         device_type = self.device_type
         init_from = self.config.init_from
         # optimizer
+        print(f"creating optimizer with lr {learning_rate}")
         optimizer = model.configure_optimizers(
             weight_decay, learning_rate, (beta1, beta2), device_type
         )
@@ -558,12 +565,18 @@ class NanoGPTTrainingPipeline:
         gradient_accumulation_steps = self.config.gradient_accumulation_steps
         master_process = self.master_process
         ctx = self.ctx
+        print("master_process:", master_process)
+        print("batch_size:", batch_size)
+        print("gradient_accumulation_steps:", gradient_accumulation_steps)
 
         # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
         iter_num = 0
         best_val_loss = 1e9
 
         X, Y = self.get_batch("train")  # fetch the very first batch
+        print(f"X.shape: {X.shape}, Y.shape: {Y.shape}")
+        print(f"X: {X[0, :5]}")
+        # import sys; sys.exit(0)
         t0 = time.time()
         local_iter_num = 0  # number of iterations in the lifetime of this process
         raw_model = model.module if ddp else model  # unwrap DDP container if needed
@@ -575,7 +588,7 @@ class NanoGPTTrainingPipeline:
                 param_group["lr"] = lr
 
             # evaluate the loss on train/val sets and write checkpoints
-            if iter_num % eval_interval == 0 and self.master_process:
+            if (iter_num + 1) % eval_interval == 0 and self.master_process:
                 losses = self.estimate_loss()
                 print(
                     f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
@@ -620,7 +633,10 @@ class NanoGPTTrainingPipeline:
                         micro_step == gradient_accumulation_steps - 1
                     )
                 with ctx:
+                    start_time = time.time()
                     logits, loss = model(X, Y)
+                    end_time = time.time()
+                    # print(f"forward pass time: {end_time - start_time:.3f}s")
                     loss = (
                         loss / gradient_accumulation_steps
                     )  # scale the loss to account for gradient accumulation
@@ -705,7 +721,7 @@ class NanoGPTTrainingPipeline:
                         if wandb_log:
                             wandb.log({"sampled/ground_truth_decoded": display})
 
-            if iter_num % sample_interval == 0 and master_process:
+            if (iter_num + 1) % sample_interval == 0 and master_process:
                 if self.config.vae_model_name is not None:
                     # sample from the model
                     model.eval()
@@ -979,7 +995,7 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, idx, targets=None):
-
+        # print(f"x_mean: {idx.float().mean()}")
         device = idx.device
         b, t = idx.size()
         assert (
