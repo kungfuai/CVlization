@@ -105,7 +105,7 @@ A variant of GPT:
 
 ```bash
 # Instead of training a diffusion model, one can also train a next token predictor.
-bash examples/video_gen/minisora/train.sh python train_latent_mdgpt.py --block_size 6000 --sparse_block_size 512 --sample_interval 100 --num_latent_frames 2 --max_iters 100000000 --wandb_log
+bash examples/video_gen/minisora/train.sh python train_latent_mdgpt.py --block_size 512 --sparse_block_size 512 --sample_interval 1000 --num_latent_frames 8 --batch_size 8 --gradient_accumulation_steps 4 --use_1d_pos_emb --max_iters 100000000 --only_predict_last --wandb_log
 ```
 
 3. Train a autoregressive MAMBA-based language model
