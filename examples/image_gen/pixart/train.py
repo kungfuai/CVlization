@@ -130,18 +130,27 @@ def train(args):
             global_step += 1
             data_time_start= time.time()
 
-            synchronize()
-            if accelerator.is_main_process:
-                if ((epoch - 1) * len(train_dataloader) + step + 1) % config.save_model_steps == 0:
-                    os.umask(0o000)
-                    save_checkpoint(os.path.join(config.work_dir, 'checkpoints'),
-                                    epoch=epoch,
-                                    step=(epoch - 1) * len(train_dataloader) + step + 1,
-                                    model=accelerator.unwrap_model(model),
-                                    model_ema=accelerator.unwrap_model(model_ema),
-                                    optimizer=optimizer,
-                                    lr_scheduler=lr_scheduler
-                                    )
+            # synchronize()
+            # if accelerator.is_main_process:
+            #     if ((epoch - 1) * len(train_dataloader) + step + 1) % config.save_model_steps == 0:
+            #         os.umask(0o000)
+            #         display_step = (epoch - 1) * len(train_dataloader) + step + 1
+            #         file_path = save_checkpoint(os.path.join(config.work_dir, 'checkpoints'),
+            #                         epoch=epoch,
+            #                         step=(epoch - 1) * len(train_dataloader) + step + 1,
+            #                         model=accelerator.unwrap_model(model),
+            #                         model_ema=accelerator.unwrap_model(model_ema),
+            #                         optimizer=optimizer,
+            #                         lr_scheduler=lr_scheduler
+            #                         )
+            #         # Also save to wandb.
+            #         if args.report_to == "wandb":
+            #             import wandb
+
+            #             metadata = {}
+            #             artifact = wandb.Artifact(name=f"model_{epoch}_{display_step}", type="model", metadata=metadata)
+            #             artifact.add_file(file_path, name="model.ckpt")
+            #             wandb.log_artifact(artifact)
             synchronize()
 
         synchronize()
@@ -156,6 +165,15 @@ def train(args):
                                 optimizer=optimizer,
                                 lr_scheduler=lr_scheduler
                                 )
+            
+                # Also save to wandb.
+                if args.report_to == "wandb":
+                    import wandb
+
+                    metadata = {}
+                    artifact = wandb.Artifact(name=f"model_{epoch}_{display_step}", type="model", metadata=metadata)
+                    artifact.add_file(file_path, name="model.ckpt")
+                    wandb.log_artifact(artifact)
                 
             latent_scale_factor = config.scale_factor
             if epoch == 1:

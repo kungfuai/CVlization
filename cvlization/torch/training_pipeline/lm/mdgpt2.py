@@ -4,7 +4,6 @@ import pickle
 import numpy as np
 from typing import Tuple
 import inspect
-import tqdm
 import os
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -192,8 +191,8 @@ class MDGPTTrainingPipeline:
             train_data = self.train_data_flattened
             val_data = self.val_data_flattened
         else:
-            train_data = self.train_data_orig
-            val_data = self.val_data_orig
+            train_data = self.train_data
+            val_data = self.val_data
         
         block_size = self.config.block_size
         batch_size = self.config.batch_size
@@ -202,21 +201,7 @@ class MDGPTTrainingPipeline:
         data = train_data if split == "train" else val_data
         x_pos = None
         y_pos = None
-        if len(data.shape) == 4:
-            # Grab a row of tokens.
-            i_example = torch.randint(data.shape[0], (batch_size,))
-            i_frame = torch.randint(data.shape[1], (batch_size,))
-            i_row = torch.randint(data.shape[2], (batch_size,))
-            x = torch.stack([
-                torch.from_numpy(data[i, i1, i2, :-1].astype(np.int64)) for i, i1, i2 in zip(i_example, i_frame, i_row)
-            ])
-            # insert the start token
-            x = torch.cat([torch.ones((batch_size, 1), dtype=torch.int64) * self.START_TOKEN, x], dim=1)
-            y = torch.stack([
-                torch.from_numpy(data[i, i1, i2, :].astype(np.int64)) for i, i1, i2 in zip(i_example, i_frame, i_row)
-            ])
-
-        elif len(data.shape) == 2:
+        if len(data.shape) == 2:
             # batch x sequence len
             irow = torch.randint(data.shape[0], (batch_size,))
             ix = torch.randint(data.shape[1] - block_size, (batch_size,))
@@ -580,34 +565,6 @@ class MDGPTTrainingPipeline:
             out[split] = losses.mean()
         model.train()
         return out
-    
-
-    def generate_video_tokens(self):
-        num_frames = 2
-        height = self.position_shape[1]
-        width = self.position_shape[2]
-        device = self.config.device
-        video_tokens = None
-        with tqdm.tqdm(total=num_frames * height * width) as pbar:
-            for t in range(num_frames):
-                for row in range(height):
-                    # Using START_TOKEN as the row start.
-                    generated_tokens = self.model.generate(
-                        idx=torch.Tensor(
-                                    np.ones((1, 1), dtype=np.int32) * self.START_TOKEN
-                                )
-                                .long()
-                                .to(device),
-                        max_new_tokens=width,
-                    )
-                    pbar.update(width)
-                    new_tokens = generated_tokens[:, 1:]
-                    if video_tokens is None:
-                        video_tokens = new_tokens
-                    else:
-                        video_tokens = torch.cat((video_tokens, new_tokens), dim=1)
-        return video_tokens
-    
 
     def training_loop(self):
         model = self.model
@@ -791,8 +748,19 @@ class MDGPTTrainingPipeline:
                     n_ = int(t * h * w)
                     with torch.no_grad():
                         positions_flattened = None if self.config.use_1d_pos_embedding else self.positions_flattened
-                        sampled_codes = self.generate_video_tokens()
-                        sampled_codes = sampled_codes[0, 0:]
+                        sampled_codes = model.generate(
+                            idx=torch.Tensor(
+                                np.ones((1, 1), dtype=np.int32) * self.START_TOKEN
+                            )
+                            .long()
+                            .to(device),
+                            max_new_tokens=n_, # self.data_seq_len,
+                            positions_flattened=positions_flattened,
+                            temperature=1,
+                            top_k=100,
+                            show_progress=True,
+                        )
+                        sampled_codes = sampled_codes[0, 1:]
                         violating_codes = (
                             (sampled_codes > self.config.vae_vocab_size - 1)
                             .float()
