@@ -35,6 +35,7 @@ def save_checkpoint(work_dir,
             previous_ckgt = file_path.format(i)
             if os.path.exists(previous_ckgt):
                 os.remove(previous_ckgt)
+    return file_path
 
 
 def load_checkpoint(checkpoint,
