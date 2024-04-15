@@ -1639,6 +1639,19 @@ class VectorQuantizer(BaseVectorQuantizer):
         x = x.view(b, t_h_w, self.embedding_dim)
         x = rearrange(x, "b (t h w) c -> b c t h w", b=b, t=t, h=h, w=w)
         return x
+    
+    @torch.no_grad()
+    def codes_to_vec_2d(self, x: torch.IntTensor) -> torch.Tensor:
+        """
+        :param x: flat codebook indices (B, L)
+        :return tensors (B,L,C)
+        """
+        b, l = x.shape
+
+        x = x.view(-1)
+        x = self.codebook.weight.index_select(0, x)
+        x = x.view(b, l, self.embedding_dim)
+        return x
 
     @torch.no_grad()
     def vec_to_codes(self, x: torch.Tensor) -> torch.IntTensor:

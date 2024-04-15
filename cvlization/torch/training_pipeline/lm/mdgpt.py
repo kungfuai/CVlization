@@ -3,7 +3,7 @@ import time
 import pickle
 import numpy as np
 from typing import Tuple
-import inspect
+import xformers.ops
 import tqdm
 import os
 from contextlib import nullcontext
@@ -18,6 +18,56 @@ from einops import rearrange
 import wandb
 from .gpt import GPT, GPTConfig, Block, MLP, CausalSelfAttention, LayerNorm
 
+
+class MultiHeadCrossAttention(nn.Module):
+    def __init__(self, d_model, num_heads, attn_drop=0., proj_drop=0., **block_kwargs):
+        super(MultiHeadCrossAttention, self).__init__()
+        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.head_dim = d_model // num_heads
+
+        self.q_linear = nn.Linear(d_model, d_model)
+        self.kv_linear = nn.Linear(d_model, d_model*2)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(d_model, d_model)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x, cond, mask=None):
+        # query/value: img tokens; key: condition; mask: if padding tokens
+        B, N, C = x.shape
+
+        q = self.q_linear(x).view(1, -1, self.num_heads, self.head_dim)
+        kv = self.kv_linear(cond).view(1, -1, 2, self.num_heads, self.head_dim)
+        k, v = kv.unbind(2)
+        attn_bias = None
+        if mask is not None:
+            attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
+        x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+        x = x.view(B, -1, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+
+        return x
+
+class BlockWithCrossAttention(Block):
+    def __init__(self, config, **kwargs):
+        super().__init__(config, **kwargs)
+        d_model = config.n_embd
+        n_head = config.n_head
+        self.cross_attn = MultiHeadCrossAttention(
+            d_model, n_head, attn_drop=0, proj_drop=0, **kwargs)
+        self.ln_3 = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_4 = LayerNorm(config.n_embd, bias=config.bias)
+
+    def forward(self, x, cond_x, mask=None):
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.cross_attn(self.ln_3(x), self.ln_4(cond_x), mask)
+        # x = x + self.mlp(x)
+        x = x + self.mlp(self.ln_2(x))
+        return x, cond_x
+
 class MDGPTTrainingPipeline:
     # TODO: compile the model.
     @dataclass
@@ -25,8 +75,10 @@ class MDGPTTrainingPipeline:
 
         log_dir: str = "logs/nanogpt"
         wandb_log: bool = False
+        watch_model: bool = False
         project: str = "nano-gpt"
         init_from: str = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
+        context_type: str = "prev_frame"  # "prev_row", "same_frame", "prev_frame"
 
         # Data
         block_size: int = 1024
@@ -202,19 +254,81 @@ class MDGPTTrainingPipeline:
         data = train_data if split == "train" else val_data
         x_pos = None
         y_pos = None
+        extra_args = {}
         if len(data.shape) == 4:
             # Grab a row of tokens.
             i_example = torch.randint(data.shape[0], (batch_size,))
             i_frame = torch.randint(data.shape[1], (batch_size,))
-            i_row = torch.randint(data.shape[2], (batch_size,))
-            x = torch.stack([
-                torch.from_numpy(data[i, i1, i2, :-1].astype(np.int64)) for i, i1, i2 in zip(i_example, i_frame, i_row)
-            ])
-            # insert the start token
-            x = torch.cat([torch.ones((batch_size, 1), dtype=torch.int64) * self.START_TOKEN, x], dim=1)
-            y = torch.stack([
-                torch.from_numpy(data[i, i1, i2, :].astype(np.int64)) for i, i1, i2 in zip(i_example, i_frame, i_row)
-            ])
+            i_row = torch.randint(data.shape[2] - 5, (batch_size,))
+            x = []
+            y = []
+            for i, i1, i2 in zip(i_example, i_frame, i_row):
+                if self.config.context_type in ["prev_row", "same_frame"]:
+                    rows = data[i, i1, i2:(i2+5), :]
+                    rows_flattened = rows.reshape(-1)
+                    # insert the start token
+                    rows_flattened = np.concatenate(
+                        [np.array([self.START_TOKEN]), rows_flattened]
+                    )
+                    x.append(torch.from_numpy(rows_flattened[:-1].astype(np.int64)))
+                    y.append(torch.from_numpy(rows_flattened[1:].astype(np.int64)))
+                elif self.config.context_type == "prev_frame":
+                    # TODO: also return x_pos, with added offset (not starting from 0).
+                    # i2 is not used here.
+                    # randomly grab sparse_block_size tokens from frame i
+                    tokens_in_this_frame = data[i, i1, :, :].ravel()
+                    # insert the start token
+                    tokens_in_this_frame = np.concatenate(
+                        [np.array([self.START_TOKEN]), tokens_in_this_frame]
+                    )
+                    sparse_block_size = self.config.sparse_block_size
+                    ix = torch.randint(len(tokens_in_this_frame) - sparse_block_size, (1,))
+                    if x_pos is None:
+                        x_pos = []
+                    x_pos.append(torch.from_numpy(np.arange(ix, ix + sparse_block_size).astype(np.int64)))
+                    assert x_pos[-1].max() < self.config.block_size, f"x_pos[-1].max(): {x_pos[-1].max()}, tokens in this frame: {len(tokens_in_this_frame)}, data: {data.shape}"
+                    x.append(torch.from_numpy(tokens_in_this_frame[ix : ix + sparse_block_size].astype(np.int64)))
+                    y.append(torch.from_numpy(tokens_in_this_frame[ix + 1 : ix + 1 + sparse_block_size].astype(np.int64)))
+                else:
+                    raise ValueError(f"Invalid context_type: {self.config.context_type}")
+                
+            x = torch.stack(x)
+            y = torch.stack(y)
+            if isinstance(x_pos, list):
+                x_pos = torch.stack(x_pos)
+            # Use the previous row as the conditioning tokens, to be used in
+            # cross-attention.
+            vae = self.vae
+            cond_token_ids = []
+
+            for i, i1, i2 in zip(i_example, i_frame, i_row):
+                if self.config.context_type == "prev_row":
+                    if i2 == 0:
+                        # use all zeros
+                        cond_token_ids.append(torch.zeros(data.shape[3], dtype=torch.int64))
+                    else:
+                        cond_token_ids.append(torch.from_numpy(data[i, i1, i2-1, :].astype(np.int64)))
+                elif self.config.context_type == "same_frame":
+                    new_cond_token_ids = np.zeros((self.position_shape[1], self.position_shape[2]), dtype=np.int64)
+                    new_cond_token_ids[:i2, :] = data[i, i1, :i2, :]
+                    new_cond_token_ids = new_cond_token_ids.ravel().astype(np.int64)
+                    assert len(new_cond_token_ids) == self.position_shape[1] * self.position_shape[2], f"len(new_cond_token_ids): {len(new_cond_token_ids)}"
+                    cond_token_ids.append(torch.from_numpy(new_cond_token_ids))
+                elif self.config.context_type == "prev_frame":
+                    if i1 == 0:
+                        cond_token_ids.append(torch.zeros(data.shape[-2:], dtype=torch.int64).reshape(-1))
+                    else:
+                        cond_token_ids.append(torch.from_numpy(data[i, i1-1, :, :].astype(np.int64)).reshape(-1))
+                else:
+                    raise ValueError(f"Invalid context_type: {self.config.context_type}")
+
+            cond_token_ids = torch.stack(cond_token_ids).to(device)
+            # cond_x_vecs = vae.vq.codes_to_vec_2d(cond_token_ids)
+            # assert x.shape == (self.config.batch_size, data.shape[3]), f"x.shape: {x.shape}"
+            extra_args = {
+                "cond_x": cond_token_ids, # cond_x_vecs,
+                "mask": None,
+            }
 
         elif len(data.shape) == 2:
             # batch x sequence len
@@ -241,6 +355,7 @@ class MDGPTTrainingPipeline:
                     for i in ix
                 ]
             )
+            
         if self.device_type == "cuda":
             # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
             x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
@@ -253,10 +368,11 @@ class MDGPTTrainingPipeline:
             if x_pos is not None:
                 x_pos = x_pos.to(device)
                 assert len(x_pos.shape) == 2, f"x_pos.shape: {x_pos.shape}"
-        assert x.shape == (self.config.batch_size, self.config.block_size), f"x.shape: {x.shape}"
-        assert y.shape == (self.config.batch_size, self.config.block_size), f"y.shape: {y.shape}"
 
-        return x_pos, x, y_pos, y
+        # assert x.shape == (self.config.batch_size, self.config.block_size), f"x.shape: {x.shape}"
+        # assert y.shape == (self.config.batch_size, self.config.block_size), f"y.shape: {y.shape}"
+
+        return x_pos, x, y_pos, y, extra_args
 
     def get_batch_for_predict_only_last(self, split: str):
         """
@@ -396,12 +512,16 @@ class MDGPTTrainingPipeline:
             meta_vocab_size = self.config.vocab_size
         out_dir = self.out_dir
 
+        if self.master_process and self.config.vae_model_name is not None:
+            self.load_vae()
+
         # model init
         self.model_args = dict(
             n_layer=n_layer,
             n_head=n_head,
             n_embd=n_embd,
             block_size=block_size,
+            sparse_block_size=self.config.sparse_block_size,
             bias=bias,
             vocab_size=None,
             dropout=dropout,
@@ -409,6 +529,7 @@ class MDGPTTrainingPipeline:
             use_1d_pos_embedding=self.config.use_1d_pos_embedding,
             causal=self.config.causal,
             only_predict_last=self.config.only_predict_last,
+            vae_hidden_dim=self.vae.vq.embedding_dim if hasattr(self, "vae") else None,
         )  # start with model_args from command line
         if init_from == "scratch":
             # init a new model from scratch
@@ -484,9 +605,8 @@ class MDGPTTrainingPipeline:
             print("compiling the model...")
             model = torch.compile(model)
         self.model = model
-
-        if self.master_process and self.config.vae_model_name is not None:
-            self.load_vae()
+        if self.config.wandb_log and self.config.watch_model and self.master_process:
+            wandb.watch(model)
 
     def load_vae(self):
         if ":" in self.config.vae_model_name:
@@ -572,10 +692,10 @@ class MDGPTTrainingPipeline:
         for split in ["train", "val"]:
             losses = torch.zeros(eval_iters)
             for k in range(eval_iters):
-                X_pos, X, Y_pos, Y = self.get_batch(split)
+                X_pos, X, Y_pos, Y, extra_args = self.get_batch(split)
                 # print(f"estimate_loss(): k={k}, X.shape: {X.shape}, Y.shape: {Y.shape}")
                 with self.ctx:
-                    logits, loss = model(x=X, y=Y, x_pos=X_pos, y_pos=Y_pos)
+                    logits, loss = model(x=X, y=Y, x_pos=X_pos, y_pos=Y_pos, **extra_args)
                 losses[k] = loss.item()
             out[split] = losses.mean()
         model.train()
@@ -587,10 +707,53 @@ class MDGPTTrainingPipeline:
         height = self.position_shape[1]
         width = self.position_shape[2]
         device = self.config.device
-        video_tokens = None
+        # Start with an empty video canvas.
+        video_tokens = torch.zeros((num_frames, height , width), dtype=torch.int64).to(device)
         with tqdm.tqdm(total=num_frames * height * width) as pbar:
             for t in range(num_frames):
-                for row in range(height):
+                if self.config.context_type in ["prev_row", "same_frame"]:
+                    for row in range(height):
+                        if self.config.context_type == "prev_row":
+                            if row == 0:
+                                cond_x_tokens = 0 * torch.ones((1, width), dtype=torch.int64).to(device)
+                            else:
+                                cond_x_tokens = video_tokens[t, row - 1, :]
+                        elif self.config.context_type == "same_frame":
+                            cond_x_tokens = video_tokens[t, :, :]
+                            # set all tokens to zero that are on or after the current row.
+                            cond_x_tokens[row:, :] = 0  # this should have no effect
+                        else:
+                            raise ValueError(f"Invalid context_type: {self.config.context_type}")
+                        # ignore the tokens that are out of the vocab size.
+                        cond_x_tokens[cond_x_tokens > self.config.vae_vocab_size] = 0
+                        # assert len(cond_x_tokens.shape) == 2, f"cond_x_tokens.shape: {cond_x_tokens.shape}"
+                        cond_x_tokens = cond_x_tokens.reshape(1, -1)
+                        # cond_x = self.vae.vq.codes_to_vec_2d(cond_x_tokens)
+                        cond_x = cond_x_tokens
+                        # Using START_TOKEN as the row start.
+                        generated_tokens = self.model.generate(
+                            idx=torch.Tensor(
+                                        np.ones((1, 1), dtype=np.int32) * self.START_TOKEN
+                                    )
+                                    .long()
+                                    .to(device),
+                            max_new_tokens=width,
+                            cond_x=cond_x,
+                        )
+                        pbar.update(width)
+                        new_tokens = generated_tokens[0, 1:]
+                        # fill in
+                        video_tokens[t, row, :] = new_tokens
+                elif self.config.context_type == "prev_frame":
+                    if t == 0:
+                        cond_x_tokens = 0 * torch.ones((height, width), dtype=torch.int64).to(device)
+                    else:
+                        cond_x_tokens = video_tokens[t - 1, :, :]
+                    # ignore the tokens that are out of the vocab size.
+                    cond_x_tokens[cond_x_tokens > self.config.vae_vocab_size] = 0
+                    cond_x_tokens = cond_x_tokens.reshape(1, -1)
+                    # cond_x = self.vae.vq.codes_to_vec_2d(cond_x_tokens)
+                    cond_x = cond_x_tokens
                     # Using START_TOKEN as the row start.
                     generated_tokens = self.model.generate(
                         idx=torch.Tensor(
@@ -598,14 +761,14 @@ class MDGPTTrainingPipeline:
                                 )
                                 .long()
                                 .to(device),
-                        max_new_tokens=width,
+                        max_new_tokens=height*width,
+                        pos_new_tokens=np.arange(height*width),
+                        cond_x=cond_x,
                     )
-                    pbar.update(width)
-                    new_tokens = generated_tokens[:, 1:]
-                    if video_tokens is None:
-                        video_tokens = new_tokens
-                    else:
-                        video_tokens = torch.cat((video_tokens, new_tokens), dim=1)
+                    pbar.update(width * height)
+                    new_tokens = generated_tokens[0, 1:]
+                    # fill in
+                    video_tokens[t, :, :] = new_tokens.reshape(height, width)
         return video_tokens
     
 
@@ -637,7 +800,7 @@ class MDGPTTrainingPipeline:
         iter_num = 0
         best_val_loss = 1e9
 
-        X_pos, X, Y_pos, Y = self.get_batch("train")  # fetch the very first batch
+        X_pos, X, Y_pos, Y, extra_args = self.get_batch("train")  # fetch the very first batch
         t0 = time.time()
         local_iter_num = 0  # number of iterations in the lifetime of this process
         raw_model = model.module if ddp else model  # unwrap DDP container if needed
@@ -696,20 +859,23 @@ class MDGPTTrainingPipeline:
                     )
                 with ctx:
                     start_time = time.time()
-                    logits, loss = model(X_pos, X, Y_pos, Y)
+                    logits, loss = model(X_pos, X, Y_pos, Y, **extra_args)
                     end_time = time.time()
                     # print(f"forward pass time: {end_time - start_time:.3f}s")
                     loss = (
                         loss / gradient_accumulation_steps
                     )  # scale the loss to account for gradient accumulation
                 # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                X_pos, X, Y_pos, Y = self.get_batch("train")
+                X_pos, X, Y_pos, Y, extra_args = self.get_batch("train")
                 # backward pass, with gradient scaling if training in fp16
                 scaler.scale(loss).backward()
             # clip the gradient
             if grad_clip != 0.0:
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                if (iter_num + 1) % log_interval == 0 and self.master_process:
+                    if self.config.wandb_log:
+                        wandb.log({"train/grad_norm": grad_norm.mean().item()}, step=iter_num)
             # step the optimizer and scaler if training in fp16
             scaler.step(optimizer)
             scaler.update()
@@ -787,12 +953,13 @@ class MDGPTTrainingPipeline:
                 if self.config.vae_model_name is not None:
                     # sample from the model
                     model.eval()
+                    # TODO: this should happen inside generate_video_tokens
                     t = 2
                     n_ = int(t * h * w)
                     with torch.no_grad():
                         positions_flattened = None if self.config.use_1d_pos_embedding else self.positions_flattened
                         sampled_codes = self.generate_video_tokens()
-                        sampled_codes = sampled_codes[0, 0:]
+                        sampled_codes = sampled_codes.reshape(-1)
                         violating_codes = (
                             (sampled_codes > self.config.vae_vocab_size - 1)
                             .float()
@@ -851,7 +1018,7 @@ class MDGPTTrainingPipeline:
 
 @dataclass
 class MDGPTConfig(GPTConfig):
-    sparse_block_size: int = 128
+    sparse_block_size: int = 512
     start_token: int = 5121
     ignore_token: int = 5122
     # Position shape is the shape of the positional indices.
@@ -860,6 +1027,8 @@ class MDGPTConfig(GPTConfig):
     causal: bool = False
     only_predict_last: bool = False
     disable_sparse_context_window: bool = False
+    use_cross_attention: bool = False
+    vae_hidden_dim: int = 4
 
 
 class MDGPT(GPT):
@@ -877,7 +1046,10 @@ class MDGPT(GPT):
         position_embedding_input_sizes = [2 * s + 1 for s in config.position_shape]
         print("position_embedding_input_sizes:", position_embedding_input_sizes)
         self.config = config
-        BlockCls = Block
+        if self.config.use_cross_attention:
+            BlockCls = BlockWithCrossAttention
+        else:
+            BlockCls = Block
         if config.use_1d_pos_embedding:
             self.transformer = nn.ModuleDict(
                 dict(
@@ -904,6 +1076,15 @@ class MDGPT(GPT):
                 )
             )
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        if self.config.use_cross_attention:
+            self.cross_attn = MultiHeadCrossAttention(
+                d_model=config.n_embd,
+                num_heads=config.n_head,
+                attn_drop=0,
+            )
+            vae_hidden_dim = self.config.vae_hidden_dim
+            self.cond_x_proj = nn.Linear(vae_hidden_dim, config.n_embd)
+
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
@@ -947,7 +1128,7 @@ class MDGPT(GPT):
                 n_params -= sum([m.weight.numel() for m in self.transformer.wpe])
         return n_params
     
-    def forward(self, x_pos, x, y_pos, y=None):
+    def forward(self, x_pos, x, y_pos, y=None, cond_x=None, **kwargs):
         idx = x
         targets = y
         # print(f"x_mean: {idx.float().mean()}")
@@ -956,7 +1137,10 @@ class MDGPT(GPT):
         assert (
             t <= self.config.block_size
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
+        if x_pos is None:
+            pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
+        else:
+            pos = x_pos
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
@@ -984,8 +1168,25 @@ class MDGPT(GPT):
                     position_dim
                 )
         x = self.transformer.drop(x)
+
+        if cond_x is not None:
+            # TODO: try using wte to encode cond_x token ids.
+            # cond_x is already encoded
+            # projection into the same space as the model
+            # cond_x = self.cond_x_proj(cond_x)
+            cond_x = self.transformer.wte(cond_x)
+            # add positional embedding
+            assert cond_x.size(1) < self.config.block_size, f"cond_x.size(1): {cond_x.size(1)}, block_size: {self.config.block_size}"
+            cond_x_pos = torch.arange(0, cond_x.size(1), dtype=torch.long, device=device)
+            assert self.config.use_1d_pos_embedding, "cross attention only supported with 1D positional embeddings"
+            cond_x_pos_emb = self.transformer.wpe(cond_x_pos)
+            cond_x = self.transformer.drop(cond_x + cond_x_pos_emb)
+
         for block in self.transformer.h:
-            x = block(x)
+            if self.config.use_cross_attention:
+                x, cond_x = block(x=x, cond_x=cond_x)
+            else:
+                x = block(x)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
@@ -1015,7 +1216,10 @@ class MDGPT(GPT):
     
     @torch.no_grad()
     def generate(
-        self, idx, max_new_tokens, positions_flattened=None, temperature=1.0, top_k=None, show_progress=False
+        self, idx, max_new_tokens,
+        pos_new_tokens=None,
+        cond_x=None,
+        positions_flattened=None, temperature=1.0, top_k=None, show_progress=False
     ):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
@@ -1028,26 +1232,26 @@ class MDGPT(GPT):
             range_to_iterate = tqdm(range(max_new_tokens), mininterval=2)
         else:
             range_to_iterate = range(max_new_tokens)
-        for _ in range_to_iterate:
+        for i in range_to_iterate:
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = (
                 idx
-                if idx.size(1) <= self.config.block_size
-                else idx[:, -self.config.block_size :]
+                if idx.size(1) <= self.config.sparse_block_size
+                else idx[:, -self.config.sparse_block_size :]
             )
-
-            # import sys
-            # print("idx_cond max:", idx_cond.max())
-            # sys.exit(0)
+            x_pos = None
+            if pos_new_tokens is not None:
+                x_pos = torch.from_numpy(pos_new_tokens[:(i+1)].astype(np.int64)).to(idx.device)
+                if x_pos.shape[0] > self.config.sparse_block_size:
+                    x_pos = x_pos[-self.config.sparse_block_size:]
 
             # forward the model to get the logits for the index in the sequence
             if positions_flattened is not None:
                 pos_idx = np.arange(idx_cond.size(1))
                 x_pos = torch.from_numpy(positions_flattened[pos_idx])
                 x_pos = x_pos.unsqueeze(0).expand(idx_cond.size(0), -1, -1).to(idx.device)
-            else:
-                x_pos = None
-            logits, _ = self(x=idx_cond, x_pos=x_pos, y_pos=None, y=None)
+            
+            logits, _ = self(x=idx_cond, x_pos=x_pos, y_pos=None, y=None, cond_x=cond_x)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
