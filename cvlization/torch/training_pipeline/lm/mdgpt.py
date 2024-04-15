@@ -1027,7 +1027,7 @@ class MDGPTConfig(GPTConfig):
     causal: bool = False
     only_predict_last: bool = False
     disable_sparse_context_window: bool = False
-    use_cross_attention: bool = False
+    use_cross_attention: bool = True
     vae_hidden_dim: int = 4
 
 
