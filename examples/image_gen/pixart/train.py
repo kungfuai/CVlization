@@ -170,8 +170,8 @@ def train(args):
                 if args.report_to == "wandb":
                     import wandb
 
-                    metadata = {}
-                    artifact = wandb.Artifact(name=f"model_{epoch}", type="model", metadata=metadata)
+                    metadata = {"loss": loss.item(), "epoch": epoch}
+                    artifact = wandb.Artifact(name=f"model_epoch{epoch}", type="model", metadata=metadata)
                     artifact.add_file(file_path, name="model.ckpt")
                     wandb.log_artifact(artifact)
                 
