@@ -348,6 +348,7 @@ def train_on_latents(
 
         # Backward & update
         loss = loss_dict["loss"].mean()
+        loss = loss / accumulate_grad_batches
         loss.backward()
 
         if i == 0:
