@@ -265,11 +265,11 @@ def train_on_latents(
     if latents is None and token_ids is not None:
         with torch.no_grad():
             # TODO: This loads all data into GPU memory! Use a dataloader instead
-            token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long).to(device)
+            token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long)
             # TODO: estimate these values automatically from z
             # latent_multiplier = 9
             # latent_bias = -0.27
-            z = vae.vq.codes_to_vec(token_ids)
+            z = vae.to("cpu").vq.codes_to_vec(token_ids)
             assert len(z.shape) == 5, f"Expected 5D tensor, got {z.shape}"
             assert (
                 z.shape[2] == token_ids.shape[1]
@@ -336,6 +336,7 @@ def train_on_latents(
     optimizer = torch.optim.Adam(denoiser.parameters(), lr=lr)
 
     # training loop
+    grad_norm = None
     for i in range(max_steps):
         x = get_batch(latent_frames_to_generate)
         assert x.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {x.shape[2]}"
@@ -353,6 +354,7 @@ def train_on_latents(
             # Decode the ground truth latents
             with torch.no_grad():
                 orig_z_first = orig_z[:1].to(device)
+                vae = vae.to(device)
                 if isinstance(vae, VQVAE):
                     video = vae.decode(orig_z_first)
                 else:
@@ -376,7 +378,8 @@ def train_on_latents(
         if (i + 1) % accumulate_grad_batches == 0:
 		    # Update Optimizer
             if clip_grad is not None:
-                torch.nn.utils.clip_grad.clip_grad_norm_(denoiser.parameters(), clip_grad)
+                grad_norm = torch.nn.utils.clip_grad.clip_grad_norm_(denoiser.parameters(), clip_grad)
+
             optimizer.step()
             optimizer.zero_grad()
 
@@ -387,13 +390,18 @@ def train_on_latents(
             if track:
                 import wandb
 
-                wandb.log({"train/loss": loss.item()})
                 x_mean = x.mean()
                 x_std = x.std()
-                wandb.log({"train/x_mean": x_mean})
-                wandb.log({"train/x_std": x_std})
                 lr = optimizer.param_groups[0]["lr"]
-                wandb.log({"train/lr": lr})
+                to_log = {
+                    "train/loss": loss.item(),
+                    "train/x_mean": x_mean,
+                    "train/x_std": x_std,
+                    "train/lr": lr,
+                }
+                if grad_norm is not None:
+                    to_log["train/grad_norm"] = grad_norm.mean().item()
+                wandb.log(to_log)
 
         if i % sample_every == 0:
             with torch.no_grad():
