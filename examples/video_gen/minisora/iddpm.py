@@ -188,13 +188,13 @@ def get_args():
     parser.add_argument(
         "--tokens_input_file",
         type=str,
-        default="flying_mnist_tokens_32frames_train.npy",
+        default=None, # "flying_mnist_tokens_32frames_train.npy",
         help="Path to the tokenized input file",
     )
     parser.add_argument(
         "--latents_input_file",
         type=str,
-        default="data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
+        default=None, # "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
         help="Path to the latents input file",
     )
     parser.add_argument(
@@ -227,8 +227,8 @@ def train_on_latents(
     latent_frames_to_generate=8,
     clip_grad=None,
     vae:str = "zzsi_kungfu/videogpt/model-kbu39ped:v11",
-    tokens_input_file:str = "flying_mnist_tokens_32frames_train.npy",
-    latents_input_file:str = "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
+    tokens_input_file:str = None, # "flying_mnist_tokens_32frames_train.npy",
+    latents_input_file:str = None, # "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
     enable_flashattn=False,
     track=False,
     **kwargs,
