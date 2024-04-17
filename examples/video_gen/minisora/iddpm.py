@@ -148,6 +148,9 @@ def get_args():
         "--max_steps", type=int, default=10000, help="Max training steps"
     )
     parser.add_argument("--log_every", type=int, default=10, help="Log every N steps")
+    parser.add_argument(
+        "--checkpoint_every", type=int, default=1000, help="Checkpoint every N steps"
+    )
     parser.add_argument("--depth", type=int, default=6, help="Depth of the model")
     parser.add_argument(
         "--hidden_size", type=int, default=768, help="Hidden size of the model"
@@ -204,6 +207,12 @@ def get_args():
         help="VAE model name",
     )
     parser.add_argument(
+        "--resume_from",
+        type=str,
+        default=None,
+        help="Resume training from a denoiser model checkpoint",
+    )
+    parser.add_argument(
         "--enable_flashattn",
         action="store_true",
         help="Enable FlashAttention in the denoiser",
@@ -217,6 +226,7 @@ def train_on_latents(
     max_steps=1000,
     log_every=10,
     sample_every=100,
+    checkpoint_every=1000,
     depth=6,
     hidden_size=768,
     patch_size=(1, 2, 2),
@@ -226,6 +236,7 @@ def train_on_latents(
     lr=1e-4,
     latent_frames_to_generate=8,
     clip_grad=None,
+    resume_from:str=None,
     vae:str = "zzsi_kungfu/videogpt/model-kbu39ped:v11",
     tokens_input_file:str = None, # "flying_mnist_tokens_32frames_train.npy",
     latents_input_file:str = None, # "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
@@ -236,7 +247,9 @@ def train_on_latents(
     import numpy as np
     from cvlization.torch.net.vae.video_vqvae import VQVAE
     from stdit.model import STDiT
+    from uuid import uuid4
 
+    local_run_id = uuid4().hex[:6]
     model_id = vae.split("/")[-1].split(":")[0]
     print(f"model_id: {model_id}")
     # load from numpy
@@ -316,6 +329,36 @@ def train_on_latents(
         enable_flashattn=enable_flashattn,
         dtype=torch.float16 if enable_flashattn else torch.float32,
     ).to(device)
+    if resume_from is not None:
+        # If the model name in resume_from is a wandb model,
+        # then first download the model.
+        if ":" in resume_from:
+            import wandb
+            import os
+
+            api = wandb.Api()
+            # skip if the file already exists
+            artifact_dir = f"artifacts/{resume_from.split('/')[-1]}"
+            if os.path.exists(artifact_dir):
+                print(f"Model already exists at {artifact_dir}")
+            else:
+                artifact_dir = api.artifact(resume_from).download()
+            # The file is model.ckpt.
+            state_dict = torch.load(artifact_dir + "/model.ckpt")
+            trimmed_state_dict = state_dict["model"]
+            # print(trimmed_state_dict.keys())
+            for k in ["pos_embed_temporal"]:
+                trimmed_state_dict.pop(k, None)
+            denoiser.load_state_dict(trimmed_state_dict, strict=False)
+        else:
+            checkpoint = torch.load(resume_from)
+            trimmed_state_dict = checkpoint["model"]
+            for k in ["pos_embed_temporal"]:
+                trimmed_state_dict.pop(k, None)
+            denoiser.load_state_dict(trimmed_state_dict, strict=False)
+        # optimizer.load_state_dict(checkpoint["optimizer"])
+        # start_step = checkpoint["step"]
+        print(f"Resuming from {resume_from}")
     print("Denoiser:")
     print(denoiser)
     num_params = sum(p.numel() for p in denoiser.parameters())
@@ -348,8 +391,7 @@ def train_on_latents(
 
         # Backward & update
         loss = loss_dict["loss"].mean()
-        loss = loss / accumulate_grad_batches
-        loss.backward()
+        (loss / accumulate_grad_batches).backward()
 
         if i == 0:
             # Decode the ground truth latents
@@ -403,6 +445,27 @@ def train_on_latents(
                 if grad_norm is not None:
                     to_log["train/grad_norm"] = grad_norm.mean().item()
                 wandb.log(to_log)
+        
+        if (i + 1) % checkpoint_every == 0:
+            from pathlib import Path
+
+            Path("checkpoints").mkdir(exist_ok=True)
+            torch.save(
+                {
+                    "model": denoiser.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "step": i,
+                },
+                f"checkpoints/iddpm_{i}.ckpt",
+            )
+            if track:
+                metadata = {"loss": loss.item(), "step": i}
+                artifact = wandb.Artifact(
+                    name="denoiser_model_{local_run_id}", type="model",
+                    metadata=metadata
+                )
+                artifact.add_file(f"checkpoints/iddpm_{i}.ckpt", name=f"model.ckpt")
+                wandb.log_artifact(artifact)
 
         if i % sample_every == 0:
             with torch.no_grad():
