@@ -211,7 +211,8 @@ class TrainLoop:
             if self.step % self.log_interval == 0:
                 logger.dumpkvs()
             if self.step % self.save_interval == 0:
-                self.opt.consolidate_state_dict()
+                if hasattr(self.opt, "consolidate_state_dict"):
+                    self.opt.consolidate_state_dict()
                 self.save()
                 # Run for a finite amount of time in integration tests.
                 if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
@@ -301,7 +302,8 @@ class TrainLoop:
     def save(self):
         def save_checkpoint(rate, params):
             state_dict = self.mp_trainer.master_params_to_state_dict(params)
-            if dist.get_rank() == 0:
+            # TODO: support multi-GPU training.
+            if True or dist.get_rank() == 0:
                 logger.log(f"saving model {rate}...")
                 if not rate:
                     filename = f"model{(self.step+self.resume_step):06d}.pt"
@@ -314,14 +316,14 @@ class TrainLoop:
         for rate, params in zip(self.ema_rate, self.ema_params):
             save_checkpoint(rate, params)
 
-        if dist.get_rank() == 0:
+        if True or dist.get_rank() == 0:
             with bf.BlobFile(
                 bf.join(get_blob_logdir(), f"opt{(self.step+self.resume_step):06d}.pt"),
                 "wb",
             ) as f:
                 th.save(self.opt.state_dict(), f)
 
-        dist.barrier()
+        # dist.barrier()
 
 
 def parse_resume_step_from_filename(filename):
