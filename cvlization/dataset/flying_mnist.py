@@ -795,7 +795,29 @@ def save_dataset_to_folder(ds, folder: str = "data/flying_mnist/train"):
         # print(f"Saved video: {folder}/{j:05d}.mp4")
 
 
+def convert_to_images(ds, output_dir):
+    from pathlib import Path
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    for j, example in tqdm(enumerate(ds)):
+        video = example["video"]  # [3, 100, 64, 64]
+        video = video.permute(1, 2, 3, 0).cpu().numpy()  # [100, 64, 64, 3]
+        # print(video.shape)
+        # import sys; sys.exit(0)
+        video = video[:10]
+        
+        for i, frame in enumerate(video):
+            # print(frame.shape); print(frame.max()); import sys; sys.exit(0)
+            frame = (frame - frame.min()) / (frame.max() - frame.min() + 1e-6)
+            frame = (frame * 255).astype(np.uint8)
+            img = Image.fromarray(frame)
+            img.save(f"{output_dir}/{j:05}_{i:05d}.png")
+
+
 if __name__ == "__main__":
+    # db = FlyingMNISTDatasetBuilder(None, to_generate=False, resolution=256)
+    # convert_to_images(db.training_dataset(), output_dir="data/flying_mnist_images/train")
+    # import sys; sys.exit(0)
+
     import cv2
 
     opts = prepare_parser().parse_args()
