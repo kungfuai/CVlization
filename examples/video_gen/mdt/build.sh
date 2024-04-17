@@ -1,0 +1,1 @@
+docker build -t mdt examples/video_gen/mdt
