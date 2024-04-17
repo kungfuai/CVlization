@@ -31,3 +31,5 @@ doc/tmp_notes
 *.npy
 # model checkpoints
 *.ckpt
+*.pt
+*.pth
