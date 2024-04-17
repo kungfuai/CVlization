@@ -90,7 +90,7 @@ bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 4 --accum
 # or train a larger net
 bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 50 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 8 --tokens_input_file data/latents/flying_mnist_110k__model-kbu39ped_tokens_32frames_train.npy --vae zzsi_kungfu/videogpt/model-kbu39ped:v11 --track
 
-bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 16 --accumulate_grad_batches 1 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 100000 --log_every 50 --sample_every 2000 --checkpoint_every 50000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 2 --latents_input_file data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy --vae stabilityai/sd-vae-ft-mse --resume_from zzsi_kungfu/flying_mnist/denoiser_model:v29 --track
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 500 --sample_every 5000 --checkpoint_every 500000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 32 --latents_input_file data/latents/flying_mnist_110k__sd-vae-ft-mse_latents_32frames_train.npy --vae stabilityai/sd-vae-ft-mse --resume_from zzsi_kungfu/flying_mnist/denoiser_model:v29 --track
 
 
 # or train with stablediffusion VAE
