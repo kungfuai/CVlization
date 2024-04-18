@@ -3,6 +3,7 @@ Train a diffusion model on images.
 """
 
 import argparse
+import torch
 
 from masked_diffusion import dist_util, logger
 from masked_diffusion.image_datasets import load_data
@@ -35,14 +36,32 @@ def main():
     schedule_sampler = create_named_schedule_sampler(args.schedule_sampler, diffusion)
 
     logger.log("creating data loader...")
-    data = load_data(
-        data_dir=args.data_dir,
-        batch_size=args.batch_size,
-        image_size=args.image_size,
-        class_cond=args.class_cond,
-    )
+    if args.latents_input_file is not None:
+        from cvlization.dataset.flying_mnist import FlyingMNISTImageLatentsBuilder
+
+        db = FlyingMNISTImageLatentsBuilder(args.latents_input_file)
+        train_ds = db.training_dataset()
+        train_loader = torch.utils.data.DataLoader(
+            train_ds, batch_size=args.batch_size, shuffle=True)
+        data = iter(train_loader)
+    else:
+        data = load_data(
+            data_dir=args.data_dir,
+            batch_size=args.batch_size,
+            image_size=args.image_size,
+            class_cond=args.class_cond,
+        )
 
     logger.log("training...")
+    if args.latents_input_file is not None:
+        print("Using latents input file:", args.latents_input_file)
+    
+    if args.track:
+        import wandb
+
+        wandb.init(project=args.project)
+        wandb.config.update(args)
+        # wandb.watch(model)
     TrainLoop(
         model=model,
         diffusion=diffusion,
@@ -59,6 +78,8 @@ def main():
         schedule_sampler=schedule_sampler,
         weight_decay=args.weight_decay,
         lr_anneal_steps=args.lr_anneal_steps,
+        data_is_latent=(args.latents_input_file is not None),
+        track=args.track,
     ).run_loop()
 
 
@@ -92,6 +113,21 @@ def create_argparser():
                         help='url used to set up distributed training')
     parser.add_argument(
         "--rank", default=0, type=int, help="""rank for distrbuted training."""
+    )
+    parser.add_argument(
+        "--latents_input_file",
+        type=str,
+        default="data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy",
+    )
+    parser.add_argument(
+        "--track",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        default="mdt",
+        help="Weights and biases project",
     )
     add_dict_to_argparser(parser, defaults)
     return parser
