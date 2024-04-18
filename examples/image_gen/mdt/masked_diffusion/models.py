@@ -436,7 +436,7 @@ class MDTv2(nn.Module):
 
         return x
 
-    def forward(self, x, t, y, enable_mask=False):
+    def forward(self, x, t, y=None, enable_mask=False):
         """
         Forward pass of MDT.
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
@@ -448,8 +448,11 @@ class MDTv2(nn.Module):
             x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
 
         t = self.t_embedder(t)                   # (N, D)
-        y = self.y_embedder(y, self.training)    # (N, D)
-        c = t + y                                # (N, D)
+        if y is not None:
+            y = self.y_embedder(y, self.training)    # (N, D)
+            c = t + y                                # (N, D)
+        else:
+            c = t
 
 
         input_skip = x

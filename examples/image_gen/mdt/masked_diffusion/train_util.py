@@ -12,6 +12,9 @@ from . import dist_util, logger
 from .fp16_util import MixedPrecisionTrainer
 from .nn import update_ema
 from .resample import LossAwareSampler, UniformSampler
+from masked_diffusion import (
+    create_diffusion,
+)
 from diffusers.models import AutoencoderKL
 # from adan import Adan
 from torch.distributed.optim import ZeroRedundancyOptimizer
@@ -43,6 +46,8 @@ class TrainLoop:
         scale_factor=0.18215, # scale_factor follows DiT and stable diffusion.
         opt_type='adamw',
         use_zero=False,
+        data_is_latent=False,  # If True, data is already latent. No need to run encoder.
+        track=False,
     ):
         self.model = model
         self.diffusion = diffusion
@@ -64,6 +69,8 @@ class TrainLoop:
         self.weight_decay = weight_decay
         self.lr_anneal_steps = lr_anneal_steps
         self.scale_factor = scale_factor
+        self.data_is_latent = data_is_latent
+        self.track = track
 
         self.step = 0
         self.resume_step = 0
@@ -206,11 +213,71 @@ class TrainLoop:
             not self.lr_anneal_steps
             or self.step + self.resume_step < self.lr_anneal_steps
         ):
-            batch, cond = next(self.data)
+            batch = next(self.data)
+            if isinstance(batch, list):
+                # print(batch[0]); import sys; sys.exit()
+                batch = batch[0]
+                cond = {}
+            elif isinstance(batch, tuple) and len(batch) == 2:
+                batch, cond = next(self.data)
+            else:
+                raise ValueError(f"Data loader must return either 1 or 2 tensors. Got {{batch}}, of type {type(batch)}.")
             self.run_step(batch, cond)
             if self.step % self.log_interval == 0:
+                if self.track:
+                    import wandb
+                    CURRENT = logger.get_current()
+                    to_log = {}
+                    for k, v in CURRENT.name2val.items():
+                        to_log[k] = v
+                    # for k, v in CURRENT.name2cnt.items():
+                    #     to_log[k] = v
+                    wandb.log(to_log, step=self.step)
+
                 logger.dumpkvs()
-            if self.step % self.save_interval == 0:
+
+            sample_interval = self.log_interval * 10
+            if self.step % sample_interval == 0:
+                if not hasattr(self, "diffusion"):
+                    self.diffusion = create_diffusion(
+                        diffusion_steps=1000,
+                        noise_schedule="linear",
+                        timestep_respacing=""
+                    )
+                diffusion = self.diffusion
+                model = self.model
+
+                # sample, decode and log
+                use_ddim = True
+                sample_fn = (
+                    diffusion.p_sample_loop if not use_ddim else diffusion.ddim_sample_loop
+                )
+                batch_size = 1
+                latent_dim = 4
+                latent_size = 32  # TODO: this is hardcoded for now.
+                clip_denoised = False
+                z = th.randn(batch_size, latent_dim, latent_size, latent_size, device=dist_util.dev())
+                model_kwargs = {"y": None}
+                sample = sample_fn(
+                    model.forward_with_cfg,
+                    z.shape,
+                    z,
+                    clip_denoised=clip_denoised,
+                    progress=True, 
+                    model_kwargs=model_kwargs,
+                    device=dist_util.dev()
+                )
+                vae = self.first_stage_model
+                sample = vae.decode(sample / 0.18215).sample
+                sample = ((sample + 1) * 127.5).clamp(0, 255).to(th.uint8) # clip in range -1,1
+                sample = sample.permute(0, 2, 3, 1)  # NHWC
+                sample = sample.contiguous()
+                print("sampled image:", sample.shape)
+                if self.track:
+                    import wandb
+                    wandb.log({"sample/generated_decoded": wandb.Image(sample[0].cpu().numpy())}, step=self.step)
+
+            if (self.step + 1) % self.save_interval == 0:
                 if hasattr(self.opt, "consolidate_state_dict"):
                     self.opt.consolidate_state_dict()
                 self.save()
@@ -219,8 +286,10 @@ class TrainLoop:
                     return
             self.step += 1
         # Save the last checkpoint if it wasn't already saved.
+        
         if (self.step - 1) % self.save_interval != 0:
             self.save()
+
 
     def run_step(self, batch, cond):
         self.forward_backward(batch, cond)
@@ -235,7 +304,10 @@ class TrainLoop:
         for i in range(0, batch.shape[0], self.microbatch):
 
             micro = batch[i : i + self.microbatch].to(dist_util.dev())
-            micro = self.get_first_stage_encoding(micro).detach()
+            if self.data_is_latent:
+                micro = micro * self.scale_factor
+            else:
+                micro = self.get_first_stage_encoding(micro).detach()
             micro_cond = {
                 k: v[i : i + self.microbatch].to(dist_util.dev())
                 for k, v in cond.items()
