@@ -14,7 +14,7 @@ docker run --shm-size 16G --runtime nvidia -it \
     -e OPENAI_LOGDIR=output_mdtv2_s2 \
 	mdt \
     python -m scripts.image_train --data_dir data/flying_mnist_images/train \
-    --batch_size 1 --image_size 256 --mask_ratio 0.30 \
+    --batch_size 8 --image_size 256 --mask_ratio 0.30 \
     --decode_layer 4 --model MDTv2_S_2 --diffusion_steps 1000 \
     --latents_input_file data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy \
     $@
