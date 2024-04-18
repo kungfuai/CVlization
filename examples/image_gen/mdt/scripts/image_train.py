@@ -30,6 +30,8 @@ def main():
     latent_size = image_size // 8
     model = models_mdt.__dict__[args.model](input_size=latent_size, mask_ratio=args.mask_ratio, decode_layer=args.decode_layer)
     print(model)
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"Number of parameters: {num_params / 1e6:.2f} M")
     diffusion = create_diffusion(**args_to_dict(args, diffusion_defaults().keys()))
     model.to(dist_util.dev())
     
@@ -43,7 +45,10 @@ def main():
         train_ds = db.training_dataset()
         train_loader = torch.utils.data.DataLoader(
             train_ds, batch_size=args.batch_size, shuffle=True)
-        data = iter(train_loader)
+        def gen():
+            while True:
+                yield from train_loader
+        data = gen()
     else:
         data = load_data(
             data_dir=args.data_dir,
