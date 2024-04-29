@@ -6,17 +6,19 @@ Train a Sora-like model, but with small scope, high quality and low cost.
 
 ### Download data
 
-Dataload the Flying MNIST dataset: https://storage.googleapis.com/research-datasets-public/flying_mnist.tar.gz and extract to `<CVlization project root>/data/`.
+Dataload the Flying MNIST dataset with [11k videos](https://storage.googleapis.com/research-datasets-public/minisora/flying_mnist_11k.tar.gz) and extract to `<CVlization project root>/data/`.
 
 
 ```bash
 mkdir -p data
 cd data
-wget https://storage.googleapis.com/research-datasets-public/flying_mnist.tar.gz
-tar -xzf flying_mnist.tar.gz
-rm flying_mnist.tar.gz
+wget https://storage.googleapis.com/research-datasets-public/minisora/flying_mnist_11k.tar.gz
+tar -xzf flying_mnist_11k.tar.gz
+rm flying_mnist_11k.tar.gz
 cd ..
 ```
+
+There is also larger dataset with [110k videos](https://storage.googleapis.com/research-datasets-public/minisora/flying_mnist_110k.tar.gz).
 
 The directory structure should be:
 
@@ -63,6 +65,13 @@ bash examples/video_gen/minisora/train.sh python latents.py --dataset flying_mni
 ```bash
 # tokenize the video using vae
 bash examples/video_gen/minisora/train.sh python tokenize_videos.py --dataset flying_mnist --batch_size 8
+```
+
+Some precomputed latents for your convenience:
+
+```
+https://storage.googleapis.com/research-datasets-public/minisora/data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy
+https://storage.googleapis.com/research-datasets-public/minisora/data/latents/flying_mnist_11k__model-kbu39ped_tokens_32frames_train.npy
 ```
 
 ### Train a latent generative model
