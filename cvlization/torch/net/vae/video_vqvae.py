@@ -206,6 +206,23 @@ class VQVAE(pl.LightningModule):
         if batch_idx == 0:
             if self.args.track:
                 self.log_reconstructions(x, x_recon, training=False)
+                # To check the robustness of the model, we can also corrupt the latents
+                # with structured noise and see how the reconstructions change.
+                # Take only 1 example
+                x = x[0:1]
+                z = self.encode(x)
+                z = self.vq(z)
+                if isinstance(z, dict):
+                    z = z["z_recon"]
+                std = z.std()
+                z[:, :, 1:, :, :] = torch.randn_like(z[:, :, 1:, :, :])  # * std
+                x_recon = self.decode(z)
+                # Take only the first frame
+                x = x[:, :, 0:1, :, :]
+                x_recon = x_recon[:, :, 0:1, :, :]
+                self.log_reconstructions(
+                    x, x_recon, training=False, postfix="_corrupted"
+                )
 
         if hasattr(self.vq, "get_codebook_usage"):
             # update codebook usage
@@ -266,7 +283,11 @@ class VQVAE(pl.LightningModule):
 
     @torch.no_grad()
     def log_reconstructions(
-        self, ground_truths, reconstructions, training: bool = True
+        self,
+        ground_truths,
+        reconstructions,
+        training: bool = True,
+        postfix: str = "",
     ):
         """
         Log the reconstructions to wandb.
@@ -315,7 +336,7 @@ class VQVAE(pl.LightningModule):
         )
 
         display = wandb.Video(data_or_path=display, fps=4, format="mp4")
-        self.logger.experiment.log({f"{panel_name}/reconstructions": display})
+        self.logger.experiment.log({f"{panel_name}/reconstructions{postfix}": display})
 
     def on_validation_epoch_end(self) -> None:
         super().on_validation_epoch_end()
