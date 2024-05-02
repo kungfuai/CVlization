@@ -657,14 +657,14 @@ def s4t4_c(embedding_dim: int = 8, **kwargs):
             padding=(1, 1, 1),
         ),
         torch.nn.LeakyReLU(),
-        torch.nn.Conv3d(
-            latent_dims[0],
-            latent_dims[0],
-            kernel_size=(3, 3, 3),
-            stride=(1, 1, 1),
-            padding=(1, 1, 1),
-        ),
-        torch.nn.LeakyReLU(),
+        # torch.nn.Conv3d(
+        #     latent_dims[0],
+        #     latent_dims[0],
+        #     kernel_size=(3, 3, 3),
+        #     stride=(1, 1, 1),
+        #     padding=(1, 1, 1),
+        # ),
+        # torch.nn.LeakyReLU(),
         torch.nn.ConvTranspose3d(
             latent_dims[0],
             latent_dims[0],

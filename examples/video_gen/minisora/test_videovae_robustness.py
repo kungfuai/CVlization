@@ -26,9 +26,11 @@ for i in range(3):
         out = vae.encode(x)
         z = out
         print(f"repetition {i+1}", z.mean(), z.min(), z.max())
-    
 
-db = FlyingMNISTDatasetBuilder(resolution=256, max_frames_per_video=16, dataset_name="flying_mnist")
+
+db = FlyingMNISTDatasetBuilder(
+    resolution=256, max_frames_per_video=16, dataset_name="flying_mnist"
+)
 ds = db.training_dataset()
 print(len(ds), "examples")
 vid = ds[3]["video"]
@@ -41,15 +43,19 @@ with torch.no_grad():
     z = vae.encode(vid)
     z = vae.vq(z)["z_recon"]
     # corrupt the latents
-    z[:, :, 1:, :, :] = torch.randn_like(z[:, :, 1:, :, :])
+    std = z.std()
+    print("std of z:", std.item())
+    z[:, :, 1:, :, :] = torch.randn_like(z[:, :, 1:, :, :]) * std
     print(z.shape, z.mean(), z.min(), z.max())
     decoded = vae.decode(z)
     print("decoded:", decoded.shape)
     # save image to png
-    recon_img = decoded.detach().cpu()[:, :, 2, :, :]
+    recon_img = decoded.detach().cpu()[:, :, 0, :, :]
     print("recon:", recon_img.shape, recon_img.mean().item())
     recon_img = recon_img[0].permute(1, 2, 0).numpy()
-    recon_img = (recon_img - recon_img.min()) / (recon_img.max() - recon_img.min() + 1e-6)
+    recon_img = (recon_img - recon_img.min()) / (
+        recon_img.max() - recon_img.min() + 1e-6
+    )
     recon_img = (recon_img * 255).astype(np.uint8)
     Image.fromarray(recon_img).save("data/tmp_recon.png")
     print(f"reconstruction saved to data/tmp_recon.png")
