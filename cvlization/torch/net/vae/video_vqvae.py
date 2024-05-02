@@ -211,6 +211,9 @@ class VQVAE(pl.LightningModule):
                 # Take only 1 example
                 x = x[0:1]
                 z = self.encode(x)
+                if isinstance(z, dict):
+                    z = z["z"]
+
                 z = self.vq(z)
                 if isinstance(z, dict):
                     z = z["z_recon"]
