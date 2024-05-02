@@ -70,8 +70,8 @@ bash examples/video_gen/minisora/train.sh python tokenize_videos.py --dataset fl
 Some precomputed latents for your convenience:
 
 ```
-https://storage.googleapis.com/research-datasets-public/minisora/data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy
-https://storage.googleapis.com/research-datasets-public/minisora/data/latents/flying_mnist_11k__model-kbu39ped_tokens_32frames_train.npy
+https://storage.googleapis.com/research-datasets-public/minisora/data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy (4.9GB)
+https://storage.googleapis.com/research-datasets-public/minisora/data/latents/flying_mnist_11k__model-kbu39ped_tokens_32frames_train.npy (2.4GB)
 ```
 
 ### Train a latent generative model
