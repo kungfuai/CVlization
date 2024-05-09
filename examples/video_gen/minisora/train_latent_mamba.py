@@ -36,13 +36,23 @@ def main():
     parser.add_argument("--beta2", type=float, default=0.99)
     parser.add_argument("--warmup_iters", type=int, default=100)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
-    parser.add_argument("--vae_model_name", type=str, default="zzsi_kungfu/videogpt/model-kbu39ped:v11")
-    parser.add_argument("--tokens_input_file", type=str, default="flying_mnist_tokens_32frames_train.npy")
+    parser.add_argument(
+        "--vae_model_name", type=str, default="zzsi_kungfu/videogpt/model-kbu39ped:v11"
+    )
+    parser.add_argument(
+        "--tokens_input_file",
+        type=str,
+        default="flying_mnist_tokens_32frames_train.npy",
+    )
     parser.add_argument("--track", action="store_true")
     args = parser.parse_args()
 
-    token_ids, position_shape, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN = prepare_data(args)
-    dataset_builder = FlatTokenIds(token_ids=token_ids, vocab_size=vocab_size, start_token_id=VIDEO_BEGIN_TOKEN)
+    token_ids, position_shape, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN = (
+        prepare_data(args)
+    )
+    dataset_builder = FlatTokenIds(
+        token_ids=token_ids, vocab_size=vocab_size, start_token_id=VIDEO_BEGIN_TOKEN
+    )
     train_pipe = MambaTrainingPipeline(
         config=MambaTrainingPipeline.Config(
             output_dir=args.log_dir,
@@ -57,7 +67,7 @@ def main():
             batch_size=args.batch_size,
             position_shape=position_shape,
             block_size=args.block_size,
-            n_layers=args.n_layer,
+            n_layer=args.n_layer,
             n_heads=args.n_head,
             n_embed=args.n_embed,
             dropout=args.dropout,

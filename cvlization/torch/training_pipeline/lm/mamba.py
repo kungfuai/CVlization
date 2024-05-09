@@ -5,17 +5,25 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from tqdm import tqdm
+from typing import Callable
 from einops import rearrange
 import wandb
 from mamba_ssm import Mamba
-from .data_utils import FlatTokenIds
+from mamba_ssm.models.mixer_seq_simple import MambaLMHeadModel
+from mamba_ssm.models.config_mamba import MambaConfig
 
+# from ...net.mamba.mamba_simple import MambaLMHeadModel
+from .data_utils import FlatTokenIds
 
 
 class MambaTrainingPipeline:
 
     @dataclass
     class Config:
+        # Decoder
+        decoder: Callable = None
+        max_length_to_generate: int = 200
+
         # Data
         block_size: int = 256
         vae_vocab_size: int = 5120
@@ -36,7 +44,7 @@ class MambaTrainingPipeline:
         eval_interval: int = 1000
         eval_iters: int = 10
         sample_interval: int = 1000
-        
+
         # Accelerator
         device: str = "cuda"
 
@@ -44,14 +52,13 @@ class MambaTrainingPipeline:
         output_dir: str = "logs/nanomamba"
         project: str = "mamba"
         track: bool = False
-        
+
         # Model
-        n_embed: int = 384
-        n_heads: int = 6
-        n_layers: int = 6
-        dropout: float = 0.2
+        d_model: int = 512
+        n_layer: int = 12
+        pad_vocab_size_multiple: int = 8
         vae_model_name: str = None
-    
+
     def __init__(self, config: Config):
         self.config = config
         output_dir = Path(config.output_dir)
@@ -59,7 +66,7 @@ class MambaTrainingPipeline:
         self.config.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.START_TOKEN = self.config.start_token
         torch.manual_seed(11)
-    
+
     def fit(self, dataset_builder: FlatTokenIds):
         if self.config.track:
             wandb.init(project=self.config.project, config=self.config)
@@ -87,24 +94,65 @@ class MambaTrainingPipeline:
         self.val_data = dataset_builder.validation_dataset()
         assert isinstance(self.train_data, np.ndarray)
         assert isinstance(self.val_data, np.ndarray)
-        assert self.train_data.dtype in [np.int32, np.int64, np.uint16, np.uint32, np.uint64]
+        assert self.train_data.dtype in [
+            np.int32,
+            np.int64,
+            np.uint16,
+            np.uint32,
+            np.uint64,
+        ]
         print(self.train_data.shape, self.val_data.shape)
-        self.data_seq_len = self.train_data.shape[1]
+        assert len(self.train_data.shape) == 1
+        self.data_seq_len = self.train_data.shape[0]
         if len(self.train_data.shape) > 1:
             self.train_data_flattened = self.train_data.ravel()
             self.val_data_flattened = self.val_data.ravel()
-        self.train_data_flattened = torch.tensor(self.train_data_flattened.astype(np.int32), dtype=torch.long)
-        self.val_data_flattened = torch.tensor(self.val_data_flattened.astype(np.int32), dtype=torch.long)
+        else:
+            self.train_data_flattened = self.train_data
+            self.val_data_flattened = self.val_data
+        self.train_data_flattened = torch.tensor(
+            self.train_data_flattened.astype(np.int32), dtype=torch.long
+        )
+        self.val_data_flattened = torch.tensor(
+            self.val_data_flattened.astype(np.int32), dtype=torch.long
+        )
 
     def create_model(self):
-        self.model = BigramNeuralNetwork(
-            vocab_size=self.config.vocab_size,
-            block_size=self.config.block_size,
-            n_embed=self.config.n_embed,
-            n_heads=self.config.n_heads,
-            n_layers=self.config.n_layers,
-            device=self.config.device,
+        """
+            d_model: int = 2560
+        n_layer: int = 64
+        vocab_size: int = 50277
+        ssm_cfg: dict = field(default_factory=dict)
+        rms_norm: bool = True
+        residual_in_fp32: bool = True
+        fused_add_norm: bool = True
+        pad_vocab_size_multiple: int = 8
+        tie_embeddings: bool = True
+        """
+        self.model = MambaLMHeadModel(
+            config=MambaConfig(
+                d_model=self.config.d_model,
+                n_layer=self.config.n_layer,
+                vocab_size=self.config.vocab_size,
+                ssm_cfg={},
+                rms_norm=True,
+                residual_in_fp32=True,
+                fused_add_norm=True,
+                pad_vocab_size_multiple=self.config.pad_vocab_size_multiple,
+                tie_embeddings=True,
+            ),
+            initializer_cfg=None,
+            device=None,
+            dtype=None,
         )
+        # self.model = MambaLM(
+        #     vocab_size=self.config.vocab_size,
+        #     block_size=self.config.block_size,
+        #     n_embed=self.config.n_embed,
+        #     n_heads=self.config.n_heads,
+        #     n_layers=self.config.n_layers,
+        #     device=self.config.device,
+        # )
         self.model.to(self.config.device)
         if self.config.vae_model_name is not None:
             self.load_vae()
@@ -123,7 +171,7 @@ class MambaTrainingPipeline:
             from diffusers.models import AutoencoderKL
 
             vae = AutoencoderKL.from_pretrained(self.config.vae_model_name)
-        
+
         vae.eval()
         vae = vae.to(self.config.device)
         self.vae = vae
@@ -149,7 +197,9 @@ class MambaTrainingPipeline:
 
         if self.config.vae_model_name is not None:
             vae = self.vae
-            ground_truth_codes = torch.from_numpy(self.val_data[0, 1:].astype(int)).long().to(device)
+            ground_truth_codes = (
+                torch.from_numpy(self.val_data[0, 1:].astype(int)).long().to(device)
+            )
             ground_truth_codes = rearrange(
                 ground_truth_codes,
                 "(b t h w) -> b t h w",
@@ -181,9 +231,7 @@ class MambaTrainingPipeline:
                 losses = self.estimate_loss()
                 # losses_data["train"].append(losses["train"].cpu().numpy())
                 losses_data["test"].append(losses["test"].cpu().numpy())
-                print(
-                    f"Step {iter}, val loss:{losses['test']:.4f}"
-                )
+                print(f"Step {iter}, val loss:{losses['test']:.4f}")
                 if self.config.track:
                     wandb.log({"val/loss": losses["test"]})
 
@@ -191,37 +239,59 @@ class MambaTrainingPipeline:
             xb, yb = self.get_batch("train")
 
             # Evaluate loss
-            logits, loss = model(xb, yb)
+            # logits, loss = model(xb, yb)
+            model_out = model(xb, yb)
+            logits = model_out.logits
+            # LM loss
+            loss = F.cross_entropy(
+                logits.view(-1, logits.size(-1)), yb.view(-1), ignore_index=-1
+            )
             if self.config.track:
                 wandb.log({"train/loss": loss.item()})
 
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             if self.config.clip_grad:
-                torch.nn.utils.clip_grad.clip_grad_norm_(model.parameters(), self.config.clip_grad)
+                torch.nn.utils.clip_grad.clip_grad_norm_(
+                    model.parameters(), self.config.clip_grad
+                )
             optimizer.step()
+
+            if iter % self.config.log_interval == 0:
+                print(f"Step {iter}, loss:{loss.item():.4f}")
+                if self.config.track:
+                    wandb.log({"train/loss": loss.item()})
 
             if iter % self.config.sample_interval == 0:
                 if self.config.vae_model_name is not None:
                     model.eval()
                     with torch.no_grad():
                         sampled_codes = model.generate(
-                            idx=torch.Tensor(np.ones((1, 1), dtype=np.int32) * self.START_TOKEN)
+                            idx=torch.Tensor(
+                                np.ones((1, 1), dtype=np.int32) * self.START_TOKEN
+                            )
                             .long()
                             .to(device),
-                            max_new_tokens=self.data_seq_len,
+                            max_length=self.config.max_length_to_generate,
+                            # max_new_tokens=self.data_seq_len,
                             # temperature=1,
                             # top_k=100,
                             show_progress=True,
                         )
                         sampled_codes = sampled_codes[0, 1:]
-                        violating_codes = (sampled_codes > self.config.vae_vocab_size - 1).float().mean()
+                        violating_codes = (
+                            (sampled_codes > self.config.vae_vocab_size - 1)
+                            .float()
+                            .mean()
+                        )
                         print(f"violating codes: {violating_codes.item()}")
-                        sampled_codes[sampled_codes > self.config.vae_vocab_size - 1] = 0
+                        sampled_codes[
+                            sampled_codes > self.config.vae_vocab_size - 1
+                        ] = 0
                         print("sampled codes:", sampled_codes)
                         # print(sampled_codes.min(), sampled_codes.max())
                         sampled_codes = rearrange(
-                            sampled_codes[:self.data_seq_len],
+                            sampled_codes[: self.data_seq_len],
                             "(b t h w) 1 -> b t h w",
                             b=1,
                             t=int(t),
@@ -234,7 +304,9 @@ class MambaTrainingPipeline:
                         assert len(z.shape) == 5
                         assert z.shape == (1, 4, t, h, w)
                         video = vae.decoder(z)
-                        video = (video - video.min()) / (video.max() - video.min() + 1e-6)
+                        video = (video - video.min()) / (
+                            video.max() - video.min() + 1e-6
+                        )
                         video = (video * 255).to(torch.uint8)
                         video = rearrange(video, "b c t h w -> t c h (b w)")
                         video = video.detach().cpu()
@@ -246,8 +318,26 @@ class MambaTrainingPipeline:
                                     "sampled/violating_codes": violating_codes,
                                 }
                             )
+                else:
+                    # Sample the tokens
+                    # Log the tokens as a string.
+                    model.eval()
+                    with torch.no_grad():
+                        sampled_tokens = model.generate(
+                            torch.zeros((1, 1), dtype=torch.long).to(device),
+                            max_length=self.config.max_length_to_generate,
+                        )[0].tolist()
+                        # decode
+                        if self.config.decoder is not None:
+                            sampled_str = self.config.decoder(sampled_tokens)
+                            print("sampled_str:", sampled_str)
+                            if self.config.track:
+                                wandb.log({"sampled/generated_decoded": sampled_str})
+                        else:
+                            if self.config.track:
+                                wandb.log({"sampled/generated": str(sampled_tokens)})
 
-                    model.train()
+                model.train()
 
             if self.config.track:
                 wandb.log({"train/lr": optimizer.param_groups[0]["lr"]})
@@ -258,12 +348,18 @@ class MambaTrainingPipeline:
         model = self.model
         model.eval()
         eval_iters = self.config.eval_iters
-        for split in ["test"]: # ["train", "test"]:
+        for split in ["test"]:  # ["train", "test"]:
             losses = torch.zeros(eval_iters)
             for k in range(eval_iters):
                 # X, Y: torch.Size([32, 512]) torch.Size([32, 512])
                 X, Y = self.get_batch(split)
-                logits, loss = model(X, Y)
+                # logits, loss = model(X, Y)
+                model_out = model(X, Y)
+                logits = model_out.logits
+                # calculate LM loss
+                loss = F.cross_entropy(
+                    logits.view(-1, logits.size(-1)), Y.view(-1), ignore_index=-1
+                )
                 losses[k] = loss.item()
             out[split] = losses.mean()
         model.train()
@@ -317,12 +413,21 @@ class LayerNorm(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, n_heads, head_size, n_embed, block_size, device:str, dropout=0.2) -> None:
+    def __init__(
+        self, n_heads, head_size, n_embed, block_size, device: str, dropout=0.2
+    ) -> None:
         super().__init__()
         self.heads = nn.ModuleList(
-            [SelfAttentionHead(
-                n_embed=n_embed, head_size=head_size, block_size=block_size, device=device, dropout=dropout
-            ) for _ in range(n_heads)]
+            [
+                SelfAttentionHead(
+                    n_embed=n_embed,
+                    head_size=head_size,
+                    block_size=block_size,
+                    device=device,
+                    dropout=dropout,
+                )
+                for _ in range(n_heads)
+            ]
         )
         self.proj = nn.Linear(n_embed, n_embed)
         self.dropout = nn.Dropout(dropout)
@@ -350,7 +455,9 @@ class FeedForward(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, n_embed, n_heads, device: str, d_state=16, d_conv=4, expand=2) -> None:
+    def __init__(
+        self, n_embed, n_heads, device: str, d_state=16, d_conv=4, expand=2
+    ) -> None:
         super().__init__()
         self.head_size = n_embed // n_heads
         # self.sa_head = MultiHeadAttention(n_heads, self.head_size)
@@ -369,61 +476,3 @@ class Block(nn.Module):
         x = x + self.sa_head(self.ln1(x))
         x = x + self.ffn(self.ln2(x))
         return x
-
-
-class BigramNeuralNetwork(nn.Module):
-    def __init__(self, vocab_size, block_size, n_embed, n_heads, n_layers, device) -> None:
-        super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
-        self.position_embedding_table = nn.Embedding(block_size, n_embed)
-        self.sa_head = MultiHeadAttention(n_heads=4, head_size=int(n_embed / 4), n_embed=n_embed, block_size=block_size, device=device)
-        self.lm_head = nn.Linear(n_embed, vocab_size)
-        self.ffn = FeedForward(n_embed)
-        self.blocks = nn.Sequential(
-            *[Block(n_embed, n_heads=n_heads, device=device) for _ in range(n_layers)]
-        )
-        self.device = device
-        self.block_size = block_size
-
-    def forward(self, idx, targets=None):
-        # idx = idx[:,-block_size:]
-        B, T = idx.shape
-        assert (
-            T <= self.block_size
-        ), f"Cannot forward sequence of length {T}, block size is only {self.block_size}"
-        # print(f"B={B}, T={T}")
-        pos = torch.arange(0, T, dtype=torch.long, device=self.device)
-        tok_emb = self.token_embedding_table(idx)  # (B,T,C_e)
-        pos_emb = self.position_embedding_table(
-            pos
-            # pos[None, :].expand(B, -1)
-        )  # (T,C_e)
-        x = tok_emb + pos_emb  # (B,T,C_e)
-        x = self.blocks(x)  # (B,T,C_e)
-        logits = self.lm_head(x)  # (B,T,vocab_size)
-        if targets is None:
-            loss = None
-        else:
-            B, T, C = logits.shape
-            logits = logits.view(B * T, C)
-            targets = targets.view(B * T)
-            loss = F.cross_entropy(logits, targets)
-            logits = logits.view(B, T, C)
-        return logits, loss
-
-    def generate(self, idx, max_new_tokens, show_progress: bool=False):
-        # idx is (B,T)
-        idx_next = []
-        iterated = tqdm(range(max_new_tokens), mininterval=2) if show_progress else range(max_new_tokens)
-        for i in iterated:
-            idx_cond = idx[:, -self.block_size:]
-            # print("max idx_cond", idx_cond.max(), "min:", idx_cond.min())
-            logits, loss = self(idx_cond)
-            last_timestep = logits[:, -1, :]
-            probs = F.softmax(last_timestep, dim=1)
-            next_index = torch.multinomial(probs, num_samples=1)
-            idx_next.append(next_index)
-            # idx = torch.cat((idx, next_index), dim=1)
-        
-        return torch.stack(idx_next, dim=1)
-        # return idx
