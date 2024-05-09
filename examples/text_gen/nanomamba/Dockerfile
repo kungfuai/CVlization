@@ -13,5 +13,6 @@ FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
 
 WORKDIR /workspace
 # RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
-RUN pip install tiktoken==0.5.2 mamba-ssm==1.0.1 causal-conv1d==1.0.1
+# RUN pip install tiktoken==0.5.2 mamba-ssm==1.0.1 causal-conv1d==1.0.1 wandb==0.17.0
+RUN pip install tiktoken==0.5.2 mamba-ssm==1.2.* causal-conv1d==1.2.* wandb==0.17.0
 # causal-conv1d==1.0.1
