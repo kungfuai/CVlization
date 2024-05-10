@@ -279,7 +279,7 @@ class MambaTrainingPipeline:
                             )
                             .long()
                             .to(device),
-                            max_length=self.config.max_length_to_generate,
+                            max_length=self.config.max_length_to_generate + 1,
                             # max_new_tokens=self.data_seq_len,
                             # temperature=1,
                             # top_k=100,
@@ -305,7 +305,7 @@ class MambaTrainingPipeline:
                         # print(sampled_codes.min(), sampled_codes.max())
                         sampled_codes = rearrange(
                             sampled_codes[: self.data_seq_len],
-                            "(b t h w) 1 -> b t h w",
+                            "(b t h w) -> b t h w",
                             b=1,
                             t=int(t),
                             h=int(h),
@@ -379,115 +379,3 @@ class MambaTrainingPipeline:
             out[split] = losses.mean()
         model.train()
         return out
-
-
-class SelfAttentionHead(nn.Module):
-    def __init__(self, head_size, n_embed, block_size, device, dropout=0.2):
-        super().__init__()
-        self.keys = nn.Linear(n_embed, head_size)
-        self.queries = nn.Linear(n_embed, head_size)
-        self.values = nn.Linear(n_embed, head_size)
-        self.head_size = head_size
-        self.n_embed = n_embed
-        self.register_buffer(
-            "tril", torch.tril(torch.ones((block_size, block_size))).to(device)
-        )
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        B, T, C = x.shape
-        k = self.keys(x)  # (B,T,C_h)
-        q = self.queries(x)  # (B,T,C_h)
-        v = self.values(x)  # (B,T,C_h)
-        wei = k @ q.transpose(-1, -2) * C ** (-0.5)  # (B,T,T)
-        wei = wei.masked_fill(self.tril[:T, :T] == 0, float("-inf"))
-        # wei = F.softmax(wei, dim=-1) # (B,T,T)
-        wei = torch.log(torch.exp(wei) + 1)  # (B,T,T)
-        wei = self.dropout(wei)
-        out = wei @ v  # (B,T,C_h)
-        return out
-
-
-class LayerNorm(nn.Module):
-    def __init__(self, dim) -> None:
-        super().__init__()
-        self.eps = 1e-5
-        # params
-        self.gamma = nn.Parameter(torch.ones(dim))
-        self.beta = nn.Parameter(torch.zeros(dim))
-
-    def forward(self, x):
-        xmean = x.mean(dim=1, keepdim=True)
-        xvar = ((x - xmean) ** 2).mean(dim=1, keepdim=True)
-        xhat = (x - xmean) / torch.sqrt(xvar + self.eps)
-        self.out = self.gamma * xhat + self.beta
-        return self.out
-
-    def parameters(self):
-        return [self.gamma, self.beta]
-
-
-class MultiHeadAttention(nn.Module):
-    def __init__(
-        self, n_heads, head_size, n_embed, block_size, device: str, dropout=0.2
-    ) -> None:
-        super().__init__()
-        self.heads = nn.ModuleList(
-            [
-                SelfAttentionHead(
-                    n_embed=n_embed,
-                    head_size=head_size,
-                    block_size=block_size,
-                    device=device,
-                    dropout=dropout,
-                )
-                for _ in range(n_heads)
-            ]
-        )
-        self.proj = nn.Linear(n_embed, n_embed)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        B, T, C = x.shape
-        out = torch.cat([head(x) for head in self.heads], dim=-1)
-        out = self.proj(out)
-        out = self.dropout(out)
-        return out
-
-
-class FeedForward(nn.Module):
-    def __init__(self, n_embed, dropout: float = 0.2) -> None:
-        super().__init__()
-        self.ffn = nn.Sequential(
-            nn.Linear(n_embed, 4 * n_embed),
-            nn.ReLU(),
-            nn.Linear(4 * n_embed, n_embed),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x):
-        return self.ffn(x)
-
-
-class Block(nn.Module):
-    def __init__(
-        self, n_embed, n_heads, device: str, d_state=16, d_conv=4, expand=2
-    ) -> None:
-        super().__init__()
-        self.head_size = n_embed // n_heads
-        # self.sa_head = MultiHeadAttention(n_heads, self.head_size)
-        self.sa_head = Mamba(
-            # This module uses roughly 3 * expand * d_model^2 parameters
-            d_model=n_embed,  # Model dimension d_model
-            d_state=d_state,  # SSM state expansion factor
-            d_conv=d_conv,  # Local convolution width
-            expand=expand,  # Block expansion factor
-        ).to(device)
-        self.ffn = FeedForward(n_embed)
-        self.ln1 = nn.LayerNorm(n_embed)
-        self.ln2 = nn.LayerNorm(n_embed)
-
-    def forward(self, x):
-        x = x + self.sa_head(self.ln1(x))
-        x = x + self.ffn(self.ln2(x))
-        return x
