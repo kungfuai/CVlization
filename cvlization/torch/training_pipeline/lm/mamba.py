@@ -102,14 +102,21 @@ class MambaTrainingPipeline:
             np.uint64,
         ]
         print(self.train_data.shape, self.val_data.shape)
-        assert len(self.train_data.shape) == 1
-        self.data_seq_len = self.train_data.shape[0]
+
         if len(self.train_data.shape) > 1:
             self.train_data_flattened = self.train_data.ravel()
             self.val_data_flattened = self.val_data.ravel()
+            if len(self.train_data.shape) == 2:
+                self.data_seq_len = self.train_data.shape[1]
+            else:
+                self.data_seq_len = np.prod(self.train_data.shape[1:])
         else:
             self.train_data_flattened = self.train_data
             self.val_data_flattened = self.val_data
+            self.data_seq_len = self.train_data.shape[0]
+
+        print("Sequence length in training data:", self.data_seq_len)
+
         self.train_data_flattened = torch.tensor(
             self.train_data_flattened.astype(np.int32), dtype=torch.long
         )
@@ -267,7 +274,7 @@ class MambaTrainingPipeline:
                     model.eval()
                     with torch.no_grad():
                         sampled_codes = model.generate(
-                            idx=torch.Tensor(
+                            input_ids=torch.Tensor(
                                 np.ones((1, 1), dtype=np.int32) * self.START_TOKEN
                             )
                             .long()
@@ -276,7 +283,7 @@ class MambaTrainingPipeline:
                             # max_new_tokens=self.data_seq_len,
                             # temperature=1,
                             # top_k=100,
-                            show_progress=True,
+                            # show_progress=True,
                         )
                         sampled_codes = sampled_codes[0, 1:]
                         violating_codes = (
@@ -285,10 +292,16 @@ class MambaTrainingPipeline:
                             .mean()
                         )
                         print(f"violating codes: {violating_codes.item()}")
-                        sampled_codes[
-                            sampled_codes > self.config.vae_vocab_size - 1
-                        ] = 0
-                        print("sampled codes:", sampled_codes)
+                        # sampled_codes[
+                        #     sampled_codes > self.config.vae_vocab_size - 1
+                        # ] = 0
+                        # rewrite the above statement with a where
+                        sampled_codes = torch.where(
+                            sampled_codes > self.config.vae_vocab_size - 1,
+                            torch.zeros_like(sampled_codes),
+                            sampled_codes,
+                        )
+                        print("sampled codes:", sampled_codes, sampled_codes.shape)
                         # print(sampled_codes.min(), sampled_codes.max())
                         sampled_codes = rearrange(
                             sampled_codes[: self.data_seq_len],
@@ -332,7 +345,9 @@ class MambaTrainingPipeline:
                             sampled_str = self.config.decoder(sampled_tokens)
                             print("sampled_str:", sampled_str)
                             if self.config.track:
-                                text_table = wandb.Table(columns=["text", "loss", "step"])
+                                text_table = wandb.Table(
+                                    columns=["text", "loss", "step"]
+                                )
                                 text_table.add_data(sampled_str, loss.item(), iter)
                                 wandb.log({"sampled/generated_decoded": text_table})
                                 # wandb.log({"sampled/generated_decoded": sampled_str})

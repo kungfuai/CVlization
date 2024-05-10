@@ -26,7 +26,6 @@ def main():
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--n_layer", type=int, default=8)
-    parser.add_argument("--n_head", type=int, default=6)
     parser.add_argument("--n_embed", type=int, default=128 * 6)
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--learning_rate", type=float, default=5e-4)
@@ -50,6 +49,8 @@ def main():
     token_ids, position_shape, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN = (
         prepare_data(args)
     )
+    latent_sequence_length = int(np.prod(token_ids.shape[1:]))
+    print(f"latent_sequence_length: {latent_sequence_length}")
     dataset_builder = FlatTokenIds(
         token_ids=token_ids, vocab_size=vocab_size, start_token_id=VIDEO_BEGIN_TOKEN
     )
@@ -67,12 +68,11 @@ def main():
             batch_size=args.batch_size,
             position_shape=position_shape,
             block_size=args.block_size,
+            d_model=args.n_embed,
             n_layer=args.n_layer,
-            n_heads=args.n_head,
-            n_embed=args.n_embed,
-            dropout=args.dropout,
             lr=args.learning_rate,
             max_iters=args.max_iters,
+            max_length_to_generate=latent_sequence_length,
             # lr_decay_iters=args.lr_decay_iters,
             # min_lr=args.min_lr,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
