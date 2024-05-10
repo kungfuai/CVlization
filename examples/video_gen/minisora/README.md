@@ -125,7 +125,7 @@ bash examples/video_gen/minisora/train.sh python train_latent_mdgpt.py --block_s
 (for now, quality is low)
 
 ```
-bash examples/video_gen/minisora/train.sh python train_latent_mamba.py --block_size 512
+bash examples/video_gen/minisora/train.sh python train_latent_mamba.py --block_size 128
 ```
 
 ## Reference

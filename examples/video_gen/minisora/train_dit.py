@@ -112,6 +112,7 @@ def load_model_from_wandb(
     hyper_parameters = state_dict["hyper_parameters"]
     args = hyper_parameters["args"]
     from cvlization.torch.net.vae.video_vqvae import VQVAE
+
     # args = Namespace(**hyper_parameters)
     # print(args)
     model = VQVAE.load_from_checkpoint(artifact_dir + "/model.ckpt")
@@ -402,6 +403,8 @@ def main():
                         decoded_samples = rearrange(
                             decoded_flattened_samples, "(b f) c h w -> b f c h w", b=1
                         )
+                        # inverse the scale factor
+                        decoded_samples = decoded_samples / 0.18215
                     else:
                         assert hasattr(vae, "decoder")
                         decoded_samples = vae.decoder(
