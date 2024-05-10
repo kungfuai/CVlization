@@ -397,14 +397,13 @@ def main():
                         flattened_samples = rearrange(
                             samples, "b c f h w -> (b f) c h w"
                         )
+                        flattened_samples = flattened_samples / 0.18215
                         decoder_output = vae.decode(flattened_samples)
                         decoded_flattened_samples = decoder_output.sample
                         # print("decoded_flattened_samples:", decoded_flattened_samples.shape)
                         decoded_samples = rearrange(
                             decoded_flattened_samples, "(b f) c h w -> b f c h w", b=1
                         )
-                        # inverse the scale factor
-                        decoded_samples = decoded_samples / 0.18215
                     else:
                         assert hasattr(vae, "decoder")
                         decoded_samples = vae.decoder(
