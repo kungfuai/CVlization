@@ -5,11 +5,14 @@ from cvlization.torch.training_pipeline.lm.data_utils import FlatTokenIds
 
 def prepare_data(args):
     data = np.load(args.tokens_input_file).astype(np.uint16)
+    print(data.shape)
+    data = data[:, :2, :, :]
     vae_vocab_size = data.max() + 1
     vocab_size = data.max() + 3
     VIDEO_BEGIN_TOKEN = data.max() + 1
     position_shape = data.shape[1:]
     data = data.reshape(len(data), -1)  # flattened for each video
+    
     return data, position_shape, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN
 
 
