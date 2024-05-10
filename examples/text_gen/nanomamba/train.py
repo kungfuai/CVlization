@@ -11,6 +11,7 @@ parser.add_argument("--lr", type=float, default=1e-3)
 parser.add_argument("--block_size", type=int, default=128)
 parser.add_argument("--d_model", type=int, default=512)
 parser.add_argument("--n_layer", type=int, default=12)
+parser.add_argument("--max_iter", type=int, default=10000)
 parser.add_argument("--pad_vocab_size_multiple", type=int, default=8)
 parser.add_argument("--device", type=str, default="cpu")
 
@@ -48,6 +49,7 @@ train_pipe = MambaTrainingPipeline(
         d_model=args.d_model,
         n_layer=args.n_layer,
         pad_vocab_size_multiple=args.pad_vocab_size_multiple,
+        max_iters=args.max_iter,
         device=args.device,
         decoder=decode,
         track=args.track,

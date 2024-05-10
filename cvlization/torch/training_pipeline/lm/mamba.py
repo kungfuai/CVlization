@@ -332,10 +332,10 @@ class MambaTrainingPipeline:
                             sampled_str = self.config.decoder(sampled_tokens)
                             print("sampled_str:", sampled_str)
                             if self.config.track:
-                                wandb.log({"sampled/generated_decoded": sampled_str})
-                        else:
-                            if self.config.track:
-                                wandb.log({"sampled/generated": str(sampled_tokens)})
+                                text_table = wandb.Table(columns=["text", "loss", "step"])
+                                text_table.add_data(sampled_str, loss.item(), iter)
+                                wandb.log({"sampled/generated_decoded": text_table})
+                                # wandb.log({"sampled/generated_decoded": sampled_str})
 
                 model.train()
 
