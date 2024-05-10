@@ -2,6 +2,7 @@ docker run --runtime nvidia -it \
 	-v $(pwd):/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
 	-e PYTHONPATH=.:examples/text_gen/nanomamba \
+	-e WANDB_API_KEY=$WANDB_API_KEY \
 	nanomamba \
 	python examples/text_gen/nanomamba/train.py $@
 
