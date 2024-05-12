@@ -6,7 +6,7 @@ from cvlization.torch.training_pipeline.lm.data_utils import FlatTokenIds
 def prepare_data(args):
     data = np.load(args.tokens_input_file).astype(np.uint16)
     print(data.shape)
-    data = data[:, :2, :, :]
+    # data = data[:, :2, :, :]
     vae_vocab_size = data.max() + 1
     vocab_size = data.max() + 3
     VIDEO_BEGIN_TOKEN = data.max() + 1
@@ -25,7 +25,7 @@ def main():
     parser.add_argument("--eval_iters", type=int, default=20)
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--log_interval", type=int, default=10)
-    parser.add_argument("--sample_interval", type=int, default=500)
+    parser.add_argument("--sample_interval", type=int, default=1000)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--n_layer", type=int, default=8)
@@ -34,7 +34,7 @@ def main():
     parser.add_argument("--learning_rate", type=float, default=5e-4)
     parser.add_argument("--max_iters", type=int, default=50000)
     parser.add_argument("--lr_decay_iters", type=int, default=5000)
-    parser.add_argument("--min_lr", type=float, default=1e-4)
+    parser.add_argument("--min_lr", type=float, default=1e-5)
     parser.add_argument("--beta2", type=float, default=0.99)
     parser.add_argument("--warmup_iters", type=int, default=100)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
@@ -44,7 +44,7 @@ def main():
     parser.add_argument(
         "--tokens_input_file",
         type=str,
-        default="flying_mnist_tokens_32frames_train.npy",
+        default="data/latents/flying_mnist__model-kbu39ped_tokens_32frames_train.npy",
     )
     parser.add_argument("--track", action="store_true")
     args = parser.parse_args()
@@ -52,7 +52,8 @@ def main():
     token_ids, position_shape, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN = (
         prepare_data(args)
     )
-    latent_sequence_length = int(np.prod(token_ids.shape[1:]))
+    # latent_sequence_length = int(np.prod(token_ids.shape[1:]))
+    latent_sequence_length = 2 * 64 * 64  # hard coded for now
     print(f"latent_sequence_length: {latent_sequence_length}")
     dataset_builder = FlatTokenIds(
         token_ids=token_ids, vocab_size=vocab_size, start_token_id=VIDEO_BEGIN_TOKEN
