@@ -87,7 +87,7 @@ Using DiT (adapted from PKU's OpenSora):
 bash examples/video_gen/minisora/train.sh python train_dit.py --model "Latte-S/2" --vae_model "zzsi_kungfu/videogpt/model-kbu39ped:v11" --batch_size 2 --num_clips_per_video 10 --lr 0.00002 --resolution 256 --sequence_length 4 --latent_input_size 64 --ae_temporal_stride 4 --ae_spatial_stride 4 --learn_sigma --ckpt_every 1000000 --sample_every 2000 --log_every 20 --epochs 100 --track
 
 # or with a StablilityAI pretrained VAE:
-bash examples/video_gen/minisora/train.sh python train_dit.py --model "Latte-T/2" --batch_size 2 --lr 0.00002 --resolution 256 --sequence_length 4 --latent_input_size 32 --ae_temporal_stride 1 --ae_spatial_stride 8 --learn_sigma --ckpt_every 1000000 --sample_every 100 --log_every 20 --epochs 100 --track
+bash examples/video_gen/minisora/train.sh python train_dit.py --model "Latte-T/2" --batch_size 2 --lr 0.00002 --resolution 256 --sequence_length 4 --latent_input_size 32 --ae_temporal_stride 1 --ae_spatial_stride 8 --learn_sigma --ckpt_every 1000000 --sample_every 5000 --log_every 100 --epochs 10000 --track
 ```
 
 Using spatial temporal DiT (adatped from ColossalAI's OpenSora):

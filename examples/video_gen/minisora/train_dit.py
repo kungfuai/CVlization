@@ -461,6 +461,7 @@ def extract_token_ids():
 
     max_frames_per_video = 32
     db = FlyingMNISTDatasetBuilder(
+        dataset_name="flying_mnist_11k",
         max_frames_per_video=max_frames_per_video, resolution=256
     )
     train_ds = db.training_dataset()
