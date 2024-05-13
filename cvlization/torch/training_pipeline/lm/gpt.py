@@ -51,6 +51,7 @@ class NanoGPTTrainingPipeline:
         gradient_accumulation_steps: int = 1
         bias: bool = True
         device: str = "cuda"
+        use_mamba_mixer: bool = False
 
         learning_rate: float = 6e-4  # max learning rate
         max_iters: int = 600000  # total number of training iterations
@@ -387,7 +388,10 @@ class NanoGPTTrainingPipeline:
             )
             print("***** model args:", self.model_args)
             gptconf = GPTConfig(**(self.model_args))
-            model = GPT(gptconf)
+            if self.config.use_mamba_mixer:
+                model = GPTMamba(gptconf)
+            else:
+                model = GPT(gptconf)
         elif init_from == "resume":
             print(f"Resuming training from {out_dir}")
             # resume training from a checkpoint.
@@ -935,7 +939,6 @@ class GPTConfig:
         True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     )
 
-
 class GPT(nn.Module):
 
     def __init__(self, config):
@@ -1205,3 +1208,68 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+
+class MambaBackbone(nn.Module):
+    def __init__(self, config=None):
+        super().__init__()
+        from mamba_ssm.models.mixer_seq_simple import create_block
+
+        norm_epsilon: float = 1e-5
+        n_layer = 16
+        rms_norm: bool = False
+        initializer_cfg = None
+        fused_add_norm = False 
+        residual_in_fp32 = False
+        self.layers = nn.ModuleList(
+            [
+                create_block(
+                    d_model=config.n_embd,
+                    ssm_cfg={}, #ssm_cfg,
+                    norm_epsilon=norm_epsilon,
+                    rms_norm=rms_norm,
+                    residual_in_fp32=residual_in_fp32,
+                    fused_add_norm=fused_add_norm,
+                    layer_idx=i,
+                )
+                for i in range(n_layer)
+            ]
+        )
+        self.norm_f = nn.LayerNorm(
+            config.n_embd, eps=norm_epsilon,
+        )
+        self.fused_add_norm = False
+
+    def forward(self, x):
+        hidden_states = x
+        residual = None
+        for layer in self.layers:
+            hidden_states, residual = layer(hidden_states, residual)
+        if not self.fused_add_norm:
+            residual = (hidden_states + residual) if residual is not None else hidden_states
+            hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
+        # else:
+        #     # Set prenorm=False here since we don't need the residual
+        #     fused_add_norm_fn = rms_norm_fn if isinstance(self.norm_f, RMSNorm) else layer_norm_fn
+        #     hidden_states = fused_add_norm_fn(
+        #         hidden_states,
+        #         self.norm_f.weight,
+        #         self.norm_f.bias,
+        #         eps=self.norm_f.eps,
+        #         residual=residual,
+        #         prenorm=False,
+        #         residual_in_fp32=self.residual_in_fp32,
+        #     )
+        return hidden_states
+
+class GPTMamba(GPT):
+    """
+    GPT model with Mamba support.
+    
+    transformer.h:
+        Use MambaLayer instead of Block.
+    """
+    def __init__(self, config):
+        super().__init__(config)
+        
+        self.transformer.h = nn.ModuleList([MambaBackbone(config)])
