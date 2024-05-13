@@ -201,6 +201,7 @@ class MambaTrainingPipeline:
         t = self.config.position_shape[0]
         h = self.config.position_shape[1]
         w = self.config.position_shape[2]
+        print("position shape:", t, h, w)
 
         if self.config.vae_model_name is not None:
             vae = self.vae
