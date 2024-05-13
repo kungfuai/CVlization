@@ -12,7 +12,7 @@ def prepare_data(args):
     VIDEO_BEGIN_TOKEN = data.max() + 1
     position_shape = data.shape[1:]
     data = data.reshape(len(data), -1)  # flattened for each video
-    
+
     return data, position_shape, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN
 
 
@@ -52,8 +52,8 @@ def main():
     token_ids, position_shape, vae_vocab_size, vocab_size, VIDEO_BEGIN_TOKEN = (
         prepare_data(args)
     )
-    # latent_sequence_length = int(np.prod(token_ids.shape[1:]))
-    latent_sequence_length = 2 * 64 * 64  # hard coded for now
+    latent_sequence_length = int(np.prod(token_ids.shape[1:]))
+    # latent_sequence_length = 2 * 64 * 64  # hard coded for now
     print(f"latent_sequence_length: {latent_sequence_length}")
     dataset_builder = FlatTokenIds(
         token_ids=token_ids, vocab_size=vocab_size, start_token_id=VIDEO_BEGIN_TOKEN
