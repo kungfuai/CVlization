@@ -12,7 +12,6 @@ from mamba_ssm import Mamba
 from mamba_ssm.models.mixer_seq_simple import MambaLMHeadModel
 from mamba_ssm.models.config_mamba import MambaConfig
 
-# from ...net.mamba.mamba_simple import MambaLMHeadModel
 from .data_utils import FlatTokenIds
 
 
@@ -152,14 +151,6 @@ class MambaTrainingPipeline:
             device=None,
             dtype=None,
         )
-        # self.model = MambaLM(
-        #     vocab_size=self.config.vocab_size,
-        #     block_size=self.config.block_size,
-        #     n_embed=self.config.n_embed,
-        #     n_heads=self.config.n_heads,
-        #     n_layers=self.config.n_layers,
-        #     device=self.config.device,
-        # )
         self.model.to(self.config.device)
         if self.config.vae_model_name is not None:
             self.load_vae()
@@ -257,13 +248,17 @@ class MambaTrainingPipeline:
             if self.config.track:
                 wandb.log({"train/loss": loss.item()})
 
-            optimizer.zero_grad(set_to_none=True)
+            loss = loss / self.config.gradient_accumulation_steps
             loss.backward()
-            if self.config.clip_grad:
-                torch.nn.utils.clip_grad.clip_grad_norm_(
-                    model.parameters(), self.config.clip_grad
-                )
-            optimizer.step()
+
+            if (iter + 1) % self.config.gradient_accumulation_steps == 0:
+                if self.config.clip_grad:
+                    torch.nn.utils.clip_grad.clip_grad_norm_(
+                        model.parameters(), self.config.clip_grad
+                    )
+                optimizer.step()
+                optimizer.zero_grad()
+                # optimizer.zero_grad(set_to_none=True)
 
             if iter % self.config.log_interval == 0:
                 print(f"Step {iter}, loss:{loss.item():.4f}")
@@ -281,10 +276,6 @@ class MambaTrainingPipeline:
                             .long()
                             .to(device),
                             max_length=self.config.max_length_to_generate + 1,
-                            # max_new_tokens=self.data_seq_len,
-                            # temperature=1,
-                            # top_k=100,
-                            # show_progress=True,
                         )
                         sampled_codes = sampled_codes[0, 1:]
                         violating_codes = (
