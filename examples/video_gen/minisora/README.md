@@ -123,7 +123,7 @@ bash examples/video_gen/minisora/train.sh python train_latent_mdgpt.py --block_s
 3. Train a autoregressive MAMBA-based language model
 
 ```bash
-bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 10000 --tokens_input_file data/latents/flying_mnist_11k__model-kbu39ped_tokens_32frames_train.npy --sample_interval 2000 --batch_size 4 --gradient_accumulation_steps 8 --max_iters 10000000 --mamba --wandb_log
+bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 10000 --tokens_input_file data/latents/flying_mnist_11k__model-kbu39ped_tokens_32frames_train.npy --sample_interval 2000 --n_layer 32 --batch_size 2 --gradient_accumulation_steps 16 --max_iters 10000000 --mamba --wandb_log
 ```
 
 An alternative Mamba training pipeline (quality is low for video tokens):
