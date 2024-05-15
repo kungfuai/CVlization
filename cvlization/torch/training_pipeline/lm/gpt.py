@@ -1211,16 +1211,16 @@ class GPT(nn.Module):
 
 
 class MambaBackbone(nn.Module):
-    def __init__(self, config=None):
+    def __init__(self, config: GPTConfig = None):
         super().__init__()
         from mamba_ssm.models.mixer_seq_simple import create_block
 
         norm_epsilon: float = 1e-5
-        n_layer = 16
+        n_layer = config.n_layer
         rms_norm: bool = False
         initializer_cfg = None
-        fused_add_norm = False 
-        residual_in_fp32 = False
+        fused_add_norm = True
+        residual_in_fp32 = True
         self.layers = nn.ModuleList(
             [
                 create_block(
