@@ -1,0 +1,1 @@
+docker build -t kandinsky examples/video_gen/kandinsky
