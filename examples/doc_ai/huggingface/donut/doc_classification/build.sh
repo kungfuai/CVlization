@@ -1,0 +1,1 @@
+docker build -t doc_classification examples/doc_ai/huggingface/donut/doc_classification
