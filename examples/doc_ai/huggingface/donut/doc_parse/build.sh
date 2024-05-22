@@ -1,0 +1,1 @@
+docker build -t doc_parse examples/doc_ai/huggingface/donut/doc_parse
