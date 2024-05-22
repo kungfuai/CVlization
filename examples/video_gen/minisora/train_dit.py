@@ -112,6 +112,7 @@ def load_model_from_wandb(
     hyper_parameters = state_dict["hyper_parameters"]
     args = hyper_parameters["args"]
     from cvlization.torch.net.vae.video_vqvae import VQVAE
+
     # args = Namespace(**hyper_parameters)
     # print(args)
     model = VQVAE.load_from_checkpoint(artifact_dir + "/model.ckpt")
@@ -396,6 +397,7 @@ def main():
                         flattened_samples = rearrange(
                             samples, "b c f h w -> (b f) c h w"
                         )
+                        flattened_samples = flattened_samples / 0.18215
                         decoder_output = vae.decode(flattened_samples)
                         decoded_flattened_samples = decoder_output.sample
                         # print("decoded_flattened_samples:", decoded_flattened_samples.shape)
@@ -459,6 +461,7 @@ def extract_token_ids():
 
     max_frames_per_video = 32
     db = FlyingMNISTDatasetBuilder(
+        dataset_name="flying_mnist_11k",
         max_frames_per_video=max_frames_per_video, resolution=256
     )
     train_ds = db.training_dataset()

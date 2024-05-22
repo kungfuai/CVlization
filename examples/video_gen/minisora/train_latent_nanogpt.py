@@ -41,6 +41,7 @@ def main():
     parser.add_argument("--sparse_context_window", action="store_true")
     parser.add_argument("--context_stride", type=int, default=2)
     parser.add_argument("--context_stride_start", type=int, default=32)
+    parser.add_argument("--mamba", action="store_true")
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--wandb_log", action="store_true")
     args = parser.parse_args()
@@ -77,6 +78,7 @@ def main():
             sparse_context_window=args.sparse_context_window,
             context_stride=args.context_stride,
             context_stride_start=args.context_stride_start,
+            use_mamba_mixer=args.mamba,
             compile=args.compile,
         )
     )

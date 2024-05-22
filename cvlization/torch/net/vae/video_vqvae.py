@@ -1,15 +1,11 @@
-import math
 import argparse
 import os
-import numpy as np
-from typing import Tuple
 
-from einops import rearrange, pack
+from einops import rearrange
 import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
 
 from cvlization.torch.net.vae import video_vae_components as ae_variants
 
@@ -100,7 +96,7 @@ class VQVAE(pl.LightningModule):
     def encode(self, x):
         z = self.encoder(x)
         return z
-    
+
     def decode(self, z):
         return self.decoder(z)
 
@@ -145,6 +141,7 @@ class VQVAE(pl.LightningModule):
 
         # print(f"x_recon: {x_recon.shape}")
         recon_loss_weight = 1.0  # TODO: make this an argument
+        # print(f"x: {x.shape}, x_recon: {x_recon.shape}")
         recon_loss = F.mse_loss(x_recon, x) * recon_loss_weight
 
         return recon_loss, kl_loss, x_recon, vq_output
@@ -209,6 +206,26 @@ class VQVAE(pl.LightningModule):
         if batch_idx == 0:
             if self.args.track:
                 self.log_reconstructions(x, x_recon, training=False)
+                # To check the robustness of the model, we can also corrupt the latents
+                # with structured noise and see how the reconstructions change.
+                # Take only 1 example
+                x = x[0:1]
+                z = self.encode(x)
+                if isinstance(z, dict):
+                    z = z["z"]
+
+                z = self.vq(z)
+                if isinstance(z, dict):
+                    z = z["z_recon"]
+                std = z.std()
+                z[:, :, 1:, :, :] = torch.randn_like(z[:, :, 1:, :, :])  # * std
+                x_recon = self.decode(z)
+                # Take only the first frame
+                x = x[:, :, 0:1, :, :]
+                x_recon = x_recon[:, :, 0:1, :, :]
+                self.log_reconstructions(
+                    x, x_recon, training=False, postfix="_corrupted"
+                )
 
         if hasattr(self.vq, "get_codebook_usage"):
             # update codebook usage
@@ -269,7 +286,11 @@ class VQVAE(pl.LightningModule):
 
     @torch.no_grad()
     def log_reconstructions(
-        self, ground_truths, reconstructions, training: bool = True
+        self,
+        ground_truths,
+        reconstructions,
+        training: bool = True,
+        postfix: str = "",
     ):
         """
         Log the reconstructions to wandb.
@@ -318,7 +339,7 @@ class VQVAE(pl.LightningModule):
         )
 
         display = wandb.Video(data_or_path=display, fps=4, format="mp4")
-        self.logger.experiment.log({f"{panel_name}/reconstructions": display})
+        self.logger.experiment.log({f"{panel_name}/reconstructions{postfix}": display})
 
     def on_validation_epoch_end(self) -> None:
         super().on_validation_epoch_end()
@@ -368,357 +389,3 @@ class VQVAE(pl.LightningModule):
         parser.add_argument("--n_res_layers", type=int, default=4)
         parser.add_argument("--downsample", nargs="+", type=int, default=(4, 4, 4))
         return parser
-
-
-class Codebook(nn.Module):
-    def __init__(self, n_codes, embedding_dim):
-        super().__init__()
-        self.register_buffer("embeddings", torch.randn(n_codes, embedding_dim))
-        self.register_buffer("N", torch.zeros(n_codes))
-        self.register_buffer("z_avg", self.embeddings.data.clone())
-
-        self.n_codes = n_codes
-        self.embedding_dim = embedding_dim
-        self._need_init = True
-
-    def _tile(self, x):
-        d, ew = x.shape
-        if d < self.n_codes:
-            n_repeats = (self.n_codes + d - 1) // d
-            std = 0.01 / np.sqrt(ew)
-            x = x.repeat(n_repeats, 1)
-            x = x + torch.randn_like(x) * std
-        return x
-
-    def _init_embeddings(self, z):
-        # z: [b, c, t, h, w]
-        self._need_init = False
-        flat_inputs = shift_dim(z, 1, -1).flatten(end_dim=-2)
-        y = self._tile(flat_inputs)
-
-        d = y.shape[0]
-        _k_rand = y[torch.randperm(y.shape[0])][: self.n_codes]
-        if dist.is_initialized():
-            dist.broadcast(_k_rand, 0)
-        self.embeddings.data.copy_(_k_rand)
-        self.z_avg.data.copy_(_k_rand)
-        self.N.data.copy_(torch.ones(self.n_codes))
-
-    def forward(self, z):
-        # z: [b, c, t, h, w]
-        if self._need_init and self.training:
-            self._init_embeddings(z)
-        flat_inputs = shift_dim(z, 1, -1).flatten(end_dim=-2)
-        distances = (
-            (flat_inputs**2).sum(dim=1, keepdim=True)
-            - 2 * flat_inputs @ self.embeddings.t()
-            + (self.embeddings.t() ** 2).sum(dim=0, keepdim=True)
-        )
-
-        encoding_indices = torch.argmin(distances, dim=1)
-        encode_onehot = F.one_hot(encoding_indices, self.n_codes).type_as(flat_inputs)
-        encoding_indices = encoding_indices.view(z.shape[0], *z.shape[2:])
-
-        embeddings = F.embedding(encoding_indices, self.embeddings)
-        embeddings = shift_dim(embeddings, -1, 1)
-
-        commitment_loss = 0.25 * F.mse_loss(z, embeddings.detach())
-
-        # EMA codebook update
-        if self.training:
-            n_total = encode_onehot.sum(dim=0)
-            encode_sum = flat_inputs.t() @ encode_onehot
-            if dist.is_initialized():
-                dist.all_reduce(n_total)
-                dist.all_reduce(encode_sum)
-
-            self.N.data.mul_(0.99).add_(n_total, alpha=0.01)
-            self.z_avg.data.mul_(0.99).add_(encode_sum.t(), alpha=0.01)
-
-            n = self.N.sum()
-            weights = (self.N + 1e-7) / (n + self.n_codes * 1e-7) * n
-            encode_normalized = self.z_avg / weights.unsqueeze(1)
-            self.embeddings.data.copy_(encode_normalized)
-
-            y = self._tile(flat_inputs)
-            _k_rand = y[torch.randperm(y.shape[0])][: self.n_codes]
-            if dist.is_initialized():
-                dist.broadcast(_k_rand, 0)
-
-            usage = (self.N.view(self.n_codes, 1) >= 1).float()
-            self.embeddings.data.mul_(usage).add_(_k_rand * (1 - usage))
-
-        embeddings_st = (embeddings - z).detach() + z
-
-        avg_probs = torch.mean(encode_onehot, dim=0)
-        perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
-
-        return dict(
-            embeddings=embeddings_st,
-            encodings=encoding_indices,
-            commitment_loss=commitment_loss,
-            perplexity=perplexity,
-        )
-
-    def dictionary_lookup(self, encodings):
-        embeddings = F.embedding(encodings, self.embeddings)
-        return embeddings
-
-
-class MiniEncoder(nn.Module):
-    """
-    A minimal spatial-temporal encoder for testing purposes.
-    """
-
-    def __init__(self, embedding_dim: int = 256, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        # (B, C, T, H, W) -> (B, C, T, H/2, W/2) -> (B, C, T, H/4, W/4) -> (B, C, T/2, H/8, W/8)
-        self.conv0 = nn.Conv3d(
-            3, embedding_dim, kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1)
-        )
-        self.conv_1by1 = nn.Conv3d(
-            3, embedding_dim, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)
-        )
-        self.conv1 = nn.Conv3d(
-            3, 16, kernel_size=3, stride=(1, 2, 2), padding=(1, 1, 1)
-        )
-        self.conv2 = nn.Conv3d(
-            16, 32, kernel_size=3, stride=(1, 2, 2), padding=(1, 1, 1)
-        )
-        self.conv3 = nn.Conv3d(
-            32, embedding_dim, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1)
-        )
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        # return self.conv_1by1(x)
-        return self.conv0(x)
-        x = self.conv1(x)
-        x = self.relu(x)
-        x = self.conv2(x)
-        x = self.relu(x)
-        x = self.conv3(x)
-        return x
-
-
-class MiniDecoder(nn.Module):
-    """
-    A minimal spatial-temporal decoder for testing purposes.
-    """
-
-    def __init__(self, embedding_dim: int = 256, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.relu = nn.ReLU()
-
-        self.relu = nn.ReLU()
-        self.u1 = nn.Upsample(scale_factor=(1, 1, 1), mode="trilinear")
-        self.c0 = nn.Conv3d(
-            embedding_dim, 3, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1)
-        )
-        self.c1 = nn.Conv3d(
-            embedding_dim, 32, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1)
-        )
-        self.u2 = nn.Upsample(scale_factor=(1, 2, 2), mode="trilinear")
-        self.c2 = nn.Conv3d(32, 16, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1))
-        self.u3 = nn.Upsample(scale_factor=(1, 2, 2), mode="trilinear")
-        self.c3 = nn.Conv3d(16, 3, kernel_size=3, stride=(1, 1, 1), padding=(1, 1, 1))
-        self.d0 = nn.ConvTranspose3d(
-            embedding_dim,
-            16,
-            kernel_size=[1, 4, 4],
-            stride=(1, 2, 2),
-            padding=(0, 1, 1),
-        )
-        self.cd0 = nn.Conv3d(
-            16, 3, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)
-        )
-        self.conv_1by1 = nn.Conv3d(
-            embedding_dim, 3, kernel_size=1, stride=(1, 1, 1), padding=(0, 0, 0)
-        )
-
-    def forward(self, x):
-        # return self.conv_1by1(x)
-        return self.cd0(self.d0(x))
-        return self.c0(self.u2(x))
-        x = self.u1(x)
-        x = self.c1(x)
-        x = self.relu(x)
-        x = self.u2(x)
-        x = self.c2(x)
-        x = self.relu(x)
-        x = self.u3(x)
-        x = self.c3(x)
-        return x
-
-
-class Encoder(nn.Module):
-    def __init__(self, n_hiddens, n_res_layers, downsample):
-        super().__init__()
-        n_times_downsample = np.array([int(math.log2(d)) for d in downsample])
-        self.convs = nn.ModuleList()
-        max_ds = n_times_downsample.max()
-        for i in range(max_ds):
-            in_channels = 3 if i == 0 else n_hiddens
-            stride = tuple([2 if d > 0 else 1 for d in n_times_downsample])
-            conv = SamePadConv3d(in_channels, n_hiddens, 4, stride=stride)
-            self.convs.append(conv)
-            n_times_downsample -= 1
-        self.conv_last = SamePadConv3d(in_channels, n_hiddens, kernel_size=3)
-
-        self.res_stack = nn.Sequential(
-            *[AttentionResidualBlock(n_hiddens) for _ in range(n_res_layers)],
-            nn.BatchNorm3d(n_hiddens),
-            nn.ReLU(),
-        )
-
-    def forward(self, x):
-        h = x
-        for conv in self.convs:
-            h = F.relu(conv(h))
-        h = self.conv_last(h)
-        h = self.res_stack(h)
-        return h
-
-
-class Decoder(nn.Module):
-    def __init__(self, n_hiddens, n_res_layers, upsample):
-        super().__init__()
-        self.res_stack = nn.Sequential(
-            *[AttentionResidualBlock(n_hiddens) for _ in range(n_res_layers)],
-            nn.BatchNorm3d(n_hiddens),
-            nn.ReLU(),
-        )
-
-        n_times_upsample = np.array([int(math.log2(d)) for d in upsample])
-        max_us = n_times_upsample.max()
-        self.convts = nn.ModuleList()
-        for i in range(max_us):
-            out_channels = 3 if i == max_us - 1 else n_hiddens
-            us = tuple([2 if d > 0 else 1 for d in n_times_upsample])
-            convt = SamePadConvTranspose3d(n_hiddens, out_channels, 4, stride=us)
-            self.convts.append(convt)
-            n_times_upsample -= 1
-
-    def forward(self, x):
-        h = self.res_stack(x)
-        for i, convt in enumerate(self.convts):
-            h = convt(h)
-            if i < len(self.convts) - 1:
-                h = F.relu(h)
-        return h
-
-
-# Does not support dilation
-class SamePadConv3d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, bias=True):
-        super().__init__()
-        if isinstance(kernel_size, int):
-            kernel_size = (kernel_size,) * 3
-        if isinstance(stride, int):
-            stride = (stride,) * 3
-
-        # assumes that the input shape is divisible by stride
-        total_pad = tuple([k - s for k, s in zip(kernel_size, stride)])
-        pad_input = []
-        for p in total_pad[::-1]:  # reverse since F.pad starts from last dim
-            pad_input.append((p // 2 + p % 2, p // 2))
-        pad_input = sum(pad_input, tuple())
-        self.pad_input = pad_input
-
-        self.conv = nn.Conv3d(
-            in_channels, out_channels, kernel_size, stride=stride, padding=0, bias=bias
-        )
-
-    def forward(self, x):
-        return self.conv(F.pad(x, self.pad_input))
-
-
-class SamePadConvTranspose3d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, bias=True):
-        super().__init__()
-        if isinstance(kernel_size, int):
-            kernel_size = (kernel_size,) * 3
-        if isinstance(stride, int):
-            stride = (stride,) * 3
-
-        total_pad = tuple([k - s for k, s in zip(kernel_size, stride)])
-        pad_input = []
-        for p in total_pad[::-1]:  # reverse since F.pad starts from last dim
-            pad_input.append((p // 2 + p % 2, p // 2))
-        pad_input = sum(pad_input, tuple())
-        self.pad_input = pad_input
-
-        self.convt = nn.ConvTranspose3d(
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=stride,
-            bias=bias,
-            padding=tuple([k - 1 for k in kernel_size]),
-        )
-
-    def forward(self, x):
-        return self.convt(F.pad(x, self.pad_input))
-
-
-class Codebook2(nn.Module):
-    # This is adapted from CVlization/examples/image_gen/vqgan/codebook.py
-    def __init__(self, n_codes: int, embedding_dim: int, beta: float = 0.25):
-        super(Codebook2, self).__init__()
-        self.num_codebook_vectors = n_codes
-        self.latent_dim = embedding_dim
-        self.beta = beta
-
-        self.embedding = nn.Embedding(self.num_codebook_vectors, self.latent_dim)
-        self.embedding.weight.data.uniform_(
-            -1.0 / self.num_codebook_vectors, 1.0 / self.num_codebook_vectors
-        )
-
-    def forward(self, z):
-        # z is of shape (b, c, t, h, w), c is the embedding dim
-        z = z.permute(0, 2, 3, 4, 1).contiguous()  # (b, t, h, w, c)
-        # print(f"z: {z.shape}")
-        z_flattened = z.view(-1, self.latent_dim)
-        # print(f"b * t * h * w: {z_flattened.shape[0]}")
-
-        # this is the distance between the z and the embeddings
-        d = (
-            torch.sum(z_flattened**2, dim=1, keepdim=True)
-            + torch.sum(self.embedding.weight**2, dim=1)
-            - 2 * (torch.matmul(z_flattened, self.embedding.weight.t()))
-        )  # (b*t*h*w, c)
-        assert d.shape == (z_flattened.shape[0], self.num_codebook_vectors)
-
-        min_encoding_indices = torch.argmin(d, dim=1)
-        z_q = self.embedding(min_encoding_indices).view(z.shape)
-
-        loss = torch.mean((z_q.detach() - z) ** 2) + self.beta * torch.mean(
-            (z_q - z.detach()) ** 2
-        )
-
-        z_q = z + (z_q - z).detach()
-
-        # print(f"z_q: {z_q.shape}")
-        # permute back
-        z_q = z_q.permute(0, 4, 1, 2, 3)  # (b, c, t, h, w)
-
-        # return z_q, min_encoding_indices, loss
-        embedings_st = z_q
-        # print(f"z_q: {z_q.shape}, min_encoding_indices: {min_encoding_indices.shape}")
-        encoding_indices = min_encoding_indices.view(z_q.shape[0], *z_q.shape[2:])
-        commitment_loss = loss
-        perplexity = torch.exp(
-            -torch.mean(
-                torch.sum(
-                    F.one_hot(min_encoding_indices, self.num_codebook_vectors).float()
-                    * F.log_softmax(d, dim=1),
-                    dim=1,
-                )
-            )
-        )
-        return dict(
-            embeddings=embedings_st,
-            encodings=encoding_indices,
-            commitment_loss=commitment_loss,
-            perplexity=perplexity,
-        )
