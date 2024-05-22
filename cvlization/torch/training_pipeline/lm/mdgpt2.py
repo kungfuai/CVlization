@@ -1,18 +1,8 @@
-"""
-Adapted from Andrej's NanoGPT.
-
-Full definition of a GPT Language Model, all of it in this single file.
-References:
-1) the official GPT-2 TensorFlow implementation released by OpenAI:
-https://github.com/openai/gpt-2/blob/master/src/model.py
-2) huggingface/transformers PyTorch implementation:
-https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
-"""
-
 import math
 import time
 import pickle
 import numpy as np
+from typing import Tuple
 import inspect
 import os
 from contextlib import nullcontext
@@ -25,9 +15,9 @@ from torch.nn import functional as F
 from torch.distributed import init_process_group, destroy_process_group
 from einops import rearrange
 import wandb
+from .gpt import GPT, GPTConfig, Block, MLP, CausalSelfAttention, LayerNorm
 
-
-class NanoGPTTrainingPipeline:
+class MDGPTTrainingPipeline:
     # TODO: compile the model.
     @dataclass
     class Config:
@@ -39,9 +29,15 @@ class NanoGPTTrainingPipeline:
 
         # Data
         block_size: int = 1024
+        sparse_block_size: int = 128
         vocab_size: int = 5120
         batch_size: int = 32
         flatten_tokens: bool = False
+        ignore_token: int = -1
+        start_token: int = 5121
+        use_1d_pos_embedding: bool = False
+        causal: bool = False
+        only_predict_last: bool = False
 
         # Model
         n_layer: int = 12
@@ -51,7 +47,6 @@ class NanoGPTTrainingPipeline:
         gradient_accumulation_steps: int = 1
         bias: bool = True
         device: str = "cuda"
-        use_mamba_mixer: bool = False
 
         learning_rate: float = 6e-4  # max learning rate
         max_iters: int = 600000  # total number of training iterations
@@ -189,17 +184,23 @@ class NanoGPTTrainingPipeline:
                 - y: The target tensor of shape (batch_size, block_size).
 
         """
+        if self.config.only_predict_last:
+            return self.get_batch_for_predict_only_last(split)
+        
         if self.config.flatten_tokens:
             train_data = self.train_data_flattened
             val_data = self.val_data_flattened
         else:
             train_data = self.train_data
             val_data = self.val_data
+        
         block_size = self.config.block_size
         batch_size = self.config.batch_size
         device = self.config.device
 
         data = train_data if split == "train" else val_data
+        x_pos = None
+        y_pos = None
         if len(data.shape) == 2:
             # batch x sequence len
             irow = torch.randint(data.shape[0], (batch_size,))
@@ -210,6 +211,9 @@ class NanoGPTTrainingPipeline:
             ])
             y = torch.stack([
                 torch.from_numpy(data[i, i1 + 1 : i1 + 1 + block_size].astype(np.int64)) for i, i1 in zip(irow, ix)
+            ])
+            x_pos = torch.stack([
+                torch.from_numpy(self.positions_flattened[i1 : i1 + block_size]) for i1 in ix
             ])
         else:
             ix = torch.randint(len(data) - block_size, (batch_size,))
@@ -227,88 +231,77 @@ class NanoGPTTrainingPipeline:
             x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
                 device, non_blocking=True
             )
+            if x_pos is not None:
+                x_pos = x_pos.pin_memory().to(device, non_blocking=True)
         else:
             x, y = x.to(device), y.to(device)
+            if x_pos is not None:
+                x_pos = x_pos.to(device)
+                assert len(x_pos.shape) == 2, f"x_pos.shape: {x_pos.shape}"
         assert x.shape == (self.config.batch_size, self.config.block_size), f"x.shape: {x.shape}"
         assert y.shape == (self.config.batch_size, self.config.block_size), f"y.shape: {y.shape}"
 
-        # make the context window sparse in the beginning of the sequence
-        if self.config.sparse_context_window:
-            sparse_idx = np.concatenate(
-                [
-                    np.arange(
-                        0,
-                        block_size - self.config.context_stride_start,
-                        self.config.context_stride,
-                    ),
-                    np.arange(
-                        block_size - self.config.context_stride_start, block_size
-                    ),
-                ]
-            )
-            x = x[:, sparse_idx]
-            y = y[:, sparse_idx]
+        return x_pos, x, y_pos, y
 
-        # For debugging.
-        # Treatment 1
-        # This is so that the model can learn to predict the final token, using varying context window lengths:
-        #  with only the nearest neighbor, and then the 2 nearest neighbors, then 3, ...
-        # x = torch.flip(
-        #     x, [1]
-        # )  # This combined with the following line (treatment 2) will make the loss nan.
-        # Treatment 2
-        # y[:, :-1] = -1  # This alone will make the training inefficient but still works.
-        # Treatment 3
-        # x[:, -1] = x[:, 0]  # This combined with treatment 1 and 2 fixes the nan issue.
-        return x, y
-
-    def get_batch_sparse(self, split: str):
+    def get_batch_for_predict_only_last(self, split: str):
         """
-        Get a batch of data for training or validation.
+        Want to generate batches that train the model with:
+        x1 -> x2
+        x1 x2 -> x3
+        x1 x2 x3 -> x4
 
-        Args:
-            split (str): The split to get the data from. Can be either "train" or "val".
-
-        Returns:
-            tuple: A tuple containing two tensors: x and y.
-                - x: The input tensor of shape (batch_size, block_size).
-                - y: The target tensor of shape (batch_size, block_size).
-
+        Use a class variable to keep track of where the target is.
         """
-        train_data = self.train_data_flattened
-        val_data = self.val_data_flattened
+        data = self.train_data if split == "train" else self.val_data
+        if not hasattr(self, "target_idx"):
+            self.target_idx = 1
+            self.pos_offset = 0
+            # TODO: consider the start token, then idx starts from 1
+        
+        assert len(data.shape) == 2, f"expected 2D data, got {data.shape}"
+        # insert the start token
+        data = np.concatenate([np.ones((data.shape[0], 1), dtype=data.dtype) * self.START_TOKEN, data], axis=1)
+
         block_size = self.config.block_size
-        batch_size = self.config.batch_size
-        device = self.config.device
-
-        data = train_data if split == "train" else val_data
-        ix = torch.randint(len(data) - block_size, (batch_size,))
-        x = torch.stack(
-            [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
-        )
-        y = torch.stack(
-            [
-                torch.from_numpy((data[i + 1 : i + 1 + block_size]).astype(np.int64))
-                for i in ix
-            ]
-        )
-        if self.device_type == "cuda":
-            # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
-                device, non_blocking=True
-            )
+        irow = torch.randint(data.shape[0], (self.config.batch_size,))
+        # In this batch, the target idx is shared.
+        target_idx = self.target_idx
+        context_start_idx = max(target_idx - block_size, 0)
+        if target_idx == 1:
+            # only with start token
+            x = torch.stack([
+                torch.from_numpy(data[i, :1].astype(np.int64)) for i in irow
+            ])
         else:
-            x, y = x.to(device), y.to(device)
-
-        # make the context window sparse in the beginning of the sequence
-        sparse_idx = np.concatenate(
-            [np.arange(0, block_size - 32, 1), np.arange(block_size - 32, block_size)]
-        )
-        x = x[:, sparse_idx]
-        y = y[:, sparse_idx]
-        # assert x.shape == (self.config.batch_size, self.config.block_size)
-        # assert y.shape == (self.config.batch_size, self.config.block_size)
-        return x, y
+            x = torch.stack([
+                torch.from_numpy(data[i, (self.pos_offset+context_start_idx):(self.pos_offset+target_idx)].astype(np.int64)) for i in irow
+            ])
+        y = torch.stack([
+            torch.from_numpy(data[i, (self.pos_offset+target_idx):(self.pos_offset+target_idx+1)].astype(np.int64)) for i in irow
+        ])
+        x_pos = None
+        y_pos = None
+        if self.device_type == "cuda":
+            x, y = x.pin_memory().to(self.config.device, non_blocking=True), y.pin_memory().to(
+                self.config.device, non_blocking=True
+            )
+            if x_pos is not None:
+                x_pos = x_pos.pin_memory().to(self.config.device, non_blocking=True)
+        else:
+            x, y = x.to(self.config.device), y.to(self.config.device)
+            if x_pos is not None:
+                x_pos = x_pos.to(self.config.device)
+                assert len(x_pos.shape) == 2, f"x_pos.shape: {x_pos.shape}"
+        # update the target idx
+        self.target_idx += 1
+        tokens_in_each_frame = self.train_data_orig.shape[2] * self.train_data_orig.shape[3]
+        if self.target_idx > tokens_in_each_frame:
+            self.target_idx = 1
+            # pos_offset is not totally random. It should only fall on the beginning of each frame.
+            frame_offset = torch.randint(self.train_data_orig.shape[1] - block_size // tokens_in_each_frame, (1,)).item()
+            self.pos_offset = frame_offset * tokens_in_each_frame
+            # self.pos_offset = torch.randint(data.shape[1] - block_size, (1,)).item()
+        return x_pos, x, y_pos, y
 
     def create_dataloaders(self, dataset_builder):
         self.train_data = dataset_builder.training_dataset()
@@ -322,10 +315,6 @@ class NanoGPTTrainingPipeline:
             np.uint32,
             np.uint64,
         ]
-        assert len(self.train_data.shape) in [
-            1,
-            2,
-        ], f"Expected 1D or 2D array for training data, got {self.train_data.shape}"
 
         if self.config.flatten_tokens:
             self.train_data_flattened = self.train_data.ravel()
@@ -338,6 +327,33 @@ class NanoGPTTrainingPipeline:
             self.data_seq_len = self.train_data.shape[-1]
         else:
             self.data_seq_len = self.config.max_tokens_to_sample
+
+        self.train_data_orig = self.train_data
+        self.val_data_orig = self.val_data
+        if len(self.train_data.shape) > 2:
+            self.train_data = self.train_data.reshape(len(self.train_data), -1)
+            self.val_data = self.val_data.reshape(len(self.val_data), -1)
+        
+        if self.config.use_1d_pos_embedding:
+            assert len(self.train_data.shape) in [
+                1,
+                2,
+            ], f"Expected 1D or 2D array for training data, got {self.train_data.shape}"
+        else:
+            assert len(self.train_data_orig.shape) > 2, f"expected multi-dim data, got training data shape {self.train_data.shape}"
+        
+        meshgrid_args = [np.arange(s) for s in self.train_data_orig.shape[1:]]
+        positions = np.array(
+            np.meshgrid(*meshgrid_args, indexing="ij"),
+        )
+        orig_shape = tuple(range(len(positions.shape)))
+        transposed_shape = orig_shape[1:] + (orig_shape[0],)
+        self.positions = positions.transpose(*transposed_shape)
+        self.position_shape = self.positions.shape[:-1]
+        print(f"position_shape: {self.position_shape}")
+        self.position_dim = len(self.position_shape)
+        self.positions_flattened = self.positions.reshape(-1, self.position_dim)
+
 
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
@@ -374,6 +390,10 @@ class NanoGPTTrainingPipeline:
             bias=bias,
             vocab_size=None,
             dropout=dropout,
+            position_shape=self.position_shape,
+            use_1d_pos_embedding=self.config.use_1d_pos_embedding,
+            causal=self.config.causal,
+            only_predict_last=self.config.only_predict_last,
         )  # start with model_args from command line
         if init_from == "scratch":
             # init a new model from scratch
@@ -387,11 +407,8 @@ class NanoGPTTrainingPipeline:
                 meta_vocab_size if meta_vocab_size is not None else 50304
             )
             print("***** model args:", self.model_args)
-            gptconf = GPTConfig(**(self.model_args))
-            if self.config.use_mamba_mixer:
-                model = GPTMamba(gptconf)
-            else:
-                model = GPT(gptconf)
+            gptconf = MDGPTConfig(**(self.model_args))
+            model = MDGPT(gptconf)
         elif init_from == "resume":
             print(f"Resuming training from {out_dir}")
             # resume training from a checkpoint.
@@ -540,10 +557,10 @@ class NanoGPTTrainingPipeline:
         for split in ["train", "val"]:
             losses = torch.zeros(eval_iters)
             for k in range(eval_iters):
-                X, Y = self.get_batch(split)
+                X_pos, X, Y_pos, Y = self.get_batch(split)
                 # print(f"estimate_loss(): k={k}, X.shape: {X.shape}, Y.shape: {Y.shape}")
                 with self.ctx:
-                    logits, loss = model(X, Y)
+                    logits, loss = model(x=X, y=Y, x_pos=X_pos, y_pos=Y_pos)
                 losses[k] = loss.item()
             out[split] = losses.mean()
         model.train()
@@ -577,10 +594,7 @@ class NanoGPTTrainingPipeline:
         iter_num = 0
         best_val_loss = 1e9
 
-        X, Y = self.get_batch("train")  # fetch the very first batch
-        print(f"X.shape: {X.shape}, Y.shape: {Y.shape}")
-        print(f"X: {X[0, :5]}")
-        # import sys; sys.exit(0)
+        X_pos, X, Y_pos, Y = self.get_batch("train")  # fetch the very first batch
         t0 = time.time()
         local_iter_num = 0  # number of iterations in the lifetime of this process
         raw_model = model.module if ddp else model  # unwrap DDP container if needed
@@ -606,7 +620,8 @@ class NanoGPTTrainingPipeline:
                             "val/loss": losses["val"],
                             "lr": lr,
                             "mfu": running_mfu * 100,  # convert to percentage
-                        }
+                        },
+                        step=iter_num,
                     )
                 if losses["val"] < best_val_loss or always_save_checkpoint:
                     best_val_loss = losses["val"]
@@ -638,14 +653,14 @@ class NanoGPTTrainingPipeline:
                     )
                 with ctx:
                     start_time = time.time()
-                    logits, loss = model(X, Y)
+                    logits, loss = model(X_pos, X, Y_pos, Y)
                     end_time = time.time()
                     # print(f"forward pass time: {end_time - start_time:.3f}s")
                     loss = (
                         loss / gradient_accumulation_steps
                     )  # scale the loss to account for gradient accumulation
                 # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                X, Y = self.get_batch("train")
+                X_pos, X, Y_pos, Y = self.get_batch("train")
                 # backward pass, with gradient scaling if training in fp16
                 scaler.scale(loss).backward()
             # clip the gradient
@@ -689,7 +704,7 @@ class NanoGPTTrainingPipeline:
                     device = self.config.device
                     vae = self.vae
                     ground_truth_codes = (
-                        torch.Tensor(self.val_data[0, 1:].astype(np.int64))
+                        torch.Tensor(self.val_data[0, 0:].astype(np.int64))
                         .long()
                         .to(device)
                     )  # this is hard coded
@@ -729,14 +744,18 @@ class NanoGPTTrainingPipeline:
                 if self.config.vae_model_name is not None:
                     # sample from the model
                     model.eval()
+                    t = 2
+                    n_ = int(t * h * w)
                     with torch.no_grad():
+                        positions_flattened = None if self.config.use_1d_pos_embedding else self.positions_flattened
                         sampled_codes = model.generate(
                             idx=torch.Tensor(
                                 np.ones((1, 1), dtype=np.int32) * self.START_TOKEN
                             )
                             .long()
                             .to(device),
-                            max_new_tokens=self.data_seq_len,
+                            max_new_tokens=n_, # self.data_seq_len,
+                            positions_flattened=positions_flattened,
                             temperature=1,
                             top_k=100,
                             show_progress=True,
@@ -755,9 +774,6 @@ class NanoGPTTrainingPipeline:
                         # sampled_codes = torch.ones(1, 32768, dtype=torch.long).to(device)
                         print("sampled codes:", sampled_codes)
                         # print(sampled_codes.min(), sampled_codes.max())
-                        assert (
-                            self.data_seq_len >= t * h * w
-                        ), f"{self.data_seq_len} < {t*h*w} not enough tokens sampled"
                         n_ = int(t * h * w)
                         sampled_codes = rearrange(
                             sampled_codes[:n_],
@@ -784,7 +800,8 @@ class NanoGPTTrainingPipeline:
                                 {
                                     "sampled/generated_video": display,
                                     "sampled/violating_codes": violating_codes,
-                                }
+                                },
+                                step=iter_num,
                             )
 
                     model.train()
@@ -800,162 +817,60 @@ class NanoGPTTrainingPipeline:
             destroy_process_group()
 
 
-class LayerNorm(nn.Module):
-    """LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False"""
-
-    def __init__(self, ndim, bias):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
-
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
-
-
-class CausalSelfAttention(nn.Module):
-
-    def __init__(self, config):
-        super().__init__()
-        assert config.n_embd % config.n_head == 0
-        # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
-        # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_head = config.n_head
-        self.n_embd = config.n_embd
-        self.dropout = config.dropout
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-        if not self.flash:
-            print(
-                "WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0"
-            )
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer(
-                "bias",
-                torch.tril(torch.ones(config.block_size, config.block_size)).view(
-                    1, 1, config.block_size, config.block_size
-                ),
-            )
-
-    def forward(self, x):
-        B, T, C = (
-            x.size()
-        )  # batch size, sequence length, embedding dimensionality (n_embd)
-
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        try:
-            q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        except:
-            # x.shape: torch.Size([8, 4096, 768]) this is the correct shape
-            # x.shape: torch.Size([1, 1, 768]), n_embd: 768, n_head: 6, c_atten: Linear(in_features=768, out_features=2304, bias=True)
-            print(
-                f"x.shape: {x.shape}, n_embd: {self.n_embd}, n_head: {self.n_head}, c_atten: {self.c_attn}"
-            )
-            raise
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                attn_mask=None,
-                dropout_p=self.dropout if self.training else 0,
-                is_causal=True,
-            )
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = (
-            y.transpose(1, 2).contiguous().view(B, T, C)
-        )  # re-assemble all head outputs side by side
-
-        # output projection
-        y = self.resid_dropout(self.c_proj(y))
-        return y
-
-
-class MLP(nn.Module):
-
-    def __init__(self, config):
-        super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu = nn.GELU()
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
-        self.dropout = nn.Dropout(config.dropout)
-
-    def forward(self, x):
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
-        x = self.dropout(x)
-        return x
-
-
-class Block(nn.Module):
-
-    def __init__(self, config):
-        super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
-
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
-        return x
-
-
 @dataclass
-class GPTConfig:
-    block_size: int = 1024
-    vocab_size: int = (
-        50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
-    )
-    n_layer: int = 12
-    n_head: int = 12
-    n_embd: int = 768
-    dropout: float = 0.0
-    bias: bool = (
-        True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-    )
+class MDGPTConfig(GPTConfig):
+    sparse_block_size: int = 128
+    start_token: int = 5121
+    ignore_token: int = 5122
+    # Position shape is the shape of the positional indices.
+    position_shape: Tuple[int, int, int] = None
+    use_1d_pos_embedding: bool = False
+    causal: bool = False
+    only_predict_last: bool = False
+    disable_sparse_context_window: bool = False
 
-class GPT(nn.Module):
 
-    def __init__(self, config):
-        super().__init__()
+class MDGPT(GPT):
+    def __init__(self, config: MDGPTConfig):
+        super(GPT, self).__init__()  # Use the grandparent class.
         assert config.vocab_size is not None
         assert config.block_size is not None
+        assert (
+            config.start_token < config.vocab_size
+        ), f"start_token: {config.start_token}, vocab_size: {config.vocab_size}"
+        assert (
+            config.ignore_token < config.vocab_size
+        ), f"ignore_token: {config.ignore_token}, vocab_size: {config.vocab_size}"
+        print("position_shape:", config.position_shape)
+        position_embedding_input_sizes = [2 * s + 1 for s in config.position_shape]
+        print("position_embedding_input_sizes:", position_embedding_input_sizes)
         self.config = config
-
-        self.transformer = nn.ModuleDict(
-            dict(
-                wte=nn.Embedding(config.vocab_size, config.n_embd),
-                wpe=nn.Embedding(config.block_size, config.n_embd),
-                drop=nn.Dropout(config.dropout),
-                h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-                ln_f=LayerNorm(config.n_embd, bias=config.bias),
+        BlockCls = Block
+        if config.use_1d_pos_embedding:
+            self.transformer = nn.ModuleDict(
+                dict(
+                    wte=nn.Embedding(config.vocab_size, config.n_embd),
+                    wpe=nn.Embedding(config.block_size, config.n_embd),
+                    drop=nn.Dropout(config.dropout),
+                    h=nn.ModuleList([BlockCls(config) for _ in range(config.n_layer)]),
+                    ln_f=LayerNorm(config.n_embd, bias=config.bias),
+                )
             )
-        )
+        else:
+            self.transformer = nn.ModuleDict(
+                dict(
+                    wte=nn.Embedding(config.vocab_size, config.n_embd),
+                    wpe=nn.ModuleList(
+                        [
+                            nn.Embedding(s, config.n_embd)
+                            for s in position_embedding_input_sizes
+                        ]
+                    ),
+                    drop=nn.Dropout(config.dropout),
+                    h=nn.ModuleList([BlockCls(config) for _ in range(config.n_layer)]),
+                    ln_f=LayerNorm(config.n_embd, bias=config.bias),
+                )
+            )
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
@@ -967,6 +882,14 @@ class GPT(nn.Module):
 
         # init all weights
         self.apply(self._init_weights)
+
+        # Check the embedding weights
+        if not config.use_1d_pos_embedding:
+            for i, wpe in enumerate(self.transformer.wpe):
+                print(
+                    f"embedding {i} weight mean, std:", wpe.weight.mean(), wpe.weight.std()
+                )
+
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
@@ -976,7 +899,7 @@ class GPT(nn.Module):
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
-
+    
     def get_num_params(self, non_embedding=True):
         """
         Return the number of parameters in the model.
@@ -986,18 +909,15 @@ class GPT(nn.Module):
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
-            n_params -= self.transformer.wpe.weight.numel()
+            if self.config.use_1d_pos_embedding:
+                n_params -= self.transformer.wpe.weight.numel()
+            else:
+                n_params -= sum([m.weight.numel() for m in self.transformer.wpe])
         return n_params
-
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-
-    def forward(self, idx, targets=None):
+    
+    def forward(self, x_pos, x, y_pos, y=None):
+        idx = x
+        targets = y
         # print(f"x_mean: {idx.float().mean()}")
         device = idx.device
         b, t = idx.size()
@@ -1008,22 +928,50 @@ class GPT(nn.Module):
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        if self.config.use_1d_pos_embedding:
+            assert pos.max() < self.transformer.wpe.num_embeddings, f"pos.max(): {pos.max()}, block_size: {self.config.block_size}, {self.transformer.wpe}, num_embeddings: {self.transformer.wpe.num_embeddings}"
+            pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
+            x = tok_emb + pos_emb
+        else:
+            x = tok_emb
+            position_dim = len(self.config.position_shape)
+            for d in range(position_dim):
+                offset = self.config.position_shape[d]
+                # TODO: try absolute value, instead of offsetting
+                # assert (
+                #     relative_pos[:, :, d].max() < self.transformer.wpe[d].num_embeddings
+                # ), f"relative_pos.max(): {relative_pos.max()}, block_size: {self.config.block_size}, {self.transformer.wpe[d]}, num_embeddings: {self.transformer.wpe[d].num_embeddings}"
+                # relative_pos_with_offset = relative_pos[:, :, d] + offset
+                assert len(x_pos.shape) == 3, f"expected 3D tensor for x_pos, got {x_pos.shape}"
+                relative_pos_with_offset = x_pos[:, :, d]
+                # print("d:", d, "relative_pos_with_offset:", relative_pos_with_offset.shape, "max:", relative_pos_with_offset.max(), "embedding:", self.transformer.wpe[d],
+                #       "position_dim:", position_dim, "x:", x.shape)
+                # import sys; sys.exit(0)
+                # print(f"x: {x.shape}, relative_pos_with_offset: {relative_pos_with_offset.shape}, position_dim: {position_dim}")
+                x += self.transformer.wpe[d](relative_pos_with_offset) / float(
+                    position_dim
+                )
+        x = self.transformer.drop(x)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
-            logits = self.lm_head(x)
-
-            # TODO: for debug
-            # targets[:, :-1] = -1
-
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
-            )
+            if self.config.only_predict_last:
+                logits = self.lm_head(
+                    x[:, [-1], :]
+                )  # note: using list [-1] to preserve the time dim
+                loss = F.cross_entropy(
+                    logits.view(-1, logits.size(-1)),
+                    targets.view(-1),
+                    ignore_index=-1,
+                )
+            else:
+                logits = self.lm_head(x)
+                loss = F.cross_entropy(
+                    logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
+                )
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(
@@ -1032,142 +980,10 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
-
-    def crop_block_size(self, block_size):
-        # model surgery to decrease the block size if necessary
-        # e.g. we may load the GPT2 pretrained model checkpoint (block size 1024)
-        # but want to use a smaller block size for some smaller, simpler model
-        assert block_size <= self.config.block_size
-        self.config.block_size = block_size
-        self.transformer.wpe.weight = nn.Parameter(
-            self.transformer.wpe.weight[:block_size]
-        )
-        for block in self.transformer.h:
-            if hasattr(block.attn, "bias"):
-                block.attn.bias = block.attn.bias[:, :, :block_size, :block_size]
-
-    @classmethod
-    def from_pretrained(cls, model_type, override_args=None):
-        assert model_type in {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl"}
-        override_args = override_args or {}  # default to empty dict
-        # only dropout can be overridden see more notes below
-        assert all(k == "dropout" for k in override_args)
-        from transformers import GPT2LMHeadModel
-
-        print("loading weights from pretrained gpt: %s" % model_type)
-
-        # n_layer, n_head and n_embd are determined from model_type
-        config_args = {
-            "gpt2": dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
-            "gpt2-medium": dict(n_layer=24, n_head=16, n_embd=1024),  # 350M params
-            "gpt2-large": dict(n_layer=36, n_head=20, n_embd=1280),  # 774M params
-            "gpt2-xl": dict(n_layer=48, n_head=25, n_embd=1600),  # 1558M params
-        }[model_type]
-        print("forcing vocab_size=50257, block_size=1024, bias=True")
-        config_args["vocab_size"] = 50257  # always 50257 for GPT model checkpoints
-        config_args["block_size"] = 1024  # always 1024 for GPT model checkpoints
-        config_args["bias"] = True  # always True for GPT model checkpoints
-        # we can override the dropout rate, if desired
-        if "dropout" in override_args:
-            print(f"overriding dropout rate to {override_args['dropout']}")
-            config_args["dropout"] = override_args["dropout"]
-        # create a from-scratch initialized minGPT model
-        config = GPTConfig(**config_args)
-        model = GPT(config)
-        sd = model.state_dict()
-        sd_keys = sd.keys()
-        sd_keys = [
-            k for k in sd_keys if not k.endswith(".attn.bias")
-        ]  # discard this mask / buffer, not a param
-
-        # init a huggingface/transformers model
-        model_hf = GPT2LMHeadModel.from_pretrained(model_type)
-        sd_hf = model_hf.state_dict()
-
-        # copy while ensuring all of the parameters are aligned and match in names and shapes
-        sd_keys_hf = sd_hf.keys()
-        sd_keys_hf = [
-            k for k in sd_keys_hf if not k.endswith(".attn.masked_bias")
-        ]  # ignore these, just a buffer
-        sd_keys_hf = [
-            k for k in sd_keys_hf if not k.endswith(".attn.bias")
-        ]  # same, just the mask (buffer)
-        transposed = [
-            "attn.c_attn.weight",
-            "attn.c_proj.weight",
-            "mlp.c_fc.weight",
-            "mlp.c_proj.weight",
-        ]
-        # basically the openai checkpoints use a "Conv1D" module, but we only want to use a vanilla Linear
-        # this means that we have to transpose these weights when we import them
-        assert len(sd_keys_hf) == len(
-            sd_keys
-        ), f"mismatched keys: {len(sd_keys_hf)} != {len(sd_keys)}"
-        for k in sd_keys_hf:
-            if any(k.endswith(w) for w in transposed):
-                # special treatment for the Conv1D weights we need to transpose
-                assert sd_hf[k].shape[::-1] == sd[k].shape
-                with torch.no_grad():
-                    sd[k].copy_(sd_hf[k].t())
-            else:
-                # vanilla copy over the other parameters
-                assert sd_hf[k].shape == sd[k].shape
-                with torch.no_grad():
-                    sd[k].copy_(sd_hf[k])
-
-        return model
-
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
-        # start with all of the candidate parameters
-        param_dict = {pn: p for pn, p in self.named_parameters()}
-        # filter out those that do not require grad
-        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-        # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-        # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
-        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        optim_groups = [
-            {"params": decay_params, "weight_decay": weight_decay},
-            {"params": nodecay_params, "weight_decay": 0.0},
-        ]
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(
-            f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters"
-        )
-        print(
-            f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
-        )
-        # Create AdamW optimizer and use the fused version if it is available
-        fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
-        use_fused = fused_available and device_type == "cuda"
-        extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(
-            optim_groups, lr=learning_rate, betas=betas, **extra_args
-        )
-        print(f"using fused AdamW: {use_fused}")
-
-        return optimizer
-
-    def estimate_mfu(self, fwdbwd_per_iter, dt):
-        """estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS"""
-        # first estimate the number of flops we do per iteration.
-        # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
-        N = self.get_num_params()
-        cfg = self.config
-        L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd // cfg.n_head, cfg.block_size
-        flops_per_token = 6 * N + 12 * L * H * Q * T
-        flops_per_fwdbwd = flops_per_token * T
-        flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
-        # express our flops throughput as ratio of A100 bfloat16 peak flops
-        flops_achieved = flops_per_iter * (1.0 / dt)  # per second
-        flops_promised = 312e12  # A100 GPU bfloat16 peak flops is 312 TFLOPS
-        mfu = flops_achieved / flops_promised
-        return mfu
-
+    
     @torch.no_grad()
     def generate(
-        self, idx, max_new_tokens, temperature=1.0, top_k=None, show_progress=False
+        self, idx, max_new_tokens, positions_flattened=None, temperature=1.0, top_k=None, show_progress=False
     ):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
@@ -1193,7 +1009,13 @@ class GPT(nn.Module):
             # sys.exit(0)
 
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            if positions_flattened is not None:
+                pos_idx = np.arange(idx_cond.size(1))
+                x_pos = torch.from_numpy(positions_flattened[pos_idx])
+                x_pos = x_pos.unsqueeze(0).expand(idx_cond.size(0), -1, -1).to(idx.device)
+            else:
+                x_pos = None
+            logits, _ = self(x=idx_cond, x_pos=x_pos, y_pos=None, y=None)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
@@ -1208,68 +1030,3 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
-
-
-class MambaBackbone(nn.Module):
-    def __init__(self, config: GPTConfig = None):
-        super().__init__()
-        from mamba_ssm.models.mixer_seq_simple import create_block
-
-        norm_epsilon: float = 1e-5
-        n_layer = config.n_layer
-        rms_norm: bool = False
-        initializer_cfg = None
-        fused_add_norm = True
-        residual_in_fp32 = True
-        self.layers = nn.ModuleList(
-            [
-                create_block(
-                    d_model=config.n_embd,
-                    ssm_cfg={}, #ssm_cfg,
-                    norm_epsilon=norm_epsilon,
-                    rms_norm=rms_norm,
-                    residual_in_fp32=residual_in_fp32,
-                    fused_add_norm=fused_add_norm,
-                    layer_idx=i,
-                )
-                for i in range(n_layer)
-            ]
-        )
-        self.norm_f = nn.LayerNorm(
-            config.n_embd, eps=norm_epsilon,
-        )
-        self.fused_add_norm = False
-
-    def forward(self, x):
-        hidden_states = x
-        residual = None
-        for layer in self.layers:
-            hidden_states, residual = layer(hidden_states, residual)
-        if not self.fused_add_norm:
-            residual = (hidden_states + residual) if residual is not None else hidden_states
-            hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
-        # else:
-        #     # Set prenorm=False here since we don't need the residual
-        #     fused_add_norm_fn = rms_norm_fn if isinstance(self.norm_f, RMSNorm) else layer_norm_fn
-        #     hidden_states = fused_add_norm_fn(
-        #         hidden_states,
-        #         self.norm_f.weight,
-        #         self.norm_f.bias,
-        #         eps=self.norm_f.eps,
-        #         residual=residual,
-        #         prenorm=False,
-        #         residual_in_fp32=self.residual_in_fp32,
-        #     )
-        return hidden_states
-
-class GPTMamba(GPT):
-    """
-    GPT model with Mamba support.
-    
-    transformer.h:
-        Use MambaLayer instead of Block.
-    """
-    def __init__(self, config):
-        super().__init__(config)
-        
-        self.transformer.h = nn.ModuleList([MambaBackbone(config)])

@@ -34,7 +34,7 @@ lr_schedule = 'constant'
 lr_schedule_args = dict(num_warmup_steps=1000)
 
 save_image_epochs = 1
-save_model_epochs = 20
+save_model_epochs = 3
 save_model_steps=1000000
 
 sample_posterior = True

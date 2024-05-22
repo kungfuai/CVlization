@@ -795,7 +795,80 @@ def save_dataset_to_folder(ds, folder: str = "data/flying_mnist/train"):
         # print(f"Saved video: {folder}/{j:05d}.mp4")
 
 
+def convert_to_images(ds, output_dir):
+    from pathlib import Path
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    for j, example in tqdm(enumerate(ds)):
+        video = example["video"]  # [3, 100, 64, 64]
+        video = video.permute(1, 2, 3, 0).cpu().numpy()  # [100, 64, 64, 3]
+        # print(video.shape)
+        # import sys; sys.exit(0)
+        video = video[:10]
+        
+        for i, frame in enumerate(video):
+            # print(frame.shape); print(frame.max()); import sys; sys.exit(0)
+            frame = (frame - frame.min()) / (frame.max() - frame.min() + 1e-6)
+            frame = (frame * 255).astype(np.uint8)
+            img = Image.fromarray(frame)
+            img.save(f"{output_dir}/{j:05}_{i:05d}.png")
+
+
+class FlyingMNISTImageLatentsBuilder:
+    def __init__(self, latent_file: str):
+        self.latents = np.load(latent_file)
+        self.n_train = int(len(self.latents) * 0.8)
+    
+    def training_dataset(self):
+        return FlyingMNISTImageLatents(self.latents[:self.n_train], video_ds=FlyingMNISTDatasetBuilder())
+    
+    def validation_dataset(self):
+        return FlyingMNISTImageLatents(self.latents[self.n_train:], video_ds=FlyingMNISTDatasetBuilder())
+
+
+class FlyingMNISTImageLatents:
+    def __init__(self, latents: np.ndarray, video_ds):
+        from einops import rearrange
+
+        self.video_ds = video_ds
+        self.resolution = 32
+        latents = torch.from_numpy(latents)
+        latents = rearrange(latents, "b c t h w -> (b t) c h w")
+        self.latents = latents
+        self.load_vae_feat = True
+
+    def __getitem__(self, idx):
+        """
+        Similar to SA.py
+        """
+        data_info = {'img_hw': torch.tensor([self.resolution, self.resolution], dtype=torch.float32),
+                     'aspect_ratio': torch.tensor(1.)}
+
+        img = self.latents[idx]
+        # txt_fea = torch.from_numpy(npz_info['caption_feature'])
+        # Use a constant text embedding from t5
+        txt_fea = torch.ones(1, 120, 4096)
+        attention_mask = torch.ones(1, 1, txt_fea.shape[1]).int()
+        # if 'attention_mask' in npz_info.keys():
+        #     attention_mask = torch.from_numpy(npz_info['attention_mask'])[None]
+
+        data_info["mask_type"] = "null"
+
+        return img, txt_fea, attention_mask, data_info
+    
+    def __len__(self):
+        return len(self.latents)
+
+    def _not_used_get_img(self, idx):
+        video_idx = idx // self.video_ds.num_frames
+        frame_idx = idx % self.video_ds.num_frames
+        return self.video_ds[video_idx][frame_idx]
+    
+
 if __name__ == "__main__":
+    # db = FlyingMNISTDatasetBuilder(None, to_generate=False, resolution=256)
+    # convert_to_images(db.training_dataset(), output_dir="data/flying_mnist_images/train")
+    # import sys; sys.exit(0)
+
     import cv2
 
     opts = prepare_parser().parse_args()
