@@ -148,6 +148,9 @@ def get_args():
         "--max_steps", type=int, default=10000, help="Max training steps"
     )
     parser.add_argument("--log_every", type=int, default=10, help="Log every N steps")
+    parser.add_argument(
+        "--checkpoint_every", type=int, default=1000, help="Checkpoint every N steps"
+    )
     parser.add_argument("--depth", type=int, default=6, help="Depth of the model")
     parser.add_argument(
         "--hidden_size", type=int, default=768, help="Hidden size of the model"
@@ -188,13 +191,13 @@ def get_args():
     parser.add_argument(
         "--tokens_input_file",
         type=str,
-        default="flying_mnist_tokens_32frames_train.npy",
+        default=None, # "flying_mnist_tokens_32frames_train.npy",
         help="Path to the tokenized input file",
     )
     parser.add_argument(
         "--latents_input_file",
         type=str,
-        default="data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
+        default=None, # "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
         help="Path to the latents input file",
     )
     parser.add_argument(
@@ -202,6 +205,17 @@ def get_args():
         type=str,
         default="zzsi_kungfu/videogpt/model-kbu39ped:v11",
         help="VAE model name",
+    )
+    parser.add_argument(
+        "--resume_from",
+        type=str,
+        default=None,
+        help="Resume training from a denoiser model checkpoint",
+    )
+    parser.add_argument(
+        "--enable_flashattn",
+        action="store_true",
+        help="Enable FlashAttention in the denoiser",
     )
     return parser.parse_args()
 
@@ -212,6 +226,7 @@ def train_on_latents(
     max_steps=1000,
     log_every=10,
     sample_every=100,
+    checkpoint_every=1000,
     depth=6,
     hidden_size=768,
     patch_size=(1, 2, 2),
@@ -221,16 +236,20 @@ def train_on_latents(
     lr=1e-4,
     latent_frames_to_generate=8,
     clip_grad=None,
+    resume_from:str=None,
     vae:str = "zzsi_kungfu/videogpt/model-kbu39ped:v11",
-    tokens_input_file:str = "flying_mnist_tokens_32frames_train.npy",
-    latents_input_file:str = "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
+    tokens_input_file:str = None, # "flying_mnist_tokens_32frames_train.npy",
+    latents_input_file:str = None, # "data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy",
+    enable_flashattn=False,
     track=False,
     **kwargs,
 ):
     import numpy as np
     from cvlization.torch.net.vae.video_vqvae import VQVAE
     from stdit.model import STDiT
+    from uuid import uuid4
 
+    local_run_id = uuid4().hex[:6]
     model_id = vae.split("/")[-1].split(":")[0]
     print(f"model_id: {model_id}")
     # load from numpy
@@ -259,11 +278,11 @@ def train_on_latents(
     if latents is None and token_ids is not None:
         with torch.no_grad():
             # TODO: This loads all data into GPU memory! Use a dataloader instead
-            token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long).to(device)
+            token_ids = torch.tensor(token_ids.astype(np.int32), dtype=torch.long)
             # TODO: estimate these values automatically from z
             # latent_multiplier = 9
             # latent_bias = -0.27
-            z = vae.vq.codes_to_vec(token_ids)
+            z = vae.to("cpu").vq.codes_to_vec(token_ids)
             assert len(z.shape) == 5, f"Expected 5D tensor, got {z.shape}"
             assert (
                 z.shape[2] == token_ids.shape[1]
@@ -282,6 +301,8 @@ def train_on_latents(
         latent_bias = -z.mean() * latent_multiplier
         orig_z = z
         z = z * latent_multiplier + latent_bias
+    
+    assert z.shape[1] == 4, f"Expected latent dimension of 4, got {z.shape[1]}"
 
     def get_batch(latent_frames_to_generate: int):
         idx = np.random.choice(len(z), batch_size, replace=False)
@@ -295,6 +316,7 @@ def train_on_latents(
         assert batch_z.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {batch_z.shape[2]}"
         return torch.Tensor(batch_z).to(device)
 
+    # TODO: with flash attn, got RuntimeError: Input type (c10::Half) and bias type (float) should be the same
     denoiser = STDiT(
         # depth=28, hidden_size=1152, patch_size=(1, 2, 2), num_heads=16, **kwargs
         # input_size=z.shape[2:],
@@ -304,7 +326,39 @@ def train_on_latents(
         patch_size=patch_size,
         num_heads=num_heads,
         unconditional=True,
+        enable_flashattn=enable_flashattn,
+        dtype=torch.float16 if enable_flashattn else torch.float32,
     ).to(device)
+    if resume_from is not None:
+        # If the model name in resume_from is a wandb model,
+        # then first download the model.
+        if ":" in resume_from:
+            import wandb
+            import os
+
+            api = wandb.Api()
+            # skip if the file already exists
+            artifact_dir = f"artifacts/{resume_from.split('/')[-1]}"
+            if os.path.exists(artifact_dir):
+                print(f"Model already exists at {artifact_dir}")
+            else:
+                artifact_dir = api.artifact(resume_from).download()
+            # The file is model.ckpt.
+            state_dict = torch.load(artifact_dir + "/model.ckpt")
+            trimmed_state_dict = state_dict["model"]
+            # print(trimmed_state_dict.keys())
+            for k in ["pos_embed_temporal"]:
+                trimmed_state_dict.pop(k, None)
+            denoiser.load_state_dict(trimmed_state_dict, strict=False)
+        else:
+            checkpoint = torch.load(resume_from)
+            trimmed_state_dict = checkpoint["model"]
+            for k in ["pos_embed_temporal"]:
+                trimmed_state_dict.pop(k, None)
+            denoiser.load_state_dict(trimmed_state_dict, strict=False)
+        # optimizer.load_state_dict(checkpoint["optimizer"])
+        # start_step = checkpoint["step"]
+        print(f"Resuming from {resume_from}")
     print("Denoiser:")
     print(denoiser)
     num_params = sum(p.numel() for p in denoiser.parameters())
@@ -325,6 +379,7 @@ def train_on_latents(
     optimizer = torch.optim.Adam(denoiser.parameters(), lr=lr)
 
     # training loop
+    grad_norm = None
     for i in range(max_steps):
         x = get_batch(latent_frames_to_generate)
         assert x.shape[2] == latent_frames_to_generate, f"Expected temporal dimension has size {latent_frames_to_generate}, got {x.shape[2]}"
@@ -336,12 +391,13 @@ def train_on_latents(
 
         # Backward & update
         loss = loss_dict["loss"].mean()
-        loss.backward()
+        (loss / accumulate_grad_batches).backward()
 
         if i == 0:
             # Decode the ground truth latents
             with torch.no_grad():
                 orig_z_first = orig_z[:1].to(device)
+                vae = vae.to(device)
                 if isinstance(vae, VQVAE):
                     video = vae.decode(orig_z_first)
                 else:
@@ -365,7 +421,8 @@ def train_on_latents(
         if (i + 1) % accumulate_grad_batches == 0:
 		    # Update Optimizer
             if clip_grad is not None:
-                torch.nn.utils.clip_grad.clip_grad_norm_(denoiser.parameters(), clip_grad)
+                grad_norm = torch.nn.utils.clip_grad.clip_grad_norm_(denoiser.parameters(), clip_grad)
+
             optimizer.step()
             optimizer.zero_grad()
 
@@ -376,13 +433,39 @@ def train_on_latents(
             if track:
                 import wandb
 
-                wandb.log({"train/loss": loss.item()})
                 x_mean = x.mean()
                 x_std = x.std()
-                wandb.log({"train/x_mean": x_mean})
-                wandb.log({"train/x_std": x_std})
                 lr = optimizer.param_groups[0]["lr"]
-                wandb.log({"train/lr": lr})
+                to_log = {
+                    "train/loss": loss.item(),
+                    "train/x_mean": x_mean,
+                    "train/x_std": x_std,
+                    "train/lr": lr,
+                }
+                if grad_norm is not None:
+                    to_log["train/grad_norm"] = grad_norm.mean().item()
+                wandb.log(to_log)
+        
+        if (i + 1) % checkpoint_every == 0:
+            from pathlib import Path
+
+            Path("checkpoints").mkdir(exist_ok=True)
+            torch.save(
+                {
+                    "model": denoiser.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "step": i,
+                },
+                f"checkpoints/iddpm_{i}.ckpt",
+            )
+            if track:
+                metadata = {"loss": loss.item(), "step": i}
+                artifact = wandb.Artifact(
+                    name="denoiser_model_{local_run_id}", type="model",
+                    metadata=metadata
+                )
+                artifact.add_file(f"checkpoints/iddpm_{i}.ckpt", name=f"model.ckpt")
+                wandb.log_artifact(artifact)
 
         if i % sample_every == 0:
             with torch.no_grad():
