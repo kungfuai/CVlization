@@ -1,1 +1,0 @@
-Adapted from https://github.com/tqch/ddpm-torch/blob/master/train.py
