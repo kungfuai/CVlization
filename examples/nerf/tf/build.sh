@@ -1,0 +1,1 @@
+docker build -t nerf_tf examples/nerf/tf
