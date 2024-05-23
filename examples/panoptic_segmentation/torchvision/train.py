@@ -2,9 +2,7 @@ import logging
 
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.dataset.kitti_tiny import KittiTinyDatasetBuilder
-from cvlization.specs.prediction_tasks import ObjectDetection
-from cvlization.training_pipeline import TrainingPipeline
-from cvlization.lab.experiment import Experiment
+from cvlization.legacy_training_pipeline import LegacyTrainingPipeline as TrainingPipeline
 from cvlization.torch.training_pipeline.object_detection.torchvision.model import (
     TorchvisionDetectionModelFactory,
 )
@@ -21,14 +19,7 @@ class TrainingSession:
         dataset_builder = self.create_dataset()
         model = self.create_model()
         training_pipeline = self.create_training_pipeline(model)
-        Experiment(
-            # The interface (inputs and outputs) of the model.
-            prediction_task=ObjectDetection(n_categories=3),
-            # Dataset and transforms.
-            dataset_builder=dataset_builder,
-            # Training pipeline: model, trainer, optimizer.
-            training_pipeline=training_pipeline,
-        ).run()
+        training_pipeline.create_dataloaders(dataset_builder).create_trainer().run()
 
     def create_model(self):
         # Use TorchvisionDetectionModelFactory.list_models() to get a list of available models.
@@ -42,7 +33,9 @@ class TrainingSession:
 
     def create_dataset(self):
         # Use TorchvisionDatasetBuilder.list_datasets() to get a list of available datasets.
-        dataset_builder = KittiTinyDatasetBuilder()
+        dataset_builder = KittiTinyDatasetBuilder(
+            flavor="torchvision",
+        )
         return dataset_builder
 
     def create_training_pipeline(self, model):
