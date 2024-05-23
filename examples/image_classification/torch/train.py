@@ -1,12 +1,8 @@
 import logging
 
-from cvlization.specs.ml_framework import MLFramework
-from cvlization.specs import ModelSpec
 from cvlization.torch.data.torchvision_dataset_builder import TorchvisionDatasetBuilder
-from cvlization.specs.prediction_tasks import ImageClassification
-from cvlization.lab.experiment import Experiment
 from cvlization.torch.encoder.torch_image_backbone import image_backbone_names
-from cvlization.torch.training_pipeline.image_classification.pipeline import ImageClassificationTrainingPipeline
+from cvlization.torch.training_pipeline.image_classification.simple_pipeline import SimpleImageClassificationPipeline
 
 
 LOGGER = logging.getLogger(__name__)
@@ -18,7 +14,13 @@ class TrainingSession:
 
     def run(self):
         dataset_builder = TorchvisionDatasetBuilder(dataset_classname="CIFAR10")
-        ImageClassificationTrainingPipeline().fit(dataset_builder=dataset_builder)
+        SimpleImageClassificationPipeline(
+            config=SimpleImageClassificationPipeline.Config(
+                model_name=self.args.net,
+                num_classes=dataset_builder.num_classes,
+                # TODO: pass tracking args to the training pipeline
+            )
+        ).fit(dataset_builder=dataset_builder)
 
 
 if __name__ == "__main__":
