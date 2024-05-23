@@ -1,0 +1,1 @@
+docker build -t mmdet_is examples/instance_segmentation/mmdet
