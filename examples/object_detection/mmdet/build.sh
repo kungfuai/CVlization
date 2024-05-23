@@ -1,0 +1,1 @@
+docker build -t mmdet_od examples/object_detection/mmdet
