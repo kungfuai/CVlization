@@ -9,7 +9,10 @@ Output:
 ## Install dependencies
 
 ```
-pip install -r exmaples/image_gen/dreambooth/requirements.txt
+bash examples/image_gen/dreambooth/build.sh
+
+# Or, if you want to do it outside of docker
+# pip install -r exmaples/image_gen/dreambooth/requirements.txt
 ```
 
 ## Running the fine-tune job
@@ -17,7 +20,10 @@ pip install -r exmaples/image_gen/dreambooth/requirements.txt
 Fine tune on images (`instance_data.zip`):
 
 ```
-python -m examples.image_gen.dreambooth.train --save_sample_prompt "a happy sks cat"
+bash examples/image_gen/dreambooth/train.sh --max_train_steps 2000
+
+# Or, if you want to do it outside of docker:
+# python -m examples.image_gen.dreambooth.train --save_sample_prompt "a happy sks cat"
 ```
 
 - GPU requirement: at least 24GB VRAM.
