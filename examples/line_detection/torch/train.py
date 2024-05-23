@@ -4,8 +4,6 @@ from cvlization.torch.net.line_detection.model_factory import (
 )
 from cvlization.legacy_training_pipeline import LegacyTrainingPipeline
 from cvlization.specs.ml_framework import MLFramework
-# from cvlization.lab.experiment import Experiment
-# from cvlization.specs.prediction_tasks import LineDetection
 from cvlization.torch.net.line_detection.letr.util import collate_fn
 
 
@@ -21,14 +19,6 @@ class TrainingSession:
         training_pipeline.create_model().create_dataloaders(
             dataset_builder
         ).create_trainer().run()
-        # Experiment(
-        #     # The interface (inputs and outputs) of the model.
-        #     prediction_task=LineDetection(),
-        #     # Dataset and transforms.
-        #     dataset_builder=dataset_builder,
-        #     # Training pipeline: model, trainer, optimizer.
-        #     training_pipeline=training_pipeline,
-        # ).run()
 
     def create_model(self):
         return TorchLineDetectionModelFactory(net=self.args.net).run()
