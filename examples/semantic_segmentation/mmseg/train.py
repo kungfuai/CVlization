@@ -41,6 +41,8 @@ class TrainingSession:
         return model, cfg
 
     def create_dataset(self, config):
+        # Download dataset
+
         dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False)
         dataset_classname = MMDatasetAdaptor.adapt_and_register_detection_dataset(dsb)
         print("registered:", dataset_classname)
@@ -54,6 +56,15 @@ class TrainingSession:
             image_dir=dsb.img_folder,
             seg_dir=dsb.seg_folder,
         )
+
+        print("==============================")
+        print("Dataset info in config:")
+        print(config.data.train)
+        data_root = config.data.train["data_root"]
+        if not os.path.exists(data_root):
+            print("Downloading dataset...")
+            dsb.training_dataset().load_annotations()  # this will trigger download and extraction
+            dsb.validation_dataset().load_annotations()
 
         if hasattr(config.data.train, "dataset"):
             datasets = [
