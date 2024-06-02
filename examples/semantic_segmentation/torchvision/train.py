@@ -10,8 +10,7 @@ from cvlization.data.dataset_builder import TransformedMapStyleDataset
 from cvlization.transforms.image_augmentation_builder import ImageAugmentationBuilder
 from cvlization.transforms.example_transform import ExampleTransform
 from cvlization.specs.prediction_tasks.semantic_segmentation import SemanticSegmentation
-from cvlization.training_pipeline import TrainingPipeline
-from cvlization.lab.experiment import Experiment
+from cvlization.legacy_training_pipeline import LegacyTrainingPipeline
 from cvlization.dataset.stanford_background import StanfordBackgroundDatasetBuilder
 from cvlization.torch.net.semantic_segmentation.torchvision import (
     TorchvisionSemanticSegmentationModelFactory,
@@ -31,14 +30,15 @@ class TrainingSession:
         self.num_classes = self.get_num_classes_from_dataset()
         model = self.create_model()
         training_pipeline = self.create_training_pipeline(model)
-        Experiment(
-            # The interface (inputs and outputs) of the model.
-            prediction_task=self.prediction_task,
-            # Dataset and transforms.
-            dataset_builder=dataset_builder,
-            # Training pipeline: model, trainer, optimizer.
-            training_pipeline=training_pipeline,
-        ).run()
+        # Experiment(
+        #     # The interface (inputs and outputs) of the model.
+        #     prediction_task=self.prediction_task,
+        #     # Dataset and transforms.
+        #     dataset_builder=dataset_builder,
+        #     # Training pipeline: model, trainer, optimizer.
+        #     training_pipeline=training_pipeline,
+        # ).run()
+        training_pipeline.create_dataloaders(dataset_builder).create_trainer().run()
 
     def create_model(self):
         model = TorchvisionSemanticSegmentationModelFactory(
@@ -107,7 +107,7 @@ class TrainingSession:
         return DatasetBuilderWithTransform(dataset_builder)
 
     def create_training_pipeline(self, model):
-        training_pipeline = TrainingPipeline(
+        training_pipeline = LegacyTrainingPipeline(
             # Annotating the ml framework helps the training pipeline to use
             #   appropriate adapters for the dataset.
             ml_framework=MLFramework.PYTORCH,
