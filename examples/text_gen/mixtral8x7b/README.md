@@ -26,6 +26,12 @@ offload_per_layer = 0  # consumes 20.4 GB
 # offload_per_layer = 5  # consumes  GB
 ```
 
+## TODO
+
+Getting this warning. Maybe I need to do something about it:
+
+```hqq_aten package not installed. HQQBackend.ATEN backend will not work unless you install the hqq_aten lib in hqq/kernels.```
+
 ## Reference
 
 This is adapted from https://github.com/dvmazur/mixtral-offloading.
