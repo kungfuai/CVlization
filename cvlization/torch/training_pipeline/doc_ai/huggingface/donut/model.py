@@ -65,12 +65,17 @@ class DonutPLModule(pl.LightningModule):
             bad_words_ids=[[processor.tokenizer.unk_token_id]],
             return_dict_in_generate=True,
         )
+
+        if not hasattr(self, "validation_step_outputs"):
+            self.validation_step_outputs = []
         
         if self.task == DonutPredictionTask.CLASSIFICATION:
             scores = self._compute_classification_metrics(outputs, batch)
+            self.validation_step_outputs.extend(scores)
             return scores
         elif self.task == DonutPredictionTask.PARSE:
             scores = self._compute_parse_metrics(outputs, batch)
+            self.validation_step_outputs.extend(scores)
             return scores
         else:
             raise NotImplementedError(f"Task {self.task} is not implemented!")
@@ -115,7 +120,8 @@ class DonutPLModule(pl.LightningModule):
             scores.append(edit_distance(pred, answer) / max(len(pred), len(answer)))
         return scores
 
-    def validation_epoch_end(self, validation_step_outputs):
+    def on_validation_epoch_end(self):
+        validation_step_outputs = self.validation_step_outputs
         print(f"val_acc = {np.mean(validation_step_outputs)}  --------")
         self.log_dict({"val_acc": np.mean(validation_step_outputs)}, sync_dist=True)
 

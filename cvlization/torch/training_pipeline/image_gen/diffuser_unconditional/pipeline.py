@@ -58,7 +58,7 @@ class Trainer:
     num_update_steps_per_epoch: int = 1000
     prediction_type: str = "epsilon" # epsilon or sample
     eval_batch_size: int = 32
-    checkpointing_steps: int = 500
+    checkpointing_steps: int = 5000
     save_images_epochs: int = 1
     save_model_epochs: int = 5
     max_train_steps: Optional[int] = None

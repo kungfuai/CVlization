@@ -1,0 +1,1 @@
+docker build -t sam_is examples/instance_segmentation/sam

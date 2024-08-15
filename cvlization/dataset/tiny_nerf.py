@@ -15,7 +15,8 @@ class TinyNerfDatasetBuilder:
     to_torch_tensor: bool = False
     data_dir: str = "./data"
     download_url: str = (
-        "https://people.eecs.berkeley.edu/~bmild/nerf/tiny_nerf_data.npz"
+        # "https://people.eecs.berkeley.edu/~bmild/nerf/tiny_nerf_data.npz"
+        "http://cseweb.ucsd.edu/~viscomp/projects/LF/papers/ECCV20/nerf/tiny_nerf_data.npz"
     )
     preload: bool = False
     label_offset: int = 0
@@ -112,7 +113,7 @@ class TinyNerfDataset:
         assert self.download_url is not None, f"download_url is None"
         check_output("mkdir -p ./data".split())
         outfile = self.download_file_local_path
-        check_output(f"wget {self.download_url} -O {outfile}".split())
+        check_output(f"wget --no-check-certificate {self.download_url} -O {outfile}".split())
 
     @property
     def download_file_local_path(self):
@@ -125,6 +126,7 @@ class TinyNerfDataset:
     def load_annotations(self):
         if not self._is_downloaded():
             self.download()
+        print("Loading from", self.download_file_local_path)
         data = np.load(self.download_file_local_path)
         images = data["images"]
         if self.channels_first:

@@ -1,0 +1,1 @@
+docker build -t torchvision_ss examples/semantic_segmentation/torchvision
