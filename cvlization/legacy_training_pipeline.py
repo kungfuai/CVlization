@@ -6,7 +6,10 @@ from typing import List, Callable, Union
 from .specs.data_column import DataColumnType
 from .data.splitted_dataset import SplittedDataset
 from .data.dataset_builder import DatasetBuilder, DatasetProvider
-from .tensorflow.aggregator.keras_aggregator import KerasAggregator
+try:
+    from .tensorflow.aggregator.keras_aggregator import KerasAggregator
+except ImportError:
+    print("Could not import KerasAggregator.")
 from .specs import ModelSpec, MLFramework
 from .specs import ensure_dataset_shapes_and_types
 

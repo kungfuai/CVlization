@@ -29,9 +29,6 @@ class TrainingSession:
 
 
 if __name__ == "__main__":
-    """
-    python -m examples.object_detection.torchvision.train
-    """
 
     from argparse import ArgumentParser
 
@@ -42,11 +39,7 @@ if __name__ == "__main__":
             
             """
     )
-    parser.add_argument("--net", type=str, default="fcos_resnet50_fpn")
-    # Common options:
-    # net="fcos_resnet50_fpn"
-    # net="retinanet_resnet50_fpn",
-    # net="fasterrcnn_resnet50_fpn", and more
+    parser.add_argument("--net", type=str, default="donut")
     parser.add_argument("--track", action="store_true")
 
     args = parser.parse_args()

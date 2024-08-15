@@ -2,10 +2,8 @@ from cvlization.dataset.york_lines import YorkLinesDatasetBuilder
 from cvlization.torch.net.line_detection.model_factory import (
     TorchLineDetectionModelFactory,
 )
-from cvlization.training_pipeline import TrainingPipeline
+from cvlization.legacy_training_pipeline import LegacyTrainingPipeline
 from cvlization.specs.ml_framework import MLFramework
-from cvlization.lab.experiment import Experiment
-from cvlization.specs.prediction_tasks import LineDetection
 from cvlization.torch.net.line_detection.letr.util import collate_fn
 
 
@@ -18,14 +16,9 @@ class TrainingSession:
         self.model = self.create_model()
         dataset_builder = self.create_dataset()
         training_pipeline = self.create_training_pipeline(self.model)
-        Experiment(
-            # The interface (inputs and outputs) of the model.
-            prediction_task=LineDetection(),
-            # Dataset and transforms.
-            dataset_builder=dataset_builder,
-            # Training pipeline: model, trainer, optimizer.
-            training_pipeline=training_pipeline,
-        ).run()
+        training_pipeline.create_model().create_dataloaders(
+            dataset_builder
+        ).create_trainer().run()
 
     def create_model(self):
         return TorchLineDetectionModelFactory(net=self.args.net).run()
@@ -34,7 +27,7 @@ class TrainingSession:
         return self.dataset_builder_cls(flavor="torchvision")
 
     def create_training_pipeline(self, model):
-        training_pipeline = TrainingPipeline(
+        training_pipeline = LegacyTrainingPipeline(
             # Annotating the ml framework helps the training pipeline to use
             #   appropriate adapters for the dataset.
             ml_framework=MLFramework.PYTORCH,

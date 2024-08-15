@@ -3,7 +3,7 @@ from itertools import combinations
 import torch
 import numpy as np
 from pytorch_lightning.core.lightning import LightningModule
-from torchmetrics.detection.map import MeanAveragePrecision
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from scipy.ndimage import zoom
 from skimage.draw import line_aa
 
@@ -259,8 +259,8 @@ class LitDetector(LightningModule):
         lneg.sort(key=lambda l: -l[-1])
 
         junc = np.array(junc, dtype=np.float32)
-        Lpos = np.array(lnid, dtype=np.int)
-        Lneg = np.array([l[2:4] for l in lneg][:4000], dtype=np.int)
+        Lpos = np.array(lnid, dtype=np.int32)
+        Lneg = np.array([l[2:4] for l in lneg][:4000], dtype=np.int32)
         lpos = np.array(lpos, dtype=np.float32)
         lneg = np.array([l[:2] for l in lneg[:2000]], dtype=np.float32)
 

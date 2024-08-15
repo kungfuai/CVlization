@@ -1,3 +1,5 @@
+For containerized workflows, please refer to `../animate_diff_cog`.
+
 ### Install
 
 ```

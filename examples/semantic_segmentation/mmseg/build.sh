@@ -1,0 +1,1 @@
+docker build -t mmseg_ss examples/semantic_segmentation/mmseg

@@ -1,15 +1,12 @@
 # Adapted from https://github.com/bmild/nerf
 import logging
-import tensorflow as tf
 from tensorflow import keras
 
 from cvlization.tensorflow.net.nerf.tiny_nerf import TinyNerfModel
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.specs.prediction_tasks.nerf import Nerf
-from cvlization.training_pipeline import TrainingPipeline
-from cvlization.lab.experiment import Experiment
+from cvlization.legacy_training_pipeline import LegacyTrainingPipeline
 from cvlization.dataset.tiny_nerf import TinyNerfDatasetBuilder
-from cvlization.tensorflow.metrics.psnr import PSNR
 
 
 LOGGER = logging.getLogger(__name__)
@@ -27,7 +24,7 @@ class TrainingSession:
 
         model = self.create_model()
 
-        training_pipeline = TrainingPipeline(
+        training_pipeline = LegacyTrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
             prediction_task=prediction_task,
             model=model,
@@ -44,16 +41,13 @@ class TrainingSession:
             experiment_tracker=None,
         )
 
-        Experiment(
-            # The interface (inputs and outputs) of the model.
-            prediction_task=prediction_task,
-            # Dataset and transforms.
-            dataset_builder=TinyNerfDatasetBuilder(),
-            # Training pipeline: model, trainer, optimizer.
-            training_pipeline=training_pipeline,
-        ).run()
+        dataset_builder=TinyNerfDatasetBuilder()
+        training_pipeline.create_dataloaders(
+            dataset_builder
+        ).create_trainer().run()
 
     def create_model(self) -> keras.Model:
+        print("To create model...")
         model = TinyNerfModel()
         optimizer = keras.optimizers.Adam(5e-4)
         model.compile(
@@ -62,6 +56,8 @@ class TrainingSession:
             loss=keras.losses.MeanSquaredError(),
             run_eagerly=True,
         )
+        print(f"Model compiled successfully.")
+        # model.summary()
         return model
 
 

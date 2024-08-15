@@ -138,9 +138,9 @@ class KerasTrainer(BaseTrainer):
             initial_epoch=self.initial_epoch,
             steps_per_epoch=self.train_steps_per_epoch,
             validation_steps=self.val_steps_per_epoch,
-            workers=self.workers,
-            use_multiprocessing=self.use_multiprocessing,
-            max_queue_size=self.max_queue_size,
+            # workers=self.workers,
+            # use_multiprocessing=self.use_multiprocessing,
+            # max_queue_size=self.max_queue_size,
             callbacks=callbacks,
         )
 

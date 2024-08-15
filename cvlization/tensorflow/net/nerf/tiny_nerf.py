@@ -15,7 +15,7 @@ i_plot = 50
 
 
 class TinyNerfModel(tf.keras.Model):
-    def __init__(self, D=8, W=256, *args, **kwargs):
+    def __init__(self, D=4, W=256, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.run_eagerly = True
         self.coordinate_model = init_model(D, W)
@@ -57,9 +57,10 @@ class TinyNerfModel(tf.keras.Model):
             images = targets[0]
             pred_images = y_pred[0]
             # loss is expected to be MSE
-            loss = self.compiled_loss(
-                images, pred_images, regularization_losses=self.losses
-            )
+            loss = self.compute_loss(None, images, pred_images)
+            # loss = self.compiled_loss(
+            #     images, pred_images, regularization_losses=self.losses
+            # )
             gradients = tape.gradient(loss, self.coordinate_model.trainable_variables)
             self.optimizer.apply_gradients(
                 zip(gradients, self.coordinate_model.trainable_variables)
@@ -112,9 +113,11 @@ class TinyNerfModel(tf.keras.Model):
         return_metrics = {}
         LOGGER.debug(f"{len(self.metrics)} metrics")
         LOGGER.debug(self.metrics)
-        LOGGER.debug("compiled:", self.compiled_metrics.metrics)
+        LOGGER.debug("compiled:", self.compiled_metrics)
+        # self.metrics[0] is the mean loss.
+        compiled_metrics = self.metrics[1]
         for target_idx, metrics_for_this_target in enumerate(
-            self.compiled_metrics._user_metrics
+            compiled_metrics._user_metrics
         ):
             if not isinstance(metrics_for_this_target, list):
                 metrics_for_this_target = [metrics_for_this_target]
@@ -132,10 +135,15 @@ class TinyNerfModel(tf.keras.Model):
                     try:
                         metric.update_state(y[target_idx], y_pred[target_idx])
                     except Exception as e:
-                        LOGGER.error(f"Failed to update metric {metric}")
+                        LOGGER.error(f"Failed to update metric {metric}. Target idx: {target_idx}")
                         raise e
-        for metric in self.compiled_metrics.metrics:
-            result = metric.result()
+                    
+        for metric in compiled_metrics.metrics:
+            try:
+                result = metric.result()
+            except:
+                LOGGER.error(f"Failed to get result for metric {metric}")
+                # raise
             if isinstance(result, dict):
                 return_metrics.update(result)
             else:
@@ -158,16 +166,20 @@ embed_fn = posenc
 
 
 def init_model(D=8, W=256):
+    print(f"Initializing model. L_embed={L_embed}, D={D}, W={W}")
     relu = tf.keras.layers.ReLU()
     dense = lambda W=W, act=relu: tf.keras.layers.Dense(W, activation=act)
 
-    inputs = tf.keras.Input(shape=(3 + 3 * 2 * L_embed))
+    inputs = tf.keras.Input(shape=(3 + 3 * 2 * L_embed,))
     outputs = inputs
     for i in range(D):
         outputs = dense()(outputs)
         if i % 4 == 0 and i > 0:
             outputs = tf.concat([outputs, inputs], -1)
-    outputs = dense(4, act=None)(outputs)
+        print("outputs:", outputs)
+    final_dense = tf.keras.layers.Dense(4)
+    outputs = final_dense(outputs)
+    print("outputs:", outputs)
 
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
