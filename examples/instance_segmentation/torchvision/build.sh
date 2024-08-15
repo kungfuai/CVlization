@@ -1,0 +1,1 @@
+docker build -t torchvision_is examples/instance_segmentation/torchvision

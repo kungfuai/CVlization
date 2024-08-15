@@ -3,7 +3,14 @@ import re
 from tensorflow import keras
 from typing import List
 
-from ..net import convnext, swin_transformer, vit, simple_conv_net, resnet
+from ..net import convnext, simple_conv_net, resnet
+from ..net import swin_transformer
+try:
+    from ..net import vit
+except AttributeError:
+    vit = None
+    print("Warning: tf VIT models are not available.")
+
 
 LOGGER = logging.getLogger(__name__)
 

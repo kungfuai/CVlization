@@ -1,0 +1,1 @@
+docker build -t mmpose examples/pose_estimation/mmpose

@@ -130,7 +130,7 @@ class TrainingPipeline:
             # limit_train_batches=10,
             # limit_val_batches=10,
             gradient_clip_val=0.1,
-            logger=TensorBoardLogger("./", name=self.name),
+            logger=TensorBoardLogger("./logs", name=self.name),
             # logger=MLFlowLogger(experiment_name="MNIST_uva_energy"),
             callbacks=[
                 ModelCheckpoint(
