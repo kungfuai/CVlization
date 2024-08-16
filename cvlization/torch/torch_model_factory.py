@@ -100,18 +100,18 @@ class TorchModelFactory:
             # TODO: create metrics based on model_target.metric!
             if model_target.column_type == DataColumnType.BOOLEAN:
                 metrics_for_this_target = [
-                    (torchmetrics.AUROC, {"num_classes": None}),
-                    (torchmetrics.AveragePrecision, {}),
+                    (torchmetrics.AUROC, {"num_classes": None, "average": "macro", "task": "BINARY"}),
+                    (torchmetrics.AveragePrecision, {"task": "BINARY"}),
                 ]
             elif model_target.column_type == DataColumnType.CATEGORICAL:
                 metrics_for_this_target = [
                     (
                         torchmetrics.Accuracy,
-                        dict(num_classes=model_target.n_categories, average="macro"),
+                        dict(num_classes=model_target.n_categories, average="macro", task="MULTICLASS"),
                     ),
                     (
                         torchmetrics.AUROC,
-                        dict(num_classes=model_target.n_categories, average="macro"),
+                        dict(num_classes=model_target.n_categories, average="macro", task="MULTICLASS"),
                     ),
                     # (
                     #     torchmetrics.AveragePrecision,

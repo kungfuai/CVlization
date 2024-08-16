@@ -77,8 +77,8 @@ class TrainerUtils:
             limit_train_batches=limit_train_batches,
             limit_val_batches=limit_val_batches,
             default_root_dir=self.checkpoint_root_dir,
-            weights_save_path=weights_save_path,
-            checkpoint_callback=enable_checkpointing,
+            # weights_save_path=weights_save_path,
+            # checkpoint_callback=enable_checkpointing,
             enable_checkpointing=enable_checkpointing,
             logger=logger_for_experiment_tracking,
             # TODO: https://github.com/PyTorchLightning/pytorch-lightning/issues/6170

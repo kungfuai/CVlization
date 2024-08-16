@@ -62,3 +62,5 @@ services:
         BUILDKIT_INLINE_CACHE: 1
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - .:/workspace

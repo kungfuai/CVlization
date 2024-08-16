@@ -3,7 +3,8 @@ import logging
 from typing import List, Optional, Any
 import torch
 from torch import nn, optim
-from pytorch_lightning.core.lightning import LightningModule
+# from pytorch_lightning.core.lightning import LightningModule
+from pytorch_lightning import LightningModule
 from torchmetrics import Metric
 
 from ..specs import DataColumnType, ModelInput, ModelTarget
@@ -75,17 +76,21 @@ class TorchLitModel(LightningModule):
 
         self._metrics = {}
         for dataset_prefix in ["train_", "val_", "test_"]:
-            self._metrics[dataset_prefix] = nn.ModuleList(
-                [
-                    nn.ModuleList(
-                        [
-                            metric_class(**kwargs)
-                            for metric_class, kwargs in metrics_for_one_target
-                        ]
-                    )
-                    for metrics_for_one_target in self.config.metrics
-                ]
-            )
+            try:
+                self._metrics[dataset_prefix] = nn.ModuleList(
+                    [
+                        nn.ModuleList(
+                            [
+                                metric_class(**kwargs)
+                                for metric_class, kwargs in metrics_for_one_target
+                            ]
+                        )
+                        for metrics_for_one_target in self.config.metrics
+                    ]
+                )
+            except Exception as e:
+                # print the metrics
+                raise ValueError(f"Error: {e}. Metrics: {self.config.metrics}")
         self._metrics = nn.ModuleDict(self._metrics)
         # TODO: should the following creation of actual layers wait for the first forward pass?
         if isinstance(self.config.model, nn.Module):
