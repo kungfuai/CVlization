@@ -36,6 +36,7 @@ def test_mnist_multiclass(tmpdir):
     first_batch = train_ds[0]
     x, y, _ = first_batch
     assert x is not None
+    print("model targets:", train_data.model_targets)
     model = create_model(train_data.model_inputs, train_data.model_targets)
     trainer = TorchTrainer(
         model=model,
@@ -43,7 +44,7 @@ def test_mnist_multiclass(tmpdir):
         model_targets=train_data.model_targets,
         train_dataset=train_data,
         val_dataset=val_data,
-        train_steps_per_epoch=10,
+        train_steps_per_epoch=20,
         train_batch_size=16,
         epochs=3,
         log_dir=str(tmpdir.join("lightning_logs")),
@@ -51,8 +52,8 @@ def test_mnist_multiclass(tmpdir):
     )
     trainer.train()
     metrics = trainer.get_metrics()
-    assert "train_AUROC" in metrics
-    assert metrics["train_AUROC"] > 0.53
+    assert "train_BinaryAUROC" in metrics
+    assert metrics["train_BinaryAUROC"] > 0.53
     # assert metrics["train_Accuracy"] > 0.15
 
 

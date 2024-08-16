@@ -48,7 +48,7 @@ class TorchTrainer(BaseTrainer):
     precision: Optional[str] = "fp32"
 
     # ## Checkpoint directory
-    log_dir: str = os.getcwd()
+    log_dir: str = os.getcwd()  # TODO: this is not used.
 
     # ## Device
     device: Optional[torch.device] = (
@@ -96,11 +96,9 @@ class TorchTrainer(BaseTrainer):
         LOGGER.info(f"limit val batches: {limit_val_batches}")
 
         if not self.log_dir:
-            weights_save_path = None
             enable_checkpointing = False
             LOGGER.info("Disable checkpointing in pytorch-lightning.")
         else:
-            weights_save_path = self.log_dir
             enable_checkpointing = True
 
         logger_for_experiment_tracking = self._set_up_experiment_tracker()
@@ -127,8 +125,6 @@ class TorchTrainer(BaseTrainer):
             limit_train_batches=limit_train_batches,
             limit_val_batches=limit_val_batches,
             default_root_dir=self.checkpoint_root_dir,
-            weights_save_path=weights_save_path,
-            checkpoint_callback=enable_checkpointing,
             enable_checkpointing=enable_checkpointing,
             logger=logger_for_experiment_tracking,
             # TODO: https://github.com/PyTorchLightning/pytorch-lightning/issues/6170
