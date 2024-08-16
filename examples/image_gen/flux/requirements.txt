@@ -1,0 +1,9 @@
+torch==2.2
+torchvision
+diffusers==0.30.0
+transformers==4.43.3
+accelerate==0.33.0
+sentencepiece==0.2.0
+protobuf==5.27.3
+numpy==1.26.4
+pillow==10.4.0
