@@ -20,4 +20,4 @@
 #                   (P)passed with output
 #                   (a)all except (p) and (P)
 
-docker-compose run --rm ci python -m pytest -p no:warnings tests/
+docker compose run --rm ci python -m pytest -p no:warnings tests/  # tests/torch/test_torch_trainer.py
