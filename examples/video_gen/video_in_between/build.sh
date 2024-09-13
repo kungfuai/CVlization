@@ -1,0 +1,1 @@
+docker build -t video_in_between examples/video_gen/video_in_between
