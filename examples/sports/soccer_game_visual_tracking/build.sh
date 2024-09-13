@@ -1,0 +1,1 @@
+docker build -t soccer_game_visual_tracking examples/sports/soccer_game_visual_tracking
