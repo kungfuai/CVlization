@@ -28,7 +28,12 @@ class ViewTransformer:
 
         source = source.astype(np.float32)
         target = target.astype(np.float32)
-        self.m, _ = cv2.findHomography(source, target)
+        try:
+            self.m, _ = cv2.findHomography(source, target)
+        except cv2.error:
+            self.m = None
+            print(f"Error finding homography matrix for source: {source} and target: {target}")
+            raise
         if self.m is None:
             raise ValueError("Homography matrix could not be calculated.")
 
