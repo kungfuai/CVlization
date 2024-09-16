@@ -132,17 +132,30 @@ def resolve_goalkeepers_team_id(
 def render_radar(
     detections: sv.Detections,
     keypoints: sv.KeyPoints,
-    color_lookup: np.ndarray
+    color_lookup: np.ndarray,
+    frame_idx: int = None
 ) -> np.ndarray:
+    if len(keypoints.xy) == 0 or keypoints.xy[0].size == 0:
+        print(f"No keypoints found for frame {frame_idx}.")
+        return draw_pitch(config=CONFIG)
     mask = (keypoints.xy[0][:, 0] > 1) & (keypoints.xy[0][:, 1] > 1)
-    transformer = ViewTransformer(
-        source=keypoints.xy[0][mask].astype(np.float32),
-        target=np.array(CONFIG.vertices)[mask].astype(np.float32)
-    )
-    xy = detections.get_anchors_coordinates(anchor=sv.Position.BOTTOM_CENTER)
-    transformed_xy = transformer.transform_points(points=xy)
+    mask_is_empty = mask.sum() == 0
+    if not mask_is_empty:
+        try:
+            transformer = ViewTransformer(
+                source=keypoints.xy[0][mask].astype(np.float32),
+                target=np.array(CONFIG.vertices)[mask].astype(np.float32)
+            )
+            xy = detections.get_anchors_coordinates(anchor=sv.Position.BOTTOM_CENTER)
+            transformed_xy = transformer.transform_points(points=xy)
+        except cv2.error:
+            if frame_idx is not None:
+                print(f"Error transforming points for frame {frame_idx}.")
+            return draw_pitch(config=CONFIG)
 
     radar = draw_pitch(config=CONFIG)
+    if mask_is_empty:
+        return radar
     radar = draw_points_on_pitch(
         config=CONFIG, xy=transformed_xy[color_lookup == 0],
         face_color=sv.Color.from_hex(COLORS[0]), radius=20, pitch=radar)
@@ -344,7 +357,7 @@ def run_radar(source_video_path: str, device: str) -> Iterator[np.ndarray]:
 
     frame_generator = sv.get_video_frames_generator(source_path=source_video_path)
     tracker = sv.ByteTrack(minimum_consecutive_frames=3)
-    for frame in tqdm(frame_generator, desc='RADAR processing frames', total=frame_count):
+    for i_frame, frame in tqdm(enumerate(frame_generator), desc='RADAR processing frames', total=frame_count):
         result = pitch_detection_model(frame, verbose=False)[0]
         keypoints = sv.KeyPoints.from_ultralytics(result)
         result = player_detection_model(frame, imgsz=1280, verbose=False)[0]
@@ -377,7 +390,7 @@ def run_radar(source_video_path: str, device: str) -> Iterator[np.ndarray]:
             custom_color_lookup=color_lookup)
 
         h, w, _ = frame.shape
-        radar = render_radar(detections, keypoints, color_lookup)
+        radar = render_radar(detections, keypoints, color_lookup, frame_idx=i_frame)
         radar = sv.resize_image(radar, (w // 2, h // 2))
         radar_h, radar_w, _ = radar.shape
         rect = sv.Rect(
