@@ -2,7 +2,7 @@
 
 This example is adapted from this [Roboflow example](https://github.com/roboflow/sports/tree/main).
 
-First, download the pre-trained models and an example video:
+First, download the pre-trained models and an example video (`pip` install [gdown](https://pypi.org/project/gdown/) if you haven't already):
 
 ```
 cd examples/sports/soccer_game_visual_tracking
@@ -15,7 +15,7 @@ and install dependences as a docker image:
 
 ```
 cd <PROJECT ROOT DIRECTORY>
-bash examples/sports/soccer_game_visual_tracking
+bash examples/sports/soccer_game_visual_tracking/build.sh
 ```
 
 Then, run video tracking:
