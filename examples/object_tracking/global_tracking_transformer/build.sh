@@ -1,0 +1,1 @@
+docker build -t gtr examples/object_tracking/global_tracking_transformer
