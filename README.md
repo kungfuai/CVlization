@@ -1,146 +1,106 @@
-# Practical and sample-efficient training pipelines for vision, language and more modalities
+# CVlization: Practical and sample-efficient training pipelines for vision, language and more modalities
 
-Dedicated to training recipes without requiring huge amount of data or thousand-node A100/H100/H200 clusters.
+## Introduction
+
+CVlization provides ready-to-use, dockerized workflows for various computer vision and language tasks. Each example has frozen dependencies, ensuring reproducibility and ease of use.
+
+## Table of Contents
+
+- [Examples](#examples)
+- [Requirements](#requirements)
+- [Quickstart](#quickstart)
+- [Project Structure](#project-structure)
+- [Library (Legacy)](#library-legacy)
+- [Documentation](#documentation)
+- [License](#licenses)
+
+## Examples
+
+Our `examples/` directory contains a variety of computer vision and language processing tasks. Each example is self-contained with its own Dockerfile and dependencies.
+
+
+### Catalog of Examples
+
+| Task Type | Workflow | Example Directory | Implementations | Status |
+|-----------|----------|-------------------|-----------------|--------|
+| ![Image Classification](./doc/images/plant_classification.png) Image Classification | Training, Inference | [`examples/image_classification`](./examples/image_classification) | torch | ✅ |
+| ![Object Detection](./doc/images/object_detection.jpg) Object Detection | Training, Inference | [`examples/object_detection`](./doc/object_detection) | mmdet, torchvision | ✅ |
+| ![Semantic Segmentation](./doc/images/semantic_segmentation.png) Semantic Segmentation | Training, Inference | [`examples/semantic_segmentation`](./examples/semantic_segmentation) | mmseg, torchvision | ✅ |
+| ![Instance Segmentation](./doc/images/instance_segmentation.png) Instance Segmentation | Training, Inference | [`examples/instance_segmentation`](./examples/instance_segmentation) | mmdet, sam, seem, torchvision | ✅ |
+| ![Panoptic Segmentation](./doc/images/panoptic_segmentation.png) Panoptic Segmentation | Segmentation | [`examples/panoptic_segmentation`](./examples/panoptic_segmentation) | mmdet, torchvision | ✅ |
+| ![Pose Estimation](./doc/images/pose_estimation.jpeg) Pose Estimation | Training, Inference | [`examples/pose_estimation`](./examples/pose_estimation) | mmpose | ✅ |
+| ![Object Tracking](./doc/images/player_tracking.gif) Object Tracking | Inference | [`examples/object_tracking`](./examples/object_tracking) | global_tracking_transformer | ✅ |
+| ![Line Detection](./doc/images/line_detection.png) Line Detection | Detection | [`examples/line_detection`](./examples/line_detection) | torch | ✅ |
+| ![Image Generation](./doc/images/controlnet.png) Image Generation | Generation | [`examples/image_gen`](./examples/image_gen) | diffuser_unconditional, dit, dreambooth, flux, mdt, pixart, stable_diffusion, uva_energy, vqgan | ✅ |
+| ![Text Generation](./doc/images/llm.png) Text Generation | Generation | [`examples/text_gen`](./examples/text_gen) | mistral7b, mixtral8x7b, nanogpt, nanomamba | ✅ |
+| ![Video Generation](./doc/images/sora.gif) Video Generation | Generation | [`examples/video_gen`](./examples/video_gen) | animate_diff, animate_diff_cog, cogvideox, deforum, kandinsky, mamba, minisora, svd_cog, svd_comfy, video_in_between | ✅ |
+| ![3D: rendering and reconstruction](./doc/images/nerf.gif) 3D: rendering and reconstruction | Training, Inference | [`examples/nerf`](./examples/nerf) | tf | ✅ |
+| ![Document AI](./doc/images/layoutlm.png) Document AI | Processing | [`examples/doc_ai`](./examples/doc_ai) | huggingface | ✅ |
+| ![Sports Analysis](./doc/images/0bfacc_0-radar.gif) Sports Analysis | Various | [`examples/sports`](./examples/sports) | soccer_game_visual_tracking | ✅ |
+
+✅ = Fully tested and maintained
+
+Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. Each example may contain one or more implementations using different frameworks or models. For beginners, we recommend starting with the Image Classification example.
+
+### Running an Example
+
+To run an example:
+
+1. Navigate to the example directory
+2. Run the following command:
+   ```
+   ../../bin/run_example.sh
+   ```
 
 ## Requirements
 
-- Docker or `conda` with at least `python3.6`
+- Docker
+- NVIDIA GPU (for GPU-accelerated examples)
 
 ## Quickstart
 
 ### Use CVlization on Colab
 [Colab notebook: running experiments on cifar10](https://colab.research.google.com/drive/1FkZcZnJC_z-PuFSYM91kU1-d63-LecMJ?usp=sharing)
 
-### Use CVlization without docker
+### Use CVlization with Docker
 
-`pip install -r requirements.txt` (some additional packages may need to be installed depending on which model is being used) and run `bin/train_no_docker.sh`. This will start a default training job to produce an image classification model.
+1. Build the Docker image:
+   ```
+   bin/build.sh
+   ```
 
-To explore more model training options, use example training scripts in the `examples/` folder. For example,
+2. Run an experiment:
+   ```
+   bin/train.sh
+   ```
 
-```
-python -m examples.instance_segmentation.mmdet.train --help
-```
+This will run a default experiment on CIFAR10.
 
-is an example script to run instance segmentation model training using [`MMDetection`](https://github.com/open-mmlab/mmdetection).
-
-### Use CVlization in docker
-```
-bin/build.sh
-```
-
-Then,
-
-```
-bin/train.sh
-```
-
-to run an experiment on CIFAR10.
-
-To run unit tests, use:
-```
-bin/test.sh
-```
-
-to use GPU on Ubuntu, you may need to install `nvidia-container-toolkit`.
+For GPU support on Ubuntu, you may need to install `nvidia-container-toolkit`:
 ```
 sudo apt-get install -y nvidia-container-toolkit
 ```
 
-## Using the library in a project
+## Project Structure
 
-Copy `cvlization` directory as a python module to your project.
+- `examples/`: Contains various computer vision and language processing examples
+- `bin/`: Shell scripts for building, running, and testing
+- `cvlization/`: The core library (legacy)
+- `data/`: Sample datasets
+- `doc/`: Project documentation
+- `tests/`: Unit and integration tests
 
-## When to use this library
+## Library (Legacy)
 
-### Exploring new model architectures, loss functions, optimizers, image augmentations
+The `cvlization` library in this repository was the initial focus but may not be actively maintained due to the rapidly changing landscape of dependencies. Users are encouraged to refer to the `examples/` for up-to-date, working implementations.
 
-In a project with many moving parts and lots of data, running experiments can be very time consuming and prone to errors.
+## Documentation
 
-When testing out a new model architecture or optimizer, do a "lab train" first. And this library is aiming to make it easy. Typically a custom model architecture is based on a commonly used base model (e.g ResNet, ViT). Do the customization on top of the base model, pick a public dataset (available in this library, e.g. CIFAR10) that is similar to your target domain, run a lab train with:
+Detailed documentation can be found in the `doc/` directory:
 
-```
-bin/train.sh
-# or python -m cvlization.lab.experiment
-```
-
-This experiment can take minutes or hours to finish (depending on the hardware, model architecture and optimizer), and its metrics will give you a good idea of whether the direction is worth pursuing.
-
-Here is an example training pipeline:
-
-```
-TrainingPipeline(
-    framework=MLFramework.TENSORFLOW,
-    config=TrainingPipelineConfig(
-        image_backbone="resnet18v2_smallimage",
-        input_shape=[32, 32, 3],
-        image_pool="flatten",
-        epochs=100,
-        train_batch_size=256,
-        val_batch_size=256,
-        train_steps_per_epoch=200,
-        optimizer_name="Adam",
-        lr=0.01,
-        n_gradients=1,
-        dropout=0,
-        experiment_tracker="wandb",
-    ),
-)
-```
-
-The list of available image backbones can be found by `cvlization.keras.image_backbone_names()` and `cvlization.torch.image_backbone_names()` for keras and torch models respectively.
-
-If you like to use your own image backbone, in tensorflow / keras, you can implement a python model function (e.g. `lambda x: keras.layers.Dense(10)`), a `keras.Layer` or a `keras.Model`. In torch, you can implement a `nn.Module`. Then pass that as the `image_backbone` argument.
-
-
-### Develop multi-task models or using multi-modal inputs
-
-The declarative pattern of the library is to make it easy to build multi-task models. The model's flow can be described as the following pseudo-code:
-
-
-```
-encoded = [encoder(input_tensor) for input_tensor in inputs]
-aggregated = aggregate(encoded)
-outputs = [head(aggregated) for head in heads]
-```
-
-Encoders, aggregators and heads are all components of the model (they can also be models themselves, e.g. `nn.Module`, `keras.Model`). When you need to change what additional inputs the model receives, or what additional targets the model should predict, you can delare this in a configuration, and the library handles model creation and dataset preparation based on your configuration. This can save lots of manual code changes that are error prone.
-
-Encoders are concerned with extracting features from specific inputs. For example, an image encoder knows how to extract features (e.g. pooled vector, feature pyramids) from an image.
-
-Aggregators are concerned with fusing different types of inputs. For example, if the inputs include multiple images or both images and categorical variables, the aggregator knows how to combine them. The logic to combine them can be use case specific. It can be a simple concatenation (with optional broadcasting), attention layers. It can also be customized to combine certain inputs first, and combine other inputs later.
-
-Heads are concered with model targets and loss functions.
-
-To customize the model, you can replace any encoder, aggregator or head with a python function, or `nn.Module` or `keras.Layer/Model` that takes in input tensors and returns output tensors.
-
-### Train models with confidence
-
-The training pipeline in the library does a series of automated quality checks and logs intermediate results for visual inspection:
-
-- It checks the model can be serialized and deserialized, saved and loaded.
-- It logs input images after image augmentation, right before the batch enters the training loop.
-
-### Structure of this project
-
-The following python sub-modules are included:
-
-- `specs`: This module contains data classes and enums that specifies of 
-the model, metrics, loss functions, optimizers. It is declarative and does
-not concern itself with the actual implementation. It is agnostic to the deep learning frameworks.
-The right level of abstraction can be hard to find. It strives to be small enough to not micro-manage how modeling should be done, 
-but not too small such that customization options are too limited.
-- `keras`: This module contains the implementation of layers, models, optimizers, losses, metrics, training loops in keras.
-- `torch`: This module contains the implementation of layers, models, optimizers, losses, metrics, training loops in torch.
-- `lab`: This module contains utilities to make it easy to run and track experiments with the help of popular tools like `ray`, `mlflow`.
-
-
-## Why did we create this repo?
-
-This repo serves 3 purposes:
-
-1. Make it easier to customize and operate computer vision and language model training pipelines for practical applications.
-2. Provide common quality check and diagnostic tools for the model training workflow.
-3. Make it easier to vet new computer vision and language modeling research, by providing consistent interface for benchmark datasets, and by having a consistent interface for training scripts in many research repos.
+- [Computer vision model training workflow and quality checks](./doc/Computer%20vision%20model%20training%20workflow%20and%20quality%20checks.pdf)
+- [Multi-task multi-input models: a common pattern](./doc/Multi-task%20multi-input%20models_%20a%20common%20pattern.pdf)
+- [Reusable model components](./doc/reusable_model_components.md)
 
 ## Licenses
 
