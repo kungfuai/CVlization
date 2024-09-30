@@ -59,10 +59,24 @@ def sample_by_denoising(model, x_T, β_schedule, T):
     Use the trained model to denoise and reconstruct data.
     """
     x_t = x_T
+    n_sample = x_T.shape[0]
+    size = x_T.shape[1:]
+
     for t in range(T - 1, 0, -1):
+        z = torch.randn(n_sample, *size).to(x_T.device) if t > 1 else 0
         t_tensor = torch.tensor([t]).float().to(x_T.device)
         predicted_noise = reverse_process(model, x_t, t_tensor)
-        x_t = (x_t - torch.sqrt(β_schedule[t]) * predicted_noise) / torch.sqrt(1 - β_schedule[t])
+        
+        # x_i = (
+        #     self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
+        #     + self.sqrt_beta_t[i] * z
+        # )
+        # Forward diffusion: x_t = torch.sqrt(1 - β_t) * x_0 + torch.sqrt(β_t) * noise
+        # Reverse diffusion: x_0 = (x_t - torch.sqrt(β_t) * noise) / torch.sqrt(1 - β_t)
+        x_t = (x_t - torch.sqrt(β_schedule[t]) * predicted_noise) / torch.sqrt(1 - β_schedule[t]) + torch.sqrt(β_schedule[t]) * z
+        # Langevin dynamics
+        # x_t = x_t - 0.5 * (1 / torch.sqrt(1 - β_schedule[t])) * predicted_noise - 0.5 * torch.sqrt(β_schedule[t]) * z
+
     return x_t  # Return reconstructed data
 
 
@@ -169,10 +183,10 @@ class DenoisingModel(nn.Module):
 def main():
     # Hyperparameters
     T = 1000
-    num_train_steps = 1000
+    num_train_steps = 80000
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     log_every = 20
-    sample_every = 100
+    sample_every = 500
 
     # load cifar10 dataset
     transform = transforms.Compose([
