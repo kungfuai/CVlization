@@ -1,4 +1,6 @@
 """
+train 1, plus a simple UNet
+
 Main components:
 
 1. Forward Diffusion Process: Adds progressively more Gaussian noise to the data.

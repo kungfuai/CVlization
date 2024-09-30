@@ -1,5 +1,7 @@
 """
 
+Simple DDPM noise schedule, a simple convnet as the denoising model.
+
 ## Main components
 
 1. Forward Diffusion Process:
