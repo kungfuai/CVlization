@@ -2,7 +2,7 @@
 Main components:
 
 1. Forward Diffusion Process: Adds progressively more Gaussian noise to the data.
-2. Reverse Process: A neural network predicts and removes noise step by step.
+2. Reverse Process: A transformer-based model predicts and removes noise step by step.
 3. Loss Function: Minimizes the difference between actual and predicted noise.
 4. Noise Schedule: Defines how much noise to add at each timestep.
 """
@@ -16,9 +16,8 @@ from torchvision.datasets import CIFAR10
 from torch.utils.data import DataLoader
 from torch.nn import MSELoss
 from torchvision.utils import save_image, make_grid
-from tqdm import tqdm
 
-from .unet import NaiveUnet
+from .transformer import DiT_S_2  # Import the DiT model
 from .ddpm import ddpm_schedules
 
 
@@ -37,7 +36,7 @@ def sample_by_denoising(denoising_model, x_T, noise_schedule, n_T, device):
     for i in range(n_T, 0, -1):
         z = torch.randn_like(x_i) if i > 1 else 0
         t = torch.full((x_i.shape[0],), i / n_T, device=device)
-        predicted_noise = denoising_model(x_i, t)
+        predicted_noise = denoising_model(x_i, t, None)[:, :3]  # Use only the first 3 channels
         x_i = (
             noise_schedule["oneover_sqrta"][i] * (x_i - predicted_noise * noise_schedule["mab_over_sqrtmab"][i])
             + noise_schedule["sqrt_beta_t"][i] * z
@@ -53,17 +52,18 @@ def train_loop(denoising_model, dataloader, optimizer, noise_schedule, n_T, tota
     step = 0
     
     while step < total_steps:
-        for x, _ in dataloader:
+        for x, y in dataloader:
             if step >= total_steps:
                 break
             
             optimizer.zero_grad()
             x = x.to(device)
+            y = y.to(device)
             
             t = torch.randint(1, n_T + 1, (x.shape[0],)).to(device)
             x_t, true_noise = forward_diffusion(x, t, noise_schedule)
             
-            predicted_noise = denoising_model(x_t, t / n_T)
+            predicted_noise = denoising_model(x_t, t / n_T, y)[:, :3]  # Use only the first 3 channels
             loss = criterion(predicted_noise, true_noise)
             
             loss.backward()
@@ -82,11 +82,12 @@ def train_loop(denoising_model, dataloader, optimizer, noise_schedule, n_T, tota
                 with torch.no_grad():
                     n_sample = 8
                     x_T = torch.randn(n_sample, 3, 32, 32).to(device)
+                    y_sample = torch.randint(0, 10, (n_sample,)).to(device)
                     sampled_images = sample_by_denoising(denoising_model, x_T, noise_schedule, n_T, device)
                     
                     xset = torch.cat([sampled_images, x[:n_sample]], dim=0)
                     grid = make_grid(xset, normalize=True, value_range=(-1, 1), nrow=4)
-                    img_output_dir = Path("data/image_gen/nano_diffusion/train2")
+                    img_output_dir = Path("data/image_gen/nano_diffusion/train3")
                     img_output_dir.mkdir(parents=True, exist_ok=True)
                     save_image(grid, img_output_dir / f"ddpm_sample_cifar_step{step+1}.png")
                 denoising_model.train()
@@ -97,7 +98,7 @@ def train_loop(denoising_model, dataloader, optimizer, noise_schedule, n_T, tota
 def main():
     # Hyperparameters
     n_T = 1000
-    total_steps = 100000  # Replace num_epochs with total_steps
+    total_steps = 100000
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     log_every = 20
     sample_every = 500
@@ -108,13 +109,19 @@ def main():
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
     dataset = CIFAR10(root='./data', train=True, download=True, transform=transform)
-    dataloader = DataLoader(dataset, batch_size=512, shuffle=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=4)
 
-    # Define the denoising model (NaiveUnet)
-    denoising_model = NaiveUnet(in_channels=3, out_channels=3, n_feat=128).to(device)
+    # Define the denoising model (DiT)
+    denoising_model = DiT_S_2(
+        input_size=32,
+        patch_size=2,
+        in_channels=3,
+        num_classes=10,
+        learn_sigma=True
+    ).to(device)
     
     # Define the optimizer
-    optimizer = optim.Adam(denoising_model.parameters(), lr=1e-5)
+    optimizer = optim.AdamW(denoising_model.parameters(), lr=1e-4, weight_decay=0.05)
 
     # Define the noise schedule
     noise_schedule = ddpm_schedules(1e-4, 0.02, n_T)
