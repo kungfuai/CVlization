@@ -497,7 +497,15 @@ class TrainingPipeline:
             ]
         )
         def transform_images(examples):
-            images = [augmentations(image.convert("RGB")) for image in examples["image"]]
+            if isinstance(examples, dict):
+                if "image" in examples:
+                    images = [augmentations(image.convert("RGB")) for image in examples["image"]]
+                elif "img" in examples:
+                    images = [augmentations(image.convert("RGB")) for image in examples["img"]]
+                else:
+                    raise ValueError("No image key found in the dataset. Got keys: {}".format(examples.keys()))
+            else:
+                images = [augmentations(image.convert("RGB")) for image in examples]
             return {"input": images}
     
         dataset.set_transform(transform_images)
