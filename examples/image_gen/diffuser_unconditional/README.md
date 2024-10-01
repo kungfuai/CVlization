@@ -15,6 +15,12 @@ If you like to run on a different dataset, such as cifar10, you can do:
 bash examples/image_gen/diffuser_unconditional/train.sh --dataset_name uoft-cs/cifar10 --resolution 32
 ```
 
+And if you want to log the training to wandb, you can do:
+
+```
+bash examples/image_gen/diffuser_unconditional/train.sh --logger wandb
+```
+
 ## TODO
 
 - calculate FID
