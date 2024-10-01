@@ -380,7 +380,7 @@ class TrainingPipeline:
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers initializes automatically on the main process.
         if accelerator.is_main_process:
-            run = os.path.split(__file__)[-1].split(".")[0]
+            run = "Diffuser Unconditional"
             accelerator.init_trackers(run)
         
         
