@@ -31,6 +31,7 @@ from diffusers.optimization import get_scheduler
 from diffusers.training_utils import EMAModel
 from diffusers.utils import check_min_version, is_accelerate_version, is_tensorboard_available, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
+from cvlization.torch.training_pipeline.dit.dit import DiT
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -134,7 +135,9 @@ class Trainer:
 
                 with accelerator.accumulate(model):
                     # Predict the noise residual
-                    model_output = model(noisy_images, timesteps).sample
+                    model_output = model(noisy_images, timesteps)
+                    if hasattr(model_output, "sample"):
+                        model_output = model_output.sample
 
                     if self.prediction_type == "epsilon":
                         loss = F.mse_loss(model_output, noise)  # this could have different weights!
@@ -332,7 +335,8 @@ class TrainingPipeline:
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             mixed_precision=args.mixed_precision,
             log_with=args.logger,
-            logging_dir=self._logging_dir,
+            # logging_dir=self._logging_dir,
+            project_dir=self._logging_dir,
             project_config=accelerator_project_config,
         )
         self._accelerator = accelerator
@@ -396,7 +400,7 @@ class TrainingPipeline:
             inv_gamma=args.ema_inv_gamma,
             power=args.ema_power,
             model_cls=UNet2DModel,
-            model_config=model.config,
+            model_config=model.config if hasattr(model, "config") else None,
         )
         self.ema_model = ema_model
         return ema_model
@@ -441,6 +445,25 @@ class TrainingPipeline:
                     "UpBlock2D",
                     "UpBlock2D",
                 ),
+            )
+        elif args.model_config_name_or_path == "dit_t0":
+            model = DiT(
+                input_size=32,
+                patch_size=2,
+                in_channels=3,
+                learn_sigma=True,
+                hidden_size=32,
+                mlp_ratio=2,
+                depth=3,
+                num_heads=1,
+                class_dropout_prob=0.1,
+            )
+        elif args.model_config_name_or_path == "dit_s_2":
+            model = DiT(
+                depth=12,
+                hidden_size=384,
+                patch_size=2,
+                num_heads=6,
             )
         else:
             config = UNet2DModel.load_config(args.model_config_name_or_path)
