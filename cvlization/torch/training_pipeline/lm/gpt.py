@@ -264,7 +264,7 @@ class NanoGPTTrainingPipeline:
 
     def get_batch_sparse(self, split: str):
         """
-        Get a batch of data for training or validation.
+        Get a batch of data for training or validation. (Not used)
 
         Args:
             split (str): The split to get the data from. Can be either "train" or "val".

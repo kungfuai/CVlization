@@ -203,13 +203,14 @@ class FlyingMNISTDataset:
         frames = []
         np.random.seed(idx + self.seed_offset)
         self.flying_mnist.init_env(idx)
+        # print(f"Digits: {self.flying_mnist.digit_labels}")
         for i in range(self.max_frames_per_video):
             frame = self.flying_mnist.generate_img()
             self.flying_mnist.update_coords()
             frame = np.array(frame)
             # print(f"Frame shape: {frame.shape}")
             frames.append(frame)
-        return dict(video=np.array(frames))
+        return dict(video=np.array(frames), digit_labels=self.flying_mnist.digit_labels)
 
     def __len__(self):
         if not self.to_generate and hasattr(self, "_clips"):
@@ -772,16 +773,23 @@ def prepare_parser():
     return parser
 
 
-def save_dataset_to_folder(ds, folder: str = "data/flying_mnist/train"):
+def save_dataset_to_folder(ds, folder: str = "data/flying_mnist/train", save_labels_only=False):
     import os
 
     os.makedirs(folder, exist_ok=True)
     print(f"Length of the dataset: {len(ds)}")
     # Saving to a folder: data/flying_mnist/train
+    all_digit_labels = []
     for j, v in tqdm(enumerate(ds), total=len(ds)):
         # print(f"video: {v.shape}")
         if isinstance(v, dict):
-            v = v["video"]
+            item = v
+            v = item["video"]
+            labels = item.get("digit_labels")
+            all_digit_labels.append(labels.ravel().tolist())
+        if save_labels_only:
+            continue
+        raise ValueError("Not implemented")
         frames = [f for f in v]
         # save to mp4
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -794,13 +802,21 @@ def save_dataset_to_folder(ds, folder: str = "data/flying_mnist/train"):
         video.release()
         # print(f"Saved video: {folder}/{j:05d}.mp4")
 
+    if all_digit_labels:
+        import json
+        json.dump(all_digit_labels, open(f"{folder}/digit_labels.json", "w"))
 
 def convert_to_images(ds, output_dir):
     from pathlib import Path
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     for j, example in tqdm(enumerate(ds)):
         video = example["video"]  # [3, 100, 64, 64]
-        video = video.permute(1, 2, 3, 0).cpu().numpy()  # [100, 64, 64, 3]
+        if isinstance(video, torch.Tensor):
+            video = video.permute(1, 2, 3, 0).cpu().numpy()  # [100, 64, 64, 3]
+        elif isinstance(video, np.ndarray):
+            assert video.shape[3] == 3, f"Expected 3 channels, got {video.shape}"
+        else:
+            raise ValueError(f"Unknown type: {type(video)}")
         # print(video.shape)
         # import sys; sys.exit(0)
         video = video[:10]
@@ -865,7 +881,7 @@ class FlyingMNISTImageLatents:
     
 
 if __name__ == "__main__":
-    # db = FlyingMNISTDatasetBuilder(None, to_generate=False, resolution=256)
+    # db = FlyingMNISTDatasetBuilder(None, to_generate=True, resolution=256, max_videos=1)
     # convert_to_images(db.training_dataset(), output_dir="data/flying_mnist_images/train")
     # import sys; sys.exit(0)
 
@@ -879,7 +895,7 @@ if __name__ == "__main__":
     train_ds = db.training_dataset()
     # Saving to a folder: data/flying_mnist/train
     if train_ds.from_dir is None:
-        save_dataset_to_folder(train_ds, folder=f"data/{ds_name}/train")
+        save_dataset_to_folder(train_ds, folder=f"data/{ds_name}/train", save_labels_only=True)
     else:
         for x in train_ds:
             print(
@@ -908,7 +924,7 @@ if __name__ == "__main__":
     val_ds = db.validation_dataset()
     # Saving to a folder: data/flying_mnist/val
     if val_ds.from_dir is None:
-        save_dataset_to_folder(val_ds, folder=f"data/{ds_name}/val")
+        save_dataset_to_folder(val_ds, folder=f"data/{ds_name}/val", save_labels_only=True)
     else:
         for x in val_ds:
             print(
