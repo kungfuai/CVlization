@@ -451,7 +451,7 @@ class TrainingPipeline:
                 input_size=32,
                 patch_size=2,
                 in_channels=3,
-                learn_sigma=True,
+                learn_sigma=False,
                 hidden_size=32,
                 mlp_ratio=2,
                 depth=3,
@@ -464,6 +464,7 @@ class TrainingPipeline:
                 hidden_size=384,
                 patch_size=2,
                 num_heads=6,
+                learn_sigma=False,
             )
         else:
             config = UNet2DModel.load_config(args.model_config_name_or_path)
