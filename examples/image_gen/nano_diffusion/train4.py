@@ -19,9 +19,12 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
+import wandb
+from torchvision.utils import make_grid
 
 from .data_utils import get_metadata, get_dataset, fix_legacy_dict
 from . import unets
+
 
 unsqueeze3x = lambda x: x[..., None, None, None]
 
@@ -203,6 +206,7 @@ def train_one_epoch(
     args,
 ):
     model.train()
+    total_loss = 0
     for step, (images, labels) in enumerate(dataloader):
         assert (images.max().item() <= 1) and (0 <= images.min().item())
 
@@ -224,6 +228,16 @@ def train_one_epoch(
         if lrs is not None:
             lrs.step()
 
+        total_loss += loss.item()
+
+        # Log metrics every 100 steps
+        if args.local_rank == 0 and step % 100 == 0:
+            wandb.log({
+                "train_loss": loss.item(),
+                "learning_rate": optimizer.param_groups[0]['lr'],
+                "step": step + len(dataloader) * logger.epoch,
+            })
+
         # update ema_dict
         if args.local_rank == 0:
             new_dict = model.state_dict()
@@ -232,6 +246,8 @@ def train_one_epoch(
                     args.ema_w * args.ema_dict[k] + (1 - args.ema_w) * new_dict[k]
                 )
             logger.log(loss.item(), display=not step % 100)
+
+    return total_loss / len(dataloader)
 
 
 def sample_N_images(
@@ -263,6 +279,9 @@ def sample_N_images(
 
     Returns: Numpy array with N images and corresponding labels.
     """
+    # Freeze random seed
+    torch.manual_seed(args.seed + args.local_rank)
+    np.random.seed(args.seed + args.local_rank)
     samples, labels, num_samples = [], [], 0
     try:
         num_processes, group = dist.get_world_size(), dist.group.WORLD
@@ -362,6 +381,9 @@ def main():
     parser.add_argument("--local_rank", default=0, type=int)
     parser.add_argument("--seed", default=112233, type=int)
 
+    # Add checkpoint saving arguments
+    parser.add_argument("--save-freq", type=int, default=10, help="Save checkpoint every n epochs")
+
     # setup
     args = parser.parse_args()
     metadata = get_metadata(args.dataset)
@@ -375,6 +397,11 @@ def main():
     
     # create save dir
     os.makedirs(args.save_dir, exist_ok=True)
+
+    # Initialize wandb
+    if args.local_rank == 0:
+        project = os.environ.get("WANDB_PROJECT", "Diffuser Unconditional")
+        wandb.init(project=project, config=args)
 
     # Creat model and diffusion process
     model = unets.__dict__[args.arch](
@@ -466,14 +493,58 @@ def main():
     # ema model
     args.ema_dict = copy.deepcopy(model.state_dict())
 
+    best_loss = float('inf')
+    best_model_path = os.path.join(args.save_dir, 'best_model.pt')
+    
     # lets start training the model
     for epoch in range(args.epochs):
         if sampler is not None:
             sampler.set_epoch(epoch)
-        train_one_epoch(model, train_loader, diffusion, optimizer, logger, None, args)
+        
+        logger.epoch = epoch  # Add this line to keep track of the current epoch
+        avg_loss = train_one_epoch(model, train_loader, diffusion, optimizer, logger, None, args)
+        
+        if args.local_rank == 0:
+            wandb.log({
+                "epoch": epoch,
+                "avg_train_loss": avg_loss,
+            })
+
+            # Save checkpoint
+            if (epoch + 1) % args.save_freq == 0 or epoch == args.epochs - 1:
+                checkpoint = {
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': avg_loss,
+                }
+                checkpoint_path = os.path.join(args.save_dir, f'checkpoint_epoch_{epoch}.pt')
+                torch.save(checkpoint, checkpoint_path)
+                
+                # Log checkpoint to wandb
+                artifact = wandb.Artifact(f'model-checkpoint-epoch-{epoch}', type='model')
+                artifact.add_file(checkpoint_path)
+                wandb.log_artifact(artifact)
+                
+                print(f"Checkpoint saved for epoch {epoch}")
+
+                # Save best model
+                if avg_loss < best_loss:
+                    best_loss = avg_loss
+                    # only save when epoch is larger than 0
+                    if epoch > 0:
+                        torch.save(model.state_dict(), best_model_path)
+                        
+                        # Log best model to wandb
+                        artifact = wandb.Artifact('best_model', type='model')
+                        artifact.add_file(best_model_path)
+                        wandb.log_artifact(artifact)
+                        
+                        print(f"New best model saved with loss: {best_loss}")
+
         if not epoch % 1:
             sampled_images, _ = sample_N_images(
-                64,
+                16,
                 model,
                 diffusion,
                 None,
@@ -485,6 +556,7 @@ def main():
                 args,
             )
             if args.local_rank == 0:
+                # Save image locally
                 cv2.imwrite(
                     os.path.join(
                         args.save_dir,
@@ -492,22 +564,17 @@ def main():
                     ),
                     np.concatenate(sampled_images, axis=1)[:, :, ::-1],
                 )
-        if args.local_rank == 0:
-            pass
-            # torch.save(
-            #     model.state_dict(),
-            #     os.path.join(
-            #         args.save_dir,
-            #         f"{args.arch}_{args.dataset}-epoch_{args.epochs}-timesteps_{args.diffusion_steps}-class_condn_{args.class_cond}.pt",
-            #     ),
-            # )
-            # torch.save(
-            #     args.ema_dict,
-            #     os.path.join(
-            #         args.save_dir,
-            #         f"{args.arch}_{args.dataset}-epoch_{args.epochs}-timesteps_{args.diffusion_steps}-class_condn_{args.class_cond}_ema_{args.ema_w}.pt",
-            #     ),
-            # )
+
+                # Convert NumPy array to PyTorch tensor
+                images_processed = sampled_images.round().astype(np.uint8)
+                # Log images to wandb
+                wandb.log(
+                    {"test_samples": [wandb.Image(img) for img in images_processed], "epoch": epoch},
+                )
+
+    # Close wandb run
+    if args.local_rank == 0:
+        wandb.finish()
 
 
 if __name__ == "__main__":
