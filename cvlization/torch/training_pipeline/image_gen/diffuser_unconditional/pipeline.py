@@ -525,6 +525,52 @@ class TrainingPipeline:
                 num_heads=6,
                 learn_sigma=False,
             )
+        elif args.model_config_name_or_path == "dit_s_4":
+            model = DiT(
+                depth=12,
+                in_channels=3,
+                hidden_size=384,
+                patch_size=4,
+                num_heads=6,
+                learn_sigma=False,
+            )
+        elif args.model_config_name_or_path == "dit_b_2":
+            model = DiT(
+                depth=12,
+                in_channels=3,
+                hidden_size=768,
+                patch_size=2,
+                num_heads=12,
+                learn_sigma=False,
+            )
+        elif args.model_config_name_or_path == "dit_b_4":
+            model = DiT(
+                depth=12,
+                in_channels=3,
+                hidden_size=768,
+                patch_size=4,
+                num_heads=12,
+                learn_sigma=False,
+            )
+        elif args.model_config_name_or_path == "dit_l_2":
+            model = DiT(
+                depth=24,
+                in_channels=3,
+                hidden_size=1024,
+                patch_size=2,
+                num_heads=16,
+                learn_sigma=False,
+            )
+        elif args.model_config_name_or_path == "dit_l_4":
+            model = DiT(
+                depth=24,
+                in_channels=3,
+                hidden_size=1024,
+                patch_size=4,
+                num_heads=16,
+                learn_sigma=False,
+            )
+            
         else:
             config = UNet2DModel.load_config(args.model_config_name_or_path)
             model = UNet2DModel.from_config(config)
