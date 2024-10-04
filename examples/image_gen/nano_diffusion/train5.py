@@ -17,9 +17,7 @@ from torchvision.datasets import CIFAR10
 from torch.utils.data import DataLoader
 from torch.nn import MSELoss
 from torchvision.utils import save_image, make_grid
-# Import the DiT model
-from .ddpm import ddpm_schedules
-from cvlization.torch.training_pipeline.dit.dit import DiT
+from cvlization.torch.training_pipeline.image_gen.dit import DiT
 from cvlization.torch.training_pipeline.image_gen.diffuser_unconditional.pipeline import UNet2DModel
 
 import torch.distributed as dist
@@ -177,7 +175,7 @@ def sample_by_denoising(denoising_model, x_T, noise_schedule, n_T, device, thres
 
 
 
-def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, logger="none"):
+def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, logger="none"):
     criterion = MSELoss()
     denoising_model.train()
     
@@ -233,59 +231,210 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
                     save_image(grid, img_output_dir / f"ddpm_sample_cifar_step{step}.png")
                     
                     if logger == "wandb":
+                        # save individual images
                         wandb.log({
-                            "generated_images": wandb.Image(grid),
+                            "test_samples": [wandb.Image(img) for img in sampled_images],
                         })
                 denoising_model.train()
             
+            if step % save_every == 0 and step > 0:
+                checkpoint_path = f"model_checkpoint_step_{step}.pth"
+                torch.save(denoising_model.state_dict(), checkpoint_path)
+                print(f"Model saved at step {step}")
+                if logger == "wandb":
+                    wandb.save(checkpoint_path)
+            
             step += 1
-        
-        # Save model checkpoint
-        if step % (total_steps // 10) == 0:
-            checkpoint_path = f"model_checkpoint_step_{step}.pth"
-            torch.save(denoising_model.state_dict(), checkpoint_path)
-            if logger == "wandb":
-                wandb.save(checkpoint_path)
-
+    
     # Save final model
     final_model_path = "final_model.pth"
     torch.save(denoising_model.state_dict(), final_model_path)
+    print("Final model saved")
     if logger == "wandb":
         wandb.save(final_model_path)
+
+
+def create_model(net: str = "unet", resolution: int = 32, in_channels: int = 3):
+    if net == "dit_t0":
+        return DiT(
+            input_size=32,
+            patch_size=2,
+            in_channels=in_channels,
+            learn_sigma=False,
+            hidden_size=32,
+            mlp_ratio=2,
+            depth=3,
+            num_heads=1,
+            class_dropout_prob=0.1,
+        )
+    elif net == "dit_t1":
+        return DiT(
+            input_size=32,
+            patch_size=2,
+            in_channels=in_channels,
+            learn_sigma=False,
+            hidden_size=32 * 6,
+            mlp_ratio=2,
+            depth=3,
+            num_heads=6,
+            class_dropout_prob=0.1,
+        )
+    elif net == "dit_t2":
+        return DiT(
+            input_size=32,
+            patch_size=2,
+            in_channels=in_channels,
+            learn_sigma=False,
+            hidden_size=32,
+            mlp_ratio=2,
+            depth=12,
+            num_heads=1,
+            class_dropout_prob=0.1,
+        )
+    elif net == "dit_t3":
+        model = DiT(
+                input_size=32,
+                patch_size=2,
+                in_channels=in_channels,
+                learn_sigma=False,
+                hidden_size=32 * 6,
+                mlp_ratio=2,
+                depth=12,
+                num_heads=6,
+                class_dropout_prob=0.1,
+            )
+    elif net == "dit_s2":
+        model = DiT(
+                depth=12,
+                in_channels=in_channels,
+                hidden_size=384,
+                patch_size=2,
+                num_heads=6,
+                learn_sigma=False,
+            )
+    elif net == "dit_b2":
+        model = DiT(
+            depth=12,
+            in_channels=in_channels,
+            hidden_size=384,
+            patch_size=2,
+            num_heads=6,
+            learn_sigma=False,
+        )
+    elif net == "dit_b4":
+        model = DiT(
+            depth=12,
+            in_channels=in_channels,
+            hidden_size=384,
+            patch_size=4,
+            num_heads=6,
+            learn_sigma=False,
+        )
+    elif net == "dit_l2":
+        model = DiT(
+            depth=12,
+            in_channels=in_channels,
+            hidden_size=768,
+            patch_size=2,
+            num_heads=12,
+            learn_sigma=False,
+        )
+    elif net == "dit_l4":
+        model = DiT(
+            depth=12,
+            in_channels=in_channels,
+            hidden_size=768,
+            patch_size=4,
+            num_heads=12,
+            learn_sigma=False,
+        )
+    elif net == "unet":
+        model = UNet2DModel(
+            sample_size=resolution,
+            in_channels=in_channels,
+            out_channels=in_channels,
+            layers_per_block=2,
+            block_out_channels=(128, 128, 256, 256, 512, 512),
+            down_block_types=(
+                "DownBlock2D",
+                "DownBlock2D",
+                "DownBlock2D",
+                "DownBlock2D",
+                "AttnDownBlock2D",
+                "DownBlock2D",
+            ),
+            up_block_types=(
+                "UpBlock2D",
+                "AttnUpBlock2D",
+                "UpBlock2D",
+                "UpBlock2D",
+                "UpBlock2D",
+                "UpBlock2D",
+            ),
+        )
+    else:
+        raise ValueError(f"Unsupported network architecture: {net}")
+    
+    return model
 
 
 def main():
     parser = argparse.ArgumentParser(description="DDPM training for CIFAR10")
     parser.add_argument("--logger", type=str, choices=["wandb", "none"], default="none", help="Logging method")
+    parser.add_argument("--net", type=str, choices=[
+        "dit_t0", "dit_t1", "dit_t2", "dit_t3",
+        "dit_s2", "dit_b2", "dit_b4", "unet",
+        "dit_b2", "dit_b4", "dit_l2", "dit_l4",
+    ], default="unet", help="Network architecture")
+    parser.add_argument("--in_channels", type=int, default=3, help="Number of input channels")
+    parser.add_argument("--resolution", type=int, default=32, help="Resolution of the image. Only used for unet.")
+    
+    # Add config parameters to argparser
+    parser.add_argument("--num_timesteps", type=int, default=1000, help="Number of timesteps in the diffusion process")
+    parser.add_argument("--total_steps", type=int, default=50000, help="Total number of training steps")
+    parser.add_argument("--batch_size", type=int, default=128, help="Batch size")
+    parser.add_argument("--learning_rate", type=float, default=7e-5, help="Initial learning rate")
+    parser.add_argument("--weight_decay", type=float, default=1e-6, help="Weight decay")
+    parser.add_argument("--lr_min", type=float, default=5e-6, help="Minimum learning rate")
+    parser.add_argument("--log_every", type=int, default=20, help="Log every N steps")
+    parser.add_argument("--sample_every", type=int, default=100, help="Sample every N steps")
+    parser.add_argument("--save_every", type=int, default=5000, help="Save model every N steps")
+    parser.add_argument("--device", type=str, default="cuda:0", help="Device to use for training")
+    
     args = parser.parse_args()
 
-    # Hyperparameters
+    # Use args to create config
     config = {
-        "n_T": 1000,
-        "total_steps": 50000,
-        "batch_size": 128,
-        "learning_rate": 7e-5,
-        "weight_decay": 1e-6,
-        "lr_min": 5e-6,
-        "log_every": 20,
-        "sample_every": 100,
+        "num_timesteps": args.num_timesteps,
+        "total_steps": args.total_steps,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate,
+        "weight_decay": args.weight_decay,
+        "lr_min": args.lr_min,
+        "log_every": args.log_every,
+        "sample_every": args.sample_every,
+        "save_every": args.save_every,
+        "net": args.net,
+        "in_channels": args.in_channels,
+        "resolution": args.resolution,
     }
 
     # Initialize wandb if specified
     if args.logger == "wandb":
         import wandb
-        wandb.init(project="ddpm-cifar10", config=config)
+        wandb.init(project=os.getenv("WANDB_PROJECT") or "Diffuser Unconditional", config=config)
         config = wandb.config
     else:
         from types import SimpleNamespace
         config = SimpleNamespace(**config)
 
     # Use config
-    n_T = config.n_T
+    num_timesteps = config.num_timesteps
     total_steps = config.total_steps
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    log_every = config.log_every
-    sample_every = config.sample_every
+    if args.device is None:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
 
     # Load CIFAR10 dataset
     transform = transforms.Compose([
@@ -300,55 +449,9 @@ def main():
         if torch.cuda.device_count() > 1:
             # Multi-GPU setup
             raise NotImplementedError("multi-node not supported")
-            os.environ['MASTER_ADDR'] = 'localhost'
-            os.environ['MASTER_PORT'] = '12355'
-            dist.init_process_group(backend='nccl', rank=0, world_size=1)
         
-    # Define the denoising model (DiT)
-    # denoising_model = DiT(
-    #     depth=12,
-    #     input_size=32,
-    #     in_channels=3,
-    #     hidden_size=384,
-    #     patch_size=2,
-    #     num_heads=6,
-    #     learn_sigma=False,
-    # ).to(device)
-    # denoising_model = DiT(
-    #     input_size=32,
-    #     patch_size=2,
-    #     in_channels=3,
-    #     learn_sigma=False,
-    #     hidden_size=32 * 6,
-    #     mlp_ratio=4,
-    #     depth=12,
-    #     num_heads=6,
-    #     class_dropout_prob=0.1,
-    # ).to(device)
-
-    denoising_model = UNet2DModel(
-        sample_size=32,
-        in_channels=3,
-        out_channels=3,
-        layers_per_block=2,
-        block_out_channels=(128, 128, 256, 256, 512, 512),
-        down_block_types=(
-            "DownBlock2D",
-            "DownBlock2D",
-            "DownBlock2D",
-            "DownBlock2D",
-            "AttnDownBlock2D",
-            "DownBlock2D",
-        ),
-        up_block_types=(
-            "UpBlock2D",
-            "AttnUpBlock2D",
-            "UpBlock2D",
-            "UpBlock2D",
-            "UpBlock2D",
-            "UpBlock2D",
-        ),
-    ).to(device)
+    # Define the denoising model
+    denoising_model = create_model(args.net, 32, 3).to(device)
     
     # Define the optimizer
     optimizer = optim.AdamW(denoising_model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
@@ -357,7 +460,7 @@ def main():
     lr_scheduler = CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=config.lr_min)
 
     # Define the noise schedule
-    betas = torch.linspace(1e-4, 0.02, n_T)
+    betas = torch.linspace(1e-4, 0.02, num_timesteps)
     alphas = 1 - betas
     alphas_cumprod = torch.cumprod(alphas, dim=0)
     noise_schedule = {
@@ -371,7 +474,13 @@ def main():
     # Train the model
     train_loop(
         denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule,
-        n_T, total_steps, device, log_every, sample_every, logger=args.logger
+        num_timesteps,
+        total_steps=args.total_steps,
+        device=args.device,
+        log_every=args.log_every,
+        sample_every=args.sample_every,
+        save_every=args.save_every,
+        logger=args.logger,
     )
 
     # Close wandb run if it was used
