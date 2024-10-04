@@ -255,10 +255,8 @@ class Trainer:
 
                     # Add this block to save model weights to wandb
                     if self.logger == "wandb":
-                        artifact = wandb.Artifact(f"model-{epoch}", type="model")
-                        artifact.add_file(os.path.join(self.output_dir, "unet", "diffusion_pytorch_model.bin"))
-                        artifact.add_file(os.path.join(self.output_dir, "scheduler", "scheduler_config.json"))
-                        wandb.log_artifact(artifact)
+                        wandb.save(os.path.join(self.output_dir, "unet", "diffusion_pytorch_model.bin"))
+                        wandb.save(os.path.join(self.output_dir, "scheduler", "scheduler_config.json"))
 
         accelerator.end_training()
 
