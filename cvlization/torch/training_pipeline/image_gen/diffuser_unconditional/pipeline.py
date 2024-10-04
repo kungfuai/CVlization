@@ -468,6 +468,54 @@ class TrainingPipeline:
                 num_heads=1,
                 class_dropout_prob=0.1,
             )
+        elif args.model_config_name_or_path == "dit_t1":
+            model = DiT(
+                input_size=32,
+                patch_size=2,
+                in_channels=3,
+                learn_sigma=False,
+                hidden_size=32 * 6,
+                mlp_ratio=2,
+                depth=3,
+                num_heads=6,
+                class_dropout_prob=0.1,
+            )
+        elif args.model_config_name_or_path == "dit_t2":
+            model = DiT(
+                input_size=32,
+                patch_size=2,
+                in_channels=3,
+                learn_sigma=False,
+                hidden_size=32,
+                mlp_ratio=2,
+                depth=12,
+                num_heads=1,
+                class_dropout_prob=0.1,
+            )
+        elif args.model_config_name_or_path == "dit_t3":
+            model = DiT(
+                input_size=32,
+                patch_size=2,
+                in_channels=3,
+                learn_sigma=False,
+                hidden_size=32 * 6,
+                mlp_ratio=2,
+                depth=12,
+                num_heads=6,
+                class_dropout_prob=0.1,
+            )
+        elif args.model_config_name_or_path == "dit_t4":
+            model = DiT(
+                input_size=32,
+                patch_size=2,
+                in_channels=3,
+                learn_sigma=False,
+                hidden_size=32 * 6,
+                mlp_ratio=4,
+                depth=12,
+                num_heads=6,
+                class_dropout_prob=0.1,
+            )
         elif args.model_config_name_or_path == "dit_s_2":
             model = DiT(
                 depth=12,
