@@ -62,7 +62,7 @@ class Trainer:
     eval_batch_size: int = 32
     checkpointing_steps: int = 5000
     save_images_epochs: int = 1
-    save_model_epochs: int = 5
+    save_model_epochs: int = 50
     max_train_steps: Optional[int] = None
     resume_from_checkpoint: Optional[str] = None
 
@@ -235,7 +235,7 @@ class Trainer:
                             step=global_step,
                         )
 
-                if epoch % self.save_model_epochs == 0 or epoch == self.num_epochs - 1:
+                if (epoch + 1) % self.save_model_epochs == 0 or epoch == self.num_epochs - 1:
                     # save the model
                     unet = accelerator.unwrap_model(model)
 
@@ -253,6 +253,12 @@ class Trainer:
                     if self.use_ema:
                         ema_model.restore(unet.parameters())
 
+                    # Add this block to save model weights to wandb
+                    if self.logger == "wandb":
+                        artifact = wandb.Artifact(f"model-{epoch}", type="model")
+                        artifact.add_file(os.path.join(self.output_dir, "unet", "diffusion_pytorch_model.bin"))
+                        artifact.add_file(os.path.join(self.output_dir, "scheduler", "scheduler_config.json"))
+                        wandb.log_artifact(artifact)
 
         accelerator.end_training()
 
