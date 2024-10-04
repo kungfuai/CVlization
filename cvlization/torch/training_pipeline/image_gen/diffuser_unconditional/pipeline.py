@@ -114,6 +114,10 @@ class Trainer:
             progress_bar = tqdm(total=self.num_update_steps_per_epoch, disable=not accelerator.is_local_main_process)
             progress_bar.set_description(f"Epoch {epoch}")
             for step, batch in enumerate(train_dataloader):
+                # Skip steps after 10, just for testing
+                # if step > 10:
+                #     break
+                
                 # Skip steps until we reach the resumed step
                 if self.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
                     if step % self.gradient_accumulation_steps == 0:
@@ -140,6 +144,7 @@ class Trainer:
                         model_output = model_output.sample
 
                     if self.prediction_type == "epsilon":
+                        assert model_output.shape == noise.shape, f"Model output shape {model_output.shape} != noise shape {noise.shape}"
                         loss = F.mse_loss(model_output, noise)  # this could have different weights!
                     elif self.prediction_type == "sample":
                         alpha_t = _extract_into_tensor(
