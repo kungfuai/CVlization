@@ -1,8 +1,9 @@
 # pip install diffusers[training] accelerate datasets
 # Adapted from https://github.com/huggingface/diffusers/blob/main/examples/unconditional_image_generation/train_unconditional.py
-
+# TODO: the name `unet` is no longer correct, other architectures can be used.
 
 import argparse
+from types import SimpleNamespace
 import inspect
 from dataclasses import dataclass
 import logging
@@ -117,7 +118,7 @@ class Trainer:
                 # Skip steps after 10, just for testing
                 # if step > 10:
                 #     break
-                
+
                 # Skip steps until we reach the resumed step
                 if self.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
                     if step % self.gradient_accumulation_steps == 0:
@@ -197,6 +198,10 @@ class Trainer:
                         ema_model.store(unet.parameters())
                         ema_model.copy_to(unet.parameters())
 
+                    # Prevent an error that complained about the DDPMPipeline does not have .device.
+                    if not hasattr(unet, "device"):
+                        unet.device = accelerator.device
+
                     pipeline = DDPMPipeline(
                         unet=unet,
                         scheduler=noise_scheduler,
@@ -261,8 +266,8 @@ class TrainingPipeline:
         self._configure_logging()
         model = self._create_model()
         ema_model = self._create_ema_model(model)
+        self._create_scheduler()
         accelerator = self._prepare_accelerator(ema_model)
-        scheduler = self._create_scheduler()
         train_dataloader = self._create_train_dataloader(dataset_builder.training_dataset())
         optimizer, lr_scheduler = self._create_optimizer(model=model, train_dataloader=train_dataloader)
         
@@ -466,6 +471,7 @@ class TrainingPipeline:
         elif args.model_config_name_or_path == "dit_s_2":
             model = DiT(
                 depth=12,
+                in_channels=3,
                 hidden_size=384,
                 patch_size=2,
                 num_heads=6,
@@ -475,6 +481,11 @@ class TrainingPipeline:
             config = UNet2DModel.load_config(args.model_config_name_or_path)
             model = UNet2DModel.from_config(config)
 
+        if not hasattr(model, "config"):
+            model.config = SimpleNamespace(
+                sample_size=args.resolution,
+                in_channels=3,
+            )
             
         if args.enable_xformers_memory_efficient_attention:
             if is_xformers_available():

@@ -2,6 +2,7 @@
 Adapted from https://github.com/facebookresearch/DiT/blob/main/models.py
 """
 
+from types import SimpleNamespace
 import torch
 import torch.nn as nn
 import numpy as np
@@ -45,6 +46,9 @@ class TimestepEmbedder(nn.Module):
         freqs = torch.exp(
             -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
         ).to(device=t.device)
+        if t.dim() == 0:
+            t = t.unsqueeze(0)
+        # make sure the device of t and embedding are the same
         args = t[:, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
         if dim % 2:
@@ -53,6 +57,7 @@ class TimestepEmbedder(nn.Module):
 
     def forward(self, t):
         t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
+        t_freq = t_freq.to(self.mlp[0].weight.device)  # Ensure t_freq is on the same device as the model
         t_emb = self.mlp(t_freq)
         return t_emb
 
@@ -241,7 +246,8 @@ class DiT(nn.Module):
             x = block(x, c)                      # (N, T, D)
         x = self.final_layer(x, c)                # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
-        return x
+        # return x
+        return SimpleNamespace(sample=x)
 
     def forward_with_cfg(self, x, t, y=None, cfg_scale=0.0):
         """
