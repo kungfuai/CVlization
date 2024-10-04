@@ -49,8 +49,10 @@ class TimestepEmbedder(nn.Module):
         if t.dim() == 0:
             t = t.unsqueeze(0)
         # make sure the device of t and embedding are the same
+        # assert t.dim() == 1, f"t must be 1-D Tensor, but got {t.dim()}-D Tensor"
         args = t[:, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
+        # assert embedding.shape == (t.shape[0], dim), f"embedding must be of shape {t.shape[0]} x {dim}, but got {embedding.shape}"
         if dim % 2:
             embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
         return embedding
