@@ -337,7 +337,7 @@ class TrainingPipeline:
             checkpointing_steps=args.checkpointing_steps,
             max_train_steps=max_train_steps,
             eval_batch_size=args.eval_batch_size,
-            use_ema=True,
+            use_ema=args.use_ema,
             prediction_type=args.prediction_type,
         )
         return trainer
