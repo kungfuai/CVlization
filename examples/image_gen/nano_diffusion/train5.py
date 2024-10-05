@@ -371,8 +371,8 @@ def create_model(net: str = "unet", resolution: int = 32, in_channels: int = 3):
     elif net == "unet":
         model = UNet2DModel(
             sample_size=resolution,
-            in_channels=in_channels,
-            out_channels=in_channels,
+            in_channels=3,
+            out_channels=3,
             layers_per_block=2,
             block_out_channels=(128, 128, 256, 256, 512, 512),
             down_block_types=(
@@ -422,6 +422,7 @@ def main():
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to use for training")
     parser.add_argument("--max_grad_norm", type=float, default=-1, help="Maximum norm for gradient clipping")
     parser.add_argument("--use_loss_mean", action="store_true", help="Use loss.mean() instead of just loss")
+    parser.add_argument("--watch_model", action="store_true", help="Use wandb to watch the model")
     
     args = parser.parse_args()
 
@@ -441,6 +442,7 @@ def main():
         "resolution": args.resolution,
         "max_grad_norm": args.max_grad_norm,
         "use_loss_mean": args.use_loss_mean,
+        "watch_model": args.watch_model,
     }
 
     # Initialize wandb if specified
@@ -477,6 +479,10 @@ def main():
     # Define the denoising model
     denoising_model = create_model(args.net, 32, 3).to(device)
     
+    # Add wandb.watch here, controlled by the new argument
+    if args.logger == "wandb" and config.watch_model:
+        wandb.watch(denoising_model, log="all", log_freq=100)
+
     # Define the optimizer
     optimizer = optim.AdamW(denoising_model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
 
