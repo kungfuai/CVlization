@@ -10,7 +10,6 @@ Modified on top of train2, but bringing in ingredients from diffuser-based train
 import numpy as np
 from pathlib import Path
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
@@ -97,7 +96,7 @@ def sample_by_denoising_old(denoising_model, x_T, noise_schedule, n_T, device):
     return x_i
 
 
-def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, clip_sample=True, clip_sample_range=1.0, prediction_type="epsilon"):
+def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, clip_sample=True, clip_sample_range=1.0):
     t_tensor = torch.full((x_t.shape[0],), t, device=x_t.device)
     model_output = denoising_model(x_t, t_tensor)
     if hasattr(model_output, "sample"):
@@ -119,12 +118,7 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
     current_beta_t = 1 - current_alpha_t
 
     # Compute the previous sample mean
-    if prediction_type == "epsilon":
-        pred_original_sample = (x_t - beta_prod_t ** 0.5 * model_output) / alpha_prod_t ** 0.5
-    elif prediction_type == "sample":
-        pred_original_sample = model_output
-    else:
-        raise ValueError(f"Unsupported prediction type: {prediction_type}")
+    pred_original_sample = (x_t - beta_prod_t ** 0.5 * model_output) / alpha_prod_t ** 0.5
 
     if clip_sample:
         pred_original_sample = torch.clamp(pred_original_sample, -clip_sample_range, clip_sample_range)
@@ -175,7 +169,7 @@ def sample_by_denoising(denoising_model, x_T, noise_schedule, n_T, device, thres
 
 
 
-def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, logger="none"):
+def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, logger="none", max_grad_norm=1.0, use_loss_mean=True):
     criterion = MSELoss()
     denoising_model.train()
     
@@ -198,8 +192,15 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
             if hasattr(predicted_noise, "sample"):
                 predicted_noise = predicted_noise.sample
             loss = criterion(predicted_noise, true_noise)
+            if use_loss_mean:
+                loss = loss.mean()
             
             loss.backward()
+            
+            # Add gradient clipping
+            if max_grad_norm is not None and max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(denoising_model.parameters(), max_grad_norm)
+            
             optimizer.step()
             lr_scheduler.step()
             
@@ -232,8 +233,9 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
                     
                     if logger == "wandb":
                         # save individual images
+                        images_processed = (sampled_images * 255).permute(0, 2, 3, 1).cpu().numpy().round().astype("uint8")
                         wandb.log({
-                            "test_samples": [wandb.Image(img) for img in sampled_images],
+                            "test_samples": [wandb.Image(img) for img in images_processed],
                         })
                 denoising_model.train()
             
@@ -400,6 +402,8 @@ def main():
     parser.add_argument("--sample_every", type=int, default=100, help="Sample every N steps")
     parser.add_argument("--save_every", type=int, default=5000, help="Save model every N steps")
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to use for training")
+    parser.add_argument("--max_grad_norm", type=float, default=-1, help="Maximum norm for gradient clipping")
+    parser.add_argument("--use_loss_mean", action="store_true", help="Use loss.mean() instead of just loss")
     
     args = parser.parse_args()
 
@@ -417,6 +421,8 @@ def main():
         "net": args.net,
         "in_channels": args.in_channels,
         "resolution": args.resolution,
+        "max_grad_norm": args.max_grad_norm,
+        "use_loss_mean": args.use_loss_mean,
     }
 
     # Initialize wandb if specified
@@ -481,6 +487,8 @@ def main():
         sample_every=args.sample_every,
         save_every=args.save_every,
         logger=args.logger,
+        max_grad_norm=config.max_grad_norm,
+        use_loss_mean=config.use_loss_mean,
     )
 
     # Close wandb run if it was used
