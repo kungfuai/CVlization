@@ -211,6 +211,12 @@ def parse_args():
         "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
     )
 
+    parser.add_argument(
+        "--watch_model",
+        action="store_true",
+        help="Whether to use wandb to watch the model (only applicable when using wandb for logging).",
+    )
+
     args = parser.parse_args()
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
     if env_local_rank != -1 and env_local_rank != args.local_rank:

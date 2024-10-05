@@ -281,6 +281,10 @@ class TrainingPipeline:
         )
         ema_model.to(accelerator.device)
 
+        # Add wandb.watch here if specified
+        if args.logger == "wandb" and args.watch_model:
+            wandb.watch(model, log="all", log_freq=100)
+
         self.model = model
         self.optimizer = optimizer
         self.train_dataloader = train_dataloader
