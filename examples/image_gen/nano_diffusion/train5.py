@@ -123,10 +123,10 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
 
     # Compute the previous sample mean
     pred_original_sample = (x_t - beta_prod_t ** 0.5 * model_output) / alpha_prod_t ** 0.5
-    print("x_t mean:", x_t.mean().item())
-    print("t:", t)
-    print("model_output mean:", model_output.mean().item())
-    print("pred_original_sample mean (before clipping):", pred_original_sample.mean().item())
+    # print("x_t mean:", x_t.mean().item())
+    # print("t:", t)
+    # print("model_output mean:", model_output.mean().item())
+    # print("pred_original_sample mean (before clipping):", pred_original_sample.mean().item())
 
     if clip_sample:
         pred_original_sample = torch.clamp(pred_original_sample, -clip_sample_range, clip_sample_range)
@@ -159,15 +159,15 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
         pred_prev_sample = threshold_sample(pred_prev_sample)
     
     # for debug, print out intermediate values
-    print("alpha_prod_t", alpha_prod_t[0].item())
-    print("alpha_prod_t_prev", alpha_prod_t_prev[0].item())
-    print("beta_prod_t", beta_prod_t[0].item())
-    print("beta_prod_t_prev", beta_prod_t_prev[0].item())
-    print("current_alpha_t", current_alpha_t[0].item())
-    print("current_beta_t", current_beta_t[0].item())
-    print("pred_original_sample mean", pred_original_sample.mean().item())
-    print("pred_original_sample_coeff", pred_original_sample_coeff[0].item())
-    print("current_sample_coeff", current_sample_coeff[0].item())
+    # print("alpha_prod_t", alpha_prod_t[0].item())
+    # print("alpha_prod_t_prev", alpha_prod_t_prev[0].item())
+    # print("beta_prod_t", beta_prod_t[0].item())
+    # print("beta_prod_t_prev", beta_prod_t_prev[0].item())
+    # print("current_alpha_t", current_alpha_t[0].item())
+    # print("current_beta_t", current_beta_t[0].item())
+    # print("pred_original_sample mean", pred_original_sample.mean().item())
+    # print("pred_original_sample_coeff", pred_original_sample_coeff[0].item())
+    # print("current_sample_coeff", current_sample_coeff[0].item())
 
     return pred_prev_sample
 
