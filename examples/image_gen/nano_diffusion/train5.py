@@ -39,9 +39,10 @@ def forward_diffusion_old(x_0, t, noise_schedule):
     return x_t, noise
 
 
-def forward_diffusion(x_0, t, noise_schedule):
+def forward_diffusion(x_0, t, noise_schedule, noise=None):
     _ts = t.view(-1, 1, 1, 1)
-    noise = torch.randn_like(x_0)
+    if noise is None:
+        noise = torch.randn_like(x_0)
     assert _ts.max() < len(noise_schedule["alphas_cumprod"]), f"t={_ts.max()} is larger than the length of noise_schedule: {len(noise_schedule['alphas_cumprod'])}"
     alpha_prod_t = noise_schedule["alphas_cumprod"][_ts]
     x_t = (alpha_prod_t ** 0.5) * x_0 + ((1 - alpha_prod_t) ** 0.5) * noise
@@ -97,6 +98,9 @@ def sample_by_denoising_old(denoising_model, x_T, noise_schedule, n_T, device):
 
 
 def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, clip_sample=True, clip_sample_range=1.0):
+    """
+    This is the backward diffusion step, with the effect of denoising.
+    """
     t_tensor = torch.full((x_t.shape[0],), t, device=x_t.device)
     model_output = denoising_model(x_t, t_tensor)
     if hasattr(model_output, "sample"):
@@ -119,6 +123,10 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
 
     # Compute the previous sample mean
     pred_original_sample = (x_t - beta_prod_t ** 0.5 * model_output) / alpha_prod_t ** 0.5
+    print("x_t mean:", x_t.mean().item())
+    print("t:", t)
+    print("model_output mean:", model_output.mean().item())
+    print("pred_original_sample mean (before clipping):", pred_original_sample.mean().item())
 
     if clip_sample:
         pred_original_sample = torch.clamp(pred_original_sample, -clip_sample_range, clip_sample_range)
@@ -138,7 +146,6 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
     # Compute the previous sample
     pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * x_t
 
-
     # Add noise
     variance = 0
     variance_noise = torch.randn_like(x_t)
@@ -150,6 +157,17 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
 
     if thresholding:
         pred_prev_sample = threshold_sample(pred_prev_sample)
+    
+    # for debug, print out intermediate values
+    print("alpha_prod_t", alpha_prod_t[0].item())
+    print("alpha_prod_t_prev", alpha_prod_t_prev[0].item())
+    print("beta_prod_t", beta_prod_t[0].item())
+    print("beta_prod_t_prev", beta_prod_t_prev[0].item())
+    print("current_alpha_t", current_alpha_t[0].item())
+    print("current_beta_t", current_beta_t[0].item())
+    print("pred_original_sample mean", pred_original_sample.mean().item())
+    print("pred_original_sample_coeff", pred_original_sample_coeff[0].item())
+    print("current_sample_coeff", current_sample_coeff[0].item())
 
     return pred_prev_sample
 
