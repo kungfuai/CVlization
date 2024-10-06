@@ -32,16 +32,6 @@ from cleanfid import fid
 import tempfile
 
 
-def forward_diffusion_old(x_0, t, noise_schedule):
-    _ts = t.view(-1, 1, 1, 1)
-    noise = torch.randn_like(x_0)
-    x_t = (
-        noise_schedule["sqrtab"][_ts] * x_0
-        + noise_schedule["sqrtmab"][_ts] * noise
-    )
-    return x_t, noise
-
-
 def forward_diffusion(x_0, t, noise_schedule, noise=None):
     _ts = t.view(-1, 1, 1, 1)
     if noise is None:
@@ -84,20 +74,6 @@ def threshold_sample(sample: torch.Tensor, dynamic_thresholding_ratio=0.995, sam
     sample = sample.to(dtype)
 
     return sample
-
-
-def sample_by_denoising_old(denoising_model, x_T, noise_schedule, n_T, device):
-    x_i = x_T.to(device)
-    for i in range(n_T, 0, -1):
-        z = torch.randn_like(x_i) if i > 1 else 0
-        t = torch.full((x_i.shape[0],), i / n_T, device=device)
-        predicted_noise = denoising_model(x_i, t)
-        x_i = (
-            noise_schedule["oneover_sqrta"][i] * (x_i - predicted_noise * noise_schedule["mab_over_sqrtmab"][i])
-            + noise_schedule["sqrt_beta_t"][i] * z
-        )
-    x_i = (x_i / 2 + 0.5).clamp(0, 1)
-    return x_i
 
 
 def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, clip_sample=True, clip_sample_range=1.0):
@@ -256,7 +232,10 @@ def denoise_and_compare(model, images, noise_schedule, n_T, device):
         if hasattr(pred_noise, "sample"):
             pred_noise = pred_noise.sample
         pred_previous_images = denoising_step(model, x_t, t, noise_schedule)
-        pred_original_images = (x_t - pred_noise * noise_schedule["sqrt_beta_t"][t]) / noise_schedule["oneover_sqrta"][t]
+        # Compute the predicted original images using the correct formula
+        alpha_t = noise_schedule["alphas"][t]
+        alpha_t_cumprod = noise_schedule["alphas_cumprod"][t]
+        pred_original_images = (x_t - ((1 - alpha_t) / (1 - alpha_t_cumprod).sqrt()) * pred_noise) / (alpha_t / (1 - alpha_t_cumprod).sqrt())
     model.train()
     return pred_previous_images, pred_original_images
 
