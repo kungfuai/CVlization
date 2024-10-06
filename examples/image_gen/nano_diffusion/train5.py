@@ -104,7 +104,10 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
     """
     This is the backward diffusion step, with the effect of denoising.
     """
-    t_tensor = torch.full((x_t.shape[0],), t, device=x_t.device)
+    if isinstance(t, int):
+        t_tensor = torch.full((x_t.shape[0],), t, device=x_t.device)
+    else:
+        t_tensor = t
     model_output = denoising_model(x_t, t_tensor)
     if hasattr(model_output, "sample"):
         model_output = model_output.sample
