@@ -115,7 +115,10 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
     # Extract relevant values from noise_schedule
     alpha_prod_t = noise_schedule["alphas_cumprod"][t_tensor]
     alpha_prod_t.to(x_t.device)
-    alpha_prod_t_prev = noise_schedule["alphas_cumprod"][t_tensor - 1] if t > 0 else torch.tensor(1.0).to(x_t.device)
+    # deal with t=0 case where t can be a tensor
+    alpha_prod_t_prev = torch.where(t_tensor > 0, 
+                                    noise_schedule["alphas_cumprod"][t_tensor - 1], 
+                                    torch.ones_like(t_tensor, device=x_t.device))
     alpha_prod_t_prev.to(alpha_prod_t.device)
 
     # Reshape alpha_prod_t_prev for proper broadcasting
