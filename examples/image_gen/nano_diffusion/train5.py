@@ -156,11 +156,13 @@ def denoising_step(denoising_model, x_t, t, noise_schedule, thresholding=False, 
     pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * x_t
 
     # Add noise
-    variance = 0
+    variance = torch.zeros_like(x_t)
     variance_noise = torch.randn_like(x_t)
-    if t > 0:
-        variance = ((1 - alpha_prod_t_prev) / (1 - alpha_prod_t) * current_beta_t)
-        variance = torch.clamp(variance, min=1e-20)
+    
+    # Handle t=0 case where t can be a tensor
+    non_zero_mask = (t != 0).float().view(-1, 1, 1, 1)
+    variance = non_zero_mask * ((1 - alpha_prod_t_prev) / (1 - alpha_prod_t) * current_beta_t)
+    variance = torch.clamp(variance, min=1e-20)
 
     pred_prev_sample = pred_prev_sample + (variance ** 0.5) * variance_noise
 
