@@ -246,7 +246,7 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
                 if logger == "wandb":
                     wandb.log({
                         "step": step,
-                        "loss": loss_ema.detach().item(),
+                        "loss": loss_ema,
                         "learning_rate": current_lr,
                     })
             
