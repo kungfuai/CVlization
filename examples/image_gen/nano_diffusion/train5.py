@@ -233,19 +233,56 @@ def compute_validation_loss(model, val_dataloader, noise_schedule, n_T, device, 
         return total_loss / num_batches
 
 
+def denoise_and_compare(model, images, noise_schedule, n_T, device):
+    model.eval()
+    with torch.no_grad():
+        # Add noise to the images
+        t = torch.full((images.shape[0],), n_T - 1, device=device)
+        x_t, _ = forward_diffusion(images, t, noise_schedule)
+        
+        # Denoise the images
+        denoised_images = sample_by_denoising(model, x_t, noise_schedule, n_T, device)
+    model.train()
+    return denoised_images
+
+
+def save_comparison_grid(original, denoised, ema_denoised, step, prefix, output_dir):
+    # Combine images into a grid
+    grid_images = torch.cat([original, denoised], dim=0)
+    if ema_denoised is not None:
+        grid_images = torch.cat([grid_images, ema_denoised], dim=0)
+    
+    grid = make_grid(grid_images, nrow=original.shape[0], normalize=True, scale_each=True)
+    save_image(grid, output_dir / f"{prefix}_comparison_step{step}.png")
+
+
 def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, validate_every=1000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999):
     criterion = MSELoss()
     denoising_model.train()
     
     # Initialize EMA model if specified
     ema_model = None
-    ema = None
     if use_ema:
         ema_model, ema = create_ema_model(denoising_model, ema_beta)
         ema_model = ema_model.to(device)
         ema_model.eval()
     
-    train_loss_ema = None
+    # Get a batch of training and validation images for denoising comparison
+    train_images_for_denoising, _ = next(iter(train_dataloader))
+    train_images_for_denoising = train_images_for_denoising[:8].to(device)
+    val_images_for_denoising, _ = next(iter(val_dataloader))
+    val_images_for_denoising = val_images_for_denoising[:8].to(device)
+
+    img_output_dir = Path("data/image_gen/nano_diffusion/train5")
+    img_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Log true samples only once at the beginning
+    if logger == "wandb":
+        wandb.log({
+            "true_train_samples": [wandb.Image(img) for img in train_images_for_denoising],
+            "true_val_samples": [wandb.Image(img) for img in val_images_for_denoising],
+        })
+
     step = 0
     
     while step < total_steps:
@@ -255,7 +292,6 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
             
             optimizer.zero_grad()
             x = x.to(device)
-            y = y.to(device)
             
             t = torch.randint(0, n_T, (x.shape[0],)).to(device)
             x_t, true_noise = forward_diffusion(x, t, noise_schedule)
@@ -279,36 +315,49 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
             if use_ema:
                 ema.step_ema(ema_model, denoising_model)
             
-            train_loss = loss.item()
-            
             if step % log_every == 0:
                 current_lr = optimizer.param_groups[0]['lr']
-                print(f"Step {step}/{total_steps}, Train Loss: {train_loss:.4f}, LR: {current_lr:.6f}")
+                print(f"Step {step}/{total_steps}, Train Loss: {loss.item():.4f}, LR: {current_lr:.6f}")
                 if logger == "wandb":
                     wandb.log({
                         "step": step,
-                        "train_loss": train_loss,
+                        "train_loss": loss.item(),
                         "learning_rate": current_lr,
                     })
             
             if step % validate_every == 0:
+                val_loss = compute_validation_loss(denoising_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean)
+                
+                # Generate denoised images for training and validation sets
+                denoised_train = denoise_and_compare(denoising_model, train_images_for_denoising, noise_schedule, n_T, device)
+                denoised_val = denoise_and_compare(denoising_model, val_images_for_denoising, noise_schedule, n_T, device)
+                
+                ema_denoised_train = None
+                ema_denoised_val = None
                 if use_ema:
-                    val_loss, ema_val_loss = compute_validation_loss(denoising_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean, ema_model)
-                    print(f"Step {step}/{total_steps}, Validation Loss: {val_loss:.4f}, EMA Validation Loss: {ema_val_loss:.4f}")
-                    if logger == "wandb":
-                        wandb.log({
-                            "step": step,
-                            "val_loss": val_loss,
+                    ema_val_loss = compute_validation_loss(ema_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean)
+                    ema_denoised_train = denoise_and_compare(ema_model, train_images_for_denoising, noise_schedule, n_T, device)
+                    ema_denoised_val = denoise_and_compare(ema_model, val_images_for_denoising, noise_schedule, n_T, device)
+                
+                # Save comparison grids
+                save_comparison_grid(train_images_for_denoising, denoised_train, ema_denoised_train, step, "train", img_output_dir)
+                save_comparison_grid(val_images_for_denoising, denoised_val, ema_denoised_val, step, "val", img_output_dir)
+                
+                print(f"Step {step}/{total_steps}, Validation Loss: {val_loss:.4f}")
+                if logger == "wandb":
+                    log_dict = {
+                        "step": step,
+                        "val_loss": val_loss,
+                        "denoised_train_samples": [wandb.Image(img) for img in denoised_train],
+                        "denoised_val_samples": [wandb.Image(img) for img in denoised_val],
+                    }
+                    if use_ema:
+                        log_dict.update({
                             "ema_val_loss": ema_val_loss,
+                            "ema_denoised_train_samples": [wandb.Image(img) for img in ema_denoised_train],
+                            "ema_denoised_val_samples": [wandb.Image(img) for img in ema_denoised_val],
                         })
-                else:
-                    val_loss = compute_validation_loss(denoising_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean)
-                    print(f"Step {step}/{total_steps}, Validation Loss: {val_loss:.4f}")
-                    if logger == "wandb":
-                        wandb.log({
-                            "step": step,
-                            "val_loss": val_loss,
-                        })
+                    wandb.log(log_dict)
             
             if step % sample_every == 0:
                 denoising_model.eval()
