@@ -426,7 +426,7 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                 denoising_model.eval()
                 with torch.no_grad():
                     n_sample = 1000  # Generate the same number of images as real_images_for_fid
-                    x_T = torch.randn(n_sample, 3, 32, 32).to(device)
+                    x_T = torch.randn_like(real_images_for_fid)
                     generated_images = sample_by_denoising(denoising_model, x_T, noise_schedule, n_T, device)
                     
                     fid_score = compute_fid(real_images_for_fid, generated_images, device=device)
@@ -449,6 +449,7 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                                 "ema_fid": ema_fid_score,
                             })
             
+                denoising_model.train()
             step += 1
     
     # Save final model
