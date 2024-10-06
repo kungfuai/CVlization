@@ -245,8 +245,9 @@ def denoise_and_compare(model, images, noise_schedule, n_T, device):
         denoised_images = model(x_t, t)
         if hasattr(denoised_images, "sample"):
             denoised_images = denoised_images.sample
+        predicted_original = (x_t - (1 - noise_schedule["alphas_cumprod"][t]) ** 0.5 * denoised_images) / (noise_schedule["alphas_cumprod"][t] ** 0.5)
     model.train()
-    return denoised_images
+    return denoised_images, predicted_original
 
 
 def save_comparison_grid(original, denoised, ema_denoised, step, prefix, output_dir):
@@ -332,15 +333,15 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                 val_loss = compute_validation_loss(denoising_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean)
                 
                 # Generate denoised images for training and validation sets
-                denoised_train = denoise_and_compare(denoising_model, train_images_for_denoising, noise_schedule, n_T, device)
-                denoised_val = denoise_and_compare(denoising_model, val_images_for_denoising, noise_schedule, n_T, device)
+                _, denoised_train = denoise_and_compare(denoising_model, train_images_for_denoising, noise_schedule, n_T, device)
+                _, denoised_val = denoise_and_compare(denoising_model, val_images_for_denoising, noise_schedule, n_T, device)
                 
                 ema_denoised_train = None
                 ema_denoised_val = None
                 if use_ema:
                     ema_val_loss = compute_validation_loss(ema_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean)
-                    ema_denoised_train = denoise_and_compare(ema_model, train_images_for_denoising, noise_schedule, n_T, device)
-                    ema_denoised_val = denoise_and_compare(ema_model, val_images_for_denoising, noise_schedule, n_T, device)
+                    _, ema_denoised_train = denoise_and_compare(ema_model, train_images_for_denoising, noise_schedule, n_T, device)
+                    _, ema_denoised_val = denoise_and_compare(ema_model, val_images_for_denoising, noise_schedule, n_T, device)
                 
                 # Save comparison grids
                 # save_comparison_grid(train_images_for_denoising, denoised_train, ema_denoised_train, step, "train", img_output_dir)
