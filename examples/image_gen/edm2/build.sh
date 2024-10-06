@@ -1,0 +1,1 @@
+docker build -t edm2 examples/image_gen/edm2
