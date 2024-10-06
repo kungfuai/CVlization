@@ -28,6 +28,8 @@ try:
 except ImportError:
     print("wandb not installed, skipping")
 from .ema import create_ema_model
+from cleanfid import fid
+import tempfile
 
 
 def forward_diffusion_old(x_0, t, noise_schedule):
@@ -242,16 +244,13 @@ def denoise_and_compare(model, images, noise_schedule, n_T, device):
         x_t, _ = forward_diffusion(images, t, noise_schedule)
         
         # Denoise the images
-        pred_previous_images = model(x_t, t)
-        if hasattr(pred_previous_images, "sample"):
-            pred_previous_images = pred_previous_images.sample
-
-        print("shapes: x_t", x_t.shape, "t", t.shape, "pred_previous_images", pred_previous_images.shape)
-        predicted_original = (
-            x_t - (1 - noise_schedule["alphas_cumprod"][t])[:, None, None, None] ** 0.5 * pred_previous_images
-        ) / (noise_schedule["alphas_cumprod"][t] ** 0.5)[:, None, None, None]
+        pred_noise = model(x_t, t)
+        if hasattr(pred_noise, "sample"):
+            pred_noise = pred_noise.sample
+        pred_previous_images = denoising_step(model, x_t, t, noise_schedule)
+        pred_original_images = (x_t - pred_noise * noise_schedule["sqrt_beta_t"][t]) / noise_schedule["oneover_sqrta"][t]
     model.train()
-    return pred_previous_images, predicted_original
+    return pred_previous_images, pred_original_images
 
 
 def save_comparison_grid(original, denoised, ema_denoised, step, prefix, output_dir):
@@ -264,7 +263,29 @@ def save_comparison_grid(original, denoised, ema_denoised, step, prefix, output_
     save_image(grid, output_dir / f"{prefix}_comparison_step{step}.png")
 
 
-def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, validate_every=1000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999):
+def compute_fid(real_images, generated_images, device='cuda'):
+    """Compute FID between real and generated images using clean-fid."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        real_path = Path(temp_dir) / 'real'
+        gen_path = Path(temp_dir) / 'gen'
+        real_path.mkdir()
+        gen_path.mkdir()
+
+        # Convert images to numpy arrays and save them
+        for i, img in enumerate(real_images):
+            img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+            np.save(real_path / f'{i}.npy', img_np)
+        for i, img in enumerate(generated_images):
+            img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+            np.save(gen_path / f'{i}.npy', img_np)
+
+        # Compute FID
+        score = fid.compute_fid(str(real_path), str(gen_path), device=device, mode="clean")
+
+    return score
+
+
+def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, validate_every=1000, fid_every=10000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999):
     criterion = MSELoss()
     denoising_model.train()
     
@@ -290,6 +311,10 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
             "true_train_samples": [wandb.Image(img) for img in train_images_for_denoising],
             "true_val_samples": [wandb.Image(img) for img in val_images_for_denoising],
         })
+
+    # Get a larger batch of real images for FID computation
+    real_images_for_fid, _ = next(iter(DataLoader(train_dataloader.dataset, batch_size=1000, shuffle=True)))
+    real_images_for_fid = real_images_for_fid.to(device)
 
     step = 0
     
@@ -356,6 +381,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                     log_dict = {
                         "step": step,
                         "val_loss": val_loss,
+                        "noisy_train_samples": [wandb.Image(img) for img in train_images_for_denoising],
+                        "noisy_val_samples": [wandb.Image(img) for img in val_images_for_denoising],
                         "denoised_train_samples": [wandb.Image(img) for img in denoised_train],
                         "denoised_val_samples": [wandb.Image(img) for img in denoised_val],
                     }
@@ -406,6 +433,33 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                     print(f"EMA Model saved at step {step}")
                     if logger == "wandb":
                         wandb.save(ema_checkpoint_path)
+            
+            if step % fid_every == 0 and step > 0:
+                denoising_model.eval()
+                with torch.no_grad():
+                    n_sample = 1000  # Generate the same number of images as real_images_for_fid
+                    x_T = torch.randn(n_sample, 3, 32, 32).to(device)
+                    generated_images = sample_by_denoising(denoising_model, x_T, noise_schedule, n_T, device)
+                    
+                    fid_score = compute_fid(real_images_for_fid, generated_images, device=device)
+                    print(f"Step {step}/{total_steps}, FID: {fid_score:.4f}")
+                    
+                    if logger == "wandb":
+                        wandb.log({
+                            "step": step,
+                            "fid": fid_score,
+                        })
+                    
+                    if use_ema:
+                        ema_generated_images = sample_by_denoising(ema_model, x_T, noise_schedule, n_T, device)
+                        ema_fid_score = compute_fid(real_images_for_fid, ema_generated_images, device=device)
+                        print(f"Step {step}/{total_steps}, EMA FID: {ema_fid_score:.4f}")
+                        
+                        if logger == "wandb":
+                            wandb.log({
+                                "step": step,
+                                "ema_fid": ema_fid_score,
+                            })
             
             step += 1
     
