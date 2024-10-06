@@ -233,9 +233,10 @@ def denoise_and_compare(model, images, noise_schedule, n_T, device):
             pred_noise = pred_noise.sample
         pred_previous_images = denoising_step(model, x_t, t, noise_schedule)
         # Compute the predicted original images using the correct formula
-        alpha_t = noise_schedule["alphas"][t]
-        alpha_t_cumprod = noise_schedule["alphas_cumprod"][t]
-        pred_original_images = (x_t - ((1 - alpha_t) / (1 - alpha_t_cumprod).sqrt()) * pred_noise) / (alpha_t / (1 - alpha_t_cumprod).sqrt())
+        alpha_t = noise_schedule["alphas"][t][:, None, None, None]
+        alpha_t_cumprod = noise_schedule["alphas_cumprod"][t][:, None, None, None]
+        pred_original_images = (
+            x_t - ((1 - alpha_t) / (1 - alpha_t_cumprod).sqrt()) * pred_noise) / (alpha_t / (1 - alpha_t_cumprod).sqrt())
     model.train()
     return pred_previous_images, pred_original_images
 
