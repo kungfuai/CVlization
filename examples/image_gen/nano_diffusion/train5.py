@@ -7,6 +7,7 @@ Modified on top of train2, but bringing in ingredients from diffuser-based train
 
 """
 
+import math
 import numpy as np
 from pathlib import Path
 import torch
@@ -19,9 +20,8 @@ from torchvision.utils import save_image, make_grid
 from cvlization.torch.training_pipeline.image_gen.dit import DiT
 from cvlization.torch.training_pipeline.image_gen.diffuser_unconditional.pipeline import UNet2DModel
 
-import torch.distributed as dist
 import os
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 import argparse
 try:
     import wandb
@@ -193,7 +193,6 @@ def compute_validation_loss(model, val_dataloader, noise_schedule, n_T, device, 
         ema_model.eval()
     
     total_loss = 0
-    total_ema_loss = 0
     num_batches = 0
     
     with torch.no_grad():
@@ -280,18 +279,15 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
             if use_ema:
                 ema.step_ema(ema_model, denoising_model)
             
-            if train_loss_ema is None:
-                train_loss_ema = loss.item()
-            else:
-                train_loss_ema = 0.9 * train_loss_ema + 0.1 * loss.item()
+            train_loss = loss.item()
             
             if step % log_every == 0:
                 current_lr = optimizer.param_groups[0]['lr']
-                print(f"Step {step}/{total_steps}, Train Loss: {train_loss_ema:.4f}, LR: {current_lr:.6f}")
+                print(f"Step {step}/{total_steps}, Train Loss: {train_loss:.4f}, LR: {current_lr:.6f}")
                 if logger == "wandb":
                     wandb.log({
                         "step": step,
-                        "train_loss": train_loss_ema,
+                        "train_loss": train_loss,
                         "learning_rate": current_lr,
                     })
             
@@ -494,6 +490,40 @@ def create_model(net: str = "unet", resolution: int = 32, in_channels: int = 3):
     return model
 
 
+def get_cosine_schedule_with_warmup(
+    optimizer, num_warmup_steps: int, num_training_steps: int, num_cycles: float = 0.5, last_epoch: int = -1
+) -> LambdaLR:
+    """
+    Create a schedule with a learning rate that decreases following the values of the cosine function between the
+    initial lr set in the optimizer to 0, after a warmup period during which it increases linearly between 0 and the
+    initial lr set in the optimizer.
+
+    Args:
+        optimizer ([`~torch.optim.Optimizer`]):
+            The optimizer for which to schedule the learning rate.
+        num_warmup_steps (`int`):
+            The number of steps for the warmup phase.
+        num_training_steps (`int`):
+            The total number of training steps.
+        num_periods (`float`, *optional*, defaults to 0.5):
+            The number of periods of the cosine function in a schedule (the default is to just decrease from the max
+            value to 0 following a half-cosine).
+        last_epoch (`int`, *optional*, defaults to -1):
+            The index of the last epoch when resuming training.
+
+    Return:
+        `torch.optim.lr_scheduler.LambdaLR` with the appropriate schedule.
+    """
+
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+        return max(0.0, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress)))
+
+    return LambdaLR(optimizer, lr_lambda, last_epoch)
+
+
 def main():
     parser = argparse.ArgumentParser(description="DDPM training for CIFAR10")
     parser.add_argument("--logger", type=str, choices=["wandb", "none"], default="none", help="Logging method")
@@ -509,19 +539,19 @@ def main():
     parser.add_argument("--num_timesteps", type=int, default=1000, help="Number of timesteps in the diffusion process")
     parser.add_argument("--total_steps", type=int, default=50000, help="Total number of training steps")
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size")
-    parser.add_argument("--learning_rate", type=float, default=7e-5, help="Initial learning rate")
+    parser.add_argument("--learning_rate", type=float, default=1e-4, help="Initial learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-6, help="Weight decay")
     parser.add_argument("--lr_min", type=float, default=5e-6, help="Minimum learning rate")
     parser.add_argument("--log_every", type=int, default=20, help="Log every N steps")
     parser.add_argument("--sample_every", type=int, default=100, help="Sample every N steps")
     parser.add_argument("--save_every", type=int, default=5000, help="Save model every N steps")
-    parser.add_argument("--validate_every", type=int, default=1000, help="Compute validation loss every N steps")
+    parser.add_argument("--validate_every", type=int, default=100, help="Compute validation loss every N steps")
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to use for training")
     parser.add_argument("--max_grad_norm", type=float, default=-1, help="Maximum norm for gradient clipping")
     parser.add_argument("--use_loss_mean", action="store_true", help="Use loss.mean() instead of just loss")
     parser.add_argument("--watch_model", action="store_true", help="Use wandb to watch the model")
     parser.add_argument("--use_ema", action="store_true", help="Use Exponential Moving Average (EMA) for the model")
-    parser.add_argument("--ema_beta", type=float, default=0.9999, help="EMA decay factor")
+    parser.add_argument("--ema_beta", type=float, default=0.99, help="EMA decay factor")
     
     args = parser.parse_args()
 
@@ -594,8 +624,7 @@ def main():
     optimizer = optim.AdamW(denoising_model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
 
     # Define the learning rate scheduler
-    lr_scheduler = CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=config.lr_min)
-
+    lr_scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=500, num_training_steps=total_steps)
     # Define the noise schedule
     betas = torch.linspace(1e-4, 0.02, num_timesteps)
     alphas = 1 - betas
