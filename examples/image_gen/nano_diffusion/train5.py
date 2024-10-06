@@ -234,14 +234,17 @@ def compute_validation_loss(model, val_dataloader, noise_schedule, n_T, device, 
 
 
 def denoise_and_compare(model, images, noise_schedule, n_T, device):
+    torch.manual_seed(10)
     model.eval()
     with torch.no_grad():
         # Add noise to the images
-        t = torch.full((images.shape[0],), n_T - 1, device=device)
+        t = torch.randint(0, n_T, (images.shape[0],), device=device)
         x_t, _ = forward_diffusion(images, t, noise_schedule)
         
         # Denoise the images
-        denoised_images = sample_by_denoising(model, x_t, noise_schedule, n_T, device)
+        denoised_images = model(x_t, t)
+        if hasattr(denoised_images, "sample"):
+            denoised_images = denoised_images.sample
     model.train()
     return denoised_images
 
@@ -340,8 +343,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                     ema_denoised_val = denoise_and_compare(ema_model, val_images_for_denoising, noise_schedule, n_T, device)
                 
                 # Save comparison grids
-                save_comparison_grid(train_images_for_denoising, denoised_train, ema_denoised_train, step, "train", img_output_dir)
-                save_comparison_grid(val_images_for_denoising, denoised_val, ema_denoised_val, step, "val", img_output_dir)
+                # save_comparison_grid(train_images_for_denoising, denoised_train, ema_denoised_train, step, "train", img_output_dir)
+                # save_comparison_grid(val_images_for_denoising, denoised_val, ema_denoised_val, step, "val", img_output_dir)
                 
                 print(f"Step {step}/{total_steps}, Validation Loss: {val_loss:.4f}")
                 if logger == "wandb":
