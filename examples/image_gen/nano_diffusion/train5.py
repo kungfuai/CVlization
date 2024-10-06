@@ -238,7 +238,7 @@ def denoise_and_compare(model, images, noise_schedule, n_T, device):
         pred_original_images = (
             x_t - ((1 - alpha_t) / (1 - alpha_t_cumprod).sqrt()) * pred_noise) / (alpha_t / (1 - alpha_t_cumprod).sqrt())
     model.train()
-    return pred_previous_images, pred_original_images
+    return x_t, pred_original_images
 
 
 def save_comparison_grid(original, denoised, ema_denoised, step, prefix, output_dir):
@@ -350,8 +350,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                 val_loss = compute_validation_loss(denoising_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean)
                 
                 # Generate denoised images for training and validation sets
-                _, denoised_train = denoise_and_compare(denoising_model, train_images_for_denoising, noise_schedule, n_T, device)
-                _, denoised_val = denoise_and_compare(denoising_model, val_images_for_denoising, noise_schedule, n_T, device)
+                noisy_train, denoised_train = denoise_and_compare(denoising_model, train_images_for_denoising, noise_schedule, n_T, device)
+                noisy_val, denoised_val = denoise_and_compare(denoising_model, val_images_for_denoising, noise_schedule, n_T, device)
                 
                 ema_denoised_train = None
                 ema_denoised_val = None
@@ -369,8 +369,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                     log_dict = {
                         "step": step,
                         "val_loss": val_loss,
-                        "noisy_train_samples": [wandb.Image(img) for img in train_images_for_denoising],
-                        "noisy_val_samples": [wandb.Image(img) for img in val_images_for_denoising],
+                        "noisy_train_samples": [wandb.Image(img) for img in noisy_train],
+                        "noisy_val_samples": [wandb.Image(img) for img in noisy_val],
                         "denoised_train_samples": [wandb.Image(img) for img in denoised_train],
                         "denoised_val_samples": [wandb.Image(img) for img in denoised_val],
                     }
