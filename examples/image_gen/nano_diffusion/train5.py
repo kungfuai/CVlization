@@ -251,15 +251,25 @@ def save_comparison_grid(original, denoised, ema_denoised, step, prefix, output_
     save_image(grid, output_dir / f"{prefix}_comparison_step{step}.png")
 
 
-def compute_fid(real_images, generated_images, device='cuda'):
+def compute_fid(real_images, generated_images, device='cuda', regenerate_real_images=False):
     """Compute FID between real and generated images using clean-fid."""
     with tempfile.TemporaryDirectory() as temp_dir:
         real_path = Path(temp_dir) / 'real'
         gen_path = Path(temp_dir) / 'gen'
-        real_path.mkdir()
-        gen_path.mkdir()
+        real_path.mkdir(exist_ok=True)
+        gen_path.mkdir(exist_ok=True)
 
         # Convert images to numpy arrays and save them
+        if not regenerate_real_images:
+            try:
+                # Try to load existing real images
+                existing_files = list(real_path.glob('*.npy'))
+                if len(existing_files) == len(real_images):
+                    print("Using existing real images for FID calculation.")
+                    return
+            except Exception as e:
+                print(f"Error loading existing real images: {e}. Regenerating...")
+
         for i, img in enumerate(real_images):
             img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
             np.save(real_path / f'{i}.npy', img_np)
@@ -273,7 +283,7 @@ def compute_fid(real_images, generated_images, device='cuda'):
     return score
 
 
-def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, validate_every=1000, fid_every=10000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999):
+def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, validate_every=1000, fid_every=10000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999, num_examples_trained=0):
     criterion = MSELoss()
     denoising_model.train()
     
@@ -296,6 +306,7 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
     # Log true samples only once at the beginning
     if logger == "wandb":
         wandb.log({
+            "num_examples_trained": 0,
             "true_train_samples": [wandb.Image(img) for img in train_images_for_denoising],
             "true_val_samples": [wandb.Image(img) for img in val_images_for_denoising],
         })
@@ -310,6 +321,9 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
         for x, y in train_dataloader:
             if step >= total_steps:
                 break
+            
+            batch_size = x.shape[0]
+            num_examples_trained += batch_size
             
             optimizer.zero_grad()
             x = x.to(device)
@@ -338,10 +352,11 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
             
             if step % log_every == 0:
                 current_lr = optimizer.param_groups[0]['lr']
-                print(f"Step {step}/{total_steps}, Train Loss: {loss.item():.4f}, LR: {current_lr:.6f}")
+                print(f"Step {step}/{total_steps}, Examples trained: {num_examples_trained}, Train Loss: {loss.item():.4f}, LR: {current_lr:.6f}")
                 if logger == "wandb":
                     wandb.log({
-                        "step": step,
+                        "num_batches_trained": step,
+                        "num_examples_trained": num_examples_trained,
                         "train_loss": loss.item(),
                         "learning_rate": current_lr,
                     })
@@ -367,7 +382,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                 print(f"Step {step}/{total_steps}, Validation Loss: {val_loss:.4f}")
                 if logger == "wandb":
                     log_dict = {
-                        "step": step,
+                        "num_batches_trained": step,
+                        "num_examples_trained": num_examples_trained,
                         "val_loss": val_loss,
                         "noisy_train_samples": [wandb.Image(img) for img in noisy_train],
                         "noisy_val_samples": [wandb.Image(img) for img in noisy_val],
@@ -376,6 +392,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                     }
                     if use_ema:
                         log_dict.update({
+                            "num_batches_trained": step,
+                            "num_examples_trained": num_examples_trained,
                             "ema_val_loss": ema_val_loss,
                             "ema_denoised_train_samples": [wandb.Image(img) for img in ema_denoised_train],
                             "ema_denoised_val_samples": [wandb.Image(img) for img in ema_denoised_val],
@@ -398,6 +416,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                         # save individual images
                         images_processed = (sampled_images * 255).permute(0, 2, 3, 1).cpu().numpy().round().astype("uint8")
                         wandb.log({
+                            "num_batches_trained": step,
+                            "num_examples_trained": num_examples_trained,
                             "test_samples": [wandb.Image(img) for img in images_processed],
                         })
                     if use_ema:
@@ -405,6 +425,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                         ema_images_processed = (ema_sampled_images * 255).permute(0, 2, 3, 1).cpu().numpy().round().astype("uint8")
                         if logger == "wandb":
                             wandb.log({
+                                "num_batches_trained": step,
+                                "num_examples_trained": num_examples_trained,
                                 "ema_test_samples": [wandb.Image(img) for img in ema_images_processed],
                             })
                 denoising_model.train()
@@ -434,7 +456,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                     
                     if logger == "wandb":
                         wandb.log({
-                            "step": step,
+                            "num_batches_trained": step,
+                            "num_examples_trained": num_examples_trained,
                             "fid": fid_score,
                         })
                     
@@ -445,7 +468,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                         
                         if logger == "wandb":
                             wandb.log({
-                                "step": step,
+                                "num_batches_trained": step,
+                                "num_examples_trained": num_examples_trained,
                                 "ema_fid": ema_fid_score,
                             })
             
@@ -464,6 +488,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
         print("Final EMA model saved")
         if logger == "wandb":
             wandb.save(final_ema_model_path)
+
+    return num_examples_trained  # Return this value in case you want to save it for resuming training later
 
 
 def create_model(net: str = "unet", resolution: int = 32, in_channels: int = 3):
@@ -742,7 +768,10 @@ def main():
         print(k, v.shape)
 
     # Train the model
-    train_loop(
+    num_examples_trained = 0  # Initialize num_examples_trained
+    # If you're resuming training, you might want to load num_examples_trained from a checkpoint
+
+    num_examples_trained = train_loop(
         denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule,
         num_timesteps,
         total_steps=args.total_steps,
@@ -751,13 +780,16 @@ def main():
         sample_every=args.sample_every,
         save_every=args.save_every,
         validate_every=args.validate_every,
+        fid_every=args.fid_every,
         logger=args.logger,
         max_grad_norm=config.max_grad_norm,
         use_loss_mean=config.use_loss_mean,
         use_ema=config.use_ema,
         ema_beta=config.ema_beta,
-        fid_every=args.fid_every,
+        num_examples_trained=num_examples_trained,  # Add this line
     )
+
+    # You might want to save num_examples_trained to a checkpoint here for future resuming
 
     # Close wandb run if it was used
     if args.logger == "wandb":
