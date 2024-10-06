@@ -242,12 +242,15 @@ def denoise_and_compare(model, images, noise_schedule, n_T, device):
         x_t, _ = forward_diffusion(images, t, noise_schedule)
         
         # Denoise the images
-        denoised_images = model(x_t, t)
-        if hasattr(denoised_images, "sample"):
-            denoised_images = denoised_images.sample
-        predicted_original = (x_t - (1 - noise_schedule["alphas_cumprod"][t]) ** 0.5 * denoised_images) / (noise_schedule["alphas_cumprod"][t] ** 0.5)
+        pred_previous_images = model(x_t, t)
+        if hasattr(pred_previous_images, "sample"):
+            pred_previous_images = pred_previous_images.sample
+
+        predicted_original = (
+            x_t - (1 - noise_schedule["alphas_cumprod"][t]) ** 0.5 * pred_previous_images
+        ) / (noise_schedule["alphas_cumprod"][t] ** 0.5)
     model.train()
-    return denoised_images, predicted_original
+    return pred_previous_images, predicted_original
 
 
 def save_comparison_grid(original, denoised, ema_denoised, step, prefix, output_dir):
