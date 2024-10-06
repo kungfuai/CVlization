@@ -487,6 +487,7 @@ def create_model(net: str = "unet", resolution: int = 32, in_channels: int = 3):
     else:
         raise ValueError(f"Unsupported network architecture: {net}")
     
+    print(f"model params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f} M")
     return model
 
 
@@ -552,6 +553,7 @@ def main():
     parser.add_argument("--watch_model", action="store_true", help="Use wandb to watch the model")
     parser.add_argument("--use_ema", action="store_true", help="Use Exponential Moving Average (EMA) for the model")
     parser.add_argument("--ema_beta", type=float, default=0.999, help="EMA decay factor")
+    parser.add_argument("--random_flip", action="store_true", help="Randomly flip images horizontally")
     
     args = parser.parse_args()
 
@@ -596,6 +598,7 @@ def main():
 
     # Load CIFAR10 dataset
     transform = transforms.Compose([
+        transforms.RandomHorizontalFlip() if args.random_flip else lambda x: x,
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
