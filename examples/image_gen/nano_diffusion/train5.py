@@ -271,9 +271,10 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
                     if use_ema:
                         ema_sampled_images = sample_by_denoising(ema_model, x_T, noise_schedule, n_T, device)
                         ema_images_processed = (ema_sampled_images * 255).permute(0, 2, 3, 1).cpu().numpy().round().astype("uint8")
-                        wandb.log({
-                            "ema_test_samples": [wandb.Image(img) for img in ema_images_processed],
-                        })
+                        if logger == "wandb":
+                            wandb.log({
+                                "ema_test_samples": [wandb.Image(img) for img in ema_images_processed],
+                            })
                 denoising_model.train()
             
             if step % save_every == 0 and step > 0:
