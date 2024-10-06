@@ -27,6 +27,7 @@ try:
     import wandb
 except ImportError:
     print("wandb not installed, skipping")
+from .ema import create_ema_model
 
 
 def forward_diffusion_old(x_0, t, noise_schedule):
@@ -187,9 +188,17 @@ def sample_by_denoising(denoising_model, x_T, noise_schedule, n_T, device, thres
 
 
 
-def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, logger="none", max_grad_norm=1.0, use_loss_mean=True):
+def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999):
     criterion = MSELoss()
     denoising_model.train()
+    
+    # Initialize EMA model if specified
+    ema_model = None
+    ema = None
+    if use_ema:
+        ema_model, ema = create_ema_model(denoising_model, ema_beta)
+        ema_model = ema_model.to(device)
+        ema_model.eval()
     
     loss_ema = None
     step = 0
@@ -222,6 +231,10 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
             optimizer.step()
             lr_scheduler.step()
             
+            # Update EMA model if specified
+            if use_ema:
+                ema.step_ema(ema_model, denoising_model)
+            
             if loss_ema is None:
                 loss_ema = loss.item()
             else:
@@ -233,7 +246,7 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
                 if logger == "wandb":
                     wandb.log({
                         "step": step,
-                        "loss": loss_ema,
+                        "loss": loss_ema.detach().item(),
                         "learning_rate": current_lr,
                     })
             
@@ -255,6 +268,12 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
                         wandb.log({
                             "test_samples": [wandb.Image(img) for img in images_processed],
                         })
+                    if use_ema:
+                        ema_sampled_images = sample_by_denoising(ema_model, x_T, noise_schedule, n_T, device)
+                        ema_images_processed = (ema_sampled_images * 255).permute(0, 2, 3, 1).cpu().numpy().round().astype("uint8")
+                        wandb.log({
+                            "ema_test_samples": [wandb.Image(img) for img in ema_images_processed],
+                        })
                 denoising_model.train()
             
             if step % save_every == 0 and step > 0:
@@ -263,6 +282,12 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
                 print(f"Model saved at step {step}")
                 if logger == "wandb":
                     wandb.save(checkpoint_path)
+                if use_ema:
+                    ema_checkpoint_path = f"ema_model_checkpoint_step_{step}.pth"
+                    torch.save(ema_model.state_dict(), ema_checkpoint_path)
+                    print(f"EMA Model saved at step {step}")
+                    if logger == "wandb":
+                        wandb.save(ema_checkpoint_path)
             
             step += 1
     
@@ -272,6 +297,12 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
     print("Final model saved")
     if logger == "wandb":
         wandb.save(final_model_path)
+    if use_ema:
+        final_ema_model_path = "final_ema_model.pth"
+        torch.save(ema_model.state_dict(), final_ema_model_path)
+        print("Final EMA model saved")
+        if logger == "wandb":
+            wandb.save(final_ema_model_path)
 
 
 def create_model(net: str = "unet", resolution: int = 32, in_channels: int = 3):
@@ -423,6 +454,8 @@ def main():
     parser.add_argument("--max_grad_norm", type=float, default=-1, help="Maximum norm for gradient clipping")
     parser.add_argument("--use_loss_mean", action="store_true", help="Use loss.mean() instead of just loss")
     parser.add_argument("--watch_model", action="store_true", help="Use wandb to watch the model")
+    parser.add_argument("--use_ema", action="store_true", help="Use Exponential Moving Average (EMA) for the model")
+    parser.add_argument("--ema_beta", type=float, default=0.9999, help="EMA decay factor")
     
     args = parser.parse_args()
 
@@ -443,6 +476,8 @@ def main():
         "max_grad_norm": args.max_grad_norm,
         "use_loss_mean": args.use_loss_mean,
         "watch_model": args.watch_model,
+        "use_ema": args.use_ema,
+        "ema_beta": args.ema_beta,
     }
 
     # Initialize wandb if specified
@@ -513,6 +548,8 @@ def main():
         logger=args.logger,
         max_grad_norm=config.max_grad_norm,
         use_loss_mean=config.use_loss_mean,
+        use_ema=config.use_ema,
+        ema_beta=config.ema_beta,
     )
 
     # Close wandb run if it was used
