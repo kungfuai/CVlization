@@ -13,7 +13,7 @@ import torch
 import torch.optim as optim
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from torch.nn import MSELoss
 from torchvision.utils import save_image, make_grid
 from cvlization.torch.training_pipeline.image_gen.dit import DiT
@@ -187,8 +187,54 @@ def sample_by_denoising(denoising_model, x_T, noise_schedule, n_T, device, thres
     return x_t
 
 
+def compute_validation_loss(model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean=True, ema_model=None):
+    model.eval()
+    if ema_model is not None:
+        ema_model.eval()
+    
+    total_loss = 0
+    total_ema_loss = 0
+    num_batches = 0
+    
+    with torch.no_grad():
+        for x, _ in val_dataloader:
+            x = x.to(device)
+            t = torch.randint(0, n_T, (x.shape[0],)).to(device)
+            x_t, true_noise = forward_diffusion(x, t, noise_schedule)
+            
+            # Compute loss for the main model
+            predicted_noise = model(x_t, t)
+            if hasattr(predicted_noise, "sample"):
+                predicted_noise = predicted_noise.sample
+            
+            loss = criterion(predicted_noise, true_noise)
+            if use_loss_mean:
+                loss = loss.mean()
+            
+            total_loss += loss.item()
+            
+            # Compute loss for the EMA model if provided
+            if ema_model is not None:
+                ema_predicted_noise = ema_model(x_t, t)
+                if hasattr(ema_predicted_noise, "sample"):
+                    ema_predicted_noise = ema_predicted_noise.sample
+                
+                ema_loss = criterion(ema_predicted_noise, true_noise)
+                if use_loss_mean:
+                    ema_loss = ema_loss.mean()
+                
+                total_ema_loss += ema_loss.item()
+            
+            num_batches += 1
+    
+    model.train()
+    if ema_model is not None:
+        return total_loss / num_batches, total_ema_loss / num_batches
+    else:
+        return total_loss / num_batches
 
-def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999):
+
+def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, validate_every=1000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999):
     criterion = MSELoss()
     denoising_model.train()
     
@@ -200,11 +246,11 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
         ema_model = ema_model.to(device)
         ema_model.eval()
     
-    loss_ema = None
+    train_loss_ema = None
     step = 0
     
     while step < total_steps:
-        for x, y in dataloader:
+        for x, y in train_dataloader:
             if step >= total_steps:
                 break
             
@@ -224,7 +270,6 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
             
             loss.backward()
             
-            # Add gradient clipping
             if max_grad_norm is not None and max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(denoising_model.parameters(), max_grad_norm)
             
@@ -235,20 +280,39 @@ def train_loop(denoising_model, dataloader, optimizer, lr_scheduler, noise_sched
             if use_ema:
                 ema.step_ema(ema_model, denoising_model)
             
-            if loss_ema is None:
-                loss_ema = loss.item()
+            if train_loss_ema is None:
+                train_loss_ema = loss.item()
             else:
-                loss_ema = 0.9 * loss_ema + 0.1 * loss.item()
+                train_loss_ema = 0.9 * train_loss_ema + 0.1 * loss.item()
             
             if step % log_every == 0:
                 current_lr = optimizer.param_groups[0]['lr']
-                print(f"Step {step}/{total_steps}, Loss: {loss_ema:.4f}, LR: {current_lr:.6f}")
+                print(f"Step {step}/{total_steps}, Train Loss: {train_loss_ema:.4f}, LR: {current_lr:.6f}")
                 if logger == "wandb":
                     wandb.log({
                         "step": step,
-                        "loss": loss_ema,
+                        "train_loss": train_loss_ema,
                         "learning_rate": current_lr,
                     })
+            
+            if step % validate_every == 0:
+                if use_ema:
+                    val_loss, ema_val_loss = compute_validation_loss(denoising_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean, ema_model)
+                    print(f"Step {step}/{total_steps}, Validation Loss: {val_loss:.4f}, EMA Validation Loss: {ema_val_loss:.4f}")
+                    if logger == "wandb":
+                        wandb.log({
+                            "step": step,
+                            "val_loss": val_loss,
+                            "ema_val_loss": ema_val_loss,
+                        })
+                else:
+                    val_loss = compute_validation_loss(denoising_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean)
+                    print(f"Step {step}/{total_steps}, Validation Loss: {val_loss:.4f}")
+                    if logger == "wandb":
+                        wandb.log({
+                            "step": step,
+                            "val_loss": val_loss,
+                        })
             
             if step % sample_every == 0:
                 denoising_model.eval()
@@ -451,6 +515,7 @@ def main():
     parser.add_argument("--log_every", type=int, default=20, help="Log every N steps")
     parser.add_argument("--sample_every", type=int, default=100, help="Sample every N steps")
     parser.add_argument("--save_every", type=int, default=5000, help="Save model every N steps")
+    parser.add_argument("--validate_every", type=int, default=1000, help="Compute validation loss every N steps")
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to use for training")
     parser.add_argument("--max_grad_norm", type=float, default=-1, help="Maximum norm for gradient clipping")
     parser.add_argument("--use_loss_mean", action="store_true", help="Use loss.mean() instead of just loss")
@@ -471,6 +536,7 @@ def main():
         "log_every": args.log_every,
         "sample_every": args.sample_every,
         "save_every": args.save_every,
+        "validate_every": args.validate_every,
         "net": args.net,
         "in_channels": args.in_channels,
         "resolution": args.resolution,
@@ -503,8 +569,13 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
-    dataset = CIFAR10(root='./data', train=True, download=True, transform=transform)
-    dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, num_workers=4)
+    full_dataset = CIFAR10(root='./data', train=True, download=True, transform=transform)
+    train_size = int(0.9 * len(full_dataset))
+    val_size = len(full_dataset) - train_size
+    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+
+    train_dataloader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=4)
+    val_dataloader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
 
     # Initialize the process group
     if torch.cuda.is_available():
@@ -539,13 +610,14 @@ def main():
 
     # Train the model
     train_loop(
-        denoising_model, dataloader, optimizer, lr_scheduler, noise_schedule,
+        denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule,
         num_timesteps,
         total_steps=args.total_steps,
         device=args.device,
         log_every=args.log_every,
         sample_every=args.sample_every,
         save_every=args.save_every,
+        validate_every=args.validate_every,
         logger=args.logger,
         max_grad_norm=config.max_grad_norm,
         use_loss_mean=config.use_loss_mean,
