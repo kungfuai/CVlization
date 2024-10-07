@@ -206,6 +206,7 @@ def train(rank=0, args=None, temp_dir=""):
 
     def evaluate_fid(model, num_samples):
         model.eval()
+        model.to(train_device)
         istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
         with torch.no_grad():
             for _ in range(0, num_samples, fid_eval_batch_size):
