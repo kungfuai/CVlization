@@ -11,10 +11,17 @@ from functools import partial
 from torch.distributed.elastic.multiprocessing import errors
 from torch.nn.parallel import DistributedDataParallel as DDP  # noqa
 from torch.optim import Adam, lr_scheduler
+import wandb
+from ddpm_torch.metrics import InceptionStatistics, calc_fd, get_precomputed
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from tqdm import tqdm
+import numpy as np
 
 
 def train(rank=0, args=None, temp_dir=""):
     distributed = args.distributed
+    use_wandb = args.logger == 'wandb' and (not distributed or dist.get_rank() == 0)
 
     def logger(msg, **kwargs):
         if not distributed or dist.get_rank() == 0:
@@ -172,6 +179,47 @@ def train(rank=0, args=None, temp_dir=""):
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
 
+        # Initialize wandb if enabled
+        if use_wandb:
+            wandb_project = os.environ.get("WANDB_PROJECT") or "Diffuser Unconditional"
+            wandb.init(project=wandb_project, name=exp_name, config=hps)
+
+    # FID evaluation setup
+    fid_eval_freq = args.fid_eval_freq
+    fid_eval_size = args.fid_eval_size
+    fid_eval_batch_size = args.fid_eval_batch_size
+
+    # Load or compute true statistics for FID
+    precomputed_dir = args.precomputed_dir
+    try:
+        true_mean, true_var = get_precomputed(dataset, download_dir=precomputed_dir)
+    except Exception:
+        print("Precomputed statistics cannot be loaded! Computing from raw data...")
+        dataloader = get_dataloader(
+            dataset, batch_size=fid_eval_batch_size, split="all", val_size=0., root=root,
+            pin_memory=True, drop_last=False, num_workers=args.num_workers, raw=True)[0]
+        istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
+        for x in tqdm(dataloader):
+            istats(x.to(train_device))
+        true_mean, true_var = istats.get_statistics()
+        np.savez(os.path.join(precomputed_dir, f"fid_stats_{dataset}.npz"), mu=true_mean, sigma=true_var)
+
+    def evaluate_fid(model, num_samples):
+        model.eval()
+        istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
+        with torch.no_grad():
+            for _ in range(0, num_samples, fid_eval_batch_size):
+                batch_size = min(fid_eval_batch_size, num_samples - _ * fid_eval_batch_size)
+                x = diffusion.p_sample_loop(model, (batch_size, *image_shape))
+                istats(x)
+        gen_mean, gen_var = istats.get_statistics()
+        fid = calc_fd(gen_mean, gen_var, true_mean, true_var)
+        model.train()
+        return fid
+
+    if use_wandb:
+        print("Using wandb")
+
     trainer = Trainer(
         model=model,
         optimizer=optimizer,
@@ -191,7 +239,11 @@ def train(rank=0, args=None, temp_dir=""):
         ema_decay=args.ema_decay,
         rank=rank,
         distributed=distributed,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
+        wandb=wandb if use_wandb else None,  # Pass wandb to Trainer if enabled
+        fid_eval_func=evaluate_fid if fid_eval_freq > 0 else None,
+        fid_eval_freq=fid_eval_freq,
+        fid_eval_size=fid_eval_size,
     )
 
     if args.use_ddim:
@@ -280,6 +332,12 @@ def main():
     parser.add_argument("--rigid-launch", action="store_true", help="whether to use torch multiprocessing spawn")
     parser.add_argument("--num-gpus", default=1, type=int, help="number of gpus for distributed training")
     parser.add_argument("--dry-run", action="store_true", help="test-run till the first model update completes")
+    parser.add_argument("--logger", default="none", type=str, help="logging method (wandb or none)")
+    parser.add_argument("--wandb-entity", default=None, type=str, help="wandb entity name")
+    parser.add_argument("--fid-eval-freq", default=3900, type=int, help="FID evaluation frequency (in steps)")
+    parser.add_argument("--fid-eval-size", default=10000, type=int, help="Number of samples for FID evaluation")
+    parser.add_argument("--fid-eval-batch-size", default=100, type=int, help="Batch size for FID evaluation")
+    parser.add_argument("--precomputed-dir", default="./precomputed", type=str, help="Directory for precomputed statistics")
 
     args = parser.parse_args()
 
@@ -288,17 +346,13 @@ def main():
         with tempfile.TemporaryDirectory() as temp_dir:
             mp.spawn(train, args=(args, temp_dir), nprocs=args.num_gpus)
     else:
-        """
-        As opposed to the case of rigid launch, distributed training now:
-        (*: elastic launch only; **: Slurm srun only)
-         *1. handles failures by restarting all the workers 
-         *2.1 assigns RANK and WORLD_SIZE automatically
-        **2.2 sets MASTER_ADDR & MASTER_PORT manually beforehand via environment variables
-         *3. allows for number of nodes change
-          4. uses TCP initialization by default
-        **5. supports multi-node training
-        """
+        if args.logger == 'wandb' and (not args.distributed or int(os.environ.get("RANK", "0")) == 0):
+            wandb_project = os.environ.get("WANDB_PROJECT") or "Diffuser Unconditional"
+            wandb.init(project=wandb_project, entity=args.wandb_entity, config=vars(args))
         train(args=args)
+
+    if args.logger == 'wandb' and (not args.distributed or int(os.environ.get("RANK", "0")) == 0):
+        wandb.finish()
 
 
 if __name__ == "__main__":

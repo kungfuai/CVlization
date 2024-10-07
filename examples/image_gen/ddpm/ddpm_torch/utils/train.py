@@ -11,6 +11,7 @@ import weakref
 from tqdm import tqdm
 from functools import partial
 from contextlib import nullcontext
+import wandb
 
 
 class DummyScheduler:
@@ -82,7 +83,11 @@ class Trainer:
             ema_decay=0.9999,
             distributed=False,
             rank=0,  # process id for distributed training
-            dry_run=False
+            dry_run=False,
+            wandb=None,  # Add this parameter
+            fid_eval_func=None,
+            fid_eval_freq=0,
+            fid_eval_size=10000
     ):
         self.model = model
         self.optimizer = optimizer
@@ -126,6 +131,10 @@ class Trainer:
             self.ema = nullcontext()
 
         self.stats = RunningStatistics(loss=None)
+        self.wandb = wandb  # Store wandb instance
+        self.fid_eval_func = fid_eval_func
+        self.fid_eval_freq = fid_eval_freq
+        self.fid_eval_size = fid_eval_size
 
     @property
     def timesteps(self):
@@ -168,6 +177,11 @@ class Trainer:
             dist.reduce(loss, dst=0, op=dist.ReduceOp.SUM)  # synchronize losses
             loss.div_(self.world_size)
         self.stats.update(x.shape[0], loss=loss.item() * x.shape[0])
+        # if self.wandb is not None:
+        #     self.wandb.log({
+        #         "loss": loss.item(),
+        #         "global_step": global_steps,
+        #     })
 
     def sample_fn(self, sample_size=None, noise=None, diffusion=None, sample_seed=None):
         if noise is None:
@@ -213,12 +227,29 @@ class Trainer:
                     results.update(self.current_stats)
                     if self.dry_run and not global_steps % self.num_accum:
                         break
+                    if self.wandb is not None:
+                        self.wandb.log({
+                            "epoch": e + 1,
+                            **self.current_stats
+                        })
+
+                    # Evaluate FID
+                    if self.fid_eval_func and global_steps % self.fid_eval_freq == 0:
+                        fid = self.fid_eval_func(self.model, self.fid_eval_size)
+                        print(f"Step {global_steps}, FID: {fid}")
+                        if self.wandb:
+                            self.wandb.log({"fid": fid, "step": global_steps})
 
             if not (e + 1) % self.image_intv and self.num_samples and image_dir:
                 self.model.eval()
                 x = self.sample_fn(sample_size=self.num_samples, sample_seed=self.sample_seed).cpu()
                 if self.is_leader:
                     save_image(x, os.path.join(image_dir, f"{e + 1}.jpg"), nrow=nrow)
+                if self.is_leader and self.wandb is not None:
+                    self.wandb.log({
+                        "samples": [wandb.Image(x) for x in x],
+                        "epoch": e + 1
+                    })
 
             if not (e + 1) % self.chkpt_intv and chkpt_path:
                 self.model.eval()
@@ -229,6 +260,10 @@ class Trainer:
                 results.update(eval_results)
                 if self.is_leader:
                     self.save_checkpoint(chkpt_path, epoch=e + 1, **results)
+                    if self.wandb is not None:
+                        self.wandb.log(results)
+                    # TODO:
+                    # save the model to wandb
 
             if self.distributed:
                 dist.barrier()  # synchronize all processes here
@@ -270,6 +305,8 @@ class Trainer:
         if "epoch" in extra_info:
             chkpt_path = re.sub(r"(_\d+)?\.pt", f"_{extra_info['epoch']}.pt", chkpt_path)
         torch.save(dict(chkpt), chkpt_path)
+        if self.wandb is not None:
+            self.wandb.save(chkpt_path)
 
     def named_state_dicts(self):
         for k in self.trainees:

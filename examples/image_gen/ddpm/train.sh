@@ -1,6 +1,7 @@
 docker run --runtime nvidia -it \
 	-v $(pwd)/examples/image_gen/ddpm:/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
-	-v $(pwd)/data/:/workspace/data \
+    -e WANDB_API_KEY=$WANDB_API_KEY \
+    -e WANDB_PROJECT=$WANDB_PROJECT \
 	ddpm \
-	python train.py
+	python train.py $@
