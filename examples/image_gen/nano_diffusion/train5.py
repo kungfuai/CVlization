@@ -673,7 +673,7 @@ def main():
     parser.add_argument("--sample_every", type=int, default=1500, help="Sample every N steps")
     parser.add_argument("--save_every", type=int, default=60000, help="Save model every N steps")
     parser.add_argument("--validate_every", type=int, default=1500, help="Compute validation loss every N steps")
-    parser.add_argument("--fid_every", type=int, default=1500, help="Compute FID every N steps")
+    parser.add_argument("--fid_every", type=int, default=6000, help="Compute FID every N steps")
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to use for training")
     parser.add_argument("--max_grad_norm", type=float, default=-1, help="Maximum norm for gradient clipping")
     parser.add_argument("--use_loss_mean", action="store_true", help="Use loss.mean() instead of just loss")
