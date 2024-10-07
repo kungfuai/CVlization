@@ -209,8 +209,8 @@ def train(rank=0, args=None, temp_dir=""):
         istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
         
         # Generate samples
-        for _ in tqdm(range(0, num_samples, fid_eval_batch_size), desc="Generating samples for FID"):
-            n_samples = min(fid_eval_batch_size, num_samples - istats.n)
+        for i in tqdm(range(0, num_samples, fid_eval_batch_size), desc="Generating samples for FID"):
+            n_samples = min(fid_eval_batch_size, num_samples - i)
             n_samples = max(n_samples, 1)
             samples = diffusion.p_sample(
                 model,
