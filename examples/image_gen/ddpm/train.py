@@ -207,13 +207,24 @@ def train(rank=0, args=None, temp_dir=""):
     def evaluate_fid(model, num_samples):
         model.eval()
         istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
-        with torch.no_grad():
-            for _ in range(0, num_samples, fid_eval_batch_size):
-                batch_size = min(fid_eval_batch_size, num_samples - _ * fid_eval_batch_size)
-                x = diffusion.p_sample(model, (batch_size, *image_shape), device=train_device)
-                istats(x)
+        
+        # Generate samples
+        for _ in tqdm(range(0, num_samples, fid_eval_batch_size), desc="Generating samples for FID"):
+            n_samples = min(fid_eval_batch_size, num_samples - istats.n)
+            n_samples = max(n_samples, 1)
+            samples = diffusion.p_sample(
+                model,
+                (n_samples, *image_shape),
+                device=train_device
+            )
+            istats(samples)
+
+        # Compute generated statistics
         gen_mean, gen_var = istats.get_statistics()
+
+        # Calculate FID
         fid = calc_fd(gen_mean, gen_var, true_mean, true_var)
+        
         model.train()
         return fid
 
