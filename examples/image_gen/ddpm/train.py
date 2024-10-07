@@ -206,12 +206,11 @@ def train(rank=0, args=None, temp_dir=""):
 
     def evaluate_fid(model, num_samples):
         model.eval()
-        model.to(train_device)
         istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
         with torch.no_grad():
             for _ in range(0, num_samples, fid_eval_batch_size):
                 batch_size = min(fid_eval_batch_size, num_samples - _ * fid_eval_batch_size)
-                x = diffusion.p_sample(model, (batch_size, *image_shape))
+                x = diffusion.p_sample(model, (batch_size, *image_shape), device=train_device)
                 istats(x)
         gen_mean, gen_var = istats.get_statistics()
         fid = calc_fd(gen_mean, gen_var, true_mean, true_var)
