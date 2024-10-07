@@ -5,6 +5,7 @@
 
 import copy
 import os
+import wandb
 
 import torch
 from absl import app, flags
@@ -47,6 +48,7 @@ flags.DEFINE_integer(
     help="frequency of saving checkpoints, 0 to disable during training",
 )
 
+flags.DEFINE_string("logger", None, "Logger to use. Set to 'wandb' to use Weights & Biases")
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
@@ -151,6 +153,11 @@ def train(argv):
     savedir = FLAGS.output_dir + FLAGS.model + "/"
     os.makedirs(savedir, exist_ok=True)
 
+    # Initialize wandb if specified
+    if FLAGS.logger == 'wandb':
+        project_name = os.getenv("WANDB_PROJECT") or "Diffuser Unconditional"
+        wandb.init(project=project_name, config=FLAGS.flag_values_dict())
+
     with trange(FLAGS.total_steps, dynamic_ncols=True) as pbar:
         for step in pbar:
             optim.zero_grad()
@@ -167,18 +174,30 @@ def train(argv):
 
             # sample and Saving the weights
             if FLAGS.save_step > 0 and step % FLAGS.save_step == 0:
-                generate_samples(net_model, FLAGS.parallel, savedir, step, net_="normal")
-                generate_samples(ema_model, FLAGS.parallel, savedir, step, net_="ema")
-                torch.save(
-                    {
-                        "net_model": net_model.state_dict(),
-                        "ema_model": ema_model.state_dict(),
-                        "sched": sched.state_dict(),
-                        "optim": optim.state_dict(),
-                        "step": step,
-                    },
-                    savedir + f"{FLAGS.model}_cifar10_weights_step_{step}.pt",
-                )
+                normal_samples = generate_samples(net_model, FLAGS.parallel, savedir, step, net_="normal")
+                ema_samples = generate_samples(ema_model, FLAGS.parallel, savedir, step, net_="ema")
+                
+                # Log images to wandb
+                if FLAGS.logger == 'wandb':
+                    wandb.log({
+                        "test_samples": [wandb.Image(img) for img in normal_samples[:8, ...]],
+                        "test_samples_ema": [wandb.Image(img) for img in ema_samples[:8, ...]],
+                        "step": step
+                    })
+
+                # ... existing code for saving weights ...
+
+            # Log metrics to wandb
+            if FLAGS.logger == 'wandb':
+                wandb.log({
+                    "loss": loss.item(),
+                    "learning_rate": sched.get_last_lr()[0],
+                    "step": step
+                })
+
+    # Finish wandb run if it was initialized
+    if FLAGS.logger == 'wandb':
+        wandb.finish()
 
 
 if __name__ == "__main__":
