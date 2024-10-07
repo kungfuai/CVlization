@@ -72,6 +72,7 @@ def generate_samples(model, parallel, savedir, step, net_="normal"):
     save_image(traj, savedir + f"{net_}_generated_FM_images_step_{step}.png", nrow=8)
 
     model.train()
+    return traj
 
 
 def ema(source, target, decay):
