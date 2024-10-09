@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 import numpy as np
+from cleanfid import fid
 
 
 def train(rank=0, args=None, temp_dir=""):
@@ -190,24 +191,22 @@ def train(rank=0, args=None, temp_dir=""):
     fid_eval_batch_size = args.fid_eval_batch_size
 
     # Load or compute true statistics for FID
-    precomputed_dir = args.precomputed_dir
-    try:
-        true_mean, true_var = get_precomputed(dataset, download_dir=precomputed_dir)
-    except Exception:
-        print("Precomputed statistics cannot be loaded! Computing from raw data...")
-        dataloader = get_dataloader(
-            dataset, batch_size=fid_eval_batch_size, split="all", val_size=0., root=root,
-            pin_memory=True, drop_last=False, num_workers=args.num_workers, raw=True)[0]
-        istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
-        for x in tqdm(dataloader):
-            istats(x.to(train_device))
-        true_mean, true_var = istats.get_statistics()
-        np.savez(os.path.join(precomputed_dir, f"fid_stats_{dataset}.npz"), mu=true_mean, sigma=true_var)
+    # precomputed_dir = args.precomputed_dir
+    # try:
+    #     true_mean, true_var = get_precomputed(dataset, download_dir=precomputed_dir)
+    # except Exception:
+    #     print("Precomputed statistics cannot be loaded! Computing from raw data...")
+    #     dataloader = get_dataloader(
+    #         dataset, batch_size=fid_eval_batch_size, split="all", val_size=0., root=root,
+    #         pin_memory=True, drop_last=False, num_workers=args.num_workers, raw=True)[0]
+    #     istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
+    #     for x in tqdm(dataloader):
+    #         istats(x.to(train_device))
+    #     true_mean, true_var = istats.get_statistics()
+    #     np.savez(os.path.join(precomputed_dir, f"fid_stats_{dataset}.npz"), mu=true_mean, sigma=true_var)
 
     def evaluate_fid(model, num_samples):
-        model.eval()
-        istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
-        
+        model.eval()        
         # Generate samples
         for i in tqdm(range(0, num_samples, fid_eval_batch_size), desc="Generating samples for FID"):
             n_samples = min(fid_eval_batch_size, num_samples - i)
@@ -217,16 +216,17 @@ def train(rank=0, args=None, temp_dir=""):
                 (n_samples, *image_shape),
                 device=train_device
             )
-            istats(samples)
+            # save images to image_dir
+            for i, img in enumerate(samples):
+                img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+                np.save(image_dir / f'{i}.npy', img_np)
 
-        # Compute generated statistics
-        gen_mean, gen_var = istats.get_statistics()
-
-        # Calculate FID
-        fid = calc_fd(gen_mean, gen_var, true_mean, true_var)
+        # Compute FID
+        # TODO: This is hard coded to be cifar10, 32x32 for now.
+        fid_score = fid.compute_fid(str(image_dir), dataset_name="cifar10", dataset_res=32, device=train_device, mode="clean")
         
         model.train()
-        return fid
+        return fid_score
 
     if use_wandb:
         print("Using wandb")
