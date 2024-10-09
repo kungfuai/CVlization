@@ -278,7 +278,8 @@ def compute_fid(real_images, generated_images, device='cuda', regenerate_real_im
             np.save(gen_path / f'{i}.npy', img_np)
 
         # Compute FID
-        score = fid.compute_fid(str(real_path), str(gen_path), device=device, mode="clean")
+        # score = fid.compute_fid(str(real_path), str(gen_path), device=device, mode="clean")
+        score = fid.compute_fid(str(gen_path), dataset_name="cifar10", dataset_res=32, device=device, mode="clean")
 
     return score
 
