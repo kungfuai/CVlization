@@ -345,8 +345,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="test-run till the first model update completes")
     parser.add_argument("--logger", default="none", type=str, help="logging method (wandb or none)")
     parser.add_argument("--wandb-entity", default=None, type=str, help="wandb entity name")
-    parser.add_argument("--fid-eval-freq", default=390, type=int, help="FID evaluation frequency (in steps)")
-    parser.add_argument("--fid-eval-size", default=10000, type=int, help="Number of samples for FID evaluation")
+    parser.add_argument("--fid-eval-freq", default=3900, type=int, help="FID evaluation frequency (in steps)")
+    parser.add_argument("--fid-eval-size", default=1000, type=int, help="Number of samples for FID evaluation")
     parser.add_argument("--fid-eval-batch-size", default=100, type=int, help="Batch size for FID evaluation")
     parser.add_argument("--precomputed-dir", default="./precomputed", type=str, help="Directory for precomputed statistics")
 
