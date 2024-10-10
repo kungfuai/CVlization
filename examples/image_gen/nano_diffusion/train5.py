@@ -285,7 +285,6 @@ def compute_fid(real_images, generated_images, device='cuda', regenerate_real_im
 
 
 def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_scheduler, noise_schedule, n_T, total_steps, device, log_every=10, sample_every=100, save_every=5000, validate_every=1000, fid_every=10000, logger="none", max_grad_norm=1.0, use_loss_mean=True, use_ema=False, ema_beta=0.9999, num_examples_trained=0):
-    criterion = MSELoss()
     denoising_model.train()
     
     # Initialize EMA model if specified
@@ -298,8 +297,11 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
     # Get a batch of training and validation images for denoising comparison
     train_images_for_denoising, _ = next(iter(train_dataloader))
     train_images_for_denoising = train_images_for_denoising[:8].to(device)
-    val_images_for_denoising, _ = next(iter(val_dataloader))
-    val_images_for_denoising = val_images_for_denoising[:8].to(device)
+    if val_dataloader is not None:
+        val_images_for_denoising, _ = next(iter(val_dataloader))
+        val_images_for_denoising = val_images_for_denoising[:8].to(device)
+    else:
+        val_images_for_denoising = []
 
     img_output_dir = Path("data/image_gen/nano_diffusion/train5")
     img_output_dir.mkdir(parents=True, exist_ok=True)
@@ -313,11 +315,12 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
         })
 
     # Get a larger batch of real images for FID computation
-    real_images_for_fid, _ = next(iter(DataLoader(train_dataloader.dataset, batch_size=1000, shuffle=True)))
+    real_images_for_fid, _ = next(iter(DataLoader(train_dataloader.dataset, batch_size=1000, shuffle=False)))
     real_images_for_fid = real_images_for_fid.to(device)
 
     step = 0
-    
+    criterion = MSELoss()
+    # torch.manual_seed(0)
     while step < total_steps:
         for x, y in train_dataloader:
             if step >= total_steps:
@@ -329,9 +332,17 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
             optimizer.zero_grad()
             x = x.to(device)
             
-            t = torch.randint(0, n_T, (x.shape[0],)).to(device)
-            x_t, true_noise = forward_diffusion(x, t, noise_schedule)
-            
+            # print("current seed:", torch.initial_seed())
+            noise = torch.randn(x.shape).to(device)
+            # torch.manual_seed(0)
+            t = torch.randint(0, n_T, (x.shape[0],), device=device).long()
+            x_t, true_noise = forward_diffusion(x, t, noise_schedule, noise=noise)
+
+            # print("noise.mean():", noise.mean(), "shape:", noise.shape)
+            # print("t:", t.float().mean())
+            # print("noisy image.mean():", x_t.mean(), "shape:", x_t.shape)
+            # print("clean image.mean():", x.mean(), "shape:", x.shape)
+
             predicted_noise = denoising_model(x_t, t)
             if hasattr(predicted_noise, "sample"):
                 predicted_noise = predicted_noise.sample
@@ -351,6 +362,8 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
             if use_ema:
                 ema.step_ema(ema_model, denoising_model)
             
+            loss = loss.detach()
+            
             if step % log_every == 0:
                 current_lr = optimizer.param_groups[0]['lr']
                 print(f"Step {step}/{total_steps}, Examples trained: {num_examples_trained}, Train Loss: {loss.item():.4f}, LR: {current_lr:.6f}")
@@ -362,7 +375,7 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
                         "learning_rate": current_lr,
                     })
             
-            if step % validate_every == 0:
+            if step % validate_every == 0 and step > 0 and val_dataloader is not None:
                 val_loss = compute_validation_loss(denoising_model, val_dataloader, noise_schedule, n_T, device, criterion, use_loss_mean)
                 
                 # Generate denoised images for training and validation sets
@@ -478,17 +491,18 @@ def train_loop(denoising_model, train_dataloader, val_dataloader, optimizer, lr_
             step += 1
     
     # Save final model
-    final_model_path = "final_model.pth"
-    torch.save(denoising_model.state_dict(), final_model_path)
-    print("Final model saved")
-    if logger == "wandb":
-        wandb.save(final_model_path)
-    if use_ema:
-        final_ema_model_path = "final_ema_model.pth"
-        torch.save(ema_model.state_dict(), final_ema_model_path)
-        print("Final EMA model saved")
+    if step > 100:
+        final_model_path = "final_model.pth"
+        torch.save(denoising_model.state_dict(), final_model_path)
+        print("Final model saved")
         if logger == "wandb":
-            wandb.save(final_ema_model_path)
+            wandb.save(final_model_path)
+        if use_ema:
+            final_ema_model_path = "final_ema_model.pth"
+            torch.save(ema_model.state_dict(), final_ema_model_path)
+            print("Final EMA model saved")
+            if logger == "wandb":
+                wandb.save(final_ema_model_path)
 
     return num_examples_trained  # Return this value in case you want to save it for resuming training later
 
