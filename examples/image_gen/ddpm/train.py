@@ -219,7 +219,7 @@ def train(rank=0, args=None, temp_dir=""):
             # save images to image_dir
             for i, img in enumerate(samples):
                 img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
-                np.save(image_dir / f'{i}.npy', img_np)
+                np.save(image_dir + f'/{i}.npy', img_np)
 
         # Compute FID
         # TODO: This is hard coded to be cifar10, 32x32 for now.

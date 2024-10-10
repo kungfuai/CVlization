@@ -2,6 +2,7 @@
 # Adapted from https://github.com/huggingface/diffusers/blob/main/examples/unconditional_image_generation/train_unconditional.py
 # TODO: the name `unet` is no longer correct, other architectures can be used.
 
+import contextlib
 import argparse
 from types import SimpleNamespace
 import inspect
@@ -65,6 +66,8 @@ class Trainer:
     save_model_epochs: int = 50
     max_train_steps: Optional[int] = None
     resume_from_checkpoint: Optional[str] = None
+    device: Optional[str] = None
+    seed: Optional[int] = None
 
     def train(self, train_dataloader):
         logger.info("***** Running training *****")
@@ -90,13 +93,20 @@ class Trainer:
                 path = dirs[-1] if len(dirs) > 0 else None
 
             if path is None:
-                accelerator.print(
-                    f"Checkpoint '{self.resume_from_checkpoint}' does not exist. Starting a new training run."
-                )
-                args.resume_from_checkpoint = None
+                if self.accelerator:
+                    self.accelerator.print(
+                        f"Checkpoint '{self.resume_from_checkpoint}' does not exist. Starting a new training run."
+                    )
+                else:
+                    print(f"Checkpoint '{self.resume_from_checkpoint}' does not exist. Starting a new training run.")
+                self.resume_from_checkpoint = None
             else:
-                accelerator.print(f"Resuming from checkpoint {path}")
-                accelerator.load_state(os.path.join(self.output_dir, path))
+                if self.accelerator:
+                    self.accelerator.print(f"Resuming from checkpoint {path}")
+                    self.accelerator.load_state(os.path.join(self.output_dir, path))
+                else:
+                    print(f"Resuming from checkpoint {path}")
+                    # TODO: Implement checkpoint loading without accelerator
                 global_step = int(path.split("-")[1])
 
                 resume_global_step = global_step * self.gradient_accumulation_steps
@@ -110,9 +120,11 @@ class Trainer:
         optimizer = self.optimizer
         lr_scheduler = self.lr_scheduler
         accelerator = self.accelerator
+        if self.seed is not None:
+            torch.manual_seed(self.seed)
         for epoch in range(first_epoch, self.num_epochs):
             model.train()
-            progress_bar = tqdm(total=self.num_update_steps_per_epoch, disable=not accelerator.is_local_main_process)
+            progress_bar = tqdm(total=self.num_update_steps_per_epoch, disable=accelerator and not accelerator.is_local_main_process)
             progress_bar.set_description(f"Epoch {epoch}")
             for step, batch in enumerate(train_dataloader):
                 # Skip steps after 10, just for testing
@@ -126,10 +138,13 @@ class Trainer:
                     continue
 
                 clean_images = batch["input"]
+                if self.accelerator is None and self.device is not None:
+                    clean_images = clean_images.to(self.device)
                 # Sample noise that we'll add to the images
                 noise = torch.randn(clean_images.shape).to(clean_images.device)
                 bsz = clean_images.shape[0]
                 # Sample a random timestep for each image
+                # torch.manual_seed(self.seed)
                 timesteps = torch.randint(
                     0, noise_scheduler.config.num_train_timesteps, (bsz,), device=clean_images.device
                 ).long()
@@ -138,15 +153,19 @@ class Trainer:
                 # (this is the forward diffusion process)
                 noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
 
-                with accelerator.accumulate(model):
+                with (accelerator.accumulate(model) if accelerator else contextlib.nullcontext()):
                     # Predict the noise residual
+                    print("noise.mean():", noise.mean(), "shape:", noise.shape)
+                    print("timesteps:", timesteps.float().mean())
+                    # print("noisy_images.mean():", noisy_images.mean(), "shape:", noisy_images.shape)
+                    # print("clean_images.mean():", clean_images.mean(), "shape:", clean_images.shape)
                     model_output = model(noisy_images, timesteps)
                     if hasattr(model_output, "sample"):
                         model_output = model_output.sample
 
                     if self.prediction_type == "epsilon":
                         assert model_output.shape == noise.shape, f"Model output shape {model_output.shape} != noise shape {noise.shape}"
-                        loss = F.mse_loss(model_output, noise)  # this could have different weights!
+                        loss = F.mse_loss(model_output, noise)
                     elif self.prediction_type == "sample":
                         alpha_t = _extract_into_tensor(
                             noise_scheduler.alphas_cumprod, timesteps, (clean_images.shape[0], 1, 1, 1)
@@ -154,21 +173,28 @@ class Trainer:
                         snr_weights = alpha_t / (1 - alpha_t)
                         loss = snr_weights * F.mse_loss(
                             model_output, clean_images, reduction="none"
-                        )  # use SNR weighting from distillation paper
+                        )
                         loss = loss.mean()
                     else:
                         raise ValueError(f"Unsupported prediction type: {self.prediction_type}")
 
-                    accelerator.backward(loss)
+                    if accelerator:
+                        accelerator.backward(loss)
+                    else:
+                        loss.backward()
 
-                    if accelerator.sync_gradients:
+                    if accelerator and accelerator.sync_gradients:
                         accelerator.clip_grad_norm_(model.parameters(), 1.0)
+                    else:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
                     optimizer.step()
+                    # print("grad mean:", list(model.parameters())[0].grad.mean().item())
+                    # print("param mean:", list(model.parameters())[0].mean().item())
                     lr_scheduler.step()
                     optimizer.zero_grad()
 
-                # Checks if the accelerator has performed an optimization step behind the scenes
-                if accelerator.sync_gradients:
+                if accelerator and accelerator.sync_gradients:
                     if self.use_ema:
                         ema_model.step(model.parameters())
                     progress_bar.update(1)
@@ -179,20 +205,41 @@ class Trainer:
                             save_path = os.path.join(self.output_dir, f"checkpoint-{global_step}")
                             accelerator.save_state(save_path)
                             logger.info(f"Saved state to {save_path}")
+                else:
+                    if self.use_ema:
+                        ema_model.step(model.parameters())
+                    progress_bar.update(1)
+                    global_step += 1
 
+                    if global_step % self.checkpointing_steps == 0:
+                        # save without accelerator
+                        save_path = os.path.join(self.output_dir, f"checkpoint-{global_step}")
+                        torch.save(model.state_dict(), save_path)
+                        logger.info(f"Saved state to {save_path}")
+            
                 logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
                 if self.use_ema:
                     logs["ema_decay"] = ema_model.cur_decay_value
                 progress_bar.set_postfix(**logs)
-                accelerator.log(logs, step=global_step)
+                if accelerator:
+                    accelerator.log(logs, step=global_step)
+
+                if global_step >= self.max_train_steps:
+                    print("loss:", loss.item(), "lr:", lr_scheduler.get_last_lr()[0], "step:", global_step)
+                    break
+            
+            if global_step >= self.max_train_steps:
+                break
+
             progress_bar.close()
 
-            accelerator.wait_for_everyone()
+            if accelerator:
+                accelerator.wait_for_everyone()
 
             # Generate sample images for visual inspection
-            if accelerator.is_main_process:
-                if epoch % self.save_images_epochs == 0 or epoch == self.num_epochs - 1:
-                    unet = accelerator.unwrap_model(model)
+            if not accelerator or accelerator.is_main_process:
+                if (epoch + 1) % self.save_images_epochs == 0 or epoch == self.num_epochs - 1:
+                    unet = accelerator.unwrap_model(model) if accelerator else model
 
                     if self.use_ema:
                         ema_model.store(unet.parameters())
@@ -200,7 +247,7 @@ class Trainer:
 
                     # Prevent an error that complained about the DDPMPipeline does not have .device.
                     if not hasattr(unet, "device"):
-                        unet.device = accelerator.device
+                        unet.device = accelerator.device if accelerator else next(unet.parameters()).device
 
                     pipeline = DDPMPipeline(
                         unet=unet,
@@ -223,21 +270,29 @@ class Trainer:
                     images_processed = (images * 255).round().astype("uint8")
 
                     if self.logger == "tensorboard":
-                        if is_accelerate_version(">=", "0.17.0.dev0"):
-                            tracker = accelerator.get_tracker("tensorboard", unwrap=True)
+                        if accelerator:
+                            if is_accelerate_version(">=", "0.17.0.dev0"):
+                                tracker = accelerator.get_tracker("tensorboard", unwrap=True)
+                            else:
+                                tracker = accelerator.get_tracker("tensorboard")
+                            tracker.add_images("test_samples", images_processed.transpose(0, 3, 1, 2), epoch)
                         else:
-                            tracker = accelerator.get_tracker("tensorboard")
-                        tracker.add_images("test_samples", images_processed.transpose(0, 3, 1, 2), epoch)
+                            # TODO: Implement tensorboard logging without accelerator
+                            pass
                     elif self.logger == "wandb":
-                        # Upcoming `log_images` helper coming in https://github.com/huggingface/accelerate/pull/962/files
-                        accelerator.get_tracker("wandb").log(
-                            {"test_samples": [wandb.Image(img) for img in images_processed], "epoch": epoch},
-                            step=global_step,
-                        )
+                        if accelerator:
+                            accelerator.get_tracker("wandb").log(
+                                {"test_samples": [wandb.Image(img) for img in images_processed], "epoch": epoch},
+                                step=global_step,
+                            )
+                        else:
+                            wandb.log(
+                                {"test_samples": [wandb.Image(img) for img in images_processed], "epoch": epoch},
+                                step=global_step,
+                            )
 
                 if (epoch + 1) % self.save_model_epochs == 0 or epoch == self.num_epochs - 1:
-                    # save the model
-                    unet = accelerator.unwrap_model(model)
+                    unet = accelerator.unwrap_model(model) if accelerator else model
 
                     if self.use_ema:
                         ema_model.store(unet.parameters())
@@ -258,7 +313,8 @@ class Trainer:
                         wandb.save(os.path.join(self.output_dir, "unet", "diffusion_pytorch_model.bin"))
                         wandb.save(os.path.join(self.output_dir, "scheduler", "scheduler_config.json"))
 
-        accelerator.end_training()
+        if accelerator:
+            accelerator.end_training()
 
 
 @dataclass
@@ -271,19 +327,24 @@ class TrainingPipeline:
         model = self._create_model()
         ema_model = self._create_ema_model(model)
         self._create_scheduler()
-        accelerator = self._prepare_accelerator(ema_model)
+        accelerator = None if args.no_accelerator else self._prepare_accelerator(ema_model)
         train_dataloader = self._create_train_dataloader(dataset_builder.training_dataset())
         optimizer, lr_scheduler = self._create_optimizer(model=model, train_dataloader=train_dataloader)
         
-        # Prepare everything with our `accelerator`.
-        model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            model, optimizer, train_dataloader, lr_scheduler
-        )
-        ema_model.to(accelerator.device)
+        if accelerator:
+            # Prepare everything with our `accelerator`.
+            model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+                model, optimizer, train_dataloader, lr_scheduler
+            )
+            ema_model.to(accelerator.device)
 
-        # Add wandb.watch here if specified
-        if args.logger == "wandb" and args.watch_model:
-            wandb.watch(model, log="all", log_freq=100)
+            # Add wandb.watch here if specified
+            if args.logger == "wandb" and args.watch_model:
+                wandb.watch(model, log="all", log_freq=100)
+        else:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model.to(device)
+            ema_model.to(device)
 
         self.model = model
         self.optimizer = optimizer
@@ -316,9 +377,9 @@ class TrainingPipeline:
     
     def _create_trainer(self):
         args = self.args
-        accelerator = self._accelerator
+        accelerator = self._accelerator if not args.no_accelerator else None
         train_dataloader = self.train_dataloader
-        total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
+        total_batch_size = args.train_batch_size * (accelerator.num_processes if accelerator else 1) * args.gradient_accumulation_steps
         num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
         max_train_steps = args.num_epochs * num_update_steps_per_epoch
         trainer = Trainer(
@@ -326,7 +387,7 @@ class TrainingPipeline:
             noise_scheduler=self.noise_scheduler,
             optimizer=self.optimizer,
             lr_scheduler=self.lr_scheduler,
-            accelerator=self._accelerator,
+            accelerator=accelerator,
             ema_model=self.ema_model,
             logger=args.logger,
             output_dir=args.output_dir,
@@ -402,7 +463,7 @@ class TrainingPipeline:
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers initializes automatically on the main process.
         if accelerator.is_main_process:
-            run = "Diffuser Unconditional"
+            run = os.getenv("WANDB_PROJECT", "Diffuser Unconditional")
             accelerator.init_trackers(run)
         
         
