@@ -191,23 +191,9 @@ def train(rank=0, args=None, temp_dir=""):
     fid_eval_size = args.fid_eval_size
     fid_eval_batch_size = args.fid_eval_batch_size
 
-    # Load or compute true statistics for FID
-    # precomputed_dir = args.precomputed_dir
-    # try:
-    #     true_mean, true_var = get_precomputed(dataset, download_dir=precomputed_dir)
-    # except Exception:
-    #     print("Precomputed statistics cannot be loaded! Computing from raw data...")
-    #     dataloader = get_dataloader(
-    #         dataset, batch_size=fid_eval_batch_size, split="all", val_size=0., root=root,
-    #         pin_memory=True, drop_last=False, num_workers=args.num_workers, raw=True)[0]
-    #     istats = InceptionStatistics(device=train_device, input_transform=lambda im: (im-127.5) / 127.5)
-    #     for x in tqdm(dataloader):
-    #         istats(x.to(train_device))
-    #     true_mean, true_var = istats.get_statistics()
-    #     np.savez(os.path.join(precomputed_dir, f"fid_stats_{dataset}.npz"), mu=true_mean, sigma=true_var)
-
     def evaluate_fid(model, num_samples):
         model.eval()
+        print(f"generating {num_samples} samples for fid evaluation")
         # Generate samples
         for i in tqdm(range(0, num_samples, fid_eval_batch_size), desc="Generating samples for FID"):
             n_samples = min(fid_eval_batch_size, num_samples - i)
@@ -224,11 +210,11 @@ def train(rank=0, args=None, temp_dir=""):
 
         # Compute FID
         # TODO: This is hard coded to be cifar10, 32x32 for now.
-        # list all files in image_dir
-        files = os.listdir(image_dir)
-        print(files[:5] + files[-5:])
-        fid_score = fid.compute_fid(str(image_dir), dataset_name="cifar10", dataset_res=32, device=train_device, mode="clean")
-        
+        fid_score = fid.compute_fid(
+            str(image_dir), dataset_name="cifar10",
+            dataset_res=32, device=train_device, mode="clean",
+            batch_size=16,
+        )
         model.train()
         return fid_score
 
@@ -307,7 +293,7 @@ def main():
     parser.add_argument("--config-path", type=str, help="path to the configuration file")
     parser.add_argument("--exp-name", type=str, help="name of the current experiment run")
     parser.add_argument("--dataset", choices=DATASET_DICT.keys(), default="cifar10")
-    parser.add_argument("--root", default="~/datasets", type=str, help="root directory of datasets")
+    parser.add_argument("--root", default="data/cifar10", type=str, help="root directory of datasets")
     parser.add_argument("--epochs", default=50, type=int, help="total number of training epochs")
     parser.add_argument("--lr", default=0.0002, type=float, help="learning rate")
     parser.add_argument("--beta1", default=0.9, type=float, help="beta_1 in Adam")
