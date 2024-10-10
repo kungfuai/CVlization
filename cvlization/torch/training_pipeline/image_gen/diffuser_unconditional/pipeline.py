@@ -10,7 +10,6 @@ from dataclasses import dataclass
 import logging
 import math
 import os
-from pathlib import Path
 from typing import Optional
 
 import accelerate
@@ -333,22 +332,29 @@ class Trainer:
         tmp_dir = tempfile.TemporaryDirectory()
         image_dir = tmp_dir.name
         # draw samples
-        num_sampled_images_for_fid = 1000
+        num_sampled_images_for_fid = 100
         sample_batch_size = 100
         num_batches = num_sampled_images_for_fid // sample_batch_size
         sampled_images = []
-        for i in range(num_batches):
+        for i in tqdm(range(num_batches), desc="Sampling images for FID"):
             images = pipeline(
-                batch_size=100,
+                batch_size=sample_batch_size,
                 num_inference_steps=self.ddpm_num_inference_steps,
                 output_type="numpy",
             ).images
             sampled_images.append(images)
         sampled_images = np.concatenate(sampled_images, axis=0)
         for i, img in enumerate(sampled_images):
-            img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+            if img.max() <= 2:
+                img = img * 255
+            img_np = img.astype(np.uint8).transpose(1, 2, 0)
             np.save(image_dir + f'/{i}.npy', img_np)
-        fid_score = fid.compute_fid(str(image_dir), dataset_name="cifar10", dataset_res=32, device=self.device, mode="clean")
+        # assert this folder only contains the right number of .npy files
+        assert len(os.listdir(image_dir)) == num_sampled_images_for_fid, f"Expected {num_sampled_images_for_fid} files in {image_dir}, but found {len(os.listdir(image_dir))}"
+        fid_score = fid.compute_fid(
+            str(image_dir), dataset_name="cifar10", dataset_res=32,
+            device=self.device, mode="clean", batch_size=2)
+        print("fid score:", fid_score)
         return fid_score
 
 @dataclass
@@ -432,7 +438,7 @@ class TrainingPipeline:
             train_batch_size=args.train_batch_size,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             total_batch_size=total_batch_size,
-            ddpm_num_inference_steps=args.ddpm_num_inference_steps,
+            ddpm_num_inference_steps=args.ddpm_num_steps,
             num_update_steps_per_epoch=num_update_steps_per_epoch,
             checkpointing_steps=args.checkpointing_steps,
             max_train_steps=max_train_steps,
