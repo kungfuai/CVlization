@@ -18,6 +18,7 @@ from torchvision import transforms
 from tqdm import tqdm
 import numpy as np
 from cleanfid import fid
+import shutil
 
 
 def train(rank=0, args=None, temp_dir=""):
@@ -157,6 +158,9 @@ def train(rank=0, args=None, temp_dir=""):
     logger(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
     logger(f"every {chkpt_intv} epoch(s)")
 
+    # remove dir
+    if os.path.exists(args.image_dir):
+        shutil.rmtree(args.image_dir)
     image_dir = os.path.join(args.image_dir, "train", exp_name)
     logger(f"Generated images (x{train_config.num_samples}) will be saved to {os.path.abspath(image_dir)}", end=" ")
     logger(f"every {train_config.image_intv} epoch(s)")

@@ -39,8 +39,6 @@ from cvlization.torch.training_pipeline.image_gen.dit import DiT
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.15.0.dev0")
 
-logger = get_logger(__name__, log_level="INFO")
-
 
 @dataclass
 class Trainer:
@@ -63,6 +61,7 @@ class Trainer:
     eval_batch_size: int = 32
     checkpointing_steps: int = 5000
     save_images_epochs: int = 1
+    fid_epochs: int = 1
     save_model_epochs: int = 50
     max_train_steps: Optional[int] = None
     resume_from_checkpoint: Optional[str] = None
@@ -70,6 +69,12 @@ class Trainer:
     seed: Optional[int] = None
 
     def train(self, train_dataloader):
+        if self.accelerator:
+            logger = get_logger(__name__, log_level="INFO")
+        else:
+            import logging
+            logger = logging.getLogger(__name__)
+        
         logger.info("***** Running training *****")
         # logger.info(f"  Num examples = {len(dataset)}")
         logger.info(f"  Num Epochs = {self.num_epochs}")
@@ -105,7 +110,7 @@ class Trainer:
                     self.accelerator.print(f"Resuming from checkpoint {path}")
                     self.accelerator.load_state(os.path.join(self.output_dir, path))
                 else:
-                    print(f"Resuming from checkpoint {path}")
+                    logger.info(f"Resuming from checkpoint {path}")
                     # TODO: Implement checkpoint loading without accelerator
                 global_step = int(path.split("-")[1])
 
@@ -155,8 +160,8 @@ class Trainer:
 
                 with (accelerator.accumulate(model) if accelerator else contextlib.nullcontext()):
                     # Predict the noise residual
-                    print("noise.mean():", noise.mean(), "shape:", noise.shape)
-                    print("timesteps:", timesteps.float().mean())
+                    # print("noise.mean():", noise.mean(), "shape:", noise.shape)
+                    # print("timesteps:", timesteps.float().mean())
                     # print("noisy_images.mean():", noisy_images.mean(), "shape:", noisy_images.shape)
                     # print("clean_images.mean():", clean_images.mean(), "shape:", clean_images.shape)
                     model_output = model(noisy_images, timesteps)
@@ -290,6 +295,9 @@ class Trainer:
                                 {"test_samples": [wandb.Image(img) for img in images_processed], "epoch": epoch},
                                 step=global_step,
                             )
+                if (epoch + 1) % self.fid_epochs == 0:
+                    fid = self.fid_score(pipeline=pipeline)
+                    logger.info(f"FID score: {fid}")
 
                 if (epoch + 1) % self.save_model_epochs == 0 or epoch == self.num_epochs - 1:
                     unet = accelerator.unwrap_model(model) if accelerator else model
@@ -316,6 +324,32 @@ class Trainer:
         if accelerator:
             accelerator.end_training()
 
+
+    def fid_score(self, pipeline):
+        from cleanfid import fid
+        import tempfile
+        import numpy as np
+
+        tmp_dir = tempfile.TemporaryDirectory()
+        image_dir = tmp_dir.name
+        # draw samples
+        num_sampled_images_for_fid = 1000
+        sample_batch_size = 100
+        num_batches = num_sampled_images_for_fid // sample_batch_size
+        sampled_images = []
+        for i in range(num_batches):
+            images = pipeline(
+                batch_size=100,
+                num_inference_steps=self.ddpm_num_inference_steps,
+                output_type="numpy",
+            ).images
+            sampled_images.append(images)
+        sampled_images = np.concatenate(sampled_images, axis=0)
+        for i, img in enumerate(sampled_images):
+            img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+            np.save(image_dir + f'/{i}.npy', img_np)
+        fid_score = fid.compute_fid(str(image_dir), dataset_name="cifar10", dataset_res=32, device=self.device, mode="clean")
+        return fid_score
 
 @dataclass
 class TrainingPipeline:
@@ -382,6 +416,7 @@ class TrainingPipeline:
         total_batch_size = args.train_batch_size * (accelerator.num_processes if accelerator else 1) * args.gradient_accumulation_steps
         num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
         max_train_steps = args.num_epochs * num_update_steps_per_epoch
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         trainer = Trainer(
             model=self.model,
             noise_scheduler=self.noise_scheduler,
@@ -404,6 +439,7 @@ class TrainingPipeline:
             eval_batch_size=args.eval_batch_size,
             use_ema=args.use_ema,
             prediction_type=args.prediction_type,
+            device=device,
         )
         return trainer
 
@@ -452,6 +488,8 @@ class TrainingPipeline:
             accelerator.register_load_state_pre_hook(load_model_hook)
         
         accelerator = self._accelerator
+        if accelerator:
+            logger = get_logger(__name__, log_level="INFO")
         logger.info(accelerator.state, main_process_only=False)
         if accelerator.is_local_main_process:
             datasets.utils.logging.set_verbosity_warning()
