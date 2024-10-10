@@ -213,7 +213,7 @@ def train(rank=0, args=None, temp_dir=""):
         fid_score = fid.compute_fid(
             str(image_dir), dataset_name="cifar10",
             dataset_res=32, device=train_device, mode="clean",
-            batch_size=16,
+            batch_size=2,
         )
         model.train()
         return fid_score
@@ -323,7 +323,7 @@ def main():
     parser.add_argument("--chkpt-path", default="", type=str, help="checkpoint path used to resume training")
     parser.add_argument("--eval", action="store_true", help="whether to evaluate fid during training")
     parser.add_argument("--eval-total-size", default=50000, type=int)
-    parser.add_argument("--eval-batch-size", default=256, type=int)
+    parser.add_argument("--eval-batch-size", default=100, type=int)
     parser.add_argument("--use-ema", action="store_true", help="whether to use exponential moving average")
     parser.add_argument("--use-ddim", action="store_true", help="whether to use DDIM sampler for evaluation")
     parser.add_argument("--skip-schedule", choices=["linear", "quadratic"], default="linear", type=str)
