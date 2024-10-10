@@ -243,8 +243,6 @@ class Trainer:
             if not (e + 1) % self.image_intv and self.num_samples and image_dir:
                 self.model.eval()
                 x = self.sample_fn(sample_size=self.num_samples, sample_seed=self.sample_seed).cpu()
-                if self.is_leader:
-                    save_image(x, os.path.join(image_dir, f"{e + 1}.jpg"), nrow=nrow)
                 if self.is_leader and self.wandb is not None:
                     self.wandb.log({
                         "samples": [wandb.Image(x) for x in x],
