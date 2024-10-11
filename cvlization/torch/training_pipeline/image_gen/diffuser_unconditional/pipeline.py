@@ -220,6 +220,8 @@ class Trainer:
                         save_path = os.path.join(self.output_dir, f"checkpoint-{global_step}")
                         torch.save(model.state_dict(), save_path)
                         logger.info(f"Saved state to {save_path}")
+                        if self.logger == "wandb":
+                            wandb.save(save_path)
             
                 logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
                 if self.use_ema:
@@ -321,6 +323,7 @@ class Trainer:
                     if self.logger == "wandb":
                         wandb.save(os.path.join(self.output_dir, "unet", "diffusion_pytorch_model.bin"))
                         wandb.save(os.path.join(self.output_dir, "scheduler", "scheduler_config.json"))
+                        print(f"Saved model to {self.output_dir} and wandb")
 
         if accelerator:
             accelerator.end_training()
@@ -415,7 +418,6 @@ class TrainingPipeline:
         elif args.logger == "wandb":
             if not is_wandb_available():
                 raise ImportError("Make sure to install wandb if you want to use it for logging during training.")
-            import wandb
     
     def _create_trainer(self):
         args = self.args
