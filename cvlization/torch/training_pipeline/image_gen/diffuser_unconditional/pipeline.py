@@ -297,6 +297,8 @@ class Trainer:
                 if (epoch + 1) % self.fid_epochs == 0:
                     fid = self.fid_score(pipeline=pipeline)
                     logger.info(f"FID score: {fid}")
+                    if self.logger == "wandb":
+                        wandb.log({"fid_score": fid}, step=global_step)
 
                 if (epoch + 1) % self.save_model_epochs == 0 or epoch == self.num_epochs - 1:
                     unet = accelerator.unwrap_model(model) if accelerator else model
