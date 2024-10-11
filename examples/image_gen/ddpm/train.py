@@ -193,6 +193,10 @@ def train(rank=0, args=None, temp_dir=""):
 
     def evaluate_fid(model, num_samples):
         model.eval()
+        # create a directory for just npy files
+        npy_dir = os.path.join(image_dir, "npy")
+        if not os.path.exists(npy_dir):
+            os.makedirs(npy_dir)
         print(f"generating {num_samples} samples for fid evaluation")
         # Generate samples
         for i in tqdm(range(0, num_samples, fid_eval_batch_size), desc="Generating samples for FID"):
@@ -206,12 +210,12 @@ def train(rank=0, args=None, temp_dir=""):
             # save images to image_dir
             for i, img in enumerate(samples):
                 img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
-                np.save(image_dir + f'/{i}.npy', img_np)
+                np.save(os.path.join(npy_dir, f'{i}.npy'), img_np)
 
         # Compute FID
         # TODO: This is hard coded to be cifar10, 32x32 for now.
         fid_score = fid.compute_fid(
-            str(image_dir), dataset_name="cifar10",
+            str(npy_dir), dataset_name="cifar10",
             dataset_res=32, device=train_device, mode="clean",
             batch_size=2,
         )
