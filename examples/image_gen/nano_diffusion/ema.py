@@ -27,6 +27,7 @@ class EMA:
     def reset_parameters(self, ema_model, model):
         ema_model.load_state_dict(model.state_dict())
 
+
 def create_ema_model(model, ema_beta):
     ema_model = copy.deepcopy(model)
     ema = EMA(beta=ema_beta)
