@@ -6,7 +6,8 @@
 import copy
 import os
 import wandb
-
+import numpy as np
+import tempfile
 import torch
 from absl import app, flags
 from torchdyn.core import NeuralODE
@@ -21,6 +22,7 @@ from torchcfm.conditional_flow_matching import (
     VariancePreservingConditionalFlowMatcher,
 )
 from torchcfm.models.unet.unet import UNetModelWrapper
+from cleanfid import fid
 
 FLAGS = flags.FLAGS
 
@@ -67,21 +69,8 @@ def train(argv):
         FLAGS.save_step,
     )
 
-    # DATASETS/DATALOADER
-    # dataset = datasets.CIFAR10(
-    #     root="./data",
-    #     train=True,
-    #     download=True,
-    #     transform=transforms.Compose(
-    #         [
-    #             transforms.RandomHorizontalFlip(),
-    #             transforms.ToTensor(),
-    #             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-    #         ]
-    #     ),
-    # )
     dataset = datasets.CIFAR10(
-        root="./data",
+        root="./data/cifar10",
         train=True,
         download=True,
         transform=transforms.Compose(
@@ -176,16 +165,29 @@ def train(argv):
             if FLAGS.save_step > 0 and step % FLAGS.save_step == 0:
                 normal_samples = generate_samples(net_model, FLAGS.parallel, savedir, step, net_="normal")
                 ema_samples = generate_samples(ema_model, FLAGS.parallel, savedir, step, net_="ema")
+                # calculate fid score
+                # Save images to a temp directory
+                temp_dir = tempfile.mkdtemp()
+                save_dir = os.path.join(temp_dir, f"normal")
+                for i, img in enumerate(normal_samples):
+                    np.save(os.path.join(save_dir, f"{i}.npy"), img.cpu().numpy())
+                fid_score_normal = fid.compute_fid(temp_dir, dataset_name='cifar10', dataset_res=32, mode='clean', batch_size=2)
+                save_dir = os.path.join(temp_dir, f"ema")
+                for i, img in enumerate(ema_samples):
+                    np.save(os.path.join(save_dir, f"{i}.npy"), img.cpu().numpy())
+                fid_score_ema = fid.compute_fid(temp_dir, dataset_name='cifar10', dataset_res=32, mode='clean', batch_size=2)
+                print(f"FID score normal: {fid_score_normal}, FID score ema: {fid_score_ema}")
                 
                 # Log images to wandb
                 if FLAGS.logger == 'wandb':
                     wandb.log({
                         "test_samples": [wandb.Image(img) for img in normal_samples[:8, ...]],
                         "test_samples_ema": [wandb.Image(img) for img in ema_samples[:8, ...]],
-                        "step": step
+                        "step": step,
+                        "fid_score_normal": fid_score_normal,
+                        "fid_score_ema": fid_score_ema
                     })
 
-                # ... existing code for saving weights ...
 
             # Log metrics to wandb
             if FLAGS.logger == 'wandb':
