@@ -21,7 +21,7 @@ from cvlization.torch.training_pipeline.image_gen.dit import DiT
 from cvlization.torch.training_pipeline.image_gen.diffuser_unconditional.pipeline import UNet2DModel
 
 import os
-from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
+from torch.optim.lr_scheduler import LambdaLR
 import argparse
 try:
     import wandb
@@ -270,9 +270,9 @@ def compute_fid(real_images, generated_images, device='cuda', regenerate_real_im
             except Exception as e:
                 print(f"Error loading existing real images: {e}. Regenerating...")
 
-        for i, img in enumerate(real_images):
-            img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
-            np.save(real_path / f'{i}.npy', img_np)
+        # for i, img in enumerate(real_images):
+        #     img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+        #     np.save(real_path / f'{i}.npy', img_np)
         for i, img in enumerate(generated_images):
             img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
             np.save(gen_path / f'{i}.npy', img_np)
