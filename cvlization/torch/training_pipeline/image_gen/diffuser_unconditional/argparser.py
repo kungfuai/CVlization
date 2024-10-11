@@ -93,6 +93,7 @@ def parse_args():
     parser.add_argument(
         "--save_model_epochs", type=int, default=10, help="How often to save the model during training."
     )
+    parser.add_argument("--fid_epochs", type=int, default=10, help="How often to evaluate FID during training.")
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
