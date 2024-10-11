@@ -60,7 +60,7 @@ class Trainer:
     eval_batch_size: int = 32
     checkpointing_steps: int = 5000
     save_images_epochs: int = 1
-    fid_epochs: int = 1
+    fid_epochs: int = 10
     save_model_epochs: int = 50
     max_train_steps: Optional[int] = None
     resume_from_checkpoint: Optional[str] = None
@@ -445,6 +445,7 @@ class TrainingPipeline:
             eval_batch_size=args.eval_batch_size,
             use_ema=args.use_ema,
             prediction_type=args.prediction_type,
+            fid_epochs=args.fid_epochs,
             device=device,
         )
         return trainer
