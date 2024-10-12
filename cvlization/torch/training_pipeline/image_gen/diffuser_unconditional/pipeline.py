@@ -351,6 +351,7 @@ class Trainer:
             ).images
             sampled_images.append(images)
         sampled_images = np.concatenate(sampled_images, axis=0)
+        print("sampled_images.min():", sampled_images.min(), "sampled_images.max():", sampled_images.max())
         for i, img in enumerate(sampled_images):
             if img.max() <= 2:
                 img = img * 255
