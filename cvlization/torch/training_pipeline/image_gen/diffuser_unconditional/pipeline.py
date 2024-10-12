@@ -336,8 +336,10 @@ class Trainer:
 
         tmp_dir = tempfile.TemporaryDirectory()
         image_dir = tmp_dir.name
+        npy_dir = os.path.join(image_dir, "npy")
+        os.makedirs(npy_dir, exist_ok=True)
         # draw samples
-        num_sampled_images_for_fid = 100
+        num_sampled_images_for_fid = 1000
         sample_batch_size = 100
         num_batches = num_sampled_images_for_fid // sample_batch_size
         sampled_images = []
@@ -353,11 +355,11 @@ class Trainer:
             if img.max() <= 2:
                 img = img * 255
             img_np = img.astype(np.uint8).transpose(1, 2, 0)
-            np.save(image_dir + f'/{i}.npy', img_np)
+            np.save(os.path.join(npy_dir, f'{i}.npy'), img_np)
         # assert this folder only contains the right number of .npy files
-        assert len(os.listdir(image_dir)) == num_sampled_images_for_fid, f"Expected {num_sampled_images_for_fid} files in {image_dir}, but found {len(os.listdir(image_dir))}"
+        assert len(os.listdir(npy_dir)) == num_sampled_images_for_fid, f"Expected {num_sampled_images_for_fid} files in {npy_dir}, but found {len(os.listdir(npy_dir))}"
         fid_score = fid.compute_fid(
-            str(image_dir), dataset_name="cifar10", dataset_res=32,
+            str(npy_dir), dataset_name="cifar10", dataset_res=32,
             device=self.device, mode="clean", batch_size=2)
         print("fid score:", fid_score)
         return fid_score
