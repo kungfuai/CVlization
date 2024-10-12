@@ -353,7 +353,10 @@ class Trainer:
         sampled_images = np.concatenate(sampled_images, axis=0)
         print("sampled_images.min():", sampled_images.min(), "sampled_images.max():", sampled_images.max())
         for i, img in enumerate(sampled_images):
-            if img.max() <= 2:
+            if img.min() < -0.5:
+                # then the range is between [-1, 1]
+                img = (img + 1) / 2
+            if img.mean() <= 2:
                 img = img * 255
             img_np = img.astype(np.uint8).transpose(1, 2, 0)
             np.save(os.path.join(npy_dir, f'{i}.npy'), img_np)
