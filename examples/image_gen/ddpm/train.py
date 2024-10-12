@@ -208,11 +208,18 @@ def train(rank=0, args=None, temp_dir=""):
                 device=train_device
             )
             # save images to image_dir
-            for i, img in enumerate(samples):
-                img_np = (img.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
-                np.save(os.path.join(npy_dir, f'{i}.npy'), img_np)
+            samples = samples.cpu().numpy()
+            if samples.min() < -0.5:
+                # range is probably [-1, 1]
+                samples = (samples + 1) / 2
+            if samples.mean() <= 2:
+                samples = samples * 255
+            for j, img in enumerate(samples):
+                img_np = img.astype(np.uint8).transpose(1, 2, 0)
+                np.save(os.path.join(npy_dir, f'{i + j}.npy'), img_np)
 
         # Compute FID
+        assert len(os.listdir(npy_dir)) == num_samples, f"Expected {num_samples} files in {npy_dir}, but found {len(os.listdir(npy_dir))}"
         # TODO: This is hard coded to be cifar10, 32x32 for now.
         fid_score = fid.compute_fid(
             str(npy_dir), dataset_name="cifar10",
