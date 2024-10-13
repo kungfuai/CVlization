@@ -340,11 +340,12 @@ class Trainer:
         os.makedirs(npy_dir, exist_ok=True)
         # draw samples
         num_sampled_images_for_fid = 1000
-        sample_batch_size = 100
+        sample_batch_size = 500
         num_batches = num_sampled_images_for_fid // sample_batch_size
         sampled_images = []
         for i in tqdm(range(num_batches), desc="Sampling images for FID"):
             images = pipeline(
+                generator=torch.Generator(device=pipeline.device).manual_seed(i),
                 batch_size=sample_batch_size,
                 num_inference_steps=self.ddpm_num_inference_steps,
                 output_type="numpy",
