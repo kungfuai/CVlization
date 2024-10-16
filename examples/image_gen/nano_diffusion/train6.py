@@ -1,3 +1,0 @@
-"""
-Flow matching training pipeline.
-"""
