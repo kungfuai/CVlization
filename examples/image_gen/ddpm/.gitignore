@@ -1,0 +1,4 @@
+chkpts/
+wandb/
+data/
+precomputed/
