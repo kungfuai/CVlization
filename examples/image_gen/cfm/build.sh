@@ -1,0 +1,1 @@
+docker build -t cfm examples/image_gen/cfm
