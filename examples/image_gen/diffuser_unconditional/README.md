@@ -4,7 +4,21 @@ This is for training an unconditional image generator with DDPM.
 
 ```
 bash examples/image_gen/diffuser_unconditional/build.sh
-bash examples/image_gen/diffuser_unconditional/train.sh
+bash examples/image_gen/diffuser_unconditional/train.sh  # --help for options
+```
+
+By default it trains on the `huggan/flowers-102-categories` dataset with 64x64 resolution.
+
+If you like to run on a different dataset, such as cifar10, you can do:
+
+```
+bash examples/image_gen/diffuser_unconditional/train.sh --dataset_name uoft-cs/cifar10 --resolution 32
+```
+
+And if you want to log the training to wandb, you can do:
+
+```
+bash examples/image_gen/diffuser_unconditional/train.sh --logger wandb
 ```
 
 ## TODO

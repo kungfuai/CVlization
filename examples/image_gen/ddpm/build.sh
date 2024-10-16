@@ -1,0 +1,1 @@
+docker build -t ddpm examples/image_gen/ddpm
