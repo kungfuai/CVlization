@@ -1,0 +1,1 @@
+docker build -t dwpose examples/pose_estimation/dwpose
