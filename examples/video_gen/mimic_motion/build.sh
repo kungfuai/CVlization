@@ -1,0 +1,1 @@
+docker build -t mimic_motion examples/video_gen/mimic_motion
