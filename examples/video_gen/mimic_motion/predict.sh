@@ -5,3 +5,4 @@ docker run --shm-size 16G --runtime nvidia -it \
 	-e HF_TOKEN=$HF_TOKEN \
 	mimic_motion \
 	python predict.py
+	

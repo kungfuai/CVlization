@@ -95,6 +95,9 @@ def main(args):
             task.ref_video_path, task.ref_image_path, 
             resolution=task.resolution, sample_stride=task.sample_stride
         )
+        print(f"shapes: pose_pixels: {pose_pixels.shape}, image_pixels: {image_pixels.shape}")
+        print(f"dtypes: pose_pixels: {pose_pixels.dtype}, image_pixels: {image_pixels.dtype}")
+        print(f"unet dtype: {pipeline.unet.dtype}, num_frames: {task.num_frames}, tile_size: {task.num_frames}, tile_overlap: {task.frames_overlap}")
         ########################################### Run MimicMotion pipeline ###########################################
         _video_frames = run_pipeline(
             pipeline, 
