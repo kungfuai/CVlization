@@ -1,0 +1,1 @@
+docker build -t animate-x examples/video_gen/animate_x/
