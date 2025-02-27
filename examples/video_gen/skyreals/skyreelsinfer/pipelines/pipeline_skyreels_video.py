@@ -141,19 +141,24 @@ class SkyreelsVideoPipeline(HunyuanVideoPipeline):
         video_length,
     ):
         initial_image = initial_image.unsqueeze(2)
+        print(f"initial_image after unsqueeze: {initial_image.shape}")
         image_latents = self.vae.encode(initial_image).latent_dist.sample()
+        print(f"vae encoder: {self.vae.encoder}")
+        print(f"image_latents after encode: {image_latents.shape}")
         if hasattr(self.vae.config, "shift_factor") and self.vae.config.shift_factor:
             image_latents = (image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
         else:
             image_latents = image_latents * self.vae.config.scaling_factor
         padding_shape = (
             batch_size,
-            num_channels_latents,
+            num_channels_latents, # * 2,
             video_length - 1,
             int(height) // self.vae_scale_factor_spatial,
             int(width) // self.vae_scale_factor_spatial,
         )
         latent_padding = torch.zeros(padding_shape, device=device, dtype=dtype)
+        print(f"latent_padding shape: {latent_padding.shape}")
+        print(f"image_latents shape: {image_latents.shape}")
         image_latents = torch.cat([image_latents, latent_padding], dim=2)
         return image_latents
 
@@ -311,11 +316,13 @@ class SkyreelsVideoPipeline(HunyuanVideoPipeline):
         )
         # add image latents
         if image is not None:
+            print(f"latents shape: {latents.shape}")
             image_latents = self.image_latents(
                 image, batch_size, height, width, device, torch.float32, num_channels_latents, num_latent_frames
             )
 
             image_latents = image_latents.to(transformer_dtype)
+            print(f"image_latents shape: {image_latents.shape}")
         else:
             image_latents = None
 
@@ -351,6 +358,9 @@ class SkyreelsVideoPipeline(HunyuanVideoPipeline):
                     latent_image_input = (
                         torch.cat([image_latents] * 2) if self.do_classifier_free_guidance else image_latents
                     )
+                    print("Concatenating latent_model_input and latent_image_input...")
+                    print(f"latent_model_input shape: {latent_model_input.shape}")
+                    print(f"latent_image_input shape: {latent_image_input.shape}")
                     latent_model_input = torch.cat([latent_model_input, latent_image_input], dim=1)
                 timestep = t.repeat(latent_model_input.shape[0]).to(torch.float32)
                 if cfg_for and self.do_classifier_free_guidance:
@@ -369,6 +379,10 @@ class SkyreelsVideoPipeline(HunyuanVideoPipeline):
                         noise_pred_list.append(noise_pred_uncond)
                     noise_pred = torch.cat(noise_pred_list, dim=0)
                 else:
+                    print("Calling transformer...")
+                    print(f"latent_model_input shape: {latent_model_input.shape}")
+                    print(f"prompt_embeds shape: {prompt_embeds.shape}")
+                    print(f"pooled_prompt_embeds shape: {pooled_prompt_embeds.shape}")
                     noise_pred = self.transformer(
                         hidden_states=latent_model_input,
                         timestep=timestep,
