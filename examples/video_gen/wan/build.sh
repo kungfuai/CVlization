@@ -1,0 +1,1 @@
+docker build -t wan examples/video_gen/wan/
