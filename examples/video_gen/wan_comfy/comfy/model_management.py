@@ -402,7 +402,6 @@ class LoadedModel:
         self.model.model_patches_to(self.device)
         self.model.model_patches_to(self.model.model_dtype())
         free_memory_ = get_free_memory("cuda:0")
-        print(f"*** In model_load(), after model_patches_to(), free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
 
         # if self.model.loaded_size() > 0:
         use_more_vram = lowvram_model_memory
@@ -411,7 +410,6 @@ class LoadedModel:
         self.model_use_more_vram(use_more_vram, force_patch_weights=force_patch_weights)
         real_model = self.model.model
         free_memory_ = get_free_memory("cuda:0")
-        print(f"*** In model_load(), after self.model_use_more_vram(), use_more_vram={use_more_vram}, free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
 
         if is_intel_xpu() and not args.disable_ipex_optimize and 'ipex' in globals() and real_model is not None:
             with torch.no_grad():
@@ -522,9 +520,6 @@ def free_memory(memory_required, device, keep_loaded=[]):
 def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimum_memory_required=None, force_full_load=False):
     cleanup_models_gc()
     global vram_state
-    print("========= load_models_gpu")
-    print(f"  models: {len(models)}")
-    print(f"  vram_state: {vram_state}")
 
     inference_memory = minimum_inference_memory()
     extra_mem = max(inference_memory, memory_required + extra_reserved_memory())
@@ -551,9 +546,6 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimu
         else:
             if hasattr(x, "model"):
                 logging.info(f"Requested to load {x.model.__class__.__name__}")
-                print(f"=== Requested to load {x.model.__class__.__name__}")
-                free_memory_ = get_free_memory("cuda:0")
-                print(f"*** In load_models_gpu(), free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
             models_to_load.append(loaded_model)
 
     for loaded_model in models_to_load:
@@ -570,12 +562,7 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimu
 
     for device in total_memory_required:
         if device != torch.device("cpu"):
-            free_memory_ = get_free_memory("cuda:0")
-            print(f"*** Before free_memory(), free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
             free_memory(total_memory_required[device] * 1.1 + extra_mem, device)
-            print(f"total_memory_required[device] * 1.1 + extra_mem: {(total_memory_required[device] * 1.1 + extra_mem) / (1024 * 1024 * 1024):.2f} GB")
-            free_memory_ = get_free_memory(device)
-            print(f"*** After free_memory(), free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
 
     for device in total_memory_required:
         if device != torch.device("cpu"):
@@ -583,9 +570,6 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimu
             if free_mem < minimum_memory_required:
                 models_l = free_memory(minimum_memory_required, device)
                 logging.info("{} models unloaded.".format(len(models_l)))
-                print("{} models unloaded.".format(len(models_l)))
-                free_memory_ = get_free_memory("cuda:0")
-                print(f"*** free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
 
     for loaded_model in models_to_load:
         model = loaded_model.model
@@ -607,15 +591,7 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False, minimu
 
         loaded_model.model_load(lowvram_model_memory, force_patch_weights=force_patch_weights)
         current_loaded_models.insert(0, loaded_model)
-        print(f"*** In load_models_gpu(), after loaded_model.model_load(), lowvram_model_memory: {lowvram_model_memory / (1024 * 1024 * 1024):.2f} GB")
-        print(f"force_patch_weights: {force_patch_weights}")
-        num_params = sum(p.numel() for p in loaded_model.model.model.parameters())
-        print(f"======== loaded model size: {num_params / (1024 * 1024 * 1024):.2f} GB")
-        free_memory_ = get_free_memory("cuda:0")
-        print(f"*** free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
 
-    free_memory_ = get_free_memory("cuda:0")
-    print(f"*** At the end of load_models_gpu(), free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
     return
 
 def load_model_gpu(model):

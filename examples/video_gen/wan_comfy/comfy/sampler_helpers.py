@@ -111,27 +111,9 @@ def prepare_sampling(model: ModelPatcher, noise_shape, conds, model_options=None
     models, inference_memory = get_additional_models(conds, model.model_dtype())
     models += get_additional_models_from_model_options(model_options)
     models += model.get_nested_additional_models()  # TODO: does this require inference_memory update?
-    print(f"-------- In prepare_sampling(), models: {len(models)}")
     memory_required = model.memory_required([noise_shape[0] * 2] + list(noise_shape[1:])) + inference_memory
     minimum_memory_required = model.memory_required([noise_shape[0]] + list(noise_shape[1:])) + inference_memory
-    """
-    Expected print outs:
-    ========= prepare_sampling
-        inference_memory: 0
-        memory_required: 3958241859.9936
-        minimum_memory_required: 1979120929.9968
-    """
-    print("========= prepare_sampling")
-    print(f"  inference_memory: {inference_memory}")
-    print(f"  memory_required: {memory_required}")
-    print(f"  minimum_memory_required: {minimum_memory_required}")
-    print(f"  model_dtype: {model.model_dtype()}")
-    print(f"  model_options: {model_options}")
-    free_memory = comfy.model_management.get_free_memory("cuda:0")
-    print(f"*** In prepare_sampling(), free_memory: {free_memory / (1024 * 1024 * 1024):.2f} GB")
     comfy.model_management.load_models_gpu([model] + models, memory_required=memory_required, minimum_memory_required=minimum_memory_required)
-    free_memory = comfy.model_management.get_free_memory("cuda:0")
-    print(f"*** In prepare_sampling(), after load_models_gpu(), free_memory: {free_memory / (1024 * 1024 * 1024):.2f} GB")
     real_model = model.model
 
     return real_model, conds, models

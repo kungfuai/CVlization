@@ -585,8 +585,6 @@ class ModelPatcher:
         return loading
 
     def load(self, device_to=None, lowvram_model_memory=0, force_patch_weights=False, full_load=False):
-        print(f"====== In ModelPatcher.load(), before self.use_ejected(), lowvram_model_memory: {lowvram_model_memory / (1024 * 1024 * 1024):.2f} GB")
-        print(f"--- full_load: {full_load}, force_patch_weights: {force_patch_weights}")
         with self.use_ejected():
             self.unpatch_hooks()
             mem_counter = 0
@@ -669,28 +667,19 @@ class ModelPatcher:
                 logging.debug("lowvram: loaded module regularly {} {}".format(n, m))
                 m.comfy_patched_weights = True
 
-            free_memory_ = comfy.model_management.get_free_memory("cuda:0")
-            print(f"*** In ModelPatcher.load(), before x[2].to(device_to), free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
-            print(f"  There are {len(load_completely)} modules to load")
             for x in load_completely:
                 x[2].to(device_to)
 
             if lowvram_counter > 0:
                 logging.info("loaded partially {} {} {}".format(lowvram_model_memory / (1024 * 1024), mem_counter / (1024 * 1024), patch_counter))
-                print(f"loaded partially {lowvram_model_memory / (1024 * 1024):.2f} MB, {mem_counter / (1024 * 1024):.2f} MB, {patch_counter}")
                 self.model.model_lowvram = True
             else:
                 logging.info("loaded completely {} {} {}".format(lowvram_model_memory / (1024 * 1024), mem_counter / (1024 * 1024), full_load))
-                print(f"loaded completely {lowvram_model_memory / (1024 * 1024):.2f} MB, {mem_counter / (1024 * 1024):.2f} MB, {full_load}")
                 self.model.model_lowvram = False
-                free_memory_ = comfy.model_management.get_free_memory("cuda:0")
-                print(f"*** In ModelPatcher.load(), before self.model.to(device_to), free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
                 if full_load:
                     self.model.to(device_to)
                     mem_counter = self.model_size()
-                free_memory_ = comfy.model_management.get_free_memory("cuda:0")
-                print(f"*** In ModelPatcher.load(), after self.model.to(device_to), free_memory: {free_memory_ / (1024 * 1024 * 1024):.2f} GB")
-
+                
             self.model.lowvram_patch_counter += patch_counter
             self.model.device = device_to
             self.model.model_loaded_weight_memory = mem_counter
@@ -831,8 +820,6 @@ class ModelPatcher:
                 return 0
             if self.model.model_loaded_weight_memory + extra_memory > self.model_size():
                 full_load = True
-            print(f"====== In partially_load(), before load(), self.model.model_loaded_weight_memory: {self.model.model_loaded_weight_memory / (1024 * 1024 * 1024):.2f} GB")
-            print(f"--- full_load: {full_load}, extra_memory: {extra_memory / (1024 * 1024 * 1024):.2f} GB")
             current_used = self.model.model_loaded_weight_memory
             try:
                 self.load(device_to, lowvram_model_memory=current_used + extra_memory, force_patch_weights=force_patch_weights, full_load=full_load)
