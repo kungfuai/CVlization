@@ -594,7 +594,6 @@ class SD1Tokenizer:
             self.clip = "clip_{}".format(self.clip_name)
 
         tokenizer = tokenizer_data.get("{}_tokenizer_class".format(self.clip), tokenizer)
-        print("tokenizer", tokenizer)
         setattr(self, self.clip, tokenizer(embedding_directory=embedding_directory, tokenizer_data=tokenizer_data))
 
     def tokenize_with_weights(self, text:str, return_word_ids=False, **kwargs):

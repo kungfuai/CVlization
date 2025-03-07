@@ -1508,42 +1508,6 @@ def common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, 
 
     callback = latent_preview.prepare_callback(model, steps)
     disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
-    """
-    # Expected print outs:
-    ======= common_ksampler
-        noise: torch.Size([1, 16, 9, 64, 64]), cpu
-        steps: 20
-        cfg: 6.0
-        sampler_name: uni_pc
-        scheduler: simple
-        latent_image: torch.Size([1, 16, 9, 64, 64]), cpu
-        positive: torch.Size([1, 512, 4096]), cpu
-        negative: torch.Size([1, 512, 4096]), cpu
-        denoise: 1.0
-        disable_noise: False
-        start_step: None
-        last_step: None
-        force_full_denoise: False
-        noise_mask: None
-        callback: <function prepare_callback.<locals>.callback at 0x7f7368511e10>
-    """
-    print("========= common_ksampler")
-    print(f"  noise: {noise.shape}, {noise.device}")
-    print(f"  steps: {steps}")
-    print(f"  cfg: {cfg}")
-    print(f"  sampler_name: {sampler_name}")
-    print(f"  scheduler: {scheduler}")
-    print(f"  latent_image: {latent_image.shape}, {latent_image.device}")
-    print(f"  positive: {positive[0][0].shape}, {positive[0][0].device}")
-    print(f"  negative: {negative[0][0].shape}, {negative[0][0].device}")
-    print(f"  denoise: {denoise}")
-    print(f"  disable_noise: {disable_noise}")
-    print(f"  start_step: {start_step}")
-    print(f"  last_step: {last_step}")
-    print(f"  force_full_denoise: {force_full_denoise}")
-    print(f"  noise_mask: {noise_mask}")
-    print(f"  callback: {callback}")
-
     samples = comfy.sample.sample(model, noise, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                                   denoise=denoise, disable_noise=disable_noise, start_step=start_step, last_step=last_step,
                                   force_full_denoise=force_full_denoise, noise_mask=noise_mask, callback=callback, disable_pbar=disable_pbar, seed=seed)
