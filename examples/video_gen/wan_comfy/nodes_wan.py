@@ -28,10 +28,22 @@ class WanImageToVideo:
 
     def encode(self, positive, negative, vae, width, height, length, batch_size, start_image=None, clip_vision_output=None):
         latent = torch.zeros([batch_size, 16, ((length - 1) // 4) + 1, height // 8, width // 8], device=comfy.model_management.intermediate_device())
+        """
+        Expected print outs:
+        latent: torch.Size([1, 16, 9, 64, 64]), device: cpu
+        width: 512, height: 512, length: 33, batch_size: 1
+        start_image: torch.Size([1, 1024, 1024, 3]), device: cpu
+        """
+        print("========= WanImageToVideo: encode")
+        print(f"latent: {latent.shape}, device: {latent.device}")
+        print(f"width: {width}, height: {height}, length: {length}, batch_size: {batch_size}")
+        print(f"start_image: {start_image.shape}, device: {start_image.device}")
         if start_image is not None:
             start_image = comfy.utils.common_upscale(start_image[:length].movedim(-1, 1), width, height, "bilinear", "center").movedim(1, -1)
+            print(f"start_image: {start_image.shape}, device: {start_image.device}")
             image = torch.ones((length, height, width, start_image.shape[-1]), device=start_image.device, dtype=start_image.dtype) * 0.5
             image[:start_image.shape[0]] = start_image
+            print(f"image: {image.shape}, device: {image.device}")
 
             concat_latent_image = vae.encode(image[:, :, :, :3])
             mask = torch.ones((1, 1, latent.shape[2], concat_latent_image.shape[-2], concat_latent_image.shape[-1]), device=start_image.device, dtype=start_image.dtype)

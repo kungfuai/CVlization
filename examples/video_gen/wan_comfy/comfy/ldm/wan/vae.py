@@ -514,11 +514,18 @@ class WanVAE(nn.Module):
                     feat_cache=self._enc_feat_map,
                     feat_idx=self._enc_conv_idx)
             else:
+                # print("========= WanVAE: encode")
+                # print(f"  x: {x.shape}, device: {x.device}")
+                # for jj, fea_map in enumerate(self._enc_feat_map):
+                #     if fea_map is not None:
+                #         print(f"  fea_map {jj}: {fea_map.shape}, device: {fea_map.device}")
+                # print(f"  fea_idx: {self._enc_conv_idx}")
                 out_ = self.encoder(
                     x[:, :, 1 + 4 * (i - 1):1 + 4 * i, :, :],
                     feat_cache=self._enc_feat_map,
                     feat_idx=self._enc_conv_idx)
                 out = torch.cat([out, out_], 2)
+                # print(f"  out: {out.shape}, device: {out.device}")
         mu, log_var = self.conv1(out).chunk(2, dim=1)
         self.clear_cache()
         return mu

@@ -107,6 +107,7 @@ class BaseModel(torch.nn.Module):
         self.current_patcher: 'ModelPatcher' = None
 
         if not unet_config.get("disable_unet_model_creation", False):
+            print("========= We should be here.")
             if model_config.custom_operations is None:
                 fp8 = model_config.optimizations.get("fp8", model_config.scaled_fp8 is not None)
                 operations = comfy.ops.pick_operations(unet_config.get("dtype", None), self.manual_cast_dtype, fp8_optimizations=fp8, scaled_fp8=model_config.scaled_fp8)
@@ -130,6 +131,8 @@ class BaseModel(torch.nn.Module):
         self.memory_usage_factor = model_config.memory_usage_factor
 
     def apply_model(self, x, t, c_concat=None, c_crossattn=None, control=None, transformer_options={}, **kwargs):
+        free_memory = comfy.model_management.get_free_memory("cuda:0")
+        print(f"*** In apply_model(), free_memory: {free_memory / (1024 * 1024 * 1024):.2f} GB")
         return comfy.patcher_extension.WrapperExecutor.new_class_executor(
             self._apply_model,
             self,
@@ -161,9 +164,9 @@ class BaseModel(torch.nn.Module):
                     extra = extra.to(dtype)
             extra_conds[o] = extra
 
-        print(f"device of xc: {xc.device}, t: {t.device}, x: {x.device}")
-        print(f"In BaseModel: device of diffusion_model: {list(self.diffusion_model.parameters())[10].device}")
+        print(f"xc: {xc.shape}, {xc.device}, t: {t.shape}, {t.device}, x: {x.shape}, {x.device}")
         model_output = self.diffusion_model(xc, t, context=context, control=control, transformer_options=transformer_options, **extra_conds).float()
+        print(f"model_output: {model_output.shape}, {model_output.device}")
         return self.model_sampling.calculate_denoised(sigma, model_output, x)
 
     def get_dtype(self):

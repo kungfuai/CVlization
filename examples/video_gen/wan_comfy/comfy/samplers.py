@@ -12,6 +12,7 @@ import collections
 from comfy import model_management
 import math
 import logging
+import comfy
 import comfy.sampler_helpers
 import comfy.model_patcher
 import comfy.patcher_extension
@@ -961,6 +962,22 @@ class CFGGuider:
         return self.inner_model.process_latent_out(samples.to(torch.float32))
 
     def outer_sample(self, noise, latent_image, sampler, sigmas, denoise_mask=None, callback=None, disable_pbar=False, seed=None):
+        """
+        Expected print outs:
+        ========= CFGGuider: outer_sample
+            noise: torch.Size([1, 16, 9, 64, 64]), cpu
+            latent_image: torch.Size([1, 16, 9, 64, 64]), cpu
+            sampler: <comfy.samplers.KSAMPLER object at 0x7fede877d5a0>
+            sigmas: torch.Size([21]), cuda:0
+            model_options: {'transformer_options': {'wrappers': {}, 'callbacks': {}}, 'to_load_options': {'wrappers': {}, 'callbacks': {}}}
+        """
+        print("========= CFGGuider: outer_sample")
+        print(f"  noise: {noise.shape}, {noise.device}")
+        print(f"  latent_image: {latent_image.shape}, {latent_image.device}")
+        print(f"  sampler: {sampler}")
+        print(f"  sigmas: {sigmas.shape}, {sigmas.device}")
+        print(f"  model_options: {self.model_options}")
+        print(f"  conds: {self.conds['positive'][0]['concat_latent_image'].device}")
         self.inner_model, self.conds, self.loaded_models = comfy.sampler_helpers.prepare_sampling(self.model_patcher, noise.shape, self.conds, self.model_options)
         device = self.model_patcher.load_device
 
@@ -1008,6 +1025,16 @@ class CFGGuider:
                 self,
                 comfy.patcher_extension.get_all_wrappers(comfy.patcher_extension.WrappersMP.OUTER_SAMPLE, self.model_options, is_model_options=True)
             )
+            print("========= CFGGuider: executor.execute")
+            print(f"  noise: {noise.shape}, {noise.device}")
+            print(f"  latent_image: {latent_image.shape}, {latent_image.device}")
+            print(f"  sampler: {sampler}")
+            print(f"  sigmas: {sigmas.shape}, {sigmas.device}")
+            print(f"  denoise_mask: {denoise_mask}")
+            print(f"  callback: {callback}")
+            print(f"  disable_pbar: {disable_pbar}")
+            free_memory = comfy.model_management.get_free_memory("cuda:0")
+            print(f"*** In CFGGuider: sample(), free_memory: {free_memory / (1024 * 1024 * 1024):.2f} GB")
             output = executor.execute(noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed)
         finally:
             cast_to_load_options(self.model_options, device=self.model_patcher.offload_device)
