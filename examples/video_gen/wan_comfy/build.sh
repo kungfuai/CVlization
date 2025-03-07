@@ -1,0 +1,1 @@
+docker build -t wan_comfy examples/video_gen/wan_comfy

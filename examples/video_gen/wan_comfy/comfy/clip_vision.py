@@ -57,6 +57,7 @@ class ClipVisionModel():
         return self.model.state_dict()
 
     def encode_image(self, image, crop=True):
+        print("in ClipVisionModel.encode_image")
         comfy.model_management.load_model_gpu(self.patcher)
         pixel_values = clip_preprocess(image.to(self.load_device), size=self.image_size, mean=self.image_mean, std=self.image_std, crop=crop).float()
         out = self.model(pixel_values=pixel_values, intermediate_output=-2)

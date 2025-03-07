@@ -1,3 +1,9 @@
+###
+
+This is still under development. There are OOM issues when generating videos.
+
+Please use the original ComfyUI.
+
 ## Quick Start
 
 In the root directory of the repo, run the following command to download the models:
