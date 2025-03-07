@@ -560,15 +560,6 @@ class VAE:
             samples = None
             for x in range(0, pixel_samples.shape[0], batch_number):
                 pixels_in = self.process_input(pixel_samples[x:x + batch_number]).to(self.vae_dtype).to(self.device)
-                """
-                Expected print outs:
-                pixels_in: torch.Size([1, 3, 33, 512, 512]), device: cuda:0
-                """
-                print("========= sd VAE: encode")
-                print(f"pixels_in: {pixels_in.shape}, device: {pixels_in.device}")
-                print(f"** device: {self.device}, free_memory: {free_memory}, memory_used: {memory_used}, batch_number: {batch_number}")
-                print(f"  output device: {self.output_device}")
-                print(f"  first_stage_model: {list(self.first_stage_model.parameters())[0].device}")
                 out = self.first_stage_model.encode(pixels_in).to(self.output_device).float()
                 if samples is None:
                     samples = torch.empty((pixel_samples.shape[0],) + tuple(out.shape[1:]), device=self.output_device)
@@ -1002,7 +993,6 @@ def load_diffusion_model_state_dict(sd, model_options={}): #load unet in diffuse
                     logging.warning("{} {}".format(diffusers_keys[k], k))
 
     offload_device = model_management.unet_offload_device()
-    print(f"in load_diffusion_model_state_dict: offload_device: {offload_device}, load_device: {load_device}")
     unet_weight_dtype = list(model_config.supported_inference_dtypes)
     if model_config.scaled_fp8 is not None:
         weight_dtype = None
