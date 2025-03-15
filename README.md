@@ -40,7 +40,7 @@ Our `examples/` directory contains a variety of computer vision and language pro
 
 ✅ = Tested and maintained
 
-Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. Each example may contain one or more implementations using different frameworks or models. For beginners, we recommend starting with the Image Classification example.
+Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. Each example may contain one or more implementations using different frameworks or models. To start with, we recommend starting with the Image Classification example.
 
 ### Running an Example
 
@@ -48,21 +48,24 @@ To run an example:
 
 1. Build the docker image:
 ```bash
-bash examples/../build.sh
+bash examples/<example_directory>/build.sh
 ```
 2. Run the following command to run the training workflow:
 ```bash
-bash examples/../train.sh
+bash examples/<example_directory>/train.sh
 ```
 3. If you want to run the inference workflow, run the following command:
 ```bash
-bash examples/../predict.sh
+bash examples/<example_directory>/predict.sh
 ```
 or
 ```bash
-bash examples/../generate.sh
+bash examples/<example_directory>/generate.sh
 ```
+
 4. For more information, see the README.md file in the example directory.
+
+**License.** Each example typically references a project that has its own license. Please refer to the license file in the example sub-directory or the referenced project for more details.
 
 #### Design choices
 
