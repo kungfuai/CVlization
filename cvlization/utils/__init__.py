@@ -1,3 +1,5 @@
+"""General utility functions."""
+
 try:
     from typing import Protocol
 except ImportError:
