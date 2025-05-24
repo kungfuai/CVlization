@@ -1,0 +1,1 @@
+docker build -t framepack examples/video_gen/framepack/
