@@ -1,5 +1,0 @@
-tensorflow>=2
-coloredlogs
-pytest
-black
-mlflow
