@@ -27,13 +27,22 @@ from transformers import SiglipImageProcessor, SiglipVisionModel
 from diffusers_helper.clip_vision import hf_clip_vision_encode
 from diffusers_helper.bucket_tools import find_nearest_bucket
 
+# Import conservative video extension functionality
+from simple_video_extension import extend_video_conservative, create_models_dict
+
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='FramePack CLI - Generate videos from images')
+    parser = argparse.ArgumentParser(description='FramePack CLI - Generate videos from images or extend existing videos')
     
-    # Required arguments
-    parser.add_argument('--input_image', type=str, required=True, 
-                        help='Path to input image file')
+    # Mode selection
+    parser.add_argument('--mode', type=str, choices=['i2v', 'extend'], default='i2v',
+                        help='Generation mode: i2v (image-to-video) or extend (video extension)')
+    
+    # Input arguments (mode-dependent)
+    parser.add_argument('--input_image', type=str, 
+                        help='Path to input image file (required for i2v mode)')
+    parser.add_argument('--input_video', type=str, 
+                        help='Path to input video file (required for extend mode)')
     parser.add_argument('--output_dir', type=str, default='./outputs/', 
                         help='Directory to save output videos (default: ./outputs/)')
     
@@ -45,7 +54,9 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=31337, 
                         help='Random seed for generation (default: 31337)')
     parser.add_argument('--total_seconds', type=float, default=5.0, 
-                        help='Total video length in seconds (default: 5.0)')
+                        help='Total video length in seconds for i2v mode (default: 5.0)')
+    parser.add_argument('--extend_seconds', type=float, default=2.0,
+                        help='Seconds to extend video in extend mode (default: 2.0)')
     parser.add_argument('--steps', type=int, default=25, 
                         help='Number of inference steps (default: 25)')
     
@@ -66,12 +77,22 @@ def parse_args():
                         help='Disable TeaCache')
     parser.add_argument('--mp4_crf', type=int, default=16, 
                         help='MP4 compression quality (0=uncompressed, 16=default)')
+    parser.add_argument('--max_context_frames', type=int, default=9,
+                        help='Maximum number of recent frames to use as context for extension (default: 9)')
     
     args = parser.parse_args()
     
     # Handle teacache flags
     if args.no_teacache:
         args.use_teacache = False
+    
+    # Validate mode-specific arguments
+    if args.mode == 'i2v':
+        if not args.input_image:
+            parser.error("--input_image is required for i2v mode")
+    elif args.mode == 'extend':
+        if not args.input_video:
+            parser.error("--input_video is required for extend mode")
     
     return args
 
@@ -382,6 +403,69 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
         raise
 
 
+@torch.no_grad()
+def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds, 
+                latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, 
+                use_teacache, mp4_crf, output_dir, models, max_context_frames=9):
+    """Conservative video extension function using recent frames as context"""
+    
+    job_id = generate_timestamp()
+    print(f"Starting conservative video extension job: {job_id}")
+    print(f"Extension length: {extend_seconds} seconds")
+    print(f"Max context frames: {max_context_frames}")
+    
+    # Check if input video exists
+    if not os.path.exists(input_video_path):
+        raise FileNotFoundError(f"Input video not found: {input_video_path}")
+    
+    try:
+        # Convert models dict to the format expected by extend_video_conservative
+        models_dict = create_models_dict(
+            models['text_encoder'], models['text_encoder_2'], 
+            models['tokenizer'], models['tokenizer_2'],
+            models['vae'], models['transformer'], 
+            models['feature_extractor'], models['image_encoder']
+        )
+        
+        def progress_callback(percentage, message):
+            print(f"[{percentage:3d}%] {message}")
+        
+        print("Using conservative video extension approach...")
+        print("Note: This approach only uses recent frames as context and may have limited temporal continuity.")
+        
+        # Extend the video using conservative approach
+        output_path = extend_video_conservative(
+            existing_frames=input_video_path,
+            prompt=prompt,
+            models=models_dict,
+            extend_seconds=extend_seconds,
+            negative_prompt=n_prompt,
+            seed=seed,
+            latent_window_size=min(latent_window_size, max_context_frames),  # Respect context limit
+            steps=steps,
+            cfg_scale=cfg,
+            distilled_cfg_scale=gs,
+            cfg_rescale=rs,
+            gpu_memory_preservation=gpu_memory_preservation,
+            use_teacache=use_teacache,
+            mp4_crf=mp4_crf,
+            output_dir=output_dir,
+            high_vram=models['high_vram'],
+            progress_callback=progress_callback
+        )
+        
+        print(f"\n=== Conservative Video Extension Complete ===")
+        print(f"Job ID: {job_id}")
+        print(f"Extended video: {output_path}")
+        
+        return output_path
+        
+    except Exception as e:
+        print(f"Error during video extension: {e}")
+        traceback.print_exc()
+        raise
+
+
 def main():
     args = parse_args()
     
@@ -389,10 +473,25 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     
     print("=== FramePack CLI ===")
-    print(f"Input image: {args.input_image}")
+    print(f"Mode: {args.mode}")
+    
+    if args.mode == 'i2v':
+        print(f"Input image: {args.input_image}")
+        print(f"Video length: {args.total_seconds} seconds")
+    elif args.mode == 'extend':
+        print(f"Input video: {args.input_video}")
+        print(f"Extension length: {args.extend_seconds} seconds")
+        print(f"Max context frames: {args.max_context_frames}")
+        print()
+        print("⚠️  VIDEO EXTENSION LIMITATIONS:")
+        print("   - Only uses recent frames as context (~0.3s)")
+        print("   - May not continue complex long-term motions")
+        print("   - Best for simple, consistent movements")
+        print("   - Experimental feature - not part of original FramePack")
+        print()
+    
     print(f"Prompt: '{args.prompt}'")
     print(f"Output directory: {args.output_dir}")
-    print(f"Video length: {args.total_seconds} seconds")
     print(f"Seed: {args.seed}")
     print(f"Steps: {args.steps}")
     print(f"Use TeaCache: {args.use_teacache}")
@@ -401,25 +500,45 @@ def main():
     # Load models
     models = load_models()
     
-    # Generate video
+    # Route to appropriate function based on mode
     try:
-        output_path = generate_video(
-            input_image_path=args.input_image,
-            prompt=args.prompt,
-            n_prompt=args.negative_prompt,
-            seed=args.seed,
-            total_second_length=args.total_seconds,
-            latent_window_size=args.latent_window_size,
-            steps=args.steps,
-            cfg=args.cfg_scale,
-            gs=args.distilled_cfg_scale,
-            rs=args.cfg_rescale,
-            gpu_memory_preservation=args.gpu_memory_preservation,
-            use_teacache=args.use_teacache,
-            mp4_crf=args.mp4_crf,
-            output_dir=args.output_dir,
-            models=models
-        )
+        if args.mode == 'i2v':
+            output_path = generate_video(
+                input_image_path=args.input_image,
+                prompt=args.prompt,
+                n_prompt=args.negative_prompt,
+                seed=args.seed,
+                total_second_length=args.total_seconds,
+                latent_window_size=args.latent_window_size,
+                steps=args.steps,
+                cfg=args.cfg_scale,
+                gs=args.distilled_cfg_scale,
+                rs=args.cfg_rescale,
+                gpu_memory_preservation=args.gpu_memory_preservation,
+                use_teacache=args.use_teacache,
+                mp4_crf=args.mp4_crf,
+                output_dir=args.output_dir,
+                models=models
+            )
+        elif args.mode == 'extend':
+            output_path = extend_video(
+                input_video_path=args.input_video,
+                prompt=args.prompt,
+                n_prompt=args.negative_prompt,
+                seed=args.seed,
+                extend_seconds=args.extend_seconds,
+                latent_window_size=args.latent_window_size,
+                steps=args.steps,
+                cfg=args.cfg_scale,
+                gs=args.distilled_cfg_scale,
+                rs=args.cfg_rescale,
+                gpu_memory_preservation=args.gpu_memory_preservation,
+                use_teacache=args.use_teacache,
+                mp4_crf=args.mp4_crf,
+                output_dir=args.output_dir,
+                models=models,
+                max_context_frames=args.max_context_frames
+            )
         
         print(f"\nSUCCESS! Video saved to: {output_path}")
         
@@ -430,11 +549,12 @@ def main():
 
 if __name__ == "__main__":
     """
-    # Basic usage
-    python predict.py --input_image /path/to/image.jpg --prompt "The girl dances gracefully"
+    # Image-to-Video (i2v) mode - Basic usage
+    python predict.py --mode i2v --input_image /path/to/image.jpg --prompt "The girl dances gracefully"
 
-    # With custom parameters
+    # Image-to-Video with custom parameters
     python predict.py \
+        --mode i2v \
         --input_image /path/to/image.jpg \
         --prompt "A character doing some simple body movements" \
         --total_seconds 10.0 \
@@ -442,17 +562,32 @@ if __name__ == "__main__":
         --steps 30 \
         --output_dir ./my_outputs/
 
-    # Disable TeaCache for better quality (slower)
+    # Video Extension mode - Basic usage
+    python predict.py --mode extend --input_video /path/to/video.mp4 --prompt "The character continues dancing"
+
+    # Video Extension with custom parameters
     python predict.py \
-        --input_image /path/to/image.jpg \
-        --prompt "Dancing scene" \
+        --mode extend \
+        --input_video /path/to/video.mp4 \
+        --prompt "The action continues with graceful movements" \
+        --extend_seconds 3.0 \
+        --seed 123 \
+        --steps 25 \
+        --max_context_frames 9 \
+        --output_dir ./extended_videos/
+
+    # High quality extension (slower, with more context)
+    python predict.py \
+        --mode extend \
+        --input_video /path/to/video.mp4 \
+        --prompt "Extended dance sequence" \
+        --extend_seconds 5.0 \
+        --mp4_crf 0 \
+        --steps 50 \
+        --max_context_frames 15 \
         --no_teacache
 
-    # High quality output
-    python predict.py \
-        --input_image /path/to/image.jpg \
-        --prompt "Dance performance" \
-        --mp4_crf 0 \
-        --steps 50
+    # Backward compatibility: i2v mode is default
+    python predict.py --input_image /path/to/image.jpg --prompt "Dancing scene"
     """
     main()
