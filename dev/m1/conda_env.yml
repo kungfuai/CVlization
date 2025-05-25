@@ -1,9 +1,0 @@
-name: cv
-
-channels:
-  - default
-  - conda-forge
-  - apple
-
-dependencies:
-  - python=3.8
