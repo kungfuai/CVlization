@@ -27,8 +27,9 @@ from transformers import SiglipImageProcessor, SiglipVisionModel
 from diffusers_helper.clip_vision import hf_clip_vision_encode
 from diffusers_helper.bucket_tools import find_nearest_bucket
 
-# Import conservative video extension functionality
+# Import video extension functionality
 from simple_video_extension import extend_video_conservative, create_models_dict
+from f1_video_extension import extend_video_f1_style, extend_video_simple
 
 
 def parse_args():
@@ -37,6 +38,10 @@ def parse_args():
     # Mode selection
     parser.add_argument('--mode', type=str, choices=['i2v', 'extend'], default='i2v',
                         help='Generation mode: i2v (image-to-video) or extend (video extension)')
+    
+    # Extension method selection
+    parser.add_argument('--extension_method', type=str, choices=['f1', 'conservative'], default='f1',
+                        help='Video extension method: f1 (F1-style, recommended) or conservative (experimental)')
     
     # Input arguments (mode-dependent)
     parser.add_argument('--input_image', type=str, 
@@ -406,20 +411,21 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
 @torch.no_grad()
 def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds, 
                 latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, 
-                use_teacache, mp4_crf, output_dir, models, max_context_frames=9):
-    """Conservative video extension function using recent frames as context"""
+                use_teacache, mp4_crf, output_dir, models, max_context_frames=9, 
+                extension_method='f1'):
+    """Video extension function supporting both F1-style and conservative methods"""
     
     job_id = generate_timestamp()
-    print(f"Starting conservative video extension job: {job_id}")
+    print(f"Starting video extension job: {job_id}")
+    print(f"Extension method: {extension_method}")
     print(f"Extension length: {extend_seconds} seconds")
-    print(f"Max context frames: {max_context_frames}")
     
     # Check if input video exists
     if not os.path.exists(input_video_path):
         raise FileNotFoundError(f"Input video not found: {input_video_path}")
     
     try:
-        # Convert models dict to the format expected by extend_video_conservative
+        # Convert models dict to the format expected by extension functions
         models_dict = create_models_dict(
             models['text_encoder'], models['text_encoder_2'], 
             models['tokenizer'], models['tokenizer_2'],
@@ -430,31 +436,71 @@ def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds,
         def progress_callback(percentage, message):
             print(f"[{percentage:3d}%] {message}")
         
-        print("Using conservative video extension approach...")
-        print("Note: This approach only uses recent frames as context and may have limited temporal continuity.")
+        if extension_method == 'f1':
+            print("🎬 Using F1-style video extension (RECOMMENDED)")
+            print("   - Treats last frame as starting image")
+            print("   - Uses proven F1 demo logic")
+            print("   - Better quality and reliability")
+            print()
+            
+            # Use F1-style extension
+            output_path = extend_video_f1_style(
+                input_video=input_video_path,
+                prompt=prompt,
+                models=models_dict,
+                total_second_length=extend_seconds,
+                negative_prompt=n_prompt,
+                seed=seed,
+                latent_window_size=latent_window_size,
+                steps=steps,
+                cfg_scale=cfg,
+                distilled_cfg_scale=gs,
+                cfg_rescale=rs,
+                gpu_memory_preservation=gpu_memory_preservation,
+                use_teacache=use_teacache,
+                mp4_crf=mp4_crf,
+                output_dir=output_dir,
+                high_vram=models['high_vram'],
+                progress_callback=progress_callback
+            )
+            
+            print(f"\n=== F1-Style Video Extension Complete ===")
+            
+        elif extension_method == 'conservative':
+            print("⚠️  Using conservative video extension (EXPERIMENTAL)")
+            print("   - Uses recent frames as context")
+            print("   - Limited temporal continuity (~0.3s)")
+            print("   - May not continue complex motions")
+            print("   - Best for simple, consistent movements")
+            print(f"   - Max context frames: {max_context_frames}")
+            print()
+            
+            # Use conservative extension
+            output_path = extend_video_conservative(
+                existing_frames=input_video_path,
+                prompt=prompt,
+                models=models_dict,
+                extend_seconds=extend_seconds,
+                negative_prompt=n_prompt,
+                seed=seed,
+                latent_window_size=min(latent_window_size, max_context_frames),  # Respect context limit
+                steps=steps,
+                cfg_scale=cfg,
+                distilled_cfg_scale=gs,
+                cfg_rescale=rs,
+                gpu_memory_preservation=gpu_memory_preservation,
+                use_teacache=use_teacache,
+                mp4_crf=mp4_crf,
+                output_dir=output_dir,
+                high_vram=models['high_vram'],
+                progress_callback=progress_callback
+            )
+            
+            print(f"\n=== Conservative Video Extension Complete ===")
         
-        # Extend the video using conservative approach
-        output_path = extend_video_conservative(
-            existing_frames=input_video_path,
-            prompt=prompt,
-            models=models_dict,
-            extend_seconds=extend_seconds,
-            negative_prompt=n_prompt,
-            seed=seed,
-            latent_window_size=min(latent_window_size, max_context_frames),  # Respect context limit
-            steps=steps,
-            cfg_scale=cfg,
-            distilled_cfg_scale=gs,
-            cfg_rescale=rs,
-            gpu_memory_preservation=gpu_memory_preservation,
-            use_teacache=use_teacache,
-            mp4_crf=mp4_crf,
-            output_dir=output_dir,
-            high_vram=models['high_vram'],
-            progress_callback=progress_callback
-        )
+        else:
+            raise ValueError(f"Unknown extension method: {extension_method}")
         
-        print(f"\n=== Conservative Video Extension Complete ===")
         print(f"Job ID: {job_id}")
         print(f"Extended video: {output_path}")
         

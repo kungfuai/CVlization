@@ -33,15 +33,15 @@ from f1_video_extension import extend_video_f1_style, extend_video_simple, exten
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='FramePack CLI - Generate videos from images or extend existing videos')
+    parser = argparse.ArgumentParser(description='FramePack CLI Enhanced - Generate videos from images or extend existing videos with multi-frame conditioning')
     
     # Mode selection
     parser.add_argument('--mode', type=str, choices=['i2v', 'extend'], default='i2v',
                         help='Generation mode: i2v (image-to-video) or extend (video extension)')
     
     # Extension method selection
-    parser.add_argument('--extension_method', type=str, choices=['f1', 'f1_multiframe', 'conservative'], default='f1',
-                        help='Video extension method: f1 (single frame), f1_multiframe (multi-frame, recommended), or conservative (experimental)')
+    parser.add_argument('--extension_method', type=str, choices=['f1', 'f1_multiframe', 'conservative'], default='f1_multiframe',
+                        help='Video extension method: f1 (single frame), f1_multiframe (multi-frame, RECOMMENDED), or conservative (experimental)')
     
     # Input arguments (mode-dependent)
     parser.add_argument('--input_image', type=str, 
@@ -82,8 +82,8 @@ def parse_args():
                         help='Disable TeaCache')
     parser.add_argument('--mp4_crf', type=int, default=16, 
                         help='MP4 compression quality (0=uncompressed, 16=default)')
-    parser.add_argument('--max_context_frames', type=int, default=9,
-                        help='Maximum number of recent frames to use as context for conservative extension (default: 9)')
+    
+    # Multi-frame extension parameters
     parser.add_argument('--num_context_frames', type=int, default=5,
                         help='Number of context frames for f1_multiframe extension (2-10, default: 5)')
     parser.add_argument('--vae_batch_size', type=int, default=16,
@@ -92,6 +92,10 @@ def parse_args():
                         help='Target resolution for bucket finding (default: 640)')
     parser.add_argument('--no_resize', action='store_true',
                         help='Skip resizing and use native video resolution (may require more VRAM)')
+    
+    # Conservative extension parameters
+    parser.add_argument('--max_context_frames', type=int, default=9,
+                        help='Maximum number of recent frames to use as context for conservative extension (default: 9)')
     
     args = parser.parse_args()
     
@@ -395,9 +399,10 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
 @torch.no_grad()
 def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds, 
                 latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, 
-                use_teacache, mp4_crf, output_dir, models, max_context_frames=9, 
-                extension_method='f1'):
-    """Video extension function supporting both F1-style and conservative methods"""
+                use_teacache, mp4_crf, output_dir, models, extension_method='f1_multiframe',
+                num_context_frames=5, vae_batch_size=16, resolution=640, no_resize=False,
+                max_context_frames=9):
+    """Video extension function supporting F1-style, F1-multiframe, and conservative methods"""
     
     job_id = generate_timestamp()
     print(f"Starting video extension job: {job_id}")
@@ -421,10 +426,10 @@ def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds,
             print(f"[{percentage:3d}%] {message}")
         
         if extension_method == 'f1':
-            print("🎬 Using F1-style video extension (RECOMMENDED)")
+            print("🎬 Using F1-style video extension (single frame)")
             print("   - Treats last frame as starting image")
             print("   - Uses proven F1 demo logic")
-            print("   - Better quality and reliability")
+            print("   - Good quality and reliability")
             print()
             
             # Use F1-style extension
@@ -449,6 +454,43 @@ def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds,
             )
             
             print(f"\n=== F1-Style Video Extension Complete ===")
+            
+        elif extension_method == 'f1_multiframe':
+            print("🎬 Using F1-style multi-frame video extension (RECOMMENDED)")
+            print("   - Uses multiple frames as context for better temporal continuity")
+            print("   - Encodes entire input video to latents")
+            print("   - Uses proven F1 sectional generation logic")
+            print("   - Best quality and temporal consistency")
+            print(f"   - Context frames: {num_context_frames}")
+            print(f"   - VAE batch size: {vae_batch_size}")
+            print()
+            
+            # Use F1-style multi-frame extension
+            output_path = extend_video_f1_multiframe(
+                input_video=input_video_path,
+                prompt=prompt,
+                models=models_dict,
+                total_second_length=extend_seconds,
+                negative_prompt=n_prompt,
+                seed=seed,
+                latent_window_size=latent_window_size,
+                steps=steps,
+                cfg_scale=cfg,
+                distilled_cfg_scale=gs,
+                cfg_rescale=rs,
+                gpu_memory_preservation=gpu_memory_preservation,
+                use_teacache=use_teacache,
+                mp4_crf=mp4_crf,
+                output_dir=output_dir,
+                high_vram=models['high_vram'],
+                progress_callback=progress_callback,
+                num_context_frames=num_context_frames,
+                vae_batch_size=vae_batch_size,
+                resolution=resolution,
+                no_resize=no_resize
+            )
+            
+            print(f"\n=== F1-Style Multi-Frame Video Extension Complete ===")
             
         elif extension_method == 'conservative':
             print("⚠️  Using conservative video extension (EXPERIMENTAL)")
@@ -505,7 +547,7 @@ def main():
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
     
-    print("=== FramePack CLI (Integrated) ===")
+    print("=== FramePack CLI Enhanced ===")
     print(f"Mode: {args.mode}")
     
     if args.mode == 'i2v':
@@ -515,7 +557,12 @@ def main():
         print(f"Input video: {args.input_video}")
         print(f"Extension method: {args.extension_method}")
         print(f"Extension length: {args.extend_seconds} seconds")
-        if args.extension_method == 'conservative':
+        if args.extension_method == 'f1_multiframe':
+            print(f"Context frames: {args.num_context_frames}")
+            print(f"VAE batch size: {args.vae_batch_size}")
+            print(f"Resolution: {args.resolution}")
+            print(f"No resize: {args.no_resize}")
+        elif args.extension_method == 'conservative':
             print(f"Max context frames: {args.max_context_frames}")
     
     print(f"Prompt: '{args.prompt}'")
@@ -565,8 +612,12 @@ def main():
                 mp4_crf=args.mp4_crf,
                 output_dir=args.output_dir,
                 models=models,
-                max_context_frames=args.max_context_frames,
-                extension_method=args.extension_method
+                extension_method=args.extension_method,
+                num_context_frames=args.num_context_frames,
+                vae_batch_size=args.vae_batch_size,
+                resolution=args.resolution,
+                no_resize=args.no_resize,
+                max_context_frames=args.max_context_frames
             )
         
         print(f"\nSUCCESS! Video saved to: {output_path}")
@@ -579,10 +630,10 @@ def main():
 if __name__ == "__main__":
     """
     # Image-to-Video (i2v) mode - Basic usage
-    python predict_integrated.py --mode i2v --input_image /path/to/image.jpg --prompt "The girl dances gracefully"
+    python predict_f1_enhanced.py --mode i2v --input_image /path/to/image.jpg --prompt "The girl dances gracefully"
 
     # Image-to-Video with custom parameters
-    python predict_integrated.py \
+    python predict_f1_enhanced.py \
         --mode i2v \
         --input_image /path/to/image.jpg \
         --prompt "A character doing some simple body movements" \
@@ -591,16 +642,26 @@ if __name__ == "__main__":
         --steps 30 \
         --output_dir ./my_outputs/
 
-    # Video Extension mode - F1 style (RECOMMENDED)
-    python predict_integrated.py \
+    # Video Extension mode - F1 Multi-Frame (RECOMMENDED)
+    python predict_f1_enhanced.py \
+        --mode extend \
+        --extension_method f1_multiframe \
+        --input_video /path/to/video.mp4 \
+        --prompt "The character continues dancing gracefully" \
+        --extend_seconds 3.0 \
+        --num_context_frames 5 \
+        --vae_batch_size 16
+
+    # Video Extension mode - F1 Single Frame
+    python predict_f1_enhanced.py \
         --mode extend \
         --extension_method f1 \
         --input_video /path/to/video.mp4 \
-        --prompt "The character continues dancing gracefully" \
+        --prompt "The action continues" \
         --extend_seconds 3.0
 
     # Video Extension mode - Conservative (experimental)
-    python predict_integrated.py \
+    python predict_f1_enhanced.py \
         --mode extend \
         --extension_method conservative \
         --input_video /path/to/video.mp4 \
@@ -608,18 +669,30 @@ if __name__ == "__main__":
         --extend_seconds 3.0 \
         --max_context_frames 9
 
-    # High quality F1 extension
-    python predict_integrated.py \
+    # High quality F1 multi-frame extension
+    python predict_f1_enhanced.py \
         --mode extend \
-        --extension_method f1 \
+        --extension_method f1_multiframe \
         --input_video /path/to/video.mp4 \
         --prompt "Extended dance sequence" \
         --extend_seconds 5.0 \
         --mp4_crf 0 \
         --steps 50 \
-        --no_teacache
+        --no_teacache \
+        --num_context_frames 8 \
+        --vae_batch_size 8
+
+    # Native resolution extension (requires more VRAM)
+    python predict_f1_enhanced.py \
+        --mode extend \
+        --extension_method f1_multiframe \
+        --input_video /path/to/video.mp4 \
+        --prompt "High quality extension" \
+        --extend_seconds 3.0 \
+        --no_resize \
+        --vae_batch_size 4
 
     # Backward compatibility: i2v mode is default
-    python predict_integrated.py --input_image /path/to/image.jpg --prompt "Dancing scene"
+    python predict_f1_enhanced.py --input_image /path/to/image.jpg --prompt "Dancing scene"
     """
     main() 
