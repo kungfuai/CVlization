@@ -1,0 +1,1 @@
+docker build -t vace examples/video_gen/vace/

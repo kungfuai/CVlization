@@ -1,0 +1,6 @@
+insightface
+git+https://github.com/facebookresearch/sam2.git
+git+https://github.com/facebookresearch/segment-anything.git
+git+https://github.com/IDEA-Research/GroundingDINO.git
+git+https://github.com/xinyu1205/recognize-anything.git
+git+https://github.com/martin-chobanyan-sdc/RAFT.git
