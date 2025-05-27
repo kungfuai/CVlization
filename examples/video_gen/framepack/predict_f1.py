@@ -29,19 +29,19 @@ from diffusers_helper.bucket_tools import find_nearest_bucket
 
 # Import video extension functionality
 from simple_video_extension import extend_video_conservative, create_models_dict
-from f1_video_extension import extend_video_f1_style, extend_video_simple
+from f1_video_extension import extend_video_f1_style, extend_video_simple, extend_video_f1_multiframe
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='FramePack CLI - Generate videos from images or extend existing videos')
+    parser = argparse.ArgumentParser(description='FramePack CLI Enhanced - Generate videos from images or extend existing videos with multi-frame conditioning')
     
     # Mode selection
     parser.add_argument('--mode', type=str, choices=['i2v', 'extend'], default='i2v',
                         help='Generation mode: i2v (image-to-video) or extend (video extension)')
     
     # Extension method selection
-    parser.add_argument('--extension_method', type=str, choices=['f1', 'conservative'], default='f1',
-                        help='Video extension method: f1 (F1-style, recommended) or conservative (experimental)')
+    parser.add_argument('--extension_method', type=str, choices=['f1', 'f1_multiframe', 'conservative'], default='f1_multiframe',
+                        help='Video extension method: f1 (single frame), f1_multiframe (multi-frame, RECOMMENDED), or conservative (experimental)')
     
     # Input arguments (mode-dependent)
     parser.add_argument('--input_image', type=str, 
@@ -82,8 +82,20 @@ def parse_args():
                         help='Disable TeaCache')
     parser.add_argument('--mp4_crf', type=int, default=16, 
                         help='MP4 compression quality (0=uncompressed, 16=default)')
+    
+    # Multi-frame extension parameters
+    parser.add_argument('--num_context_frames', type=int, default=5,
+                        help='Number of context frames for f1_multiframe extension (2-10, default: 5)')
+    parser.add_argument('--vae_batch_size', type=int, default=16,
+                        help='VAE batch size for video encoding in f1_multiframe (default: 16)')
+    parser.add_argument('--resolution', type=int, default=640,
+                        help='Target resolution for bucket finding (default: 640)')
+    parser.add_argument('--no_resize', action='store_true',
+                        help='Skip resizing and use native video resolution (may require more VRAM)')
+    
+    # Conservative extension parameters
     parser.add_argument('--max_context_frames', type=int, default=9,
-                        help='Maximum number of recent frames to use as context for extension (default: 9)')
+                        help='Maximum number of recent frames to use as context for conservative extension (default: 9)')
     
     args = parser.parse_args()
     
@@ -122,7 +134,8 @@ def load_models():
     feature_extractor = SiglipImageProcessor.from_pretrained("lllyasviel/flux_redux_bfl", subfolder='feature_extractor')
     image_encoder = SiglipVisionModel.from_pretrained("lllyasviel/flux_redux_bfl", subfolder='image_encoder', torch_dtype=torch.float16).cpu()
     
-    transformer = HunyuanVideoTransformer3DModelPacked.from_pretrained('lllyasviel/FramePackI2V_HY', torch_dtype=torch.bfloat16).cpu()
+    # Use F1 model for both i2v and extension
+    transformer = HunyuanVideoTransformer3DModelPacked.from_pretrained('lllyasviel/FramePack_F1_I2V_HY_20250503', torch_dtype=torch.bfloat16).cpu()
     
     # Set models to eval mode
     vae.eval()
@@ -186,14 +199,14 @@ def load_models():
 def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length, 
                   latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, 
                   use_teacache, mp4_crf, output_dir, models):
-    """Main video generation function"""
+    """Main video generation function (Image-to-Video)"""
     
     # Calculate sections
     total_latent_sections = (total_second_length * 30) / (latent_window_size * 4)
     total_latent_sections = int(max(round(total_latent_sections), 1))
     
     job_id = generate_timestamp()
-    print(f"Starting generation job: {job_id}")
+    print(f"Starting I2V generation job: {job_id}")
     print(f"Total latent sections: {total_latent_sections}")
     
     # Load and process input image
@@ -242,9 +255,7 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
         height, width = find_nearest_bucket(H, W, resolution=640)
         input_image_np = resize_and_center_crop(input_image, target_width=width, target_height=height)
         
-        # Save processed input image
         Image.fromarray(input_image_np).save(os.path.join(output_dir, f'{job_id}.png'))
-        print(f"Processed image saved: {job_id}.png")
         
         input_image_pt = torch.from_numpy(input_image_np).float() / 127.5 - 1
         input_image_pt = input_image_pt.permute(2, 0, 1)[None, :, None]
@@ -261,9 +272,7 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
         if not models['high_vram']:
             load_model_as_complete(models['image_encoder'], target_device=gpu)
         
-        image_encoder_output = hf_clip_vision_encode(
-            input_image_np, models['feature_extractor'], models['image_encoder']
-        )
+        image_encoder_output = hf_clip_vision_encode(input_image_np, models['feature_extractor'], models['image_encoder'])
         image_encoder_last_hidden_state = image_encoder_output.last_hidden_state
         
         # Dtype conversion
@@ -276,36 +285,19 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
         # Sampling
         print("Starting sampling...")
         rnd = torch.Generator("cpu").manual_seed(seed)
-        num_frames = latent_window_size * 4 - 3
         
-        history_latents = torch.zeros(size=(1, 16, 1 + 2 + 16, height // 8, width // 8), dtype=torch.float32).cpu()
+        history_latents = torch.zeros(size=(1, 16, 16 + 2 + 1, height // 8, width // 8), dtype=torch.float32).cpu()
         history_pixels = None
-        total_generated_latent_frames = 0
         
-        latent_paddings = reversed(range(total_latent_sections))
+        history_latents = torch.cat([history_latents, start_latent.to(history_latents)], dim=2)
+        total_generated_latent_frames = 1
         
-        if total_latent_sections > 4:
-            latent_paddings = [3] + [2] * (total_latent_sections - 3) + [1, 0]
-        
-        for section_idx, latent_padding in enumerate(latent_paddings):
-            is_last_section = latent_padding == 0
-            latent_padding_size = latent_padding * latent_window_size
-            
-            print(f"Section {section_idx + 1}/{len(list(latent_paddings))}: latent_padding_size = {latent_padding_size}, is_last_section = {is_last_section}")
-            
-            indices = torch.arange(0, sum([1, latent_padding_size, latent_window_size, 1, 2, 16])).unsqueeze(0)
-            clean_latent_indices_pre, blank_indices, latent_indices, clean_latent_indices_post, clean_latent_2x_indices, clean_latent_4x_indices = indices.split([1, latent_padding_size, latent_window_size, 1, 2, 16], dim=1)
-            clean_latent_indices = torch.cat([clean_latent_indices_pre, clean_latent_indices_post], dim=1)
-            
-            clean_latents_pre = start_latent.to(history_latents)
-            clean_latents_post, clean_latents_2x, clean_latents_4x = history_latents[:, :, :1 + 2 + 16, :, :].split([1, 2, 16], dim=2)
-            clean_latents = torch.cat([clean_latents_pre, clean_latents_post], dim=2)
+        for section_index in range(total_latent_sections):
+            print(f'Section {section_index + 1}/{total_latent_sections}')
             
             if not models['high_vram']:
                 unload_complete_models()
-                move_model_to_device_with_memory_preservation(
-                    models['transformer'], target_device=gpu, preserved_memory_gb=gpu_memory_preservation
-                )
+                move_model_to_device_with_memory_preservation(models['transformer'], target_device=gpu, preserved_memory_gb=gpu_memory_preservation)
             
             if use_teacache:
                 models['transformer'].initialize_teacache(enable_teacache=True, num_steps=steps)
@@ -315,15 +307,24 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
             def callback(d):
                 current_step = d['i'] + 1
                 percentage = int(100.0 * current_step / steps)
-                print(f"  Step {current_step}/{steps} ({percentage}%) - Total generated frames: {int(max(0, total_generated_latent_frames * 4 - 3))}")
+                total_frames_so_far = int(max(0, total_generated_latent_frames * 4 - 3))
+                video_length_so_far = max(0, total_frames_so_far / 30)
+                print(f"  Step {current_step}/{steps} ({percentage}%) - Frames: {total_frames_so_far}, Length: {video_length_so_far:.2f}s")
                 return
+            
+            indices = torch.arange(0, sum([1, 16, 2, 1, latent_window_size])).unsqueeze(0)
+            clean_latent_indices_start, clean_latent_4x_indices, clean_latent_2x_indices, clean_latent_1x_indices, latent_indices = indices.split([1, 16, 2, 1, latent_window_size], dim=1)
+            clean_latent_indices = torch.cat([clean_latent_indices_start, clean_latent_1x_indices], dim=1)
+            
+            clean_latents_4x, clean_latents_2x, clean_latents_1x = history_latents[:, :, -sum([16, 2, 1]):, :, :].split([16, 2, 1], dim=2)
+            clean_latents = torch.cat([start_latent.to(history_latents), clean_latents_1x], dim=2)
             
             generated_latents = sample_hunyuan(
                 transformer=models['transformer'],
                 sampler='unipc',
                 width=width,
                 height=height,
-                frames=num_frames,
+                frames=latent_window_size * 4 - 3,
                 real_guidance_scale=cfg,
                 distilled_guidance_scale=gs,
                 guidance_rescale=rs,
@@ -348,28 +349,23 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
                 callback=callback,
             )
             
-            if is_last_section:
-                generated_latents = torch.cat([start_latent.to(generated_latents), generated_latents], dim=2)
-            
             total_generated_latent_frames += int(generated_latents.shape[2])
-            history_latents = torch.cat([generated_latents.to(history_latents), history_latents], dim=2)
+            history_latents = torch.cat([history_latents, generated_latents.to(history_latents)], dim=2)
             
             if not models['high_vram']:
-                offload_model_from_device_for_memory_preservation(
-                    models['transformer'], target_device=gpu, preserved_memory_gb=8
-                )
+                offload_model_from_device_for_memory_preservation(models['transformer'], target_device=gpu, preserved_memory_gb=8)
                 load_model_as_complete(models['vae'], target_device=gpu)
             
-            real_history_latents = history_latents[:, :, :total_generated_latent_frames, :, :]
+            real_history_latents = history_latents[:, :, -total_generated_latent_frames:, :, :]
             
             if history_pixels is None:
                 history_pixels = vae_decode(real_history_latents, models['vae']).cpu()
             else:
-                section_latent_frames = (latent_window_size * 2 + 1) if is_last_section else (latent_window_size * 2)
+                section_latent_frames = latent_window_size * 2
                 overlapped_frames = latent_window_size * 4 - 3
                 
-                current_pixels = vae_decode(real_history_latents[:, :, :section_latent_frames], models['vae']).cpu()
-                history_pixels = soft_append_bcthw(current_pixels, history_pixels, overlapped_frames)
+                current_pixels = vae_decode(real_history_latents[:, :, -section_latent_frames:], models['vae']).cpu()
+                history_pixels = soft_append_bcthw(history_pixels, current_pixels, overlapped_frames)
             
             if not models['high_vram']:
                 unload_complete_models()
@@ -377,22 +373,14 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
             output_filename = os.path.join(output_dir, f'{job_id}_{total_generated_latent_frames}.mp4')
             save_bcthw_as_mp4(history_pixels, output_filename, fps=30, crf=mp4_crf)
             
-            current_video_length = max(0, (total_generated_latent_frames * 4 - 3) / 30)
-            print(f"  Decoded section. Latent shape: {real_history_latents.shape}, Pixel shape: {history_pixels.shape}")
-            print(f"  Current video length: {current_video_length:.2f} seconds")
-            print(f"  Saved: {output_filename}")
-            
-            if is_last_section:
-                break
+            print(f'  Saved intermediate: {output_filename}')
         
         final_output = os.path.join(output_dir, f'{job_id}_final.mp4')
         save_bcthw_as_mp4(history_pixels, final_output, fps=30, crf=mp4_crf)
         
-        print(f"\n=== Generation Complete ===")
+        print(f"\n=== I2V Generation Complete ===")
         print(f"Job ID: {job_id}")
         print(f"Final video: {final_output}")
-        print(f"Video length: {(total_generated_latent_frames * 4 - 3) / 30:.2f} seconds")
-        print(f"Total frames: {total_generated_latent_frames * 4 - 3}")
         
         return final_output
         
@@ -411,9 +399,10 @@ def generate_video(input_image_path, prompt, n_prompt, seed, total_second_length
 @torch.no_grad()
 def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds, 
                 latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, 
-                use_teacache, mp4_crf, output_dir, models, max_context_frames=9, 
-                extension_method='f1'):
-    """Video extension function supporting both F1-style and conservative methods"""
+                use_teacache, mp4_crf, output_dir, models, extension_method='f1_multiframe',
+                num_context_frames=5, vae_batch_size=16, resolution=640, no_resize=False,
+                max_context_frames=9):
+    """Video extension function supporting F1-style, F1-multiframe, and conservative methods"""
     
     job_id = generate_timestamp()
     print(f"Starting video extension job: {job_id}")
@@ -433,14 +422,14 @@ def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds,
             models['feature_extractor'], models['image_encoder']
         )
         
-        def progress_callback(percentage, message):
+        def progress_callback(message, percentage):
             print(f"[{percentage:3d}%] {message}")
         
         if extension_method == 'f1':
-            print("🎬 Using F1-style video extension (RECOMMENDED)")
+            print("🎬 Using F1-style video extension (single frame)")
             print("   - Treats last frame as starting image")
             print("   - Uses proven F1 demo logic")
-            print("   - Better quality and reliability")
+            print("   - Good quality and reliability")
             print()
             
             # Use F1-style extension
@@ -466,6 +455,43 @@ def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds,
             
             print(f"\n=== F1-Style Video Extension Complete ===")
             
+        elif extension_method == 'f1_multiframe':
+            print("🎬 Using F1-style multi-frame video extension (RECOMMENDED)")
+            print("   - Uses multiple frames as context for better temporal continuity")
+            print("   - Encodes entire input video to latents")
+            print("   - Uses proven F1 sectional generation logic")
+            print("   - Best quality and temporal consistency")
+            print(f"   - Context frames: {num_context_frames}")
+            print(f"   - VAE batch size: {vae_batch_size}")
+            print()
+            
+            # Use F1-style multi-frame extension
+            output_path = extend_video_f1_multiframe(
+                input_video=input_video_path,
+                prompt=prompt,
+                models=models_dict,
+                total_second_length=extend_seconds,
+                negative_prompt=n_prompt,
+                seed=seed,
+                latent_window_size=latent_window_size,
+                steps=steps,
+                cfg_scale=cfg,
+                distilled_cfg_scale=gs,
+                cfg_rescale=rs,
+                gpu_memory_preservation=gpu_memory_preservation,
+                use_teacache=use_teacache,
+                mp4_crf=mp4_crf,
+                output_dir=output_dir,
+                high_vram=models['high_vram'],
+                progress_callback=progress_callback,
+                num_context_frames=num_context_frames,
+                vae_batch_size=vae_batch_size,
+                resolution=resolution,
+                no_resize=no_resize
+            )
+            
+            print(f"\n=== F1-Style Multi-Frame Video Extension Complete ===")
+            
         elif extension_method == 'conservative':
             print("⚠️  Using conservative video extension (EXPERIMENTAL)")
             print("   - Uses recent frames as context")
@@ -476,6 +502,9 @@ def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds,
             print()
             
             # Use conservative extension
+            def conservative_progress_callback(percentage, message):
+                print(f"[{percentage:3d}%] {message}")
+            
             output_path = extend_video_conservative(
                 existing_frames=input_video_path,
                 prompt=prompt,
@@ -493,7 +522,7 @@ def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds,
                 mp4_crf=mp4_crf,
                 output_dir=output_dir,
                 high_vram=models['high_vram'],
-                progress_callback=progress_callback
+                progress_callback=conservative_progress_callback
             )
             
             print(f"\n=== Conservative Video Extension Complete ===")
@@ -518,7 +547,7 @@ def main():
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
     
-    print("=== FramePack CLI ===")
+    print("=== FramePack CLI Enhanced ===")
     print(f"Mode: {args.mode}")
     
     if args.mode == 'i2v':
@@ -526,15 +555,15 @@ def main():
         print(f"Video length: {args.total_seconds} seconds")
     elif args.mode == 'extend':
         print(f"Input video: {args.input_video}")
+        print(f"Extension method: {args.extension_method}")
         print(f"Extension length: {args.extend_seconds} seconds")
-        print(f"Max context frames: {args.max_context_frames}")
-        print()
-        print("⚠️  VIDEO EXTENSION LIMITATIONS:")
-        print("   - Only uses recent frames as context (~0.3s)")
-        print("   - May not continue complex long-term motions")
-        print("   - Best for simple, consistent movements")
-        print("   - Experimental feature - not part of original FramePack")
-        print()
+        if args.extension_method == 'f1_multiframe':
+            print(f"Context frames: {args.num_context_frames}")
+            print(f"VAE batch size: {args.vae_batch_size}")
+            print(f"Resolution: {args.resolution}")
+            print(f"No resize: {args.no_resize}")
+        elif args.extension_method == 'conservative':
+            print(f"Max context frames: {args.max_context_frames}")
     
     print(f"Prompt: '{args.prompt}'")
     print(f"Output directory: {args.output_dir}")
@@ -583,6 +612,11 @@ def main():
                 mp4_crf=args.mp4_crf,
                 output_dir=args.output_dir,
                 models=models,
+                extension_method=args.extension_method,
+                num_context_frames=args.num_context_frames,
+                vae_batch_size=args.vae_batch_size,
+                resolution=args.resolution,
+                no_resize=args.no_resize,
                 max_context_frames=args.max_context_frames
             )
         
@@ -596,10 +630,10 @@ def main():
 if __name__ == "__main__":
     """
     # Image-to-Video (i2v) mode - Basic usage
-    python predict.py --mode i2v --input_image /path/to/image.jpg --prompt "The girl dances gracefully"
+    python predict_f1_enhanced.py --mode i2v --input_image /path/to/image.jpg --prompt "The girl dances gracefully"
 
     # Image-to-Video with custom parameters
-    python predict.py \
+    python predict_f1_enhanced.py \
         --mode i2v \
         --input_image /path/to/image.jpg \
         --prompt "A character doing some simple body movements" \
@@ -608,32 +642,57 @@ if __name__ == "__main__":
         --steps 30 \
         --output_dir ./my_outputs/
 
-    # Video Extension mode - Basic usage
-    python predict.py --mode extend --input_video /path/to/video.mp4 --prompt "The character continues dancing"
-
-    # Video Extension with custom parameters
-    python predict.py \
+    # Video Extension mode - F1 Multi-Frame (RECOMMENDED)
+    python predict_f1_enhanced.py \
         --mode extend \
+        --extension_method f1_multiframe \
+        --input_video /path/to/video.mp4 \
+        --prompt "The character continues dancing gracefully" \
+        --extend_seconds 3.0 \
+        --num_context_frames 5 \
+        --vae_batch_size 16
+
+    # Video Extension mode - F1 Single Frame
+    python predict_f1_enhanced.py \
+        --mode extend \
+        --extension_method f1 \
+        --input_video /path/to/video.mp4 \
+        --prompt "The action continues" \
+        --extend_seconds 3.0
+
+    # Video Extension mode - Conservative (experimental)
+    python predict_f1_enhanced.py \
+        --mode extend \
+        --extension_method conservative \
         --input_video /path/to/video.mp4 \
         --prompt "The action continues with graceful movements" \
         --extend_seconds 3.0 \
-        --seed 123 \
-        --steps 25 \
-        --max_context_frames 9 \
-        --output_dir ./extended_videos/
+        --max_context_frames 9
 
-    # High quality extension (slower, with more context)
-    python predict.py \
+    # High quality F1 multi-frame extension
+    python predict_f1_enhanced.py \
         --mode extend \
+        --extension_method f1_multiframe \
         --input_video /path/to/video.mp4 \
         --prompt "Extended dance sequence" \
         --extend_seconds 5.0 \
         --mp4_crf 0 \
         --steps 50 \
-        --max_context_frames 15 \
-        --no_teacache
+        --no_teacache \
+        --num_context_frames 8 \
+        --vae_batch_size 8
+
+    # Native resolution extension (requires more VRAM)
+    python predict_f1_enhanced.py \
+        --mode extend \
+        --extension_method f1_multiframe \
+        --input_video /path/to/video.mp4 \
+        --prompt "High quality extension" \
+        --extend_seconds 3.0 \
+        --no_resize \
+        --vae_batch_size 4
 
     # Backward compatibility: i2v mode is default
-    python predict.py --input_image /path/to/image.jpg --prompt "Dancing scene"
+    python predict_f1_enhanced.py --input_image /path/to/image.jpg --prompt "Dancing scene"
     """
-    main()
+    main() 
