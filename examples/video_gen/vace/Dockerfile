@@ -1,0 +1,13 @@
+FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y libgl1-mesa-glx libglib2.0-0 git gcc g++ build-essential wget \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install torch==2.5.1 --no-cache-dir
+COPY requirements requirements/
+RUN pip install -r requirements/framework.txt
+
+# Install additional required packages
+RUN pip install wan@git+https://github.com/Wan-Video/Wan2.1 && \
+    pip install ltx-video@git+https://github.com/Lightricks/LTX-Video@ltx-video-0.9.1 sentencepiece --no-deps
