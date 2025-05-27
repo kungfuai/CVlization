@@ -3,6 +3,7 @@
 import os
 import random
 import sys
+import argparse
 from typing import Sequence, Mapping, Any, Union
 import torch
 from nodes_wan import WanImageToVideo
@@ -120,7 +121,39 @@ def import_custom_nodes() -> None:
 from nodes import NODE_CLASS_MAPPINGS
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='WAN Image to Video Generation')
+    parser.add_argument('-p', '--prompt', type=str, default="the cartoon character does a powerful kungfu kick (like Bruce Lee)",
+                      help='Positive prompt for video generation')
+    parser.add_argument('-n', '--negative-prompt', type=str, 
+                      default="色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+                      help='Negative prompt for video generation')
+    parser.add_argument('-i', '--reference-image', type=str, default="examples/video_gen/animate_x/data/images/1.jpg",
+                      help='Path to reference image')
+    parser.add_argument('-o', '--output-dir', type=str, default="output",
+                      help='Directory to save output video')
+    parser.add_argument('--fps', type=int, default=16,
+                      help='Frames per second for output video')
+    parser.add_argument('--cfg', type=float, default=6.0,
+                      help='Classifier-free guidance scale')
+    parser.add_argument('--steps', type=int, default=20,
+                      help='Number of sampling steps')
+    parser.add_argument('--width', type=int, default=512,
+                      help='Output video width')
+    parser.add_argument('--height', type=int, default=512,
+                      help='Output video height')
+    parser.add_argument('--length', type=int, default=33,
+                      help='Number of frames to generate')
+    parser.add_argument('--seed', type=int, default=None,
+                      help='Random seed for generation (default: random)')
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+    # Create output directory if it doesn't exist
+    os.makedirs(args.output_dir, exist_ok=True)
+    
     # import_custom_nodes()
     with torch.inference_mode():
         cliploader = NODE_CLASS_MAPPINGS["CLIPLoader"]()
@@ -134,12 +167,12 @@ def main():
 
         cliptextencode = NODE_CLASS_MAPPINGS["CLIPTextEncode"]()
         cliptextencode_6 = cliptextencode.encode(
-            text="the cartoon character does a powerful kungfu kick (like Bruce Lee)",
+            text=args.prompt,
             clip=get_value_at_index(cliploader_38, 0),
         )
 
         cliptextencode_7 = cliptextencode.encode(
-            text="色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+            text=args.negative_prompt,
             clip=get_value_at_index(cliploader_38, 0),
         )
 
@@ -165,7 +198,7 @@ def main():
         print(f"Clip Vision Model: {num_params / 1e9:.3f}B")
 
         loadimage = NODE_CLASS_MAPPINGS["LoadImage"]()
-        loadimage_52 = loadimage.load_image(image="examples/video_gen/animate_x/data/images/1.jpg")
+        loadimage_52 = loadimage.load_image(image=args.reference_image)
 
         clipvisionencode = NODE_CLASS_MAPPINGS["CLIPVisionEncode"]()
         clipvisionencode_51 = clipvisionencode.encode(
@@ -176,9 +209,9 @@ def main():
 
         wanimagetovideo = WanImageToVideo()
         wanimagetovideo_50 = wanimagetovideo.encode(
-            width=512,
-            height=512,
-            length=33,
+            width=args.width,
+            height=args.height,
+            length=args.length,
             batch_size=1,
             positive=get_value_at_index(cliptextencode_6, 0),
             negative=get_value_at_index(cliptextencode_7, 0),
@@ -199,9 +232,9 @@ def main():
 
             print(f"To begin sampling...")
             ksampler_3 = ksampler.sample(
-                seed=random.randint(1, 2**64),
-                steps=20,
-                cfg=6,
+                seed=args.seed if args.seed is not None else random.randint(1, 2**64),
+                steps=args.steps,
+                cfg=args.cfg,
                 sampler_name="uni_pc",
                 scheduler="simple",
                 denoise=1,
@@ -218,13 +251,17 @@ def main():
             )
 
             saveanimatedwebp_28 = saveanimatedwebp.save_images(
-                filename_prefix="ComfyUI",
-                fps=16,
+                filename_prefix=os.path.join(args.output_dir, "ComfyUI"),
+                fps=args.fps,
                 lossless=False,
                 quality=90,
                 method="default",
                 images=get_value_at_index(vaedecode_8, 0),
             )
+            
+            # Print the output file path
+            output_path = get_value_at_index(saveanimatedwebp_28, 0)
+            print(f"\nOutput saved to: {output_path}")
 
 
 if __name__ == "__main__":
