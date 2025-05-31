@@ -1,0 +1,1 @@
+docker build -t vace_comfy examples/video_gen/vace_comfy
