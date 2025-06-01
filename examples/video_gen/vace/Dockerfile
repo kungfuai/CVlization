@@ -7,7 +7,9 @@ RUN apt-get update && \
 RUN pip install torch==2.5.1 --no-cache-dir
 COPY requirements requirements/
 RUN pip install -r requirements/framework.txt
+RUN pip install groundingdino-py
 
 # Install additional required packages
 RUN pip install wan@git+https://github.com/Wan-Video/Wan2.1 && \
     pip install ltx-video@git+https://github.com/Lightricks/LTX-Video@ltx-video-0.9.1 sentencepiece --no-deps
+RUN pip install sam2==1.1.0
