@@ -19,6 +19,7 @@ class SAM2ImageAnnotator:
         except:
             import warnings
             warnings.warn("please pip install sam2 package, or you can refer to models/VACE-Annotators/sam2/SAM_2-1.0-cp310-cp310-linux_x86_64.whl")
+            raise
         config_path = cfg['CONFIG_PATH']
         local_config_path = os.path.join(*config_path.rsplit('/')[-3:])
         if not os.path.exists(local_config_path):  # TODO
