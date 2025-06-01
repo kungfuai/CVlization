@@ -3,16 +3,24 @@
 # Example script to run VACE (Video Animation Control Extension) video generation
 # This calls the predict.py script with sample arguments
 
-python examples/video_gen/vace_comfy/predict.py \
-    --prompt "A beautiful woman dancing gracefully in a garden, her flowing dress moving in the wind, cinematic lighting, high quality animation" \
-    --negative-prompt "static, blurry, low quality, distorted, ugly, deformed" \
-    --input-images "examples/video_gen/animate_x/data/images/1.jpg" \
-    --output-dir "output/vace_example" \
-    --fps 16 \
-    --cfg 4.0 \
-    --steps 20 \
-    --width 720 \
-    --height 720 \
-    --length 49 \
-    --seed 42 \
-    --model-shift 8.0
+# docker run --shm-size 16G --runtime nvidia -it \
+# 	-v $(pwd)/examples/video_gen/vace/:/workspace \
+# 	-v $(pwd)/data/container_cache:/root/.cache \
+#     -e CUDA_VISIBLE_DEVICES='0' \
+# 	vace \
+#     python vace/vace_pipeline.py --base wan \
+# 		--task frameref \
+# 		--mode firstframe \
+# 		--image "assets/images/drone0.png" \
+# 		--prompt "a guy happily explains he likes the drone"
+
+docker run --shm-size 16G --runtime nvidia -it \
+	-v $(pwd)/examples/video_gen/vace/:/workspace \
+	-v $(pwd)/data/container_cache:/root/.cache \
+    -e CUDA_VISIBLE_DEVICES='0' \
+	vace \
+    python vace/vace_pipeline.py --base wan \
+		--task image_reference \
+		--mode salientmasktrack \
+		--image "assets/images/drone0.png" \
+		--prompt "a guy happily explains he likes the drone"
