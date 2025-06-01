@@ -15,6 +15,7 @@ class GDINOAnnotator:
         except:
             import warnings
             warnings.warn("please pip install groundingdino package, or you can refer to models/VACE-Annotators/gdino/groundingdino-0.1.0-cp310-cp310-linux_x86_64.whl")
+            raise
 
         grounding_dino_config_path = cfg['CONFIG_PATH']
         grounding_dino_checkpoint_path = cfg['PRETRAINED_MODEL']
