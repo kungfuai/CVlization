@@ -1,0 +1,1 @@
+docker build -t phantom examples/video_gen/phantom/
