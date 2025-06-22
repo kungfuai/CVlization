@@ -32,6 +32,7 @@ def get_value_at_index(obj: Union[Sequence, Mapping], index: int) -> Any:
     try:
         return obj[index]
     except KeyError:
+        assert "result" in obj, f"obj is {obj}"
         return obj["result"][index]
 
 
@@ -260,7 +261,9 @@ def main():
             )
             
             # Print the output file path
-            output_path = get_value_at_index(saveanimatedwebp_28, 0)
+            # {'ui': {'images': [{'filename': 'ComfyUI_00004_.webp', 'subfolder': 'output', 'type': 'output'}], 'animated': (True,)}}
+            output_path = os.path.join(args.output_dir, saveanimatedwebp_28['ui']['images'][0]['filename'])
+            # output_path = get_value_at_index(saveanimatedwebp_28, 0)
             print(f"\nOutput saved to: {output_path}")
 
 
