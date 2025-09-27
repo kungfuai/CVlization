@@ -32,6 +32,7 @@ def get_value_at_index(obj: Union[Sequence, Mapping], index: int) -> Any:
     try:
         return obj[index]
     except KeyError:
+        assert "result" in obj, f"obj is {obj}"
         return obj["result"][index]
 
 
@@ -154,6 +155,10 @@ def main():
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
     
+    # Set the folder_paths output directory to respect args.output_dir
+    import folder_paths
+    folder_paths.set_output_directory(args.output_dir)
+    
     # import_custom_nodes()
     with torch.inference_mode():
         cliploader = NODE_CLASS_MAPPINGS["CLIPLoader"]()
@@ -251,7 +256,7 @@ def main():
             )
 
             saveanimatedwebp_28 = saveanimatedwebp.save_images(
-                filename_prefix=os.path.join(args.output_dir, "ComfyUI"),
+                filename_prefix="ComfyUI",
                 fps=args.fps,
                 lossless=False,
                 quality=90,
@@ -260,7 +265,9 @@ def main():
             )
             
             # Print the output file path
-            output_path = get_value_at_index(saveanimatedwebp_28, 0)
+            # {'ui': {'images': [{'filename': 'ComfyUI_00004_.webp', 'subfolder': 'output', 'type': 'output'}], 'animated': (True,)}}
+            filename = saveanimatedwebp_28['ui']['images'][0]['filename']
+            output_path = os.path.join(args.output_dir, filename)
             print(f"\nOutput saved to: {output_path}")
 
 
