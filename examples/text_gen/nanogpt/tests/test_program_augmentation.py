@@ -3,6 +3,7 @@ import importlib.util
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 import types
 import sys
@@ -42,12 +43,50 @@ for parent in Path(__file__).resolve().parents:
 if _MODULE_PATH is None:
     raise FileNotFoundError("Could not locate NanoGPT pipeline module for testing")
 
+
 spec = importlib.util.spec_from_file_location("_nanogpt_pipeline", _MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(module)
 
 NanoGPTTrainingPipeline = module.NanoGPTTrainingPipeline
+ProgramAugmentedGPT = module.ProgramAugmentedGPT
+
+
+class _DummyBackbone(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        hidden_dim = 2
+        self.config = types.SimpleNamespace(block_size=8, n_embd=hidden_dim)
+        self.lm_head = torch.nn.Linear(hidden_dim, 3, bias=False)
+        with torch.no_grad():
+            self.lm_head.weight[:] = torch.tensor(
+                [[-10.0, -10.0], [-10.0, -10.0], [10.0, 10.0]]
+            )
+
+    def forward(self, idx, targets=None):
+        features = self.forward_features(idx)
+        logits = self.lm_head(features)
+        if targets is None:
+            return logits[:, [-1], :], None
+        loss = F.cross_entropy(
+            logits.view(-1, logits.size(-1)), targets.view(-1)
+        )
+        return logits, loss
+
+    def forward_features(self, idx):
+        b, t = idx.shape
+        hidden = torch.ones(b, t, self.config.n_embd, device=idx.device)
+        return hidden
+
+    def generate(self, idx, *args, **kwargs):
+        return idx
+
+    def configure_optimizers(self, *args, **kwargs):
+        return None
+
+    def estimate_mfu(self, *args, **kwargs):
+        return 0.0
 
 
 class _DummyDatasetBuilder:
@@ -94,3 +133,28 @@ def test_get_batch_with_program_targets_are_masked_and_dense():
     torch.testing.assert_close(batch["targets_program"], expected_program)
 
     assert pipeline.program_nil_local_id == nil_local
+
+
+def test_program_augmented_generate_respects_gate():
+    backbone = _DummyBackbone()
+    pag = ProgramAugmentedGPT(
+        backbone=backbone,
+        program_vocab_size=2,
+        program_offset=50,
+        nil_local_id=2,
+        nil_loss_weight=1.0,
+    )
+
+    # Force NIL path (use text head)
+    with torch.no_grad():
+        pag.program_head.weight.zero_()
+        pag.program_head.weight[2].fill_(5.0)
+
+    seed_idx = torch.tensor([[0]], dtype=torch.long)
+    out_nil = pag.generate(seed_idx.clone(), max_new_tokens=1, top_k=1)
+    assert out_nil[0, -1].item() == 2
+
+    # Disable program sampling to mimic baseline generation
+    pag.set_program_sampling(False)
+    out_text_only = pag.generate(seed_idx.clone(), max_new_tokens=1, top_k=1)
+    assert out_text_only[0, -1].item() == 2
