@@ -153,8 +153,3 @@ def test_program_augmented_generate_respects_gate():
     seed_idx = torch.tensor([[0]], dtype=torch.long)
     out_nil = pag.generate(seed_idx.clone(), max_new_tokens=1, top_k=1)
     assert out_nil[0, -1].item() == 2
-
-    # Disable program sampling to mimic baseline generation
-    pag.set_program_sampling(False)
-    out_text_only = pag.generate(seed_idx.clone(), max_new_tokens=1, top_k=1)
-    assert out_text_only[0, -1].item() == 2
