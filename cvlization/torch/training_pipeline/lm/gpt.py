@@ -498,6 +498,7 @@ class NanoGPTTrainingPipeline:
             model = ProgramAugmentedGPT(
                 backbone=model,
                 program_vocab_size=self.config.program_vocab_size,
+                program_offset=self.program_offset,
                 nil_local_id=self.program_nil_local_id,
                 nil_loss_weight=self.config.program_nil_loss_weight,
             )
@@ -1155,6 +1156,7 @@ class ProgramAugmentedGPT(nn.Module):
         self,
         backbone: GPT,
         program_vocab_size: int,
+        program_offset: int,
         nil_local_id: int,
         nil_loss_weight: float,
     ):
@@ -1164,9 +1166,13 @@ class ProgramAugmentedGPT(nn.Module):
             backbone.config.n_embd, program_vocab_size + 1, bias=False
         )
         torch.nn.init.normal_(self.program_head.weight, mean=0.0, std=0.02)
+        self.program_vocab_size = program_vocab_size
+        self.program_offset = program_offset
         self.nil_local_id = nil_local_id
         self.nil_loss_weight = nil_loss_weight
         self.config = backbone.config
+        self.sample_program_inference = True
+        self.sample_program_argmax = False
 
     def forward(
         self,
@@ -1219,8 +1225,75 @@ class ProgramAugmentedGPT(nn.Module):
             return {"text": logits_text, "program": logits_prog}, total_loss, metrics
         return None, total_loss, metrics
 
-    def generate(self, *args, **kwargs):
-        return self.backbone.generate(*args, **kwargs)
+    def generate(
+        self,
+        idx,
+        max_new_tokens,
+        temperature: float = 1.0,
+        top_k: Optional[int] = None,
+        show_progress: bool = False,
+    ):
+        if not self.sample_program_inference:
+            return self.backbone.generate(
+                idx,
+                max_new_tokens,
+                temperature=temperature,
+                top_k=top_k,
+                show_progress=show_progress,
+            )
+
+        if show_progress:
+            from tqdm import tqdm
+
+            range_iter = tqdm(range(max_new_tokens), mininterval=2)
+        else:
+            range_iter = range(max_new_tokens)
+
+        def _top_k_filter(logits: torch.Tensor) -> torch.Tensor:
+            if top_k is None:
+                return logits
+            k = min(top_k, logits.size(-1))
+            values, _ = torch.topk(logits, k)
+            threshold = values[:, [-1]]
+            logits = logits.clone()
+            logits[logits < threshold] = -float("Inf")
+            return logits
+
+        for _ in range_iter:
+            idx_cond = (
+                idx
+                if idx.size(1) <= self.config.block_size
+                else idx[:, -self.config.block_size :]
+            )
+
+            features = self.backbone.forward_features(idx_cond)
+            last_hidden = features[:, [-1], :]
+
+            prog_logits = self.program_head(last_hidden)[:, 0, :] / temperature
+            prog_logits = _top_k_filter(prog_logits)
+            if self.sample_program_argmax:
+                prog_samples = torch.argmax(prog_logits, dim=-1, keepdim=True)
+            else:
+                prog_probs = F.softmax(prog_logits, dim=-1)
+                prog_samples = torch.multinomial(prog_probs, num_samples=1)
+            nil_mask = prog_samples.squeeze(-1).eq(self.nil_local_id)
+
+            text_logits = self.backbone.lm_head(last_hidden)[:, 0, :] / temperature
+            text_logits = _top_k_filter(text_logits)
+            text_probs = F.softmax(text_logits, dim=-1)
+            text_samples = torch.multinomial(text_probs, num_samples=1)
+
+            prog_tokens = prog_samples + self.program_offset
+            idx_next = torch.where(
+                nil_mask.unsqueeze(-1), text_samples, prog_tokens
+            )
+            idx = torch.cat((idx, idx_next), dim=1)
+
+        return idx
+
+    def set_program_sampling(self, enabled: bool, deterministic: bool = False):
+        self.sample_program_inference = bool(enabled)
+        self.sample_program_argmax = bool(deterministic)
 
     def forward_features(self, idx: torch.Tensor) -> torch.Tensor:
         return self.backbone.forward_features(idx)
@@ -1231,10 +1304,6 @@ class ProgramAugmentedGPT(nn.Module):
     def estimate_mfu(self, *args, **kwargs):
         return self.backbone.estimate_mfu(*args, **kwargs)
 
-    def __getattr__(self, name):
-        if name in {"backbone", "program_head", "nil_local_id", "nil_loss_weight", "config"}:
-            return self.__dict__[name]
-        return getattr(self.backbone, name)
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
         # e.g. we may load the GPT2 pretrained model checkpoint (block size 1024)
