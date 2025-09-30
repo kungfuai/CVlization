@@ -35,10 +35,30 @@ if os.path.exists(meta_path):
 
 def main():
     data_dir = os.path.join("data", dataset)
-    train_data = np.memmap(
-        os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r"
-    )
-    val_data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
+    use_program_aug = config.get("use_program_augmentation", False)
+
+    if use_program_aug:
+        pos_meta_path = os.path.join(data_dir, "meta_pos.pkl")
+        assert os.path.exists(
+            pos_meta_path
+        ), f"Expected {pos_meta_path} when use_program_augmentation is True"
+        with open(pos_meta_path, "rb") as f:
+            meta_pos = pickle.load(f)
+        config.setdefault("program_offset", meta_pos["program_offset"])
+        config.setdefault("program_nil_id", meta_pos["program_nil_id"])
+        config.setdefault(
+            "program_vocab_size", len(meta_pos["program_pos_vocab"])
+        )
+        train_bin = "train_with_pos.bin"
+        val_bin = "val_with_pos.bin"
+        dtype = np.uint32
+    else:
+        train_bin = "train.bin"
+        val_bin = "val.bin"
+        dtype = np.uint16
+
+    train_data = np.memmap(os.path.join(data_dir, train_bin), dtype=dtype, mode="r")
+    val_data = np.memmap(os.path.join(data_dir, val_bin), dtype=dtype, mode="r")
 
     class DatasetBuilder:
         def training_dataset(self):
