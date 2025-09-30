@@ -79,7 +79,7 @@ def test_get_batch_with_program_targets_are_masked_and_dense():
     pipeline = NanoGPTTrainingPipeline(config)
     pipeline.create_dataloaders(_DummyDatasetBuilder(data))
 
-    batch = pipeline.get_batch_with_program("train")
+    batch = pipeline.get_batch("train")
 
     assert batch["input_ids"].shape == (1, 4)
     torch.testing.assert_close(
