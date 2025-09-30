@@ -50,7 +50,7 @@ class NanoGPTTrainingPipeline:
         dropout: float = 0.0
         gradient_accumulation_steps: int = 1
         bias: bool = True
-        device: str = "cuda"
+        device: str = "cuda"  # e.g. 'cuda', 'cpu', or 'mps'
         use_mamba_mixer: bool = False
 
         learning_rate: float = 6e-4  # max learning rate
@@ -98,26 +98,36 @@ class NanoGPTTrainingPipeline:
         self.out_dir = (
             f"{config.log_dir}/batch{config.batch_size}_block{config.block_size}"
         )
-        self.dtype = (
-            "bfloat16"
-            if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-            else "float16"
-        )  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+        requested_device = (config.device or "cpu").lower()
+        if "cuda" in requested_device:
+            self.dtype = (
+                "bfloat16"
+                if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+                else "float16"
+            )
+        elif "mps" in requested_device:
+            self.dtype = "float32"
+        else:
+            self.dtype = "float32"
+        # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 
         self.ptdtype = {
             "float32": torch.float32,
             "bfloat16": torch.bfloat16,
             "float16": torch.float16,
         }[self.dtype]
-        device_type = (
-            "cuda" if "cuda" in config.device else "cpu"
-        )  # for later use in torch.autocast
+        if "cuda" in requested_device:
+            device_type = "cuda"
+        elif "mps" in requested_device:
+            device_type = "mps"
+        else:
+            device_type = "cpu"
+        # for later use in torch.autocast
         self.device_type = device_type
-        self.ctx = (
-            nullcontext()
-            if device_type == "cpu"
-            else torch.amp.autocast(device_type=device_type, dtype=self.ptdtype)
-        )
+        if device_type == "cuda":
+            self.ctx = torch.amp.autocast(device_type=device_type, dtype=self.ptdtype)
+        else:
+            self.ctx = nullcontext()
         self._setup_io()
         if self.master_process:
             os.makedirs(self.out_dir, exist_ok=True)
@@ -125,8 +135,9 @@ class NanoGPTTrainingPipeline:
         seed = 1337 + self.seed_offset
         print(f"setting random seed to {seed}")
         torch.manual_seed(seed)
-        torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
-        torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
+        if device_type == "cuda":
+            torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
+            torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
         self.START_TOKEN = self.config.start_token
 
@@ -148,12 +159,18 @@ class NanoGPTTrainingPipeline:
         block_size = self.config.block_size
         self.ddp = ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
         if ddp:
-            init_process_group(backend=self.config.backend)
+            backend = self.config.backend
+            if backend == "nccl" and self.device_type != "cuda":
+                backend = "gloo"
+            init_process_group(backend=backend)
             ddp_rank = int(os.environ["RANK"])
             ddp_local_rank = int(os.environ["LOCAL_RANK"])
             ddp_world_size = int(os.environ["WORLD_SIZE"])
-            device = f"cuda:{ddp_local_rank}"
-            torch.cuda.set_device(device)
+            if self.device_type == "cuda":
+                device = f"cuda:{ddp_local_rank}"
+                torch.cuda.set_device(device)
+            else:
+                device = self.config.device
             self.master_process = (
                 ddp_rank == 0
             )  # this process will do logging, checkpointing etc.
@@ -162,6 +179,7 @@ class NanoGPTTrainingPipeline:
             # down the desired gradient accumulation iterations per process proportionally
             assert self.config.gradient_accumulation_steps % ddp_world_size == 0
             self.config.gradient_accumulation_steps //= ddp_world_size
+            self.config.device = device
         else:
             # if not ddp, we are running on a single gpu, and one process
             self.master_process = True
@@ -490,8 +508,26 @@ class NanoGPTTrainingPipeline:
     def create_grad_scaler(self):
         # initialize a GradScaler. If enabled=False scaler is a no-op
         dtype = self.dtype
-        self.scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
-        print(f"GradScaler enabled: {dtype == 'float16'}")
+        if self.device_type == "cuda":
+            enabled = dtype == "float16"
+            self.scaler = torch.cuda.amp.GradScaler(enabled=enabled)
+        else:
+            class _IdentityScaler:
+                def scale(self, loss):
+                    return loss
+
+                def unscale_(self, optimizer):
+                    return None
+
+                def step(self, optimizer):
+                    optimizer.step()
+
+                def update(self):
+                    return None
+
+            self.scaler = _IdentityScaler()
+            enabled = False
+        print(f"GradScaler enabled: {enabled}")
 
     def create_optimizer(self):
         model = self.model
@@ -579,7 +615,6 @@ class NanoGPTTrainingPipeline:
 
         X, Y = self.get_batch("train")  # fetch the very first batch
         print(f"X.shape: {X.shape}, Y.shape: {Y.shape}")
-        print(f"X: {X[0, :5]}")
         # import sys; sys.exit(0)
         t0 = time.time()
         local_iter_num = 0  # number of iterations in the lifetime of this process
