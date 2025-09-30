@@ -17,6 +17,7 @@ import inspect
 import os
 from contextlib import nullcontext
 from dataclasses import dataclass
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -46,6 +47,7 @@ class NanoGPTTrainingPipeline:
         program_offset: int = None
         program_nil_id: int = None
         program_vocab_size: int = 0
+        program_nil_loss_weight: float = 1.0
 
         # Model
         n_layer: int = 12
@@ -270,10 +272,6 @@ class NanoGPTTrainingPipeline:
 
     def get_batch(self, split: str):
         x, y = self._sample_batch(split)
-        return x, y
-
-    def get_batch_with_program(self, split: str):
-        x, y = self._sample_batch(split)
         batch = {"input_ids": x, "targets": y}
         if not self.config.use_program_augmentation:
             return batch
@@ -411,6 +409,12 @@ class NanoGPTTrainingPipeline:
             meta_vocab_size = self.config.vocab_size
         out_dir = self.out_dir
 
+        if meta_vocab_size is None:
+            meta_vocab_size = self.config.vocab_size
+        vocab_for_model = meta_vocab_size
+        if self.config.use_program_augmentation:
+            vocab_for_model = max(vocab_for_model, self.config.program_nil_id + 1)
+
         # model init
         self.model_args = dict(
             n_layer=n_layer,
@@ -418,7 +422,7 @@ class NanoGPTTrainingPipeline:
             n_embd=n_embd,
             block_size=block_size,
             bias=bias,
-            vocab_size=None,
+            vocab_size=vocab_for_model,
             dropout=dropout,
         )  # start with model_args from command line
         if init_from == "scratch":
@@ -429,9 +433,7 @@ class NanoGPTTrainingPipeline:
                 print(
                     "defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)"
                 )
-            self.model_args["vocab_size"] = (
-                meta_vocab_size if meta_vocab_size is not None else 50304
-            )
+            self.model_args["vocab_size"] = vocab_for_model
             print("***** model args:", self.model_args)
             gptconf = GPTConfig(**(self.model_args))
             if self.config.use_mamba_mixer:
@@ -492,6 +494,11 @@ class NanoGPTTrainingPipeline:
             self.model_args["block_size"] = (
                 block_size  # so that the checkpoint will have the right value
             )
+        if self.config.use_program_augmentation and model.program_head is None:
+            program_classes = self.config.program_vocab_size + 1
+            model.program_head = nn.Linear(model.config.n_embd, program_classes, bias=False)
+            torch.nn.init.normal_(model.program_head.weight, mean=0.0, std=0.02)
+
         print(model)
         model.to(device)
         if self.config.compile:
@@ -603,13 +610,29 @@ class NanoGPTTrainingPipeline:
         model.eval()
         for split in ["train", "val"]:
             losses = torch.zeros(eval_iters)
+            text_losses = [] if self.config.use_program_augmentation else None
             for k in range(eval_iters):
-                X, Y = self.get_batch(split)
-                # print(f"estimate_loss(): k={k}, X.shape: {X.shape}, Y.shape: {Y.shape}")
+                batch = self.get_batch(split)
                 with self.ctx:
-                    logits, loss = model(X, Y)
+                    if self.config.use_program_augmentation:
+                        _, loss, metrics = model(
+                            batch["input_ids"],
+                            targets_text=batch["targets_text"],
+                            targets_program=batch["targets_program"],
+                            program_nil_local_id=self.program_nil_local_id,
+                            nil_weight=self.config.program_nil_loss_weight,
+                            return_logits=False,
+                        )
+                        if "loss_text" in metrics:
+                            text_losses.append(metrics["loss_text"].item())
+                    else:
+                        _, loss = model(
+                            batch["input_ids"], batch["targets"]
+                        )
                 losses[k] = loss.item()
-            out[split] = losses.mean()
+            out[split] = losses.mean().item()
+            if text_losses:
+                out[f"{split}_text_ce"] = float(sum(text_losses) / len(text_losses))
         model.train()
         return out
 
@@ -641,8 +664,8 @@ class NanoGPTTrainingPipeline:
         iter_num = 0
         best_val_loss = 1e9
 
-        X, Y = self.get_batch("train")  # fetch the very first batch
-        print(f"X.shape: {X.shape}, Y.shape: {Y.shape}")
+        batch = self.get_batch("train")  # fetch the very first batch
+        print(f"input_ids shape: {batch['input_ids'].shape}")
         # import sys; sys.exit(0)
         t0 = time.time()
         local_iter_num = 0  # number of iterations in the lifetime of this process
@@ -657,20 +680,28 @@ class NanoGPTTrainingPipeline:
             # evaluate the loss on train/val sets and write checkpoints
             if (iter_num + 1) % eval_interval == 0 and self.master_process:
                 losses = self.estimate_loss()
-                print(
-                    f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
-                )
-                # print("batch_size:", batch_size)
-                if wandb_log:
-                    wandb.log(
-                        {
-                            "iter": iter_num,
-                            "train/loss": losses["train"],
-                            "val/loss": losses["val"],
-                            "lr": lr,
-                            "mfu": running_mfu * 100,  # convert to percentage
-                        }
+                message_parts = [
+                    f"train loss {losses['train']:.4f}",
+                    f"val loss {losses['val']:.4f}",
+                ]
+                if "val_text_ce" in losses:
+                    message_parts.append(
+                        f"val text CE {losses['val_text_ce']:.4f}"
                     )
+                print(f"step {iter_num}: " + ", ".join(message_parts))
+                if wandb_log:
+                    log_payload = {
+                        "iter": iter_num,
+                        "train/loss": losses["train"],
+                        "val/loss": losses["val"],
+                        "lr": lr,
+                        "mfu": running_mfu * 100,
+                    }
+                    if "val_text_ce" in losses:
+                        log_payload["val/text_ce"] = losses["val_text_ce"]
+                    if "train_text_ce" in losses:
+                        log_payload["train/text_ce"] = losses["train_text_ce"]
+                    wandb.log(log_payload)
                 if losses["val"] < best_val_loss or always_save_checkpoint:
                     best_val_loss = losses["val"]
                     if iter_num > 0:
@@ -690,6 +721,7 @@ class NanoGPTTrainingPipeline:
 
             # forward backward update, with optional gradient accumulation to simulate larger batch size
             # and using the GradScaler if data type is float16
+            last_metrics = {}
             for micro_step in range(gradient_accumulation_steps):
                 if ddp:
                     # in DDP training we only need to sync gradients at the last micro step.
@@ -701,16 +733,24 @@ class NanoGPTTrainingPipeline:
                     )
                 with ctx:
                     start_time = time.time()
-                    logits, loss = model(X, Y)
+                    if self.config.use_program_augmentation:
+                        _, loss, metrics = model(
+                            batch["input_ids"],
+                            targets_text=batch["targets_text"],
+                            targets_program=batch["targets_program"],
+                            program_nil_local_id=self.program_nil_local_id,
+                            nil_weight=self.config.program_nil_loss_weight,
+                            return_logits=False,
+                        )
+                    else:
+                        _, loss = model(batch["input_ids"], batch["targets"])
+                        metrics = {}
                     end_time = time.time()
-                    # print(f"forward pass time: {end_time - start_time:.3f}s")
-                    loss = (
-                        loss / gradient_accumulation_steps
-                    )  # scale the loss to account for gradient accumulation
-                # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                X, Y = self.get_batch("train")
-                # backward pass, with gradient scaling if training in fp16
+                    loss = loss / gradient_accumulation_steps
+                next_batch = self.get_batch("train")
                 scaler.scale(loss).backward()
+                batch = next_batch
+                last_metrics = metrics
             # clip the gradient
             if grad_clip != 0.0:
                 scaler.unscale_(optimizer)
@@ -736,9 +776,29 @@ class NanoGPTTrainingPipeline:
                     running_mfu = (
                         mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
                     )
-                print(
-                    f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
-                )
+                log_line = f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
+                if self.config.use_program_augmentation:
+                    if "loss_text" in last_metrics:
+                        log_line += f", text CE {last_metrics['loss_text'].item():.4f}"
+                    if "loss_prog" in last_metrics:
+                        log_line += f", prog CE {last_metrics['loss_prog'].item():.4f}"
+                    if "loss_nil" in last_metrics:
+                        log_line += f", nil CE {last_metrics['loss_nil'].item():.4f}"
+                print(log_line)
+                if wandb_log and self.config.use_program_augmentation:
+                    wandb.log(
+                        {
+                            "train/text_ce_step": last_metrics["loss_text"].item()
+                            if "loss_text" in last_metrics
+                            else float("nan"),
+                            "train/prog_ce_step": last_metrics["loss_prog"].item()
+                            if "loss_prog" in last_metrics
+                            else float("nan"),
+                            "train/nil_ce_step": last_metrics["loss_nil"].item()
+                            if "loss_nil" in last_metrics
+                            else float("nan"),
+                        }
+                    )
 
             # log the decoded ground truth codes
             # TODO: this is hardcoded for now
@@ -1028,6 +1088,8 @@ class GPT(nn.Module):
             self.lm_head.weight
         )  # https://paperswithcode.com/method/weight-tying
 
+        self.program_head: Optional[nn.Linear] = None
+
         # init all weights
         self.apply(self._init_weights)
         # apply special scaled init to the residual projections, per GPT-2 paper
@@ -1060,7 +1122,16 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(
+        self,
+        idx,
+        targets=None,
+        targets_text=None,
+        targets_program=None,
+        program_nil_local_id: Optional[int] = None,
+        nil_weight: float = 1.0,
+        return_logits: bool = True,
+    ):
         # print(f"x_mean: {idx.float().mean()}")
         device = idx.device
         b, t = idx.size()
@@ -1076,6 +1147,45 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
+
+        if targets_text is not None and targets_program is not None:
+            assert (
+                self.program_head is not None
+            ), "program_head must be initialized when using program augmentation"
+            logits_text = self.lm_head(x)
+            logits_prog = self.program_head(x)
+
+            loss = None
+            metrics = {}
+
+            text_mask = targets_text.ne(-1)
+            if text_mask.any():
+                loss_text = F.cross_entropy(
+                    logits_text[text_mask], targets_text[text_mask]
+                )
+                nil_targets = torch.full_like(
+                    targets_text[text_mask], program_nil_local_id
+                )
+                loss_nil = F.cross_entropy(logits_prog[text_mask], nil_targets)
+            else:
+                loss_text = logits_text.new_zeros(())
+                loss_nil = logits_prog.new_zeros(())
+
+            program_mask = targets_program.ne(program_nil_local_id)
+            if program_mask.any():
+                loss_prog = F.cross_entropy(
+                    logits_prog[program_mask], targets_program[program_mask]
+                )
+            else:
+                loss_prog = logits_prog.new_zeros(())
+
+            loss = loss_prog + loss_text + nil_weight * loss_nil
+            metrics["loss_prog"] = loss_prog.detach()
+            metrics["loss_text"] = loss_text.detach()
+            metrics["loss_nil"] = loss_nil.detach()
+
+            logits = {"text": logits_text, "program": logits_prog}
+            return logits if return_logits else None, loss, metrics
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
