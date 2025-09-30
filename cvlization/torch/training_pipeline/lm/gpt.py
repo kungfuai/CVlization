@@ -17,7 +17,7 @@ import inspect
 import os
 from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -494,10 +494,13 @@ class NanoGPTTrainingPipeline:
             self.model_args["block_size"] = (
                 block_size  # so that the checkpoint will have the right value
             )
-        if self.config.use_program_augmentation and model.program_head is None:
-            program_classes = self.config.program_vocab_size + 1
-            model.program_head = nn.Linear(model.config.n_embd, program_classes, bias=False)
-            torch.nn.init.normal_(model.program_head.weight, mean=0.0, std=0.02)
+        if self.config.use_program_augmentation:
+            model = ProgramAugmentedGPT(
+                backbone=model,
+                program_vocab_size=self.config.program_vocab_size,
+                nil_local_id=self.program_nil_local_id,
+                nil_loss_weight=self.config.program_nil_loss_weight,
+            )
 
         print(model)
         model.to(device)
@@ -619,8 +622,6 @@ class NanoGPTTrainingPipeline:
                             batch["input_ids"],
                             targets_text=batch["targets_text"],
                             targets_program=batch["targets_program"],
-                            program_nil_local_id=self.program_nil_local_id,
-                            nil_weight=self.config.program_nil_loss_weight,
                             return_logits=False,
                         )
                         if "loss_text" in metrics:
@@ -738,8 +739,6 @@ class NanoGPTTrainingPipeline:
                             batch["input_ids"],
                             targets_text=batch["targets_text"],
                             targets_program=batch["targets_program"],
-                            program_nil_local_id=self.program_nil_local_id,
-                            nil_weight=self.config.program_nil_loss_weight,
                             return_logits=False,
                         )
                     else:
@@ -1088,8 +1087,6 @@ class GPT(nn.Module):
             self.lm_head.weight
         )  # https://paperswithcode.com/method/weight-tying
 
-        self.program_head: Optional[nn.Linear] = None
-
         # init all weights
         self.apply(self._init_weights)
         # apply special scaled init to the residual projections, per GPT-2 paper
@@ -1122,90 +1119,122 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(
-        self,
-        idx,
-        targets=None,
-        targets_text=None,
-        targets_program=None,
-        program_nil_local_id: Optional[int] = None,
-        nil_weight: float = 1.0,
-        return_logits: bool = True,
-    ):
-        # print(f"x_mean: {idx.float().mean()}")
+    def forward_features(self, idx: torch.Tensor) -> torch.Tensor:
         device = idx.device
         b, t = idx.size()
         assert (
             t <= self.config.block_size
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
+        pos = torch.arange(0, t, dtype=torch.long, device=device)
 
-        # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
+        tok_emb = self.transformer.wte(idx)
+        pos_emb = self.transformer.wpe(pos)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
+        return x
 
-        if targets_text is not None and targets_program is not None:
-            assert (
-                self.program_head is not None
-            ), "program_head must be initialized when using program augmentation"
-            logits_text = self.lm_head(x)
-            logits_prog = self.program_head(x)
-
-            loss = None
-            metrics = {}
-
-            text_mask = targets_text.ne(-1)
-            if text_mask.any():
-                loss_text = F.cross_entropy(
-                    logits_text[text_mask], targets_text[text_mask]
-                )
-                nil_targets = torch.full_like(
-                    targets_text[text_mask], program_nil_local_id
-                )
-                loss_nil = F.cross_entropy(logits_prog[text_mask], nil_targets)
-            else:
-                loss_text = logits_text.new_zeros(())
-                loss_nil = logits_prog.new_zeros(())
-
-            program_mask = targets_program.ne(program_nil_local_id)
-            if program_mask.any():
-                loss_prog = F.cross_entropy(
-                    logits_prog[program_mask], targets_program[program_mask]
-                )
-            else:
-                loss_prog = logits_prog.new_zeros(())
-
-            loss = loss_prog + loss_text + nil_weight * loss_nil
-            metrics["loss_prog"] = loss_prog.detach()
-            metrics["loss_text"] = loss_text.detach()
-            metrics["loss_nil"] = loss_nil.detach()
-
-            logits = {"text": logits_text, "program": logits_prog}
-            return logits if return_logits else None, loss, metrics
+    def forward(self, idx, targets=None):
+        x = self.forward_features(idx)
 
         if targets is not None:
-            # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
-
-            # TODO: for debug
-            # targets[:, :-1] = -1
-
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
-        else:
-            # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(
-                x[:, [-1], :]
-            )  # note: using list [-1] to preserve the time dim
-            loss = None
+            return logits, loss
 
+        logits = self.lm_head(x[:, [-1], :])
+        loss = None
         return logits, loss
 
+
+class ProgramAugmentedGPT(nn.Module):
+    def __init__(
+        self,
+        backbone: GPT,
+        program_vocab_size: int,
+        nil_local_id: int,
+        nil_loss_weight: float,
+    ):
+        super().__init__()
+        self.backbone = backbone
+        self.program_head = nn.Linear(
+            backbone.config.n_embd, program_vocab_size + 1, bias=False
+        )
+        torch.nn.init.normal_(self.program_head.weight, mean=0.0, std=0.02)
+        self.nil_local_id = nil_local_id
+        self.nil_loss_weight = nil_loss_weight
+        self.config = backbone.config
+
+    def forward(
+        self,
+        input_ids,
+        targets=None,
+        targets_text=None,
+        targets_program=None,
+        return_logits: bool = False,
+    ):
+        if targets_text is None or targets_program is None:
+            logits, loss = self.backbone(input_ids, targets=targets)
+            if return_logits:
+                return logits, loss, {}
+            return logits, loss
+
+        features = self.backbone.forward_features(input_ids)
+        logits_text = self.backbone.lm_head(features)
+        logits_prog = self.program_head(features)
+
+        text_mask = targets_text.ne(-1)
+        if text_mask.any():
+            loss_text = F.cross_entropy(
+                logits_text[text_mask], targets_text[text_mask]
+            )
+            nil_targets = torch.full_like(
+                targets_text[text_mask], self.nil_local_id
+            )
+            loss_nil = F.cross_entropy(logits_prog[text_mask], nil_targets)
+        else:
+            loss_text = logits_text.new_zeros(())
+            loss_nil = logits_prog.new_zeros(())
+
+        program_mask = targets_program.ne(self.nil_local_id)
+        if program_mask.any():
+            loss_prog = F.cross_entropy(
+                logits_prog[program_mask], targets_program[program_mask]
+            )
+        else:
+            loss_prog = logits_prog.new_zeros(())
+
+        total_loss = loss_prog + loss_text + self.nil_loss_weight * loss_nil
+
+        metrics: Dict[str, torch.Tensor] = {
+            "loss_prog": loss_prog.detach(),
+            "loss_text": loss_text.detach(),
+            "loss_nil": loss_nil.detach(),
+        }
+
+        if return_logits:
+            return {"text": logits_text, "program": logits_prog}, total_loss, metrics
+        return None, total_loss, metrics
+
+    def generate(self, *args, **kwargs):
+        return self.backbone.generate(*args, **kwargs)
+
+    def forward_features(self, idx: torch.Tensor) -> torch.Tensor:
+        return self.backbone.forward_features(idx)
+
+    def configure_optimizers(self, *args, **kwargs):
+        return self.backbone.configure_optimizers(*args, **kwargs)
+
+    def estimate_mfu(self, *args, **kwargs):
+        return self.backbone.estimate_mfu(*args, **kwargs)
+
+    def __getattr__(self, name):
+        if name in {"backbone", "program_head", "nil_local_id", "nil_loss_weight", "config"}:
+            return self.__dict__[name]
+        return getattr(self.backbone, name)
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
         # e.g. we may load the GPT2 pretrained model checkpoint (block size 1024)
