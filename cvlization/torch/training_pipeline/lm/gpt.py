@@ -42,6 +42,10 @@ class NanoGPTTrainingPipeline:
         vocab_size: int = 5120
         batch_size: int = 32
         flatten_tokens: bool = False
+        use_program_augmentation: bool = False
+        program_offset: int = None
+        program_nil_id: int = None
+        program_vocab_size: int = 0
 
         # Model
         n_layer: int = 12
@@ -140,6 +144,10 @@ class NanoGPTTrainingPipeline:
             torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
         self.START_TOKEN = self.config.start_token
+        self.program_offset = None
+        self.program_nil_id = None
+        self.program_nil_local_id = None
+        self.program_vocab_size = None
 
     def fit(self, dataset_builder):
         if self.master_process and self.config.wandb_log:
@@ -194,41 +202,32 @@ class NanoGPTTrainingPipeline:
         print(f"tokens per iteration will be: {tokens_per_iter:,}")
         self.tokens_per_iter = tokens_per_iter
 
-    def get_batch(self, split: str):
-        """
-        Get a batch of data for training or validation.
-
-        Args:
-            split (str): The split to get the data from. Can be either "train" or "val".
-
-        Returns:
-            tuple: A tuple containing two tensors: x and y.
-                - x: The input tensor of shape (batch_size, block_size).
-                - y: The target tensor of shape (batch_size, block_size).
-
-        """
+    def _sample_batch(self, split: str):
         if self.config.flatten_tokens:
-            train_data = self.train_data_flattened
-            val_data = self.val_data_flattened
+            data = self.train_data_flattened if split == "train" else self.val_data_flattened
         else:
-            train_data = self.train_data
-            val_data = self.val_data
+            data = self.train_data if split == "train" else self.val_data
+
         block_size = self.config.block_size
         batch_size = self.config.batch_size
         device = self.config.device
 
-        data = train_data if split == "train" else val_data
         if len(data.shape) == 2:
-            # batch x sequence len
             irow = torch.randint(data.shape[0], (batch_size,))
             ix = torch.randint(data.shape[1] - block_size, (batch_size,))
-            # print(ix)
-            x = torch.stack([
-                torch.from_numpy(data[i, i1 : i1 + block_size].astype(np.int64)) for i, i1 in zip(irow, ix)
-            ])
-            y = torch.stack([
-                torch.from_numpy(data[i, i1 + 1 : i1 + 1 + block_size].astype(np.int64)) for i, i1 in zip(irow, ix)
-            ])
+
+            def _slice_rows(arr, offset=0):
+                return torch.stack(
+                    [
+                        torch.from_numpy(
+                            arr[i, j + offset : j + offset + block_size].astype(np.int64)
+                        )
+                        for i, j in zip(irow, ix)
+                    ]
+                )
+
+            x = _slice_rows(data)
+            y = _slice_rows(data, offset=1)
         else:
             ix = torch.randint(len(data) - block_size, (batch_size,))
             x = torch.stack(
@@ -240,17 +239,17 @@ class NanoGPTTrainingPipeline:
                     for i in ix
                 ]
             )
+
         if self.device_type == "cuda":
-            # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
-                device, non_blocking=True
-            )
+            x = x.pin_memory().to(device, non_blocking=True)
+            y = y.pin_memory().to(device, non_blocking=True)
         else:
-            x, y = x.to(device), y.to(device)
+            x = x.to(device)
+            y = y.to(device)
+
         assert x.shape == (self.config.batch_size, self.config.block_size), f"x.shape: {x.shape}"
         assert y.shape == (self.config.batch_size, self.config.block_size), f"y.shape: {y.shape}"
 
-        # make the context window sparse in the beginning of the sequence
         if self.config.sparse_context_window:
             sparse_idx = np.concatenate(
                 [
@@ -267,18 +266,32 @@ class NanoGPTTrainingPipeline:
             x = x[:, sparse_idx]
             y = y[:, sparse_idx]
 
-        # For debugging.
-        # Treatment 1
-        # This is so that the model can learn to predict the final token, using varying context window lengths:
-        #  with only the nearest neighbor, and then the 2 nearest neighbors, then 3, ...
-        # x = torch.flip(
-        #     x, [1]
-        # )  # This combined with the following line (treatment 2) will make the loss nan.
-        # Treatment 2
-        # y[:, :-1] = -1  # This alone will make the training inefficient but still works.
-        # Treatment 3
-        # x[:, -1] = x[:, 0]  # This combined with treatment 1 and 2 fixes the nan issue.
         return x, y
+
+    def get_batch(self, split: str):
+        x, y = self._sample_batch(split)
+        return x, y
+
+    def get_batch_with_program(self, split: str):
+        x, y = self._sample_batch(split)
+        batch = {"input_ids": x, "targets": y}
+        if not self.config.use_program_augmentation:
+            return batch
+
+        text_targets = y.clone()
+        program_targets = torch.full_like(y, self.program_nil_local_id)
+        program_mask = y >= self.program_offset
+        if program_mask.any():
+            program_targets[program_mask] = y[program_mask] - self.program_offset
+            text_targets[program_mask] = -1
+
+        batch.update(
+            {
+                "targets_text": text_targets,
+                "targets_program": program_targets,
+            }
+        )
+        return batch
 
     def get_batch_sparse(self, split: str):
         """
@@ -356,6 +369,21 @@ class NanoGPTTrainingPipeline:
             self.data_seq_len = self.train_data.shape[-1]
         else:
             self.data_seq_len = self.config.max_tokens_to_sample
+
+        if self.config.use_program_augmentation:
+            assert (
+                self.config.program_offset is not None
+            ), "program_offset must be set when program augmentation is enabled"
+            assert (
+                self.config.program_nil_id is not None
+            ), "program_nil_id must be set when program augmentation is enabled"
+            assert (
+                self.config.program_vocab_size > 0
+            ), "program_vocab_size must be > 0 when program augmentation is enabled"
+            self.program_offset = self.config.program_offset
+            self.program_nil_id = self.config.program_nil_id
+            self.program_vocab_size = self.config.program_vocab_size
+            self.program_nil_local_id = self.program_nil_id - self.program_offset
 
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
