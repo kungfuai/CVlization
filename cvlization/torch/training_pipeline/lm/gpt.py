@@ -428,9 +428,13 @@ class NanoGPTTrainingPipeline:
 
             text_mask = targets_text[:, t] != -1
             if text_mask.any():
+                logits_masked = text_logits[text_mask]
+                targets_masked = targets_text[text_mask]
+                if logits_masked.ndim == 1:
+                    logits_masked = logits_masked.unsqueeze(0)
                 loss = F.cross_entropy(
-                    text_logits[text_mask],
-                    targets_text[text_mask],
+                    logits_masked,
+                    targets_masked,
                     reduction="sum",
                 )
                 total_loss += loss.item()
