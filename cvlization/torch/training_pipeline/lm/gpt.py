@@ -665,42 +665,42 @@ class NanoGPTTrainingPipeline:
     @torch.no_grad()
     def estimate_loss(self):
         model = self.model
-        eval_iters = self.config.eval_iters
+        eval_iters_val = min(self.config.eval_iters, 100) if self.master_process else self.config.eval_iters
         out = {}
         model.eval()
-        for split in ["train", "val"]:
-            losses = torch.zeros(eval_iters)
-            text_losses = [] if self.config.use_program_augmentation else None
-            sampled_text_losses = [] if self.config.use_program_augmentation else None
-            if self.master_process:
-                print(f"[eval] split={split} running {eval_iters} iters...")
-            for k in range(eval_iters):
-                batch = self.get_batch(split)
-                with self.ctx:
-                    if self.config.use_program_augmentation:
-                        _, loss, metrics = model(
-                            batch["input_ids"],
-                            targets_text=batch["targets_text"],
-                            targets_program=batch["targets_program"],
-                            return_logits=False,
-                        )
-                        if "loss_text" in metrics:
-                            text_losses.append(metrics["loss_text"].item())
-                        sampled_ce = self._sampled_text_ce(batch)
-                        if sampled_ce is not None:
-                            sampled_text_losses.append(sampled_ce)
-                    else:
-                        _, loss = model(
-                            batch["input_ids"], batch["targets"]
-                        )
-                losses[k] = loss.item()
-            out[split] = losses.mean().item()
-            if text_losses:
-                out[f"{split}_text_ce"] = float(sum(text_losses) / len(text_losses))
-            if sampled_text_losses:
-                out[f"{split}_sampled_text_ce"] = float(
-                    sum(sampled_text_losses) / len(sampled_text_losses)
-                )
+        split = "val"
+        losses = torch.zeros(eval_iters_val)
+        text_losses = [] if self.config.use_program_augmentation else None
+        sampled_text_losses = [] if self.config.use_program_augmentation else None
+        if self.master_process:
+            print(f"[eval] split={split} running {eval_iters_val} iters...")
+        for k in range(eval_iters_val):
+            batch = self.get_batch(split)
+            with self.ctx:
+                if self.config.use_program_augmentation:
+                    _, loss, metrics = model(
+                        batch["input_ids"],
+                        targets_text=batch["targets_text"],
+                        targets_program=batch["targets_program"],
+                        return_logits=False,
+                    )
+                    if "loss_text" in metrics:
+                        text_losses.append(metrics["loss_text"].item())
+                    sampled_ce = self._sampled_text_ce(batch)
+                    if sampled_ce is not None:
+                        sampled_text_losses.append(sampled_ce)
+                else:
+                    _, loss = model(
+                        batch["input_ids"], batch["targets"]
+                    )
+            losses[k] = loss.item()
+        out[split] = losses.mean().item()
+        if text_losses:
+            out[f"{split}_text_ce"] = float(sum(text_losses) / len(text_losses))
+        if sampled_text_losses:
+            out[f"{split}_sampled_text_ce"] = float(
+                sum(sampled_text_losses) / len(sampled_text_losses)
+            )
         model.train()
         return out
 
