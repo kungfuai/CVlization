@@ -694,9 +694,12 @@ class NanoGPTTrainingPipeline:
                         batch["input_ids"], batch["targets"]
                     )
             losses[k] = loss.item()
-        metric_key = "val_loss_augmented" if self.config.use_program_augmentation else "val_loss"
-        out[split] = losses.mean().item()
-        out[metric_key] = out.pop(split)
+        val_value = losses.mean().item()
+        metric_key = (
+            "val_loss_augmented" if self.config.use_program_augmentation else "val_loss"
+        )
+        out[metric_key] = val_value
+        out["val"] = val_value
         if text_losses:
             val_text_ce = float(sum(text_losses) / len(text_losses))
             out["val_text_ce"] = val_text_ce
