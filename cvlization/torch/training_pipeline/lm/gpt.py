@@ -688,6 +688,8 @@ class NanoGPTTrainingPipeline:
             losses = torch.zeros(eval_iters)
             text_losses = [] if self.config.use_program_augmentation else None
             sampled_text_losses = [] if self.config.use_program_augmentation else None
+            if self.master_process:
+                print(f"[eval] split={split} running {eval_iters} iters...")
             for k in range(eval_iters):
                 batch = self.get_batch(split)
                 with self.ctx:
@@ -1026,6 +1028,10 @@ class NanoGPTTrainingPipeline:
                             print(preview)
                             if wandb_log:
                                 wandb.log({"sampled/text": preview})
+                            if self.master_process:
+                                print(
+                                    f"[sample] iter={iter_num+1} generated preview (len={len(preview)})"
+                                )
                     finally:
                         model.train()
 
