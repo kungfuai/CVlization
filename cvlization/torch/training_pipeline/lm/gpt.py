@@ -870,20 +870,23 @@ class NanoGPTTrainingPipeline:
                     if "loss_nil" in last_metrics:
                         log_line += f", nil CE {last_metrics['loss_nil'].item():.4f}"
                 print(log_line)
-                if wandb_log and self.config.use_program_augmentation:
-                    wandb.log(
-                        {
-                            "train/text_ce_step": last_metrics["loss_text"].item()
-                            if "loss_text" in last_metrics
-                            else float("nan"),
-                            "train/prog_ce_step": last_metrics["loss_prog"].item()
-                            if "loss_prog" in last_metrics
-                            else float("nan"),
-                            "train/nil_ce_step": last_metrics["loss_nil"].item()
-                            if "loss_nil" in last_metrics
-                            else float("nan"),
-                        }
-                    )
+                if wandb_log:
+                    payload = {"train/loss_step": lossf}
+                    if self.config.use_program_augmentation:
+                        payload.update(
+                            {
+                                "train/text_ce_step": last_metrics["loss_text"].item()
+                                if "loss_text" in last_metrics
+                                else float("nan"),
+                                "train/prog_ce_step": last_metrics["loss_prog"].item()
+                                if "loss_prog" in last_metrics
+                                else float("nan"),
+                                "train/nil_ce_step": last_metrics["loss_nil"].item()
+                                if "loss_nil" in last_metrics
+                                else float("nan"),
+                            }
+                        )
+                    wandb.log(payload)
 
             # log the decoded ground truth codes
             # TODO: this is hardcoded for now
