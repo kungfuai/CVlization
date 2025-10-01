@@ -1059,7 +1059,7 @@ class NanoGPTTrainingPipeline:
                                 show_progress=False,
                             )
                             decoded = self._decode_tokens(sample[0])
-                            preview_len = min(len(decoded), 200)
+                            preview_len = min(len(decoded), 400)
                             preview = decoded[:preview_len]
                             if preview_len < len(decoded):
                                 preview += "..."
@@ -1068,9 +1068,15 @@ class NanoGPTTrainingPipeline:
                             if wandb_log:
                                 if not hasattr(self, "_wandb_sample_table"):
                                     self._wandb_sample_table = wandb.Table(
-                                        columns=["iter", "preview"]
+                                        columns=["iter", "text"]
                                     )
-                                self._wandb_sample_table.add_data(iter_num + 1, preview)
+                                table_len = min(len(decoded), 512)
+                                table_text = decoded[:table_len]
+                                if table_len < len(decoded):
+                                    table_text += "..."
+                                self._wandb_sample_table.add_data(
+                                    iter_num + 1, table_text
+                                )
                                 wandb.log({"sampled/text": self._wandb_sample_table})
                             if self.master_process:
                                 print(
