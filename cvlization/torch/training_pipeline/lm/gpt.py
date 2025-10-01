@@ -724,7 +724,11 @@ class NanoGPTTrainingPipeline:
         grad_clip = self.config.grad_clip
         eval_interval = self.config.eval_interval
         log_interval = self.config.log_interval
-        sample_interval = self.config.sample_interval
+        sample_interval = (
+            self.config.sample_interval
+            if self.config.sample_interval is not None
+            else self.config.eval_interval
+        )
         always_save_checkpoint = self.config.always_save_checkpoint
         out_dir = self.out_dir
         wandb_log = self.config.wandb_log
@@ -1015,6 +1019,8 @@ class NanoGPTTrainingPipeline:
                                 preview += "..."
                             print("---- sampled text ----")
                             print(preview)
+                            if wandb_log:
+                                wandb.log({"sampled/text": preview})
                     finally:
                         model.train()
 
