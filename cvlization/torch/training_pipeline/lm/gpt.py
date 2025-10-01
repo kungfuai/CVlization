@@ -48,6 +48,8 @@ class NanoGPTTrainingPipeline:
         program_nil_id: int = None
         program_vocab_size: int = 0
         program_nil_loss_weight: float = 1.0
+        itos: Optional[Dict[int, str]] = None
+        program_pos_vocab: Optional[list] = None
 
         # Model
         n_layer: int = 12
@@ -150,6 +152,8 @@ class NanoGPTTrainingPipeline:
         self.program_nil_id = None
         self.program_nil_local_id = None
         self.program_vocab_size = None
+        self.itos = self.config.itos
+        self.program_pos_vocab = self.config.program_pos_vocab
 
     def fit(self, dataset_builder):
         if self.master_process and self.config.wandb_log:
@@ -382,6 +386,24 @@ class NanoGPTTrainingPipeline:
             self.program_nil_id = self.config.program_nil_id
             self.program_vocab_size = self.config.program_vocab_size
             self.program_nil_local_id = self.program_nil_id - self.program_offset
+
+    def _decode_tokens(self, tokens: torch.Tensor) -> str:
+        if self.itos is None:
+            return "".join(str(int(tok)) for tok in tokens.tolist())
+        pieces = []
+        for tok in tokens.tolist():
+            tok = int(tok)
+            if (
+                self.program_offset is not None
+                and tok >= self.program_offset
+                and self.program_pos_vocab is not None
+            ):
+                idx = tok - self.program_offset
+                if 0 <= idx < len(self.program_pos_vocab):
+                    pieces.append(f"<{self.program_pos_vocab[idx]}>")
+                    continue
+            pieces.append(self.itos.get(tok, "?"))
+        return "".join(pieces)
 
     @torch.no_grad()
     def _sampled_text_ce(self, batch: Dict[str, torch.Tensor]) -> Optional[float]:
@@ -974,6 +996,27 @@ class NanoGPTTrainingPipeline:
                             )
 
                     model.train()
+                elif self.itos is not None:
+                    model.eval()
+                    try:
+                        with torch.no_grad():
+                            context = batch["input_ids"][:1, :1]
+                            sample = model.generate(
+                                context,
+                                max_new_tokens=self.config.block_size,
+                                temperature=0.8,
+                                top_k=40,
+                                show_progress=False,
+                            )
+                            decoded = self._decode_tokens(sample[0])
+                            preview_len = min(len(decoded), 200)
+                            preview = decoded[:preview_len]
+                            if preview_len < len(decoded):
+                                preview += "..."
+                            print("---- sampled text ----")
+                            print(preview)
+                    finally:
+                        model.train()
 
             iter_num += 1
             local_iter_num += 1

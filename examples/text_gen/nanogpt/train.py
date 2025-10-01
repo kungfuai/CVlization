@@ -31,6 +31,7 @@ if os.path.exists(meta_path):
         meta = pickle.load(f)
     meta_vocab_size = meta["vocab_size"]
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
+    config["itos"] = meta.get("itos")
 
 
 def main():
@@ -47,6 +48,7 @@ def main():
         config["program_offset"] = meta_pos["program_offset"]
         config["program_nil_id"] = meta_pos["program_nil_id"]
         config["program_vocab_size"] = len(meta_pos["program_pos_vocab"])
+        config["program_pos_vocab"] = meta_pos.get("program_pos_vocab")
         train_bin = "train_with_pos.bin"
         val_bin = "val_with_pos.bin"
         dtype = np.uint32
