@@ -415,45 +415,29 @@ class NanoGPTTrainingPipeline:
 
         input_ids = batch["input_ids"]
         targets_text = batch["targets_text"]
+        targets_program = batch["targets_program"]
 
-        generated = input_ids[:, :1]
-        total_loss = 0.0
-        total_tokens = 0
+        # pass 1: get program predictions under teacher-forced context
+        features = model.backbone.forward_features(input_ids)
+        prog_logits = model.program_head(features)
+        sampled_local = torch.argmax(prog_logits, dim=-1)
+        sampled_tokens = sampled_local + model.program_offset
 
-        for t in range(targets_text.size(1)):
-            features = model.forward_features(generated)
-            last_hidden = features[:, -1:, :]
-            prog_logits = model.program_head(last_hidden)[:, 0, :]
-            text_logits = model.backbone.lm_head(last_hidden)[:, 0, :]
+        # replace program tokens with sampled ones
+        generated = input_ids.clone()
+        program_mask = targets_program != model.nil_local_id
+        generated[program_mask] = sampled_tokens[program_mask]
 
-            targets_column = targets_text[:, t]
-            text_mask = targets_column != -1
-            if text_mask.any():
-                logits_masked = text_logits[text_mask]
-                targets_masked = targets_column[text_mask].view(-1).long()
-                if logits_masked.ndim == 1:
-                    logits_masked = logits_masked.unsqueeze(0)
-                loss = F.cross_entropy(
-                    logits_masked,
-                    targets_masked,
-                    reduction="sum",
-                )
-                total_loss += loss.item()
-                total_tokens += text_mask.sum().item()
-
-            prog_probs = F.softmax(prog_logits, dim=-1)
-            prog_samples = torch.multinomial(prog_probs, num_samples=1)
-            sampled_program_tokens = prog_samples + model.program_offset
-            next_tokens = torch.where(
-                text_mask.unsqueeze(-1),
-                targets_column[:, None],
-                sampled_program_tokens,
-            )
-            generated = torch.cat((generated, next_tokens), dim=1)
-
-        if total_tokens == 0:
+        # pass 2: compute text CE under sampled program context
+        features_new = model.backbone.forward_features(generated)
+        logits_text = model.backbone.lm_head(features_new)
+        text_mask = targets_text != -1
+        if not text_mask.any():
             return None
-        return total_loss / total_tokens
+        logits_masked = logits_text[text_mask]
+        targets_masked = targets_text[text_mask].long()
+        loss = F.cross_entropy(logits_masked, targets_masked, reduction="mean")
+        return loss.item()
 
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
