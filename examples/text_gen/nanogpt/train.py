@@ -44,11 +44,9 @@ def main():
         ), f"Expected {pos_meta_path} when use_program_augmentation is True"
         with open(pos_meta_path, "rb") as f:
             meta_pos = pickle.load(f)
-        config.setdefault("program_offset", meta_pos["program_offset"])
-        config.setdefault("program_nil_id", meta_pos["program_nil_id"])
-        config.setdefault(
-            "program_vocab_size", len(meta_pos["program_pos_vocab"])
-        )
+        config["program_offset"] = meta_pos["program_offset"]
+        config["program_nil_id"] = meta_pos["program_nil_id"]
+        config["program_vocab_size"] = len(meta_pos["program_pos_vocab"])
         train_bin = "train_with_pos.bin"
         val_bin = "val_with_pos.bin"
         dtype = np.uint32

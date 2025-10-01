@@ -383,6 +383,51 @@ class NanoGPTTrainingPipeline:
             self.program_vocab_size = self.config.program_vocab_size
             self.program_nil_local_id = self.program_nil_id - self.program_offset
 
+    @torch.no_grad()
+    def _sampled_text_ce(self, batch: Dict[str, torch.Tensor]) -> Optional[float]:
+        model = self.model
+        if not self.config.use_program_augmentation or not isinstance(
+            model, ProgramAugmentedGPT
+        ):
+            return None
+
+        input_ids = batch["input_ids"]
+        targets_text = batch["targets_text"]
+
+        generated = input_ids[:, :1]
+        total_loss = 0.0
+        total_tokens = 0
+
+        for t in range(targets_text.size(1)):
+            features = model.forward_features(generated)
+            last_hidden = features[:, -1:, :]
+            prog_logits = model.program_head(last_hidden)[:, 0, :]
+            text_logits = model.backbone.lm_head(last_hidden)[:, 0, :]
+
+            text_mask = targets_text[:, t] != -1
+            if text_mask.any():
+                loss = F.cross_entropy(
+                    text_logits[text_mask],
+                    targets_text[text_mask],
+                    reduction="sum",
+                )
+                total_loss += loss.item()
+                total_tokens += text_mask.sum().item()
+
+            prog_probs = F.softmax(prog_logits, dim=-1)
+            prog_samples = torch.multinomial(prog_probs, num_samples=1)
+            sampled_program_tokens = prog_samples + model.program_offset
+            next_tokens = torch.where(
+                text_mask.unsqueeze(-1),
+                targets_text[:, t : t + 1],
+                sampled_program_tokens,
+            )
+            generated = torch.cat((generated, next_tokens), dim=1)
+
+        if total_tokens == 0:
+            return None
+        return total_loss / total_tokens
+
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
         data_dir = os.path.join("data", self.config.dataset)
@@ -615,6 +660,7 @@ class NanoGPTTrainingPipeline:
         for split in ["train", "val"]:
             losses = torch.zeros(eval_iters)
             text_losses = [] if self.config.use_program_augmentation else None
+            sampled_text_losses = [] if self.config.use_program_augmentation else None
             for k in range(eval_iters):
                 batch = self.get_batch(split)
                 with self.ctx:
@@ -627,6 +673,9 @@ class NanoGPTTrainingPipeline:
                         )
                         if "loss_text" in metrics:
                             text_losses.append(metrics["loss_text"].item())
+                        sampled_ce = self._sampled_text_ce(batch)
+                        if sampled_ce is not None:
+                            sampled_text_losses.append(sampled_ce)
                     else:
                         _, loss = model(
                             batch["input_ids"], batch["targets"]
@@ -635,6 +684,10 @@ class NanoGPTTrainingPipeline:
             out[split] = losses.mean().item()
             if text_losses:
                 out[f"{split}_text_ce"] = float(sum(text_losses) / len(text_losses))
+            if sampled_text_losses:
+                out[f"{split}_sampled_text_ce"] = float(
+                    sum(sampled_text_losses) / len(sampled_text_losses)
+                )
         model.train()
         return out
 
@@ -690,6 +743,10 @@ class NanoGPTTrainingPipeline:
                     message_parts.append(
                         f"val text CE {losses['val_text_ce']:.4f}"
                     )
+                if "val_sampled_text_ce" in losses:
+                    message_parts.append(
+                        f"val sampled text CE {losses['val_sampled_text_ce']:.4f}"
+                    )
                 print(f"step {iter_num}: " + ", ".join(message_parts))
                 if wandb_log:
                     log_payload = {
@@ -703,6 +760,12 @@ class NanoGPTTrainingPipeline:
                         log_payload["val/text_ce"] = losses["val_text_ce"]
                     if "train_text_ce" in losses:
                         log_payload["train/text_ce"] = losses["train_text_ce"]
+                    if "val_sampled_text_ce" in losses:
+                        log_payload["val/text_ce_sampled"] = losses["val_sampled_text_ce"]
+                    if "train_sampled_text_ce" in losses:
+                        log_payload["train/text_ce_sampled"] = losses[
+                            "train_sampled_text_ce"
+                        ]
                     wandb.log(log_payload)
                 if losses["val"] < best_val_loss or always_save_checkpoint:
                     best_val_loss = losses["val"]
