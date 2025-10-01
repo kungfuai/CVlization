@@ -672,6 +672,8 @@ class NanoGPTTrainingPipeline:
         losses = torch.zeros(eval_iters_val)
         text_losses = [] if self.config.use_program_augmentation else None
         sampled_text_losses = [] if self.config.use_program_augmentation else None
+        prog_losses = [] if self.config.use_program_augmentation else None
+        nil_losses = [] if self.config.use_program_augmentation else None
         if self.master_process:
             print(f"[eval] split={split} running {eval_iters_val} iters...")
         for k in range(eval_iters_val):
@@ -686,6 +688,10 @@ class NanoGPTTrainingPipeline:
                     )
                     if "loss_text" in metrics:
                         text_losses.append(metrics["loss_text"].item())
+                    if "loss_prog" in metrics:
+                        prog_losses.append(metrics["loss_prog"].item())
+                    if "loss_nil" in metrics:
+                        nil_losses.append(metrics["loss_nil"].item())
                     sampled_ce = self._sampled_text_ce(batch)
                     if sampled_ce is not None:
                         sampled_text_losses.append(sampled_ce)
@@ -710,6 +716,10 @@ class NanoGPTTrainingPipeline:
             out[f"{split}_sampled_text_ce"] = float(
                 sum(sampled_text_losses) / len(sampled_text_losses)
             )
+        if prog_losses:
+            out["val_prog_ce"] = float(sum(prog_losses) / len(prog_losses))
+        if nil_losses:
+            out["val_nil_ce"] = float(sum(nil_losses) / len(nil_losses))
         model.train()
         return out
 
