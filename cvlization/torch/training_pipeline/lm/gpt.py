@@ -1011,9 +1011,12 @@ class NanoGPTTrainingPipeline:
                             print("---- sampled text ----")
                             print(preview)
                             if wandb_log:
-                                table = wandb.Table(columns=["preview"])
-                                table.add_data(preview)
-                                wandb.log({"sampled/text": table})
+                                if not hasattr(self, "_wandb_sample_table"):
+                                    self._wandb_sample_table = wandb.Table(
+                                        columns=["iter", "preview"]
+                                    )
+                                self._wandb_sample_table.add_data(iter_num + 1, preview)
+                                wandb.log({"sampled/text": self._wandb_sample_table})
                             if self.master_process:
                                 print(
                                     f"[sample] iter={iter_num+1} generated preview (len={len(preview)})"
