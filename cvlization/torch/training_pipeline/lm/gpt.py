@@ -784,6 +784,18 @@ class NanoGPTTrainingPipeline:
                     message_parts.append(
                         f"val sampled text CE {losses['val_sampled_text_ce']:.4f}"
                     )
+                if "val_loss_augmented" in losses:
+                    message_parts.append(
+                        f"val loss augmented {losses['val_loss_augmented']:.4f}"
+                    )
+                if "val_prog_ce" in losses:
+                    message_parts.append(
+                        f"val prog CE {losses['val_prog_ce']:.4f}"
+                    )
+                if "val_nil_ce" in losses:
+                    message_parts.append(
+                        f"val nil CE {losses['val_nil_ce']:.4f}"
+                    )
                 print(f"step {iter_num}: " + ", ".join(message_parts))
                 if wandb_log:
                     log_payload = {
@@ -804,6 +816,14 @@ class NanoGPTTrainingPipeline:
                         log_payload["train/text_ce_sampled"] = losses[
                             "train_sampled_text_ce"
                         ]
+                    if "val_loss_augmented" in losses:
+                        log_payload["val/loss_augmented"] = losses[
+                            "val_loss_augmented"
+                        ]
+                    if "val_prog_ce" in losses:
+                        log_payload["val/prog_ce"] = losses["val_prog_ce"]
+                    if "val_nil_ce" in losses:
+                        log_payload["val/nil_ce"] = losses["val_nil_ce"]
                     wandb.log(log_payload)
                 if losses["val"] < best_val_loss or always_save_checkpoint:
                     best_val_loss = losses["val"]
