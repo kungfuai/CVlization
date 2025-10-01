@@ -752,10 +752,9 @@ class NanoGPTTrainingPipeline:
             # evaluate the loss on train/val sets and write checkpoints
             if (iter_num + 1) % eval_interval == 0 and self.master_process:
                 losses = self.estimate_loss()
-                message_parts = [
-                    f"train loss {losses['train']:.4f}",
-                    f"val loss {losses['val']:.4f}",
-                ]
+                message_parts = [f"val loss {losses['val']:.4f}"]
+                if "train" in losses:
+                    message_parts.insert(0, f"train loss {losses['train']:.4f}")
                 if "val_text_ce" in losses:
                     message_parts.append(
                         f"val text CE {losses['val_text_ce']:.4f}"
@@ -768,11 +767,12 @@ class NanoGPTTrainingPipeline:
                 if wandb_log:
                     log_payload = {
                         "iter": iter_num,
-                        "train/loss": losses["train"],
                         "val/loss": losses["val"],
                         "lr": lr,
                         "mfu": running_mfu * 100,
                     }
+                    if "train" in losses:
+                        log_payload["train/loss"] = losses["train"]
                     if "val_text_ce" in losses:
                         log_payload["val/text_ce"] = losses["val_text_ce"]
                     if "train_text_ce" in losses:
