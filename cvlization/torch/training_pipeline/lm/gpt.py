@@ -721,11 +721,7 @@ class NanoGPTTrainingPipeline:
         if nil_losses:
             out["val_nil_ce"] = float(sum(nil_losses) / len(nil_losses))
 
-        out["val"] = (
-            out.get("val_loss")
-            if not self.config.use_program_augmentation
-            else out.get("val_loss")
-        )
+        out["val"] = out.get("val_loss")
         model.train()
         return out
 
