@@ -1003,7 +1003,18 @@ class NanoGPTTrainingPipeline:
                     model.eval()
                     try:
                         with torch.no_grad():
-                            context = batch["input_ids"][:1, :1]
+                            if self.itos is not None:
+                                k_token = None
+                                for idx, ch in self.itos.items():
+                                    if ch == "K":
+                                        k_token = int(idx)
+                                        break
+                            if k_token is None:
+                                context = batch["input_ids"][:1, :1]
+                            else:
+                                context = torch.tensor([[k_token]], dtype=torch.long).to(
+                                    self.config.device
+                                )
                             sample = model.generate(
                                 context,
                                 max_new_tokens=self.config.block_size,
