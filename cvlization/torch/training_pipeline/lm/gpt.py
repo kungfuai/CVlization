@@ -1011,7 +1011,9 @@ class NanoGPTTrainingPipeline:
                             print("---- sampled text ----")
                             print(preview)
                             if wandb_log:
-                                wandb.log({"sampled/text": preview})
+                                table = wandb.Table(columns=["preview"])
+                                table.add_data(preview)
+                                wandb.log({"sampled/text": table})
                             if self.master_process:
                                 print(
                                     f"[sample] iter={iter_num+1} generated preview (len={len(preview)})"
