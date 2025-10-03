@@ -16,6 +16,9 @@ VAL_SEQ_LEN=${VAL_SEQ_LEN:-$((4*64*1024))}    # Default: 256K tokens
 MAX_BATCH_SPAN_MULTIPLIER=${MAX_BATCH_SPAN_MULTIPLIER:-4}  # Default: 4x batch size for BOS alignment
 TRAIN_LOSS_EVERY=${TRAIN_LOSS_EVERY:-0}  # Default: 0 (disabled)
 NUM_ITERATIONS=${NUM_ITERATIONS:-3500}  # Default: 3500 training steps
+# Learning rates
+ADAM_LR=${ADAM_LR:-0.008}  # Default: 0.008 for DistAdam optimizer
+MUON_LR=${MUON_LR:-0.05}   # Default: 0.05 for Muon optimizer
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -56,9 +59,17 @@ while [[ $# -gt 0 ]]; do
       NUM_ITERATIONS="$2"
       shift 2
       ;;
+    --adam-lr)
+      ADAM_LR="$2"
+      shift 2
+      ;;
+    --muon-lr)
+      MUON_LR="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: ./train.sh [--num-gpus N] [--wandb] [--data-dir DIR] [--train-seq-len N] [--val-seq-len N] [--no-torch-compile] [--max-batch-span-multiplier N] [--train-loss-every N] [--num-iterations N]"
+      echo "Usage: ./train.sh [--num-gpus N] [--wandb] [--data-dir DIR] [--train-seq-len N] [--val-seq-len N] [--no-torch-compile] [--max-batch-span-multiplier N] [--train-loss-every N] [--num-iterations N] [--adam-lr N] [--muon-lr N]"
       echo ""
       echo "Memory optimization options:"
       echo "  --train-seq-len N      Training sequence length in tokens (default: 49152)"
@@ -69,9 +80,14 @@ while [[ $# -gt 0 ]]; do
       echo "  --max-batch-span-multiplier N   Multiplier for max_batch_span when align_to_bos=True (default: 4)"
       echo "  --train-loss-every N   Print training loss every N steps (default: 0=disabled)"
       echo "  --num-iterations N     Number of training steps to run (default: 3500)"
+      echo "  --adam-lr N            Learning rate for DistAdam optimizer (default: 0.008)"
+      echo "  --muon-lr N            Learning rate for Muon optimizer (default: 0.05)"
       echo ""
       echo "Example for A10 GPU (23GB memory):"
       echo "  ./train.sh --train-seq-len 16384 --val-seq-len 65536"
+      echo ""
+      echo "Example with higher learning rates:"
+      echo "  ./train.sh --adam-lr 0.012 --muon-lr 0.08"
       echo ""
       echo "Example to disable torch.compile:"
       echo "  ./train.sh --no-torch-compile"
@@ -95,6 +111,8 @@ echo "  - Torch compile: $([ "$USE_COMPILE" = "1" ] && echo "enabled" || echo "d
 echo "  - Max batch span multiplier: $MAX_BATCH_SPAN_MULTIPLIER"
 echo "  - Train loss printing: $([ "$TRAIN_LOSS_EVERY" = "0" ] && echo "disabled" || echo "every $TRAIN_LOSS_EVERY steps")"
 echo "  - Training iterations: $NUM_ITERATIONS steps"
+echo "  - DistAdam learning rate: $ADAM_LR"
+echo "  - Muon learning rate: $MUON_LR"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -114,6 +132,8 @@ docker run -it --rm \
   -e MAX_BATCH_SPAN_MULTIPLIER="$MAX_BATCH_SPAN_MULTIPLIER" \
   -e TRAIN_LOSS_EVERY="$TRAIN_LOSS_EVERY" \
   -e NUM_ITERATIONS="$NUM_ITERATIONS" \
+  -e ADAM_LR="$ADAM_LR" \
+  -e MUON_LR="$MUON_LR" \
   modded-nanogpt \
   bash -c "
     # First, download the training data if it doesn't exist
