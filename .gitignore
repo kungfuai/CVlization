@@ -33,3 +33,4 @@ doc/tmp_notes
 *.ckpt
 *.pt
 *.pth
+.env
