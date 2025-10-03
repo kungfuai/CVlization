@@ -6,6 +6,7 @@ import uuid
 import time
 import copy
 import glob
+import itertools
 from dataclasses import dataclass
 from functools import lru_cache, partial # Added partial for hook registration
 from pathlib import Path
@@ -607,7 +608,7 @@ def distributed_data_generator(filename_pattern: str, batch_size: int, align_to_
     files = [Path(file) for file in sorted(glob.glob(filename_pattern))]
     assert batch_size % world_size == 0
     local_batch_size = batch_size // world_size
-    file_iter = iter(files) # use itertools.cycle(files) instead if you want to do multi-epoch training
+    file_iter = itertools.cycle(files) # enables multi-epoch training by cycling through data files
     tokens, pos = _load_data_shard(next(file_iter)), 0
     max_batch_span = max_batch_span_multiplier * batch_size if align_to_bos else batch_size # provide buffer to handle samples up to length local_batch_size
     while True:
@@ -644,6 +645,9 @@ class Hyperparameters:
     # optimization
     num_iterations = int(os.environ.get("NUM_ITERATIONS", 3500)) # number of iterations to run
     cooldown_frac = 0.45 # fraction of training spent cooling down the learning rate
+    # learning rates
+    adam_lr = float(os.environ.get("ADAM_LR", 0.008)) # learning rate for DistAdam optimizer
+    muon_lr = float(os.environ.get("MUON_LR", 0.05)) # learning rate for Muon optimizer
     # evaluation and logging
     val_loss_every = 125 # every how many steps to evaluate val loss? 0 for only at the end
     train_loss_every = int(os.environ.get("TRAIN_LOSS_EVERY", 0)) # every how many steps to print train loss? 0 to disable
@@ -768,8 +772,8 @@ head_params = [model.lm_head.weight]
 # init the optimizer(s)
 # small adam epsilon by @YouJiacheng. this is an alternate method of fixing the world_size dependence
 # discovered by @fernbear.bsky.social https://x.com/hi_tysam/status/1879692937589875094
-optimizer1 = DistAdam(scalar_params + head_params + embed_params, lr=0.008, betas=(0.8, 0.95), eps=1e-10, weight_decay=0.0)
-optimizer2 = Muon(hidden_matrix_params, lr=0.05, momentum=0.95, weight_decay=0.0)
+optimizer1 = DistAdam(scalar_params + head_params + embed_params, lr=args.adam_lr, betas=(0.8, 0.95), eps=1e-10, weight_decay=0.0)
+optimizer2 = Muon(hidden_matrix_params, lr=args.muon_lr, momentum=0.95, weight_decay=0.0)
 optimizers = [optimizer1, optimizer2]
 for opt in optimizers:
     for group in opt.param_groups:
@@ -798,16 +802,15 @@ def get_window_size_blocks(step: int):
     return get_window_size_blocks_helper(window_size)
 
 if args.use_compile:
-    print("🔥 Applying torch.compile to model...")
+    print0("🔥 Applying torch.compile to model...")
     compile_start = time.perf_counter()
     model: nn.Module = torch.compile(model, dynamic=False)
     compile_time_ms = 1000 * (time.perf_counter() - compile_start)
-    print("✅ torch.compile applied successfully")
-    print0(f"Model compilation time: {compile_time_ms:.0f}ms", console=True)
+    print0("✅ torch.compile applied successfully")
 else:
-    print("⚡ Skipping torch.compile (disabled)")
-    model: nn.Module = model
+    print0("⚡ Skipping torch.compile (disabled)")
     compile_time_ms = 0
+    model: nn.Module = model
 
 ########################################
 #            Warmup kernels            #
