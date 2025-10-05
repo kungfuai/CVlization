@@ -44,6 +44,24 @@ bash examples/text_gen/llama_3b_finetune/train.sh
 
 The training takes approximately 1-2 hours on a modern GPU (e.g., RTX 4090, A100).
 
+#### Dataset
+
+The pre-configured dataset is **yahma/alpaca-cleaned**, which contains ~52K instruction-following examples in the format:
+- `instruction`: The task description
+- `input`: Optional context or input
+- `output`: The expected response
+
+This dataset is ideal for teaching models to follow instructions and respond helpfully.
+
+### Using Your Own Data
+
+See [CUSTOM_DATASETS.md](../CUSTOM_DATASETS.md) for detailed instructions on using your own datasets, including:
+- Supported formats (Alpaca, ShareGPT, Custom)
+- Local file loading (.json, .jsonl, .csv, .parquet)
+- HuggingFace dataset integration
+- JSON structure examples
+- Troubleshooting tips
+
 ### Output
 
 The fine-tuned model will be saved to:

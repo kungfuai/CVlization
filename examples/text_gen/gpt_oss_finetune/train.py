@@ -1,10 +1,8 @@
 from unsloth import FastLanguageModel
 from datasets import load_dataset
-from trl import SFTTrainer
-from transformers import TrainingArguments, DataCollatorForSeq2Seq
+from trl import SFTTrainer, SFTConfig
 import torch
 import yaml
-import sys
 
 # Load configuration
 print("Loading configuration...")
@@ -24,6 +22,7 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     max_seq_length=model_config["max_seq_length"],
     dtype=None,  # Auto-detect
     load_in_4bit=model_config["load_in_4bit"],
+    full_finetuning=False,  # Use LoRA
 )
 
 # Load dataset
@@ -56,29 +55,10 @@ if "max_samples" in dataset_config:
 # Format dataset based on format type
 dataset_format = dataset_config["format"]
 
-if dataset_format == "alpaca":
-    print("Formatting dataset in Alpaca format...")
-    def format_alpaca(examples):
-        instructions = examples["instruction"]
-        inputs = examples["input"]
-        outputs = examples["output"]
-
-        texts = []
-        for instruction, input_text, output in zip(instructions, inputs, outputs):
-            if input_text:
-                prompt = f"### Instruction:\n{instruction}\n\n### Input:\n{input_text}\n\n### Response:\n{output}"
-            else:
-                prompt = f"### Instruction:\n{instruction}\n\n### Response:\n{output}"
-            texts.append(prompt)
-
-        return {"text": texts}
-
-    dataset = dataset.map(format_alpaca, batched=True, remove_columns=dataset.column_names)
-
-elif dataset_format == "sharegpt":
+if dataset_format == "sharegpt":
     print("Formatting dataset in ShareGPT format...")
     def format_sharegpt(examples):
-        conversations = examples["conversations"]
+        conversations = examples["messages"]
         texts = []
         for convo in conversations:
             text = tokenizer.apply_chat_template(convo, tokenize=False, add_generation_prompt=False)
@@ -92,7 +72,7 @@ elif dataset_format == "custom":
     if "text" not in dataset.column_names:
         raise ValueError("Custom format requires a 'text' column in the dataset")
 else:
-    raise ValueError(f"Unknown dataset format: {dataset_format}")
+    raise ValueError(f"Unknown dataset format: {dataset_format}. GPT-OSS supports 'sharegpt' or 'custom'")
 
 # Split dataset for training and validation if eval is enabled
 if training_config.get("do_eval", False):
@@ -115,8 +95,6 @@ model = FastLanguageModel.get_peft_model(
     bias="none",
     use_gradient_checkpointing="unsloth",
     random_state=training_config["seed"],
-    use_rslora=False,
-    loftq_config=None,
 )
 
 # Determine max_steps or num_train_epochs
@@ -124,7 +102,7 @@ max_steps = training_config.get("max_steps", -1)
 num_train_epochs = 1 if max_steps != -1 else training_config.get("num_epochs", 1)
 
 # Training arguments
-training_args = TrainingArguments(
+training_args = SFTConfig(
     output_dir=training_config["output_dir"],
     per_device_train_batch_size=training_config["per_device_train_batch_size"],
     gradient_accumulation_steps=training_config["gradient_accumulation_steps"],
@@ -155,7 +133,6 @@ trainer = SFTTrainer(
     eval_dataset=eval_dataset,
     dataset_text_field="text",
     max_seq_length=model_config["max_seq_length"],
-    data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
     args=training_args,
 )
 
