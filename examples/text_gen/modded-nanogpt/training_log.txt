@@ -1,0 +1,8 @@
+Starting modded-nanogpt training with:
+  - Number of GPUs: 1
+  - Batch size: 8
+  - Data directory: ./data
+  - Checkpoint directory: ./checkpoints
+  - Log directory: ./logs
+  - Weights & Biases: disabled
+the input device is not a TTY
