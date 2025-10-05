@@ -1,10 +1,8 @@
 from unsloth import FastLanguageModel
 from datasets import load_dataset
-from trl import SFTTrainer
-from transformers import TrainingArguments, DataCollatorForSeq2Seq
+from trl import SFTTrainer, SFTConfig
 import torch
 import yaml
-import sys
 
 # Load configuration
 print("Loading configuration...")
@@ -24,6 +22,7 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     max_seq_length=model_config["max_seq_length"],
     dtype=None,  # Auto-detect
     load_in_4bit=model_config["load_in_4bit"],
+    full_finetuning=False,
 )
 
 # Load dataset
@@ -62,14 +61,27 @@ if dataset_format == "alpaca":
         instructions = examples["instruction"]
         inputs = examples["input"]
         outputs = examples["output"]
-
         texts = []
+
         for instruction, input_text, output in zip(instructions, inputs, outputs):
+            # Combine instruction and input
             if input_text:
-                prompt = f"### Instruction:\n{instruction}\n\n### Input:\n{input_text}\n\n### Response:\n{output}"
+                message = f"{instruction}\n{input_text}"
             else:
-                prompt = f"### Instruction:\n{instruction}\n\n### Response:\n{output}"
-            texts.append(prompt)
+                message = instruction
+
+            # Format as chat messages for Qwen
+            messages = [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": output}
+            ]
+
+            text = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False
+            )
+            texts.append(text)
 
         return {"text": texts}
 
@@ -124,7 +136,7 @@ max_steps = training_config.get("max_steps", -1)
 num_train_epochs = 1 if max_steps != -1 else training_config.get("num_epochs", 1)
 
 # Training arguments
-training_args = TrainingArguments(
+training_args = SFTConfig(
     output_dir=training_config["output_dir"],
     per_device_train_batch_size=training_config["per_device_train_batch_size"],
     gradient_accumulation_steps=training_config["gradient_accumulation_steps"],
@@ -144,6 +156,8 @@ training_args = TrainingArguments(
     eval_strategy="steps" if eval_dataset else "no",
     eval_steps=training_config.get("eval_steps", training_config["save_steps"]) if eval_dataset else None,
     do_eval=eval_dataset is not None,
+    dataset_num_proc=2,
+    packing=False,
 )
 
 # Create trainer
@@ -155,7 +169,6 @@ trainer = SFTTrainer(
     eval_dataset=eval_dataset,
     dataset_text_field="text",
     max_seq_length=model_config["max_seq_length"],
-    data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
     args=training_args,
 )
 
