@@ -76,9 +76,11 @@ dataset:
 3. **Example for local dataset:**
 ```yaml
 dataset:
-  path: "./my_data.json"  # Local JSON file
+  path: "./my_data.json"  # Supports: .json, .jsonl, .csv, .parquet
   format: "custom"
 ```
+
+**Note:** Local files are auto-detected by file extension. Supported formats: `.json`, `.jsonl`, `.csv`, `.parquet`
 
 4. **Adjust training parameters in `config.yaml`:**
 ```yaml
