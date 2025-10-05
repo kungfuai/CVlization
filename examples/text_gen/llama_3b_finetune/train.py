@@ -30,7 +30,22 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 print(f"Loading dataset: {dataset_config['path']}...")
 dataset_path = dataset_config["path"]
 dataset_split = dataset_config.get("split", "train")
-dataset = load_dataset(dataset_path, split=dataset_split)
+
+# Detect if it's a local file or HuggingFace dataset
+import os
+if os.path.exists(dataset_path):
+    # Local file - infer format from extension
+    if dataset_path.endswith('.json') or dataset_path.endswith('.jsonl'):
+        dataset = load_dataset("json", data_files=dataset_path, split=dataset_split)
+    elif dataset_path.endswith('.csv'):
+        dataset = load_dataset("csv", data_files=dataset_path, split=dataset_split)
+    elif dataset_path.endswith('.parquet'):
+        dataset = load_dataset("parquet", data_files=dataset_path, split=dataset_split)
+    else:
+        raise ValueError(f"Unsupported file format: {dataset_path}. Use .json, .jsonl, .csv, or .parquet")
+else:
+    # HuggingFace dataset
+    dataset = load_dataset(dataset_path, split=dataset_split)
 
 # Limit dataset size if specified
 if "max_samples" in dataset_config:
