@@ -67,8 +67,34 @@ dataset:
 2. **Supported dataset formats:**
 
    - **`alpaca`**: Expects columns `instruction`, `input`, `output`
+     ```json
+     [
+       {
+         "instruction": "Translate to French",
+         "input": "Hello world",
+         "output": "Bonjour le monde"
+       }
+     ]
+     ```
+
    - **`sharegpt`**: Expects column `conversations` (list of chat messages)
+     ```json
+     [
+       {
+         "conversations": [
+           {"role": "user", "content": "What is Qwen?"},
+           {"role": "assistant", "content": "Qwen is a language model..."}
+         ]
+       }
+     ]
+     ```
+
    - **`custom`**: Expects column `text` (pre-formatted strings)
+     ```json
+     [
+       {"text": "<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi!<|im_end|>"}
+     ]
+     ```
 
 3. **Example for local dataset:**
 ```yaml
