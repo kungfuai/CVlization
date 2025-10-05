@@ -53,6 +53,41 @@ The pre-configured dataset is **yahma/alpaca-cleaned**, which contains ~52K inst
 
 This dataset is ideal for teaching models to follow instructions and respond helpfully.
 
+### Using Your Own Data
+
+All training configuration is controlled via `config.yaml`. To use your own dataset:
+
+1. **Edit `config.yaml`** and update the `dataset` section:
+
+```yaml
+dataset:
+  path: "your-username/your-dataset"  # HuggingFace dataset or local path
+  format: "alpaca"  # Choose: alpaca, sharegpt, or custom
+  split: "train"
+  max_samples: 1000  # Optional: limit dataset size for testing
+```
+
+2. **Supported dataset formats:**
+
+   - **`alpaca`**: Expects columns `instruction`, `input`, `output`
+   - **`sharegpt`**: Expects column `conversations` (list of chat messages)
+   - **`custom`**: Expects column `text` (pre-formatted prompt-response strings)
+
+3. **Example for local dataset:**
+```yaml
+dataset:
+  path: "./my_data.json"  # Local JSON file
+  format: "custom"
+```
+
+4. **Adjust training parameters in `config.yaml`:**
+```yaml
+training:
+  max_steps: 1000  # Or set to -1 to use num_epochs instead
+  per_device_train_batch_size: 2
+  learning_rate: 2.0e-4
+```
+
 ### Output
 
 The fine-tuned model will be saved to:

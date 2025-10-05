@@ -46,6 +46,45 @@ bash examples/text_gen/qwen_7b_finetune/train.sh
 
 Training takes approximately 1-2 hours on an A10 GPU for the full example.
 
+#### Dataset
+
+The pre-configured dataset is **yahma/alpaca-cleaned**, which contains ~52K instruction-following examples formatted for Qwen's chat template.
+
+### Using Your Own Data
+
+All training configuration is controlled via `config.yaml`. To use your own dataset:
+
+1. **Edit `config.yaml`** and update the `dataset` section:
+
+```yaml
+dataset:
+  path: "your-username/your-dataset"  # HuggingFace dataset or local path
+  format: "alpaca"  # Choose: alpaca, sharegpt, or custom
+  split: "train"
+  max_samples: 1000  # Optional: limit dataset size for testing
+```
+
+2. **Supported dataset formats:**
+
+   - **`alpaca`**: Expects columns `instruction`, `input`, `output`
+   - **`sharegpt`**: Expects column `conversations` (list of chat messages)
+   - **`custom`**: Expects column `text` (pre-formatted strings)
+
+3. **Example for local dataset:**
+```yaml
+dataset:
+  path: "./my_data.json"
+  format: "custom"
+```
+
+4. **Adjust training parameters in `config.yaml`:**
+```yaml
+training:
+  max_steps: 1000
+  per_device_train_batch_size: 2
+  learning_rate: 2.0e-4
+```
+
 ### Output
 
 The fine-tuned model will be saved to:
