@@ -46,6 +46,44 @@ bash examples/text_gen/gpt_oss_finetune/train.sh
 
 Training takes approximately 2-3 hours on an A10 GPU for the full example.
 
+#### Dataset
+
+The pre-configured dataset is **HuggingFaceH4/Multilingual-Thinking**, which contains reasoning tasks with chain-of-thought examples in chat format (ShareGPT style with `messages` column).
+
+### Using Your Own Data
+
+All training configuration is controlled via `config.yaml`. To use your own dataset:
+
+1. **Edit `config.yaml`** and update the `dataset` section:
+
+```yaml
+dataset:
+  path: "your-username/your-dataset"  # HuggingFace dataset or local path
+  format: "sharegpt"  # Choose: sharegpt or custom
+  split: "train"
+  max_samples: 1000  # Optional: limit dataset size for testing
+```
+
+2. **Supported dataset formats:**
+
+   - **`sharegpt`**: Expects column `messages` (list of chat messages with role/content)
+   - **`custom`**: Expects column `text` (pre-formatted chat strings)
+
+3. **Example for local dataset:**
+```yaml
+dataset:
+  path: "./my_conversations.json"
+  format: "custom"
+```
+
+4. **Adjust training parameters in `config.yaml`:**
+```yaml
+training:
+  max_steps: 100
+  per_device_train_batch_size: 1  # Keep low for 20B model
+  learning_rate: 2.0e-4
+```
+
 ### Output
 
 The fine-tuned model will be saved to:
