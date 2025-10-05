@@ -52,55 +52,14 @@ The pre-configured dataset is **HuggingFaceH4/Multilingual-Thinking**, which con
 
 ### Using Your Own Data
 
-All training configuration is controlled via `config.yaml`. To use your own dataset:
+See [CUSTOM_DATASETS.md](../CUSTOM_DATASETS.md) for detailed instructions on using your own datasets, including:
+- Supported formats (ShareGPT, Custom)
+- Local file loading (.json, .jsonl, .csv, .parquet)
+- HuggingFace dataset integration
+- JSON structure examples
+- Troubleshooting tips
 
-1. **Edit `config.yaml`** and update the `dataset` section:
-
-```yaml
-dataset:
-  path: "your-username/your-dataset"  # HuggingFace dataset or local path
-  format: "sharegpt"  # Choose: sharegpt or custom
-  split: "train"
-  max_samples: 1000  # Optional: limit dataset size for testing
-```
-
-2. **Supported dataset formats:**
-
-   - **`sharegpt`**: Expects column `messages` (list of chat messages with role/content)
-     ```json
-     [
-       {
-         "messages": [
-           {"role": "user", "content": "Explain quantum computing"},
-           {"role": "assistant", "content": "Quantum computing uses..."}
-         ]
-       }
-     ]
-     ```
-
-   - **`custom`**: Expects column `text` (pre-formatted chat strings)
-     ```json
-     [
-       {"text": "<|user|>\nExplain AI<|assistant|>\nAI is..."}
-     ]
-     ```
-
-3. **Example for local dataset:**
-```yaml
-dataset:
-  path: "./my_conversations.json"  # Supports: .json, .jsonl, .csv, .parquet
-  format: "custom"
-```
-
-**Note:** Local files are auto-detected by file extension. Supported formats: `.json`, `.jsonl`, `.csv`, `.parquet`
-
-4. **Adjust training parameters in `config.yaml`:**
-```yaml
-training:
-  max_steps: 100
-  per_device_train_batch_size: 1  # Keep low for 20B model
-  learning_rate: 2.0e-4
-```
+**Note:** GPT-OSS uses the `messages` column for ShareGPT format (not `conversations`).
 
 ### Output
 

@@ -55,66 +55,12 @@ This dataset is ideal for teaching models to follow instructions and respond hel
 
 ### Using Your Own Data
 
-All training configuration is controlled via `config.yaml`. To use your own dataset:
-
-1. **Edit `config.yaml`** and update the `dataset` section:
-
-```yaml
-dataset:
-  path: "your-username/your-dataset"  # HuggingFace dataset or local path
-  format: "alpaca"  # Choose: alpaca, sharegpt, or custom
-  split: "train"
-  max_samples: 1000  # Optional: limit dataset size for testing
-```
-
-2. **Supported dataset formats:**
-
-   - **`alpaca`**: Expects columns `instruction`, `input`, `output`
-     ```json
-     [
-       {
-         "instruction": "Summarize this text",
-         "input": "Long article here...",
-         "output": "Brief summary here"
-       }
-     ]
-     ```
-
-   - **`sharegpt`**: Expects column `conversations` (list of chat messages)
-     ```json
-     [
-       {
-         "conversations": [
-           {"role": "user", "content": "What is Python?"},
-           {"role": "assistant", "content": "Python is a programming language..."}
-         ]
-       }
-     ]
-     ```
-
-   - **`custom`**: Expects column `text` (pre-formatted strings)
-     ```json
-     [
-       {"text": "### Instruction:\nWhat is AI?\n\n### Response:\nAI stands for..."}
-     ]
-     ```
-
-3. **Example for local dataset:**
-```yaml
-dataset:
-  path: "./my_data.json"  # Supports: .json, .jsonl, .csv, .parquet
-  format: "custom"
-```
-
-**Note:** Local files are auto-detected by file extension. Supported formats: `.json`, `.jsonl`, `.csv`, `.parquet`
-
-4. **Adjust training parameters in `config.yaml`:**
-```yaml
-training:
-  max_steps: 1000  # Or set to -1 to use num_epochs instead
-  per_device_train_batch_size: 2
-  learning_rate: 2.0e-4
-```
+See [CUSTOM_DATASETS.md](../CUSTOM_DATASETS.md) for detailed instructions on using your own datasets, including:
+- Supported formats (Alpaca, ShareGPT, Custom)
+- Local file loading (.json, .jsonl, .csv, .parquet)
+- HuggingFace dataset integration
+- JSON structure examples
+- Troubleshooting tips
 
 ### Output
 
