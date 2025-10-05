@@ -44,6 +44,15 @@ bash examples/text_gen/llama_3b_finetune/train.sh
 
 The training takes approximately 1-2 hours on a modern GPU (e.g., RTX 4090, A100).
 
+#### Dataset
+
+The pre-configured dataset is **yahma/alpaca-cleaned**, which contains ~52K instruction-following examples in the format:
+- `instruction`: The task description
+- `input`: Optional context or input
+- `output`: The expected response
+
+This dataset is ideal for teaching models to follow instructions and respond helpfully.
+
 ### Output
 
 The fine-tuned model will be saved to:
