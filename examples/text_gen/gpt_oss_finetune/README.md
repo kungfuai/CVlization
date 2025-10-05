@@ -67,7 +67,23 @@ dataset:
 2. **Supported dataset formats:**
 
    - **`sharegpt`**: Expects column `messages` (list of chat messages with role/content)
+     ```json
+     [
+       {
+         "messages": [
+           {"role": "user", "content": "Explain quantum computing"},
+           {"role": "assistant", "content": "Quantum computing uses..."}
+         ]
+       }
+     ]
+     ```
+
    - **`custom`**: Expects column `text` (pre-formatted chat strings)
+     ```json
+     [
+       {"text": "<|user|>\nExplain AI<|assistant|>\nAI is..."}
+     ]
+     ```
 
 3. **Example for local dataset:**
 ```yaml

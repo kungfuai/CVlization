@@ -70,8 +70,34 @@ dataset:
 2. **Supported dataset formats:**
 
    - **`alpaca`**: Expects columns `instruction`, `input`, `output`
+     ```json
+     [
+       {
+         "instruction": "Summarize this text",
+         "input": "Long article here...",
+         "output": "Brief summary here"
+       }
+     ]
+     ```
+
    - **`sharegpt`**: Expects column `conversations` (list of chat messages)
-   - **`custom`**: Expects column `text` (pre-formatted prompt-response strings)
+     ```json
+     [
+       {
+         "conversations": [
+           {"role": "user", "content": "What is Python?"},
+           {"role": "assistant", "content": "Python is a programming language..."}
+         ]
+       }
+     ]
+     ```
+
+   - **`custom`**: Expects column `text` (pre-formatted strings)
+     ```json
+     [
+       {"text": "### Instruction:\nWhat is AI?\n\n### Response:\nAI stands for..."}
+     ]
+     ```
 
 3. **Example for local dataset:**
 ```yaml
