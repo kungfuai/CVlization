@@ -17,6 +17,7 @@ import inspect
 import os
 from contextlib import nullcontext
 from dataclasses import dataclass
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -42,6 +43,13 @@ class NanoGPTTrainingPipeline:
         vocab_size: int = 5120
         batch_size: int = 32
         flatten_tokens: bool = False
+        use_program_augmentation: bool = False
+        program_offset: int = None
+        program_nil_id: int = None
+        program_vocab_size: int = 0
+        program_nil_loss_weight: float = 1.0
+        itos: Optional[Dict[int, str]] = None
+        program_pos_vocab: Optional[list] = None
 
         # Model
         n_layer: int = 12
@@ -50,7 +58,7 @@ class NanoGPTTrainingPipeline:
         dropout: float = 0.0
         gradient_accumulation_steps: int = 1
         bias: bool = True
-        device: str = "cuda"
+        device: str = "cuda"  # e.g. 'cuda', 'cpu', or 'mps'
         use_mamba_mixer: bool = False
 
         learning_rate: float = 6e-4  # max learning rate
@@ -98,26 +106,36 @@ class NanoGPTTrainingPipeline:
         self.out_dir = (
             f"{config.log_dir}/batch{config.batch_size}_block{config.block_size}"
         )
-        self.dtype = (
-            "bfloat16"
-            if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-            else "float16"
-        )  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+        requested_device = (config.device or "cpu").lower()
+        if "cuda" in requested_device:
+            self.dtype = (
+                "bfloat16"
+                if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+                else "float16"
+            )
+        elif "mps" in requested_device:
+            self.dtype = "float32"
+        else:
+            self.dtype = "float32"
+        # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 
         self.ptdtype = {
             "float32": torch.float32,
             "bfloat16": torch.bfloat16,
             "float16": torch.float16,
         }[self.dtype]
-        device_type = (
-            "cuda" if "cuda" in config.device else "cpu"
-        )  # for later use in torch.autocast
+        if "cuda" in requested_device:
+            device_type = "cuda"
+        elif "mps" in requested_device:
+            device_type = "mps"
+        else:
+            device_type = "cpu"
+        # for later use in torch.autocast
         self.device_type = device_type
-        self.ctx = (
-            nullcontext()
-            if device_type == "cpu"
-            else torch.amp.autocast(device_type=device_type, dtype=self.ptdtype)
-        )
+        if device_type == "cuda":
+            self.ctx = torch.amp.autocast(device_type=device_type, dtype=self.ptdtype)
+        else:
+            self.ctx = nullcontext()
         self._setup_io()
         if self.master_process:
             os.makedirs(self.out_dir, exist_ok=True)
@@ -125,10 +143,17 @@ class NanoGPTTrainingPipeline:
         seed = 1337 + self.seed_offset
         print(f"setting random seed to {seed}")
         torch.manual_seed(seed)
-        torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
-        torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
+        if device_type == "cuda":
+            torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
+            torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
         self.START_TOKEN = self.config.start_token
+        self.program_offset = None
+        self.program_nil_id = None
+        self.program_nil_local_id = None
+        self.program_vocab_size = None
+        self.itos = self.config.itos
+        self.program_pos_vocab = self.config.program_pos_vocab
 
     def fit(self, dataset_builder):
         if self.master_process and self.config.wandb_log:
@@ -148,12 +173,18 @@ class NanoGPTTrainingPipeline:
         block_size = self.config.block_size
         self.ddp = ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
         if ddp:
-            init_process_group(backend=self.config.backend)
+            backend = self.config.backend
+            if backend == "nccl" and self.device_type != "cuda":
+                backend = "gloo"
+            init_process_group(backend=backend)
             ddp_rank = int(os.environ["RANK"])
             ddp_local_rank = int(os.environ["LOCAL_RANK"])
             ddp_world_size = int(os.environ["WORLD_SIZE"])
-            device = f"cuda:{ddp_local_rank}"
-            torch.cuda.set_device(device)
+            if self.device_type == "cuda":
+                device = f"cuda:{ddp_local_rank}"
+                torch.cuda.set_device(device)
+            else:
+                device = self.config.device
             self.master_process = (
                 ddp_rank == 0
             )  # this process will do logging, checkpointing etc.
@@ -162,6 +193,7 @@ class NanoGPTTrainingPipeline:
             # down the desired gradient accumulation iterations per process proportionally
             assert self.config.gradient_accumulation_steps % ddp_world_size == 0
             self.config.gradient_accumulation_steps //= ddp_world_size
+            self.config.device = device
         else:
             # if not ddp, we are running on a single gpu, and one process
             self.master_process = True
@@ -176,41 +208,32 @@ class NanoGPTTrainingPipeline:
         print(f"tokens per iteration will be: {tokens_per_iter:,}")
         self.tokens_per_iter = tokens_per_iter
 
-    def get_batch(self, split: str):
-        """
-        Get a batch of data for training or validation.
-
-        Args:
-            split (str): The split to get the data from. Can be either "train" or "val".
-
-        Returns:
-            tuple: A tuple containing two tensors: x and y.
-                - x: The input tensor of shape (batch_size, block_size).
-                - y: The target tensor of shape (batch_size, block_size).
-
-        """
+    def _sample_batch(self, split: str):
         if self.config.flatten_tokens:
-            train_data = self.train_data_flattened
-            val_data = self.val_data_flattened
+            data = self.train_data_flattened if split == "train" else self.val_data_flattened
         else:
-            train_data = self.train_data
-            val_data = self.val_data
+            data = self.train_data if split == "train" else self.val_data
+
         block_size = self.config.block_size
         batch_size = self.config.batch_size
         device = self.config.device
 
-        data = train_data if split == "train" else val_data
         if len(data.shape) == 2:
-            # batch x sequence len
             irow = torch.randint(data.shape[0], (batch_size,))
             ix = torch.randint(data.shape[1] - block_size, (batch_size,))
-            # print(ix)
-            x = torch.stack([
-                torch.from_numpy(data[i, i1 : i1 + block_size].astype(np.int64)) for i, i1 in zip(irow, ix)
-            ])
-            y = torch.stack([
-                torch.from_numpy(data[i, i1 + 1 : i1 + 1 + block_size].astype(np.int64)) for i, i1 in zip(irow, ix)
-            ])
+
+            def _slice_rows(arr, offset=0):
+                return torch.stack(
+                    [
+                        torch.from_numpy(
+                            arr[i, j + offset : j + offset + block_size].astype(np.int64)
+                        )
+                        for i, j in zip(irow, ix)
+                    ]
+                )
+
+            x = _slice_rows(data)
+            y = _slice_rows(data, offset=1)
         else:
             ix = torch.randint(len(data) - block_size, (batch_size,))
             x = torch.stack(
@@ -222,17 +245,17 @@ class NanoGPTTrainingPipeline:
                     for i in ix
                 ]
             )
+
         if self.device_type == "cuda":
-            # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
-                device, non_blocking=True
-            )
+            x = x.pin_memory().to(device, non_blocking=True)
+            y = y.pin_memory().to(device, non_blocking=True)
         else:
-            x, y = x.to(device), y.to(device)
+            x = x.to(device)
+            y = y.to(device)
+
         assert x.shape == (self.config.batch_size, self.config.block_size), f"x.shape: {x.shape}"
         assert y.shape == (self.config.batch_size, self.config.block_size), f"y.shape: {y.shape}"
 
-        # make the context window sparse in the beginning of the sequence
         if self.config.sparse_context_window:
             sparse_idx = np.concatenate(
                 [
@@ -249,18 +272,28 @@ class NanoGPTTrainingPipeline:
             x = x[:, sparse_idx]
             y = y[:, sparse_idx]
 
-        # For debugging.
-        # Treatment 1
-        # This is so that the model can learn to predict the final token, using varying context window lengths:
-        #  with only the nearest neighbor, and then the 2 nearest neighbors, then 3, ...
-        # x = torch.flip(
-        #     x, [1]
-        # )  # This combined with the following line (treatment 2) will make the loss nan.
-        # Treatment 2
-        # y[:, :-1] = -1  # This alone will make the training inefficient but still works.
-        # Treatment 3
-        # x[:, -1] = x[:, 0]  # This combined with treatment 1 and 2 fixes the nan issue.
         return x, y
+
+    def get_batch(self, split: str):
+        x, y = self._sample_batch(split)
+        batch = {"input_ids": x, "targets": y}
+        if not self.config.use_program_augmentation:
+            return batch
+
+        text_targets = y.clone()
+        program_targets = torch.full_like(y, self.program_nil_local_id)
+        program_mask = y >= self.program_offset
+        if program_mask.any():
+            program_targets[program_mask] = y[program_mask] - self.program_offset
+            text_targets[program_mask] = -1
+
+        batch.update(
+            {
+                "targets_text": text_targets,
+                "targets_program": program_targets,
+            }
+        )
+        return batch
 
     def get_batch_sparse(self, split: str):
         """
@@ -339,6 +372,73 @@ class NanoGPTTrainingPipeline:
         else:
             self.data_seq_len = self.config.max_tokens_to_sample
 
+        if self.config.use_program_augmentation:
+            assert (
+                self.config.program_offset is not None
+            ), "program_offset must be set when program augmentation is enabled"
+            assert (
+                self.config.program_nil_id is not None
+            ), "program_nil_id must be set when program augmentation is enabled"
+            assert (
+                self.config.program_vocab_size > 0
+            ), "program_vocab_size must be > 0 when program augmentation is enabled"
+            self.program_offset = self.config.program_offset
+            self.program_nil_id = self.config.program_nil_id
+            self.program_vocab_size = self.config.program_vocab_size
+            self.program_nil_local_id = self.program_nil_id - self.program_offset
+
+    def _decode_tokens(self, tokens: torch.Tensor) -> str:
+        if self.itos is None:
+            return "".join(str(int(tok)) for tok in tokens.tolist())
+        pieces = []
+        for tok in tokens.tolist():
+            tok = int(tok)
+            if (
+                self.program_offset is not None
+                and tok >= self.program_offset
+                and self.program_pos_vocab is not None
+            ):
+                idx = tok - self.program_offset
+                if 0 <= idx < len(self.program_pos_vocab):
+                    pieces.append(f"<{self.program_pos_vocab[idx]}>")
+                    continue
+            pieces.append(self.itos.get(tok, "?"))
+        return "".join(pieces)
+
+    @torch.no_grad()
+    def _sampled_text_ce(self, batch: Dict[str, torch.Tensor]) -> Optional[float]:
+        model = self.model
+        if not self.config.use_program_augmentation or not isinstance(
+            model, ProgramAugmentedGPT
+        ):
+            return None
+
+        input_ids = batch["input_ids"]
+        targets_text = batch["targets_text"]
+        targets_program = batch["targets_program"]
+
+        # pass 1: get program predictions under teacher-forced context
+        features = model.backbone.forward_features(input_ids)
+        prog_logits = model.program_head(features)
+        sampled_local = torch.argmax(prog_logits, dim=-1)
+        sampled_tokens = sampled_local + model.program_offset
+
+        # replace program tokens with sampled ones
+        generated = input_ids.clone()
+        program_mask = targets_program != model.nil_local_id
+        generated[program_mask] = sampled_tokens[program_mask]
+
+        # pass 2: compute text CE under sampled program context
+        features_new = model.backbone.forward_features(generated)
+        logits_text = model.backbone.lm_head(features_new)
+        text_mask = targets_text != -1
+        if not text_mask.any():
+            return None
+        logits_masked = logits_text[text_mask]
+        targets_masked = targets_text[text_mask].long()
+        loss = F.cross_entropy(logits_masked, targets_masked, reduction="mean")
+        return loss.item()
+
     def _try_to_infer_vocab_size(self):
         # attempt to derive vocab_size from the dataset
         data_dir = os.path.join("data", self.config.dataset)
@@ -365,6 +465,12 @@ class NanoGPTTrainingPipeline:
             meta_vocab_size = self.config.vocab_size
         out_dir = self.out_dir
 
+        if meta_vocab_size is None:
+            meta_vocab_size = self.config.vocab_size
+        vocab_for_model = meta_vocab_size
+        if self.config.use_program_augmentation:
+            vocab_for_model = max(vocab_for_model, self.config.program_nil_id + 1)
+
         # model init
         self.model_args = dict(
             n_layer=n_layer,
@@ -372,7 +478,7 @@ class NanoGPTTrainingPipeline:
             n_embd=n_embd,
             block_size=block_size,
             bias=bias,
-            vocab_size=None,
+            vocab_size=vocab_for_model,
             dropout=dropout,
         )  # start with model_args from command line
         if init_from == "scratch":
@@ -383,9 +489,7 @@ class NanoGPTTrainingPipeline:
                 print(
                     "defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)"
                 )
-            self.model_args["vocab_size"] = (
-                meta_vocab_size if meta_vocab_size is not None else 50304
-            )
+            self.model_args["vocab_size"] = vocab_for_model
             print("***** model args:", self.model_args)
             gptconf = GPTConfig(**(self.model_args))
             if self.config.use_mamba_mixer:
@@ -446,6 +550,15 @@ class NanoGPTTrainingPipeline:
             self.model_args["block_size"] = (
                 block_size  # so that the checkpoint will have the right value
             )
+        if self.config.use_program_augmentation:
+            model = ProgramAugmentedGPT(
+                backbone=model,
+                program_vocab_size=self.config.program_vocab_size,
+                program_offset=self.program_offset,
+                nil_local_id=self.program_nil_local_id,
+                nil_loss_weight=self.config.program_nil_loss_weight,
+            )
+
         print(model)
         model.to(device)
         if self.config.compile:
@@ -490,8 +603,26 @@ class NanoGPTTrainingPipeline:
     def create_grad_scaler(self):
         # initialize a GradScaler. If enabled=False scaler is a no-op
         dtype = self.dtype
-        self.scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
-        print(f"GradScaler enabled: {dtype == 'float16'}")
+        if self.device_type == "cuda":
+            enabled = dtype == "float16"
+            self.scaler = torch.cuda.amp.GradScaler(enabled=enabled)
+        else:
+            class _IdentityScaler:
+                def scale(self, loss):
+                    return loss
+
+                def unscale_(self, optimizer):
+                    return None
+
+                def step(self, optimizer):
+                    optimizer.step()
+
+                def update(self):
+                    return None
+
+            self.scaler = _IdentityScaler()
+            enabled = False
+        print(f"GradScaler enabled: {enabled}")
 
     def create_optimizer(self):
         model = self.model
@@ -534,18 +665,63 @@ class NanoGPTTrainingPipeline:
     @torch.no_grad()
     def estimate_loss(self):
         model = self.model
-        eval_iters = self.config.eval_iters
+        eval_iters_val = min(self.config.eval_iters, 100) if self.master_process else self.config.eval_iters
         out = {}
         model.eval()
-        for split in ["train", "val"]:
-            losses = torch.zeros(eval_iters)
-            for k in range(eval_iters):
-                X, Y = self.get_batch(split)
-                # print(f"estimate_loss(): k={k}, X.shape: {X.shape}, Y.shape: {Y.shape}")
-                with self.ctx:
-                    logits, loss = model(X, Y)
-                losses[k] = loss.item()
-            out[split] = losses.mean()
+        split = "val"
+        losses = torch.zeros(eval_iters_val)
+        text_losses = [] if self.config.use_program_augmentation else None
+        sampled_text_losses = [] if self.config.use_program_augmentation else None
+        prog_losses = [] if self.config.use_program_augmentation else None
+        nil_losses = [] if self.config.use_program_augmentation else None
+        if self.master_process:
+            print(f"[eval] split={split} running {eval_iters_val} iters...")
+        for k in range(eval_iters_val):
+            batch = self.get_batch(split)
+            with self.ctx:
+                if self.config.use_program_augmentation:
+                    _, loss, metrics = model(
+                        batch["input_ids"],
+                        targets_text=batch["targets_text"],
+                        targets_program=batch["targets_program"],
+                        return_logits=False,
+                    )
+                    if "loss_text" in metrics:
+                        text_losses.append(metrics["loss_text"].item())
+                    if "loss_prog" in metrics:
+                        prog_losses.append(metrics["loss_prog"].item())
+                    if "loss_nil" in metrics:
+                        nil_losses.append(metrics["loss_nil"].item())
+                    sampled_ce = self._sampled_text_ce(batch)
+                    if sampled_ce is not None:
+                        sampled_text_losses.append(sampled_ce)
+                else:
+                    _, loss = model(
+                        batch["input_ids"], batch["targets"]
+                    )
+            losses[k] = loss.item()
+        val_value = losses.mean().item()
+        if self.config.use_program_augmentation:
+            out["val_loss_augmented"] = val_value
+        else:
+            out["val_loss"] = val_value
+        if text_losses:
+            val_text_ce = float(sum(text_losses) / len(text_losses))
+            if self.config.use_program_augmentation:
+                out["val_loss"] = val_text_ce
+                out["val_text_ce"] = val_text_ce
+            else:
+                out["val_loss"] = val_text_ce
+        if sampled_text_losses:
+            out[f"{split}_sampled_text_ce"] = float(
+                sum(sampled_text_losses) / len(sampled_text_losses)
+            )
+        if prog_losses:
+            out["val_prog_ce"] = float(sum(prog_losses) / len(prog_losses))
+        if nil_losses:
+            out["val_nil_ce"] = float(sum(nil_losses) / len(nil_losses))
+
+        out["val"] = out.get("val_loss")
         model.train()
         return out
 
@@ -560,7 +736,11 @@ class NanoGPTTrainingPipeline:
         grad_clip = self.config.grad_clip
         eval_interval = self.config.eval_interval
         log_interval = self.config.log_interval
-        sample_interval = self.config.sample_interval
+        sample_interval = (
+            self.config.sample_interval
+            if self.config.sample_interval is not None
+            else self.config.eval_interval
+        )
         always_save_checkpoint = self.config.always_save_checkpoint
         out_dir = self.out_dir
         wandb_log = self.config.wandb_log
@@ -577,9 +757,8 @@ class NanoGPTTrainingPipeline:
         iter_num = 0
         best_val_loss = 1e9
 
-        X, Y = self.get_batch("train")  # fetch the very first batch
-        print(f"X.shape: {X.shape}, Y.shape: {Y.shape}")
-        print(f"X: {X[0, :5]}")
+        batch = self.get_batch("train")  # fetch the very first batch
+        print(f"input_ids shape: {batch['input_ids'].shape}")
         # import sys; sys.exit(0)
         t0 = time.time()
         local_iter_num = 0  # number of iterations in the lifetime of this process
@@ -594,20 +773,58 @@ class NanoGPTTrainingPipeline:
             # evaluate the loss on train/val sets and write checkpoints
             if (iter_num + 1) % eval_interval == 0 and self.master_process:
                 losses = self.estimate_loss()
-                print(
-                    f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
-                )
-                # print("batch_size:", batch_size)
-                if wandb_log:
-                    wandb.log(
-                        {
-                            "iter": iter_num,
-                            "train/loss": losses["train"],
-                            "val/loss": losses["val"],
-                            "lr": lr,
-                            "mfu": running_mfu * 100,  # convert to percentage
-                        }
+                message_parts = [f"val loss {losses['val']:.4f}"]
+                if "train" in losses:
+                    message_parts.insert(0, f"train loss {losses['train']:.4f}")
+                if "val_text_ce" in losses:
+                    message_parts.append(
+                        f"val text CE {losses['val_text_ce']:.4f}"
                     )
+                if "val_sampled_text_ce" in losses:
+                    message_parts.append(
+                        f"val sampled text CE {losses['val_sampled_text_ce']:.4f}"
+                    )
+                if "val_loss_augmented" in losses:
+                    message_parts.append(
+                        f"val loss augmented {losses['val_loss_augmented']:.4f}"
+                    )
+                if "val_prog_ce" in losses:
+                    message_parts.append(
+                        f"val prog CE {losses['val_prog_ce']:.4f}"
+                    )
+                if "val_nil_ce" in losses:
+                    message_parts.append(
+                        f"val nil CE {losses['val_nil_ce']:.4f}"
+                    )
+                print(f"step {iter_num}: " + ", ".join(message_parts))
+                if wandb_log:
+                    log_payload = {
+                        "iter": iter_num,
+                        "val/loss": losses["val"],
+                        "lr": lr,
+                        "mfu": running_mfu * 100,
+                    }
+                    if "train" in losses:
+                        log_payload["train/loss"] = losses["train"]
+                    if "val_text_ce" in losses:
+                        log_payload["val/text_ce"] = losses["val_text_ce"]
+                    if "train_text_ce" in losses:
+                        log_payload["train/text_ce"] = losses["train_text_ce"]
+                    if "val_sampled_text_ce" in losses:
+                        log_payload["val/text_ce_sampled"] = losses["val_sampled_text_ce"]
+                    if "train_sampled_text_ce" in losses:
+                        log_payload["train/text_ce_sampled"] = losses[
+                            "train_sampled_text_ce"
+                        ]
+                    if "val_loss_augmented" in losses:
+                        log_payload["val/loss_augmented"] = losses[
+                            "val_loss_augmented"
+                        ]
+                    if "val_prog_ce" in losses:
+                        log_payload["val/prog_ce"] = losses["val_prog_ce"]
+                    if "val_nil_ce" in losses:
+                        log_payload["val/nil_ce"] = losses["val_nil_ce"]
+                    wandb.log(log_payload)
                 if losses["val"] < best_val_loss or always_save_checkpoint:
                     best_val_loss = losses["val"]
                     if iter_num > 0:
@@ -627,6 +844,7 @@ class NanoGPTTrainingPipeline:
 
             # forward backward update, with optional gradient accumulation to simulate larger batch size
             # and using the GradScaler if data type is float16
+            last_metrics = {}
             for micro_step in range(gradient_accumulation_steps):
                 if ddp:
                     # in DDP training we only need to sync gradients at the last micro step.
@@ -638,16 +856,22 @@ class NanoGPTTrainingPipeline:
                     )
                 with ctx:
                     start_time = time.time()
-                    logits, loss = model(X, Y)
+                    if self.config.use_program_augmentation:
+                        _, loss, metrics = model(
+                            batch["input_ids"],
+                            targets_text=batch["targets_text"],
+                            targets_program=batch["targets_program"],
+                            return_logits=False,
+                        )
+                    else:
+                        _, loss = model(batch["input_ids"], batch["targets"])
+                        metrics = {}
                     end_time = time.time()
-                    # print(f"forward pass time: {end_time - start_time:.3f}s")
-                    loss = (
-                        loss / gradient_accumulation_steps
-                    )  # scale the loss to account for gradient accumulation
-                # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                X, Y = self.get_batch("train")
-                # backward pass, with gradient scaling if training in fp16
+                    loss = loss / gradient_accumulation_steps
+                next_batch = self.get_batch("train")
                 scaler.scale(loss).backward()
+                batch = next_batch
+                last_metrics = metrics
             # clip the gradient
             if grad_clip != 0.0:
                 scaler.unscale_(optimizer)
@@ -673,9 +897,32 @@ class NanoGPTTrainingPipeline:
                     running_mfu = (
                         mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
                     )
-                print(
-                    f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
-                )
+                log_line = f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
+                if self.config.use_program_augmentation:
+                    if "loss_text" in last_metrics:
+                        log_line += f", text CE {last_metrics['loss_text'].item():.4f}"
+                    if "loss_prog" in last_metrics:
+                        log_line += f", prog CE {last_metrics['loss_prog'].item():.4f}"
+                    if "loss_nil" in last_metrics:
+                        log_line += f", nil CE {last_metrics['loss_nil'].item():.4f}"
+                print(log_line)
+                if wandb_log:
+                    payload = {"train/loss_step": lossf}
+                    if self.config.use_program_augmentation:
+                        payload.update(
+                            {
+                                "train/text_ce_step": last_metrics["loss_text"].item()
+                                if "loss_text" in last_metrics
+                                else float("nan"),
+                                "train/prog_ce_step": last_metrics["loss_prog"].item()
+                                if "loss_prog" in last_metrics
+                                else float("nan"),
+                                "train/nil_ce_step": last_metrics["loss_nil"].item()
+                                if "loss_nil" in last_metrics
+                                else float("nan"),
+                            }
+                        )
+                    wandb.log(payload)
 
             # log the decoded ground truth codes
             # TODO: this is hardcoded for now
@@ -788,6 +1035,55 @@ class NanoGPTTrainingPipeline:
                             )
 
                     model.train()
+                elif self.itos is not None:
+                    model.eval()
+                    try:
+                        with torch.no_grad():
+                            if self.itos is not None:
+                                k_token = None
+                                for idx, ch in self.itos.items():
+                                    if ch == "K":
+                                        k_token = int(idx)
+                                        break
+                            if k_token is None:
+                                context = batch["input_ids"][:1, :1]
+                            else:
+                                context = torch.tensor([[k_token]], dtype=torch.long).to(
+                                    self.config.device
+                                )
+                            sample = model.generate(
+                                context,
+                                max_new_tokens=self.config.block_size,
+                                temperature=0.8,
+                                top_k=40,
+                                show_progress=False,
+                            )
+                            decoded = self._decode_tokens(sample[0])
+                            preview_len = min(len(decoded), 400)
+                            preview = decoded[:preview_len]
+                            if preview_len < len(decoded):
+                                preview += "..."
+                            print("---- sampled text ----")
+                            print(preview)
+                            if wandb_log:
+                                if not hasattr(self, "_wandb_sample_table"):
+                                    self._wandb_sample_table = wandb.Table(
+                                        columns=["iter", "text"]
+                                    )
+                                table_len = min(len(decoded), 512)
+                                table_text = decoded[:table_len]
+                                if table_len < len(decoded):
+                                    table_text += "..."
+                                self._wandb_sample_table.add_data(
+                                    iter_num + 1, table_text
+                                )
+                                wandb.log({"sampled/text": self._wandb_sample_table})
+                            if self.master_process:
+                                print(
+                                    f"[sample] iter={iter_num+1} generated preview (len={len(preview)})"
+                                )
+                    finally:
+                        model.train()
 
             iter_num += 1
             local_iter_num += 1
@@ -997,41 +1293,253 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
-        # print(f"x_mean: {idx.float().mean()}")
+    def forward_features(self, idx: torch.Tensor) -> torch.Tensor:
         device = idx.device
         b, t = idx.size()
         assert (
             t <= self.config.block_size
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
+        pos = torch.arange(0, t, dtype=torch.long, device=device)
 
-        # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
+        tok_emb = self.transformer.wte(idx)
+        pos_emb = self.transformer.wpe(pos)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
+        return x
+
+    def forward(self, idx, targets=None):
+        x = self.forward_features(idx)
 
         if targets is not None:
-            # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
-
-            # TODO: for debug
-            # targets[:, :-1] = -1
-
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
-        else:
-            # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(
-                x[:, [-1], :]
-            )  # note: using list [-1] to preserve the time dim
-            loss = None
+            return logits, loss
 
+        logits = self.lm_head(x[:, [-1], :])
+        loss = None
         return logits, loss
+
+    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
+        param_dict = {pn: p for pn, p in self.named_parameters()}
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+        optim_groups = [
+            {"params": decay_params, "weight_decay": weight_decay},
+            {"params": nodecay_params, "weight_decay": 0.0},
+        ]
+        num_decay_params = sum(p.numel() for p in decay_params)
+        num_nodecay_params = sum(p.numel() for p in nodecay_params)
+        print(
+            f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters"
+        )
+        print(
+            f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
+        )
+        fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
+        use_fused = fused_available and device_type == "cuda"
+        extra_args = dict(fused=True) if use_fused else dict()
+        optimizer = torch.optim.AdamW(
+            optim_groups, lr=learning_rate, betas=betas, **extra_args
+        )
+        print(f"using fused AdamW: {use_fused}")
+        return optimizer
+
+    def estimate_mfu(self, fwdbwd_per_iter, dt):
+        N = self.get_num_params()
+        cfg = self.config
+        L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd // cfg.n_head, cfg.block_size
+        flops_per_token = 6 * N + 12 * L * H * Q * T
+        flops_per_fwdbwd = flops_per_token * T
+        flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
+        flops_achieved = flops_per_iter * (1.0 / dt)
+        flops_promised = 312e12
+        return flops_achieved / flops_promised
+
+    @torch.no_grad()
+    def generate(
+        self, idx, max_new_tokens, temperature=1.0, top_k=None, show_progress=False
+    ):
+        if show_progress:
+            from tqdm import tqdm
+
+            range_iter = tqdm(range(max_new_tokens), mininterval=2)
+        else:
+            range_iter = range(max_new_tokens)
+        for _ in range_iter:
+            idx_cond = (
+                idx
+                if idx.size(1) <= self.config.block_size
+                else idx[:, -self.config.block_size :]
+            )
+            logits, _ = self(idx_cond)
+            logits = logits[:, -1, :] / temperature
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -float("Inf")
+            probs = F.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat((idx, idx_next), dim=1)
+
+        return idx
+
+
+class ProgramAugmentedGPT(nn.Module):
+    def __init__(
+        self,
+        backbone: GPT,
+        program_vocab_size: int,
+        program_offset: int,
+        nil_local_id: int,
+        nil_loss_weight: float,
+    ):
+        super().__init__()
+        self.backbone = backbone
+        self.program_head = nn.Linear(
+            backbone.config.n_embd, program_vocab_size + 1, bias=False
+        )
+        torch.nn.init.normal_(self.program_head.weight, mean=0.0, std=0.02)
+        self.program_vocab_size = program_vocab_size
+        self.program_offset = program_offset
+        self.nil_local_id = nil_local_id
+        self.nil_loss_weight = nil_loss_weight
+        self.config = backbone.config
+        self.sample_program_inference = True
+        self.sample_program_argmax = False
+
+    def forward(
+        self,
+        input_ids,
+        targets=None,
+        targets_text=None,
+        targets_program=None,
+        return_logits: bool = False,
+    ):
+        if targets_text is None or targets_program is None:
+            logits, loss = self.backbone(input_ids, targets=targets)
+            if return_logits:
+                return logits, loss, {}
+            return logits, loss
+
+        features = self.backbone.forward_features(input_ids)
+        logits_text = self.backbone.lm_head(features)
+        logits_prog = self.program_head(features)
+
+        text_mask = targets_text.ne(-1)
+        if text_mask.any():
+            loss_text = F.cross_entropy(
+                logits_text[text_mask], targets_text[text_mask]
+            )
+            nil_targets = torch.full_like(
+                targets_text[text_mask], self.nil_local_id
+            )
+            loss_nil = F.cross_entropy(logits_prog[text_mask], nil_targets)
+        else:
+            loss_text = logits_text.new_zeros(())
+            loss_nil = logits_prog.new_zeros(())
+
+        program_mask = targets_program.ne(self.nil_local_id)
+        if program_mask.any():
+            loss_prog = F.cross_entropy(
+                logits_prog[program_mask], targets_program[program_mask]
+            )
+        else:
+            loss_prog = logits_prog.new_zeros(())
+
+        total_loss = loss_prog + loss_text + self.nil_loss_weight * loss_nil
+
+        metrics: Dict[str, torch.Tensor] = {
+            "loss_prog": loss_prog.detach(),
+            "loss_text": loss_text.detach(),
+            "loss_nil": loss_nil.detach(),
+        }
+
+        if return_logits:
+            return {"text": logits_text, "program": logits_prog}, total_loss, metrics
+        return None, total_loss, metrics
+
+    def generate(
+        self,
+        idx,
+        max_new_tokens,
+        temperature: float = 1.0,
+        top_k: Optional[int] = None,
+        show_progress: bool = False,
+    ):
+        if not self.sample_program_inference:
+            return self.backbone.generate(
+                idx,
+                max_new_tokens,
+                temperature=temperature,
+                top_k=top_k,
+                show_progress=show_progress,
+            )
+
+        if show_progress:
+            from tqdm import tqdm
+
+            range_iter = tqdm(range(max_new_tokens), mininterval=2)
+        else:
+            range_iter = range(max_new_tokens)
+
+        def _top_k_filter(logits: torch.Tensor) -> torch.Tensor:
+            if top_k is None:
+                return logits
+            k = min(top_k, logits.size(-1))
+            values, _ = torch.topk(logits, k)
+            threshold = values[:, [-1]]
+            logits = logits.clone()
+            logits[logits < threshold] = -float("Inf")
+            return logits
+
+        for _ in range_iter:
+            idx_cond = (
+                idx
+                if idx.size(1) <= self.config.block_size
+                else idx[:, -self.config.block_size :]
+            )
+
+            features = self.backbone.forward_features(idx_cond)
+            last_hidden = features[:, [-1], :]
+
+            prog_logits = self.program_head(last_hidden)[:, 0, :] / temperature
+            prog_logits = _top_k_filter(prog_logits)
+            if self.sample_program_argmax:
+                prog_samples = torch.argmax(prog_logits, dim=-1, keepdim=True)
+            else:
+                prog_probs = F.softmax(prog_logits, dim=-1)
+                prog_samples = torch.multinomial(prog_probs, num_samples=1)
+            nil_mask = prog_samples.squeeze(-1).eq(self.nil_local_id)
+
+            text_logits = self.backbone.lm_head(last_hidden)[:, 0, :] / temperature
+            text_logits = _top_k_filter(text_logits)
+            text_probs = F.softmax(text_logits, dim=-1)
+            text_samples = torch.multinomial(text_probs, num_samples=1)
+
+            prog_tokens = prog_samples + self.program_offset
+            idx_next = torch.where(
+                nil_mask.unsqueeze(-1), text_samples, prog_tokens
+            )
+            idx = torch.cat((idx, idx_next), dim=1)
+
+        return idx
+
+    def set_program_sampling(self, enabled: bool, deterministic: bool = False):
+        self.sample_program_inference = bool(enabled)
+        self.sample_program_argmax = bool(deterministic)
+
+    def forward_features(self, idx: torch.Tensor) -> torch.Tensor:
+        return self.backbone.forward_features(idx)
+
+    def configure_optimizers(self, *args, **kwargs):
+        return self.backbone.configure_optimizers(*args, **kwargs)
+
+    def estimate_mfu(self, *args, **kwargs):
+        return self.backbone.estimate_mfu(*args, **kwargs)
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -1117,97 +1625,6 @@ class GPT(nn.Module):
 
         return model
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
-        # start with all of the candidate parameters
-        param_dict = {pn: p for pn, p in self.named_parameters()}
-        # filter out those that do not require grad
-        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-        # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-        # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
-        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        optim_groups = [
-            {"params": decay_params, "weight_decay": weight_decay},
-            {"params": nodecay_params, "weight_decay": 0.0},
-        ]
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(
-            f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters"
-        )
-        print(
-            f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
-        )
-        # Create AdamW optimizer and use the fused version if it is available
-        fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
-        use_fused = fused_available and device_type == "cuda"
-        extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(
-            optim_groups, lr=learning_rate, betas=betas, **extra_args
-        )
-        print(f"using fused AdamW: {use_fused}")
-
-        return optimizer
-
-    def estimate_mfu(self, fwdbwd_per_iter, dt):
-        """estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS"""
-        # first estimate the number of flops we do per iteration.
-        # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
-        N = self.get_num_params()
-        cfg = self.config
-        L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd // cfg.n_head, cfg.block_size
-        flops_per_token = 6 * N + 12 * L * H * Q * T
-        flops_per_fwdbwd = flops_per_token * T
-        flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
-        # express our flops throughput as ratio of A100 bfloat16 peak flops
-        flops_achieved = flops_per_iter * (1.0 / dt)  # per second
-        flops_promised = 312e12  # A100 GPU bfloat16 peak flops is 312 TFLOPS
-        mfu = flops_achieved / flops_promised
-        return mfu
-
-    @torch.no_grad()
-    def generate(
-        self, idx, max_new_tokens, temperature=1.0, top_k=None, show_progress=False
-    ):
-        """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-        the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
-        """
-        if show_progress:
-            from tqdm import tqdm
-
-            range_to_iterate = tqdm(range(max_new_tokens), mininterval=2)
-        else:
-            range_to_iterate = range(max_new_tokens)
-        for _ in range_to_iterate:
-            # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = (
-                idx
-                if idx.size(1) <= self.config.block_size
-                else idx[:, -self.config.block_size :]
-            )
-
-            # import sys
-            # print("idx_cond max:", idx_cond.max())
-            # sys.exit(0)
-
-            # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
-            # pluck the logits at the final step and scale by desired temperature
-            logits = logits[:, -1, :] / temperature
-            # optionally crop the logits to only the top k options
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float("Inf")
-            # apply softmax to convert logits to (normalized) probabilities
-            probs = F.softmax(logits, dim=-1)
-            # sample from the distribution
-            idx_next = torch.multinomial(probs, num_samples=1)
-            # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
-
-        return idx
 
 
 class MambaBackbone(nn.Module):
