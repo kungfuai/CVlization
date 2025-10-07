@@ -2,17 +2,15 @@
 
 # Quick smoke test with 2 training steps
 
-# Optional: Set HuggingFace token
+# Optional: Set HuggingFace token (not required for Qwen)
 if [ -z "$HF_TOKEN" ]; then
-    echo "Warning: HF_TOKEN not set. Required for Llama models."
-    echo "Set it with: export HF_TOKEN=your_huggingface_token"
-    exit 1
+    echo "Note: HF_TOKEN not set. Using non-gated model (Qwen 0.5B)."
 fi
 
-IMAGE_NAME="llama_3b_trl_sft"
-CONTAINER_NAME="llama_3b_trl_sft_test"
+IMAGE_NAME="trl_sft"
+CONTAINER_NAME="trl_sft_test"
 
-echo "=== Llama 3B SFT Smoke Test (2 steps) ==="
+echo "=== TRL SFT Smoke Test (2 steps) ==="
 
 # Get absolute path to repo root
 REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
