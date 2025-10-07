@@ -118,7 +118,6 @@ training_args = SFTConfig(
     logging_steps=training_config["logging_steps"],
     save_steps=training_config["save_steps"],
     seed=training_config["seed"],
-    max_seq_length=model_config["max_seq_length"],
     fp16=not torch.cuda.is_bf16_supported(),
     bf16=torch.cuda.is_bf16_supported(),
     dataset_text_field="text",
@@ -128,7 +127,7 @@ training_args = SFTConfig(
 # Create SFT trainer
 trainer = SFTTrainer(
     model=model,
-    tokenizer=tokenizer,
+    processing_class=tokenizer,
     args=training_args,
     train_dataset=dataset,
     peft_config=peft_config,
