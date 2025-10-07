@@ -13,7 +13,7 @@ examples/text_gen/
 │   └── qwen_7b_sft/       # Qwen 2.5 7B SFT
 │
 └── trl/              # TRL (HuggingFace) fine-tuning examples
-    └── llama_3b_sft/      # Llama 3.2 3B SFT
+    └── sft/               # Supervised Fine-Tuning (works with any model)
 ```
 
 ## Framework Comparison
@@ -37,7 +37,7 @@ examples/text_gen/
 - **Best for**: Standard workflows, production environments
 
 **Examples:**
-- [Llama 3B SFT](trl/llama_3b_sft/) - Standard HF fine-tuning with TRL
+- [SFT](trl/sft/) - Standard HF fine-tuning with TRL (configurable model)
 
 ## Quick Start
 
@@ -63,29 +63,31 @@ bash train.sh
 ### TRL Examples
 
 ```bash
-# Llama 3B with TRL
-cd examples/text_gen/trl/llama_3b_sft
+# SFT with TRL (Qwen 0.5B by default, or any model via config)
+cd examples/text_gen/trl/sft
 bash build.sh
-export HF_TOKEN=your_token
-bash train.sh
+bash train.sh  # Works without HF_TOKEN for Qwen
 ```
 
 ## Benchmarking: Unsloth vs TRL
 
-To compare performance, both frameworks include examples for **Llama 3.2 3B** with identical:
-- Model architecture
-- Dataset (Alpaca)
-- Hyperparameters
-- LoRA configuration
+To compare performance, set both to use the same model (e.g., Llama 3.2 3B):
+
+**Setup:**
+1. Update `trl/sft/config.yaml` to use `meta-llama/Llama-3.2-3B-Instruct`
+2. Set `HF_TOKEN` for both examples
+3. Use identical dataset (Alpaca), hyperparameters, and LoRA config
 
 **Run both and compare:**
 ```bash
 # TRL baseline
-cd examples/text_gen/trl/llama_3b_sft
+cd examples/text_gen/trl/sft
+export HF_TOKEN=your_token
 time bash train.sh 2>&1 | tee trl_log.txt
 
 # Unsloth optimized
 cd examples/text_gen/unsloth/llama_3b_sft
+export HF_TOKEN=your_token
 time bash train.sh 2>&1 | tee unsloth_log.txt
 ```
 
