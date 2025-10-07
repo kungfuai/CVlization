@@ -4,10 +4,16 @@ from trl import SFTConfig, SFTTrainer
 from peft import LoraConfig
 import torch
 import yaml
+import argparse
+
+# Parse command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--config", type=str, default="config.yaml", help="Path to config file")
+args = parser.parse_args()
 
 # Load configuration
-print("Loading configuration...")
-with open("config.yaml", "r") as f:
+print(f"Loading configuration from {args.config}...")
+with open(args.config, "r") as f:
     config = yaml.safe_load(f)
 
 dataset_config = config["dataset"]
