@@ -94,10 +94,14 @@ End-to-end document understanding using IBM's [Granite-Docling-258M](https://hug
 
 ## Performance
 
-- **Speed**: Depends on image size and device (CPU vs GPU)
-- **Memory**: ~2GB RAM for CPU inference
+- **Speed**:
+  - **GPU**: Fast inference (seconds per page)
+  - **CPU**: Very slow (~15+ minutes per page, not recommended for production)
+- **Memory**: ~2GB RAM for CPU inference, ~4GB VRAM for GPU
 - **Accuracy**: Competitive with larger models
 - **Efficiency**: 70% less memory than similar-sized alternatives
+
+**Note**: CPU inference is extremely slow and not practical for production use. GPU is strongly recommended for this model.
 
 ## Requirements
 
