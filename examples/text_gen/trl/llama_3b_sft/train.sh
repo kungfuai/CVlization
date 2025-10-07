@@ -1,14 +1,13 @@
 #!/bin/bash
 
-# Optional: Set HuggingFace token for gated models
+# Optional: Set HuggingFace token for gated models (Llama, etc.)
 if [ -z "$HF_TOKEN" ]; then
-    echo "Warning: HF_TOKEN not set. Required for Llama models."
-    echo "Set it with: export HF_TOKEN=your_huggingface_token"
-    exit 1
+    echo "Warning: HF_TOKEN not set. Using non-gated model (Qwen 0.5B)."
+    echo "To use Llama models, set: export HF_TOKEN=your_huggingface_token"
 fi
 
-IMAGE_NAME="llama_3b_trl_sft"
-CONTAINER_NAME="llama_3b_trl_sft_training"
+IMAGE_NAME="trl_sft"
+CONTAINER_NAME="trl_sft_training"
 
 echo "=== Llama 3B SFT Training with TRL ==="
 echo "Running training in Docker container..."
