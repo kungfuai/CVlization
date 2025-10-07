@@ -20,8 +20,7 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     transformers \
     accelerate \
-    pillow \
-    qwen-vl-utils
+    pillow
 
 # Create directories
 RUN mkdir -p /app/inputs /app/outputs
