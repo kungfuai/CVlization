@@ -42,7 +42,7 @@ docker run --rm \
     -v "$INPUT_DIR:/app/inputs:ro" \
     -v "$(pwd)/outputs:/app/outputs" \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-    docling-granite \
+    granite-docling \
     python predict.py "/app/inputs/$INPUT_NAME" "$@"
 
 echo ""

@@ -3,9 +3,9 @@ set -e
 
 # Build the Granite-Docling Docker image
 echo "Building Granite-Docling container..."
-docker build -t docling-granite .
+docker build -t granite-docling .
 
-echo "Build complete! Image: docling-granite"
+echo "Build complete! Image: granite-docling"
 echo ""
 echo "Usage:"
 echo "  ./predict.sh <input_image> [options]"
