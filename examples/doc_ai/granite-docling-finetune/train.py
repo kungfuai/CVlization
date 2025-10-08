@@ -47,9 +47,10 @@ from trl import SFTTrainer, SFTConfig
 # -----------------------------
 MODEL_ID = os.environ.get("MODEL_ID", "ibm-granite/granite-docling-258M")
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "./outputs/granite_docling_sft")
-TRAIN_DATA = os.environ.get("TRAIN_DATA", "docling_dpbench")  # "docling_dpbench" or path to JSON/JSONL
-TRAIN_SPLIT = os.environ.get("TRAIN_SPLIT", "train")
+TRAIN_DATA = os.environ.get("TRAIN_DATA", "ds4sd/docling-dpbench")  # "ds4sd/docling-dpbench" or path to JSON/JSONL
+TRAIN_SPLIT = os.environ.get("TRAIN_SPLIT", "test")  # dpbench only has 'test' split
 VAL_SPLIT = os.environ.get("VAL_SPLIT", None)  # e.g., "validation" or None
+MAX_TRAIN_SAMPLES = int(os.environ.get("MAX_TRAIN_SAMPLES", 0)) or None  # Limit training samples (0 = use all)
 
 # Training hyperparams (safe-ish defaults for 24 GB)
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 1))
@@ -104,20 +105,54 @@ class DoclingJSONDataset(Dataset):
                     assert isinstance(data, list)
                     self.samples = data
         else:
-            # A named HF dataset, e.g. "docling_dpbench" (community-converted)
+            # A named HF dataset
             ds = load_dataset(source)
             subset = ds[split] if split else ds[list(ds.keys())[0]]
-            for ex in subset:
-                # Try common field names; adapt as needed.
-                image_path = ex.get("image") or ex.get("image_path") or ex.get("image_file")
-                prompt = ex.get("prompt") or "Extract text and layout as DocTags."
-                doctags = ex.get("doctags") or ex.get("ground_truth") or ex.get("labels")
-                if image_path and doctags:
-                    self.samples.append({
-                        "image_path": image_path,
-                        "prompt": prompt,
-                        "doctags": doctags,
-                    })
+
+            # Special handling for ds4sd/docling-dpbench
+            if source == "ds4sd/docling-dpbench":
+                import io
+                for ex in subset:
+                    # Get ground truth image (first page)
+                    if ex.get("GroundTruthPageImages") and len(ex["GroundTruthPageImages"]) > 0:
+                        image_bytes = ex["GroundTruthPageImages"][0]["bytes"]
+                        image = Image.open(io.BytesIO(image_bytes))
+
+                        # Get ground truth document and extract text
+                        gt_doc = json.loads(ex["GroundTruthDocument"]) if isinstance(ex["GroundTruthDocument"], str) else ex["GroundTruthDocument"]
+
+                        # Extract text from the structured format
+                        doctags = ""
+                        if isinstance(gt_doc, dict):
+                            # Extract from 'texts' field (list of text elements)
+                            texts = gt_doc.get("texts", [])
+                            if texts:
+                                # Concatenate all text content
+                                text_parts = [t.get("text", "") for t in texts if isinstance(t, dict) and t.get("text")]
+                                doctags = "\n".join(text_parts)
+
+                        if not doctags:
+                            # Fallback: convert entire structure to string (for debugging)
+                            doctags = str(gt_doc)[:2048]
+
+                        if image and doctags:
+                            self.samples.append({
+                                "image": image,  # PIL Image directly
+                                "prompt": "Extract text and layout from this document.",
+                                "doctags": doctags[:2048],  # Limit length
+                            })
+            else:
+                # Generic HF dataset
+                for ex in subset:
+                    image_path = ex.get("image") or ex.get("image_path") or ex.get("image_file")
+                    prompt = ex.get("prompt") or "Extract text and layout as DocTags."
+                    doctags = ex.get("doctags") or ex.get("ground_truth") or ex.get("labels")
+                    if image_path and doctags:
+                        self.samples.append({
+                            "image_path": image_path,
+                            "prompt": prompt,
+                            "doctags": doctags,
+                        })
         if max_items:
             self.samples = self.samples[:max_items]
 
@@ -127,7 +162,12 @@ class DoclingJSONDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         ex = self.samples[idx]
         # Load PIL image lazily per sample; no manual resize/normalize.
-        image = Image.open(ex["image_path"]).convert("RGB")
+        if "image" in ex:
+            # Already a PIL Image (from dpbench)
+            image = ex["image"]
+        else:
+            # Load from path
+            image = Image.open(ex["image_path"]).convert("RGB")
         return {
             "image": image,
             "prompt": ex["prompt"],
@@ -251,12 +291,15 @@ if hasattr(model, "vision_tower"):
         p.requires_grad_(False)
 
 # Build assistant header ids by rendering an empty assistant turn
-assistant_header_ids = processor.apply_chat_template(
-    [{"role": "assistant", "content": ""}],
-    tokenize=True,
+assistant_messages = [{"role": "assistant", "content": ""}]
+assistant_text = processor.apply_chat_template(
+    assistant_messages,
+    tokenize=False,
     add_generation_prompt=False,
-)["input_ids"]
-if isinstance(assistant_header_ids[0], list):
+)
+assistant_tokens = tokenizer(assistant_text, add_special_tokens=False)
+assistant_header_ids = assistant_tokens["input_ids"]
+if isinstance(assistant_header_ids, list) and len(assistant_header_ids) > 0 and isinstance(assistant_header_ids[0], list):
     assistant_header_ids = assistant_header_ids[0]
 
 eos_id = tokenizer.eos_token_id or tokenizer.convert_tokens_to_ids("<|end_of_text|>")
@@ -277,14 +320,13 @@ model.print_trainable_parameters()
 # -----------------------------
 # Datasets
 # -----------------------------
-if TRAIN_DATA == "docling_dpbench":
-    # Example: you might have a community-mirrored dpbench with these fields.
-    # Replace with your path or a prepared JSONL for best results.
-    train_ds = DoclingJSONDataset("docling_dpbench", split=TRAIN_SPLIT)
-    eval_ds = DoclingJSONDataset("docling_dpbench", split=VAL_SPLIT) if VAL_SPLIT else None
-else:
-    train_ds = DoclingJSONDataset(TRAIN_DATA, split=TRAIN_SPLIT)
-    eval_ds = DoclingJSONDataset(TRAIN_DATA, split=VAL_SPLIT) if VAL_SPLIT else None
+print(f"Loading dataset: {TRAIN_DATA}, split: {TRAIN_SPLIT}")
+train_ds = DoclingJSONDataset(TRAIN_DATA, split=TRAIN_SPLIT, max_items=MAX_TRAIN_SAMPLES)
+eval_ds = DoclingJSONDataset(TRAIN_DATA, split=VAL_SPLIT) if VAL_SPLIT else None
+
+print(f"Loaded {len(train_ds)} training samples")
+if eval_ds:
+    print(f"Loaded {len(eval_ds)} eval samples")
 
 collate = Collator(
     processor=processor,
@@ -306,22 +348,24 @@ train_args = SFTConfig(
     logging_steps=10,
     save_strategy="steps",
     save_steps=500,
-    evaluation_strategy="no" if eval_ds is None else "steps",
-    eval_steps=1000,
+    eval_strategy="no" if eval_ds is None else "steps",
+    eval_steps=1000 if eval_ds else None,
     bf16=BF16,
     fp16=not BF16,
     remove_unused_columns=False,  # IMPORTANT for pixel_values to pass through
-    max_seq_length=MAX_SEQ_LEN,
+    # max_seq_length parameter moved to SFTTrainer
+    dataset_text_field="",  # We use custom collator, not text field
     packing=False,
 )
 
 trainer = SFTTrainer(
     model=model,
-    tokenizer=tokenizer,
+    processing_class=processor,
     train_dataset=train_ds,
     eval_dataset=eval_ds,
     args=train_args,
     data_collator=collate,
+    # max_seq_length handled by our custom collator
 )
 
 trainer.train()

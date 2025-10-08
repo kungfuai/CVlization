@@ -2,7 +2,7 @@
 set -e
 
 # Default values
-TRAIN_DATA="${TRAIN_DATA:-docling_dpbench}"
+TRAIN_DATA="${TRAIN_DATA:-ds4sd/docling-dpbench}"
 OUTPUT_DIR="${OUTPUT_DIR:-./outputs/granite_docling_sft}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 GRAD_ACCUM="${GRAD_ACCUM:-8}"
@@ -78,6 +78,7 @@ docker run --rm \
     -e LR="$LR" \
     -e MAX_SEQ_LEN="$MAX_SEQ_LEN" \
     -e LORA_R="$LORA_R" \
+    -e MAX_TRAIN_SAMPLES="${MAX_TRAIN_SAMPLES:-0}" \
     granite-docling-finetune \
     python train.py
 
