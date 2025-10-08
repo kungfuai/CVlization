@@ -37,8 +37,9 @@ echo "Processing: $INPUT_FILE"
 echo "Using Granite-Docling-258M VLM model..."
 echo ""
 
-# Run Docker container
+# Run Docker container with GPU support
 docker run --rm \
+    --gpus all \
     -v "$INPUT_DIR:/app/inputs:ro" \
     -v "$(pwd)/outputs:/app/outputs" \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
