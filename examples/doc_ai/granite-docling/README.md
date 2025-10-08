@@ -40,7 +40,7 @@ End-to-end document understanding using IBM's [Granite-Docling-258M](https://hug
 
 ### Options
 
-- `--output <file>`: Save output to file (prints to stdout if not specified)
+- `--output <file>`: Save output to file (default: prints to stdout)
 - `--format <format>`: Output format
   - `markdown` (default): Clean markdown with preserved structure
   - `json`: Structured JSON output
