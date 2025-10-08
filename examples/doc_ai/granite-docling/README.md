@@ -95,13 +95,13 @@ End-to-end document understanding using IBM's [Granite-Docling-258M](https://hug
 ## Performance
 
 - **Speed**:
-  - **GPU**: Fast inference (seconds per page)
-  - **CPU**: Very slow (~15+ minutes per page, not recommended for production)
-- **Memory**: ~2GB RAM for CPU inference, ~4GB VRAM for GPU
+  - **GPU (NVIDIA A10)**: Slow (~3-10+ minutes per page even with full GPU utilization)
+  - **CPU**: Extremely slow (~15+ minutes per page, not recommended)
+- **Memory**: ~2GB RAM for CPU inference, ~2.7GB VRAM for GPU (A10)
 - **Accuracy**: Competitive with larger models
 - **Efficiency**: 70% less memory than similar-sized alternatives
 
-**Note**: CPU inference is extremely slow and not practical for production use. GPU is strongly recommended for this model.
+**Note**: The granite-docling model has significant performance limitations with the current transformers inference path. Even on GPU, inference is very slow (multiple minutes per page). For production use, consider using the docling-serve example instead, which processes pages in ~30-40 seconds on CPU with the multi-model pipeline approach.
 
 ## Requirements
 
