@@ -12,9 +12,9 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch (CPU version for smaller image, use GPU version if needed)
+# Install PyTorch (GPU version)
 RUN pip install --no-cache-dir \
-    torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    torch torchvision --index-url https://download.pytorch.org/whl/cu124
 
 # Install transformers and required packages
 RUN pip install --no-cache-dir \
