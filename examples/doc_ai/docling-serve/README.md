@@ -41,13 +41,13 @@ Extract structured content from PDFs and images using IBM's [Docling](https://gi
 
 ### Options
 
-- `--output <file>`: Save output to file (prints to stdout if not specified)
+- `--output <file>`: Save output to file (default: prints to stdout)
 - `--format <format>`: Output format
   - `json` (default): Structured JSON with full document hierarchy
   - `markdown`: Clean markdown format
   - `text`: Plain text extraction
-- `--export-tables`: Export tables separately to `outputs/tables/`
-- `--export-images`: Export image metadata to `outputs/images/`
+- `--export-tables`: Export tables separately (saved to `outputs/tables/` or next to output file)
+- `--export-images`: Export image metadata (saved to `outputs/images/` or next to output file)
 
 ### Examples
 
