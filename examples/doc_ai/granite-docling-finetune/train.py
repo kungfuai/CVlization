@@ -189,8 +189,8 @@ def build_messages(prompt: str, doctags: str) -> List[Dict[str, Any]]:
     user = {
         "role": "user",
         "content": [
+            {"type": "image"},
             {"type": "text", "text": prompt},
-            # image will be passed through the processor call; keep structure consistent
         ],
     }
     assistant = {"role": "assistant", "content": doctags}
