@@ -8,11 +8,15 @@ This example demonstrates how to use Moondream3, a 9B parameter Mixture-of-Exper
 
 Moondream3 is currently in **preview** status with known compatibility issues:
 
-- **PyTorch Compatibility**: The model requires `torch.nn.attention.flex_attention` which is not available in stable PyTorch releases (2.4.x, 2.5.x)
+- **PyTorch API Incompatibility**: The model code uses `BlockMask.seq_lengths` which doesn't exist in current PyTorch nightly builds
+- **Unstable Preview**: The model was built against a specific PyTorch nightly version and the API has since changed
+- **flex_attention**: Requires PyTorch nightly (2.6+), not available in stable releases
+- **Not Functional**: This example currently **does not work** due to API mismatches
 - **Recommended Alternative**: Use [Moondream2](../moondream2/) which is stable and fully functional
-- **Status**: This example is provided as a template for when Moondream3 reaches stable release
 
-For a working vision language model example, please use **Moondream2** instead.
+**Status**: This example is provided as a template for when Moondream3 reaches stable release.
+
+### For a working vision language model, please use **Moondream2** instead.
 
 ### Features
 
