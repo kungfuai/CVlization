@@ -4,19 +4,14 @@ This example demonstrates how to use Moondream3, a 9B parameter Mixture-of-Exper
 
 **Original Model**: [moondream/moondream3-preview on HuggingFace](https://huggingface.co/moondream/moondream3-preview)
 
-**⚠️ IMPORTANT - Known Limitations**:
+**✅ Fully Functional** with PyTorch 2.8.0+
 
-Moondream3 is currently in **preview** status with known compatibility issues:
+Moondream3 requirements:
+- **PyTorch ≥ 2.7.0** with CUDA build matching your driver (cu121, cu126, cu128, etc.)
+- Call `.compile()` after loading model to enable FlexAttention (default in this example)
+- **Alternative**: Use `pip install -U moondream-station` for easier setup
 
-- **PyTorch API Incompatibility**: The model code uses `BlockMask.seq_lengths` which doesn't exist in current PyTorch nightly builds
-- **Unstable Preview**: The model was built against a specific PyTorch nightly version and the API has since changed
-- **flex_attention**: Requires PyTorch nightly (2.6+), not available in stable releases
-- **Not Functional**: This example currently **does not work** due to API mismatches
-- **Recommended Alternative**: Use [Moondream2](../moondream2/) which is stable and fully functional
-
-**Status**: This example is provided as a template for when Moondream3 reaches stable release.
-
-### For a working vision language model, please use **Moondream2** instead.
+> **Note**: This example uses PyTorch 2.8.0+cu126 which works with CUDA 12.4+ drivers.
 
 ### Features
 
@@ -203,10 +198,15 @@ The `predict.py` script supports:
 
 ### Performance
 
-- **Speed**: Fast inference with MoE architecture and model compilation
+**Benchmarks on NVIDIA A10 (23GB VRAM)**:
+- Model load time: ~5s
+- Inference time: ~11s (after warmup)
+- Total time: ~16s for OCR task
+
+**Requirements**:
 - **Memory**: ~12GB VRAM for inference
-- **Quality**: Frontier-level visual reasoning
-- **Efficiency**: 2B active params provide excellent speed/quality tradeoff
+- **Quality**: Frontier-level visual reasoning with structured JSON output
+- **Efficiency**: 2B active params (out of 9B total) for good speed/quality tradeoff
 
 ### Capabilities
 
@@ -231,52 +231,47 @@ The `predict.py` script supports:
 
 ### Output Examples
 
-#### OCR Output
-```
-INVOICE
-Date: October 9, 2025
-Invoice #: 12345
-
-Item          Qty    Price
-Widget A        2    $10.00
-Widget B        1    $25.00
-
-Total: $45.00
-```
-
-#### Markdown Output
+#### OCR Output (Markdown Table)
 ```markdown
-# INVOICE
-
-**Date**: October 9, 2025
-**Invoice #**: 12345
-
 | Item | Qty | Price |
 |------|-----|-------|
 | Widget A | 2 | $10.00 |
 | Widget B | 1 | $25.00 |
 
-**Total**: $45.00
+Total: $45.00
 ```
 
-#### Caption Output
-```
-A simple invoice document showing two line items for widgets with quantities
-and prices, totaling $45.00, dated October 9, 2025.
+#### Caption Output (Structured JSON)
+```json
+{
+  "document_type": "invoice",
+  "invoice_date": "October 9, 2025",
+  "invoice_number": "12345",
+  "total_amount": "$45.00",
+  "items": [
+    {
+      "item_name": "Widget A",
+      "quantity": 2,
+      "price": "$10.00"
+    },
+    {
+      "item_name": "Widget B",
+      "quantity": 1,
+      "price": "$25.00"
+    }
+  ]
+}
 ```
 
-#### Query Output
-```
-Q: What is the total amount?
-A: The total amount is $45.00
+#### Query Output (Structured JSON)
+```json
+{
+  "total_amount": "$45.00",
+  "invoice_number": "12345"
+}
 ```
 
-#### Detection Output
-```
-Q: Detect all objects in this image
-A: This image contains a table with 2 rows, text labels (Item, Qty, Price),
-   numeric values, and header information including date and invoice number.
-```
+**Note**: Moondream3 intelligently returns structured JSON output when appropriate, making it excellent for document parsing and data extraction tasks.
 
 ### How It Works
 
@@ -345,29 +340,13 @@ Model weights are cached in:
 
 Size: ~18GB (persists across runs)
 
-### Comparison with Other Models
+### Differences from Moondream2
 
-| Feature | Moondream3 | Moondream2 | dots.ocr |
-|---------|-----------|-----------|----------|
-| Size | 9B (2B active) | 1.93B | 1.7B |
-| Context | 32k tokens | 2k tokens | 4k tokens |
-| OCR | ✅ Excellent | ✅ Good | ✅ Excellent |
-| Captioning | ✅ Yes | ✅ Yes | ❌ No |
-| Visual QA | ✅ Yes | ✅ Yes | ❌ No |
-| Object Detection | ✅ Yes | ✅ Basic | ❌ No |
-| Pointing | ✅ Yes | ❌ No | ❌ No |
-| Speed | ⚡ Fast | ⚡⚡ Very Fast | ⚡ Fast |
-| Setup | 🟢 Easy | 🟢 Easy | 🟡 Moderate |
-| VRAM | 12GB+ | 6GB+ | 8GB+ |
-
-### Upgrade from Moondream2
-
-Moondream3 offers significant improvements over Moondream2:
-- **16x larger context** (32k vs 2k tokens)
-- **Better visual reasoning** with MoE architecture
-- **Additional capabilities**: pointing, advanced object detection
-- **Structured output**: markdown conversion, better formatting
-- **Same easy API** - minimal code changes needed
+- **Size**: 9B MoE (2B active) vs 1.93B
+- **Context**: 32k tokens vs 2k tokens
+- **Architecture**: Mixture-of-Experts vs dense model
+- **Additional features**: Pointing, structured JSON output
+- **Requirements**: PyTorch 2.7.0+ vs any version
 
 ### References
 
