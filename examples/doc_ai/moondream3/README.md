@@ -4,6 +4,16 @@ This example demonstrates how to use Moondream3, a 9B parameter Mixture-of-Exper
 
 **Original Model**: [moondream/moondream3-preview on HuggingFace](https://huggingface.co/moondream/moondream3-preview)
 
+**⚠️ IMPORTANT - Known Limitations**:
+
+Moondream3 is currently in **preview** status with known compatibility issues:
+
+- **PyTorch Compatibility**: The model requires `torch.nn.attention.flex_attention` which is not available in stable PyTorch releases (2.4.x, 2.5.x)
+- **Recommended Alternative**: Use [Moondream2](../moondream2/) which is stable and fully functional
+- **Status**: This example is provided as a template for when Moondream3 reaches stable release
+
+For a working vision language model example, please use **Moondream2** instead.
+
 ### Features
 
 - **Advanced Architecture**: 9B total params, 2B active (MoE) - efficient and powerful
