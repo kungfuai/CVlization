@@ -13,8 +13,10 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 # Copy requirements
 COPY requirements.txt .
 
-# Install PyTorch nightly for flex_attention support (required by Moondream3)
-RUN /root/.local/bin/uv pip install --system --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu124
+# Install PyTorch 2.8.0 for flex_attention support (required by Moondream3)
+# Use CUDA 12.6 build (compatible with our CUDA 12.4 runtime)
+# Pinned version for reproducibility
+RUN pip install --upgrade torch==2.8.0+cu126 torchvision==0.23.0+cu126 --index-url https://download.pytorch.org/whl/cu126
 
 # Install other Python dependencies
 RUN /root/.local/bin/uv pip install --system transformers>=4.40.0 pillow>=10.0.0 requests>=2.31.0 accelerate>=0.34.0 einops>=0.7.0

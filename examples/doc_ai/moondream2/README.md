@@ -152,9 +152,14 @@ The `predict.py` script supports:
 
 ### Performance
 
-- **Speed**: Fast inference on consumer GPUs
+**Benchmarks on NVIDIA A10 (23GB VRAM)**:
+- Model load time: ~3s
+- Inference time: ~1s (after warmup)
+- Total time: ~4s for OCR task
+
+**Requirements**:
 - **Memory**: ~6GB VRAM for inference
-- **Quality**:
+- **Quality** (benchmark scores):
   - DocVQA: 79.3
   - TextVQA: 76.3
   - OCRBench: 61.2
