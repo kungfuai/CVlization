@@ -1,0 +1,66 @@
+# Dataset configuration
+dataset:
+  # HuggingFace dataset path or local directory
+  path: "HuggingFaceH4/Multilingual-Thinking"
+
+  # Dataset format: "sharegpt" or "custom"
+  # - sharegpt: expects column: messages (list of chat messages)
+  # - custom: expects column: text (pre-formatted strings)
+  format: "sharegpt"
+
+  # Optional: specify split (default: "train")
+  split: "train"
+
+  # Optional: limit dataset size for testing
+  # max_samples: 1000
+
+# Model configuration
+model:
+  name: "unsloth/gpt-oss-20b"
+  max_seq_length: 1024  # GPT-OSS supports up to 128k
+  load_in_4bit: true
+
+# LoRA configuration
+lora:
+  r: 8  # LoRA rank (smaller for larger model)
+  alpha: 8
+  dropout: 0
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+# Training configuration
+training:
+  output_dir: "./gpt-oss-finetune"
+  max_steps: 20  # Set to -1 for full training based on num_epochs
+  num_epochs: 1  # Only used if max_steps == -1
+
+  # Batch size settings (optimized for A10 24GB)
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
+
+  # Learning rate settings
+  learning_rate: 2.0e-4
+  warmup_steps: 5
+  lr_scheduler_type: "linear"
+
+  # Optimizer settings
+  optim: "adamw_8bit"
+  weight_decay: 0.01
+
+  # Logging and saving
+  logging_steps: 1
+  save_steps: 10
+  eval_steps: 10
+
+  # Evaluation
+  do_eval: false  # Set to true to enable evaluation split
+  eval_split_ratio: 0.1
+
+  # Random seed
+  seed: 3407
