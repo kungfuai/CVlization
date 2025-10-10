@@ -1,0 +1,10 @@
+# Training outputs
+llama-alpaca-finetune/
+*.log
+
+# Test configs
+config_test.yaml
+
+# Python cache
+__pycache__/
+*.pyc
