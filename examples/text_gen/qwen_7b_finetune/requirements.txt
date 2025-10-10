@@ -1,7 +1,0 @@
-transformers==4.56.2
-trl==0.23.0
-peft==0.17.1
-accelerate==1.10.1
-bitsandbytes==0.48.1
-datasets==4.1.1
-unsloth[cu124-torch260] @ git+https://github.com/unslothai/unsloth.git
