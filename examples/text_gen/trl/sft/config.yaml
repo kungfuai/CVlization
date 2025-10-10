@@ -1,0 +1,64 @@
+# Dataset configuration
+dataset:
+  # HuggingFace dataset path or local directory
+  path: "yahma/alpaca-cleaned"
+
+  # Dataset format: "alpaca", "sharegpt", or "custom"
+  # - alpaca: expects columns: instruction, input, output
+  # - sharegpt: expects column: conversations (list of messages)
+  # - custom: expects column: text (pre-formatted strings)
+  format: "alpaca"
+
+  # Optional: specify split (default: "train")
+  split: "train"
+
+  # Optional: limit dataset size for testing
+  # max_samples: 1000
+
+# Model configuration
+model:
+  # Use Qwen 2.5 3B (no HF_TOKEN required)
+  # Alternative: "meta-llama/Llama-3.2-3B-Instruct" (requires HF_TOKEN and license approval)
+  name: "Qwen/Qwen2.5-3B-Instruct"
+  max_seq_length: 2048
+  load_in_4bit: true
+
+# LoRA configuration
+lora:
+  r: 16  # LoRA rank
+  alpha: 16
+  dropout: 0
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+# Training configuration
+training:
+  output_dir: "./llama-alpaca-finetune"
+  max_steps: 100  # Set to -1 for full training based on num_epochs
+  num_epochs: 100  # Only used if max_steps == -1
+
+  # Batch size settings
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 4
+
+  # Learning rate settings
+  learning_rate: 2.0e-4
+  warmup_steps: 2
+  lr_scheduler_type: "linear"
+
+  # Optimizer settings
+  optim: "adamw_8bit"
+  weight_decay: 0.01
+
+  # Logging and saving
+  logging_steps: 1
+  save_steps: 10
+
+  # Random seed
+  seed: 42
