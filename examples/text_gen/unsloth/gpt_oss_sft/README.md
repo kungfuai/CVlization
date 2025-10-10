@@ -52,7 +52,7 @@ The pre-configured dataset is **HuggingFaceH4/Multilingual-Thinking**, which con
 
 ### Using Your Own Data
 
-See [CUSTOM_DATASETS.md](../CUSTOM_DATASETS.md) for detailed instructions on using your own datasets, including:
+See [CUSTOM_DATASETS.md](../../CUSTOM_DATASETS.md) for detailed instructions on using your own datasets, including:
 - Supported formats (ShareGPT, Custom)
 - Local file loading (.json, .jsonl, .csv, .parquet)
 - HuggingFace dataset integration
