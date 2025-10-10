@@ -4,43 +4,103 @@ Moondream2 Vision Language Model - OCR & Document Understanding
 
 This script demonstrates OCR and document understanding using Moondream2,
 a compact 1.93B parameter vision language model.
+
+Simple implementation using transformers AutoModelForCausalLM with trust_remote_code=True.
 """
 
 import argparse
 import json
-import os
 from pathlib import Path
 from PIL import Image
 import torch
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
+
+# Model configuration
+MODEL_ID = "vikhyatk/moondream2"
+REVISION = "2024-08-26"  # Stable revision with best OCR quality
 
 # OCR prompts
 OCR_PROMPTS = {
-    "default": "Transcribe the text",
-    "ordered": "Transcribe the text in natural reading order",
-    "detailed": "Extract all text from this document with their layout structure"
+    "default": "What text is in this image?",
+    "ordered": "Extract all text from this document in reading order",
+    "detailed": "Extract all text from this document with their exact layout and structure"
 }
 
 
-def load_model(model_id: str, revision: str = "2025-06-21", device: str = "cuda"):
-    """Load the Moondream2 model."""
-    print(f"Loading Moondream2 model (revision: {revision})...")
+def detect_device():
+    """
+    Detect the best available device and dtype for inference.
 
+    Returns:
+        tuple: (device, dtype)
+    """
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        dtype = torch.bfloat16
+        print(f"Using CUDA device: {torch.cuda.get_device_name()}")
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        device = torch.device("mps")
+        dtype = torch.float16
+        print("Using Apple Silicon (MPS)")
+    else:
+        device = torch.device("cpu")
+        dtype = torch.float32
+        print("Using CPU (no GPU detected)")
+
+    return device, dtype
+
+
+def load_model(model_id: str = MODEL_ID, revision: str = REVISION, device: str = None):
+    """
+    Load the Moondream2 model.
+
+    Args:
+        model_id: HuggingFace model ID
+        revision: Model revision/version
+        device: Device to use (auto-detect if None)
+
+    Returns:
+        tuple: (model, tokenizer)
+    """
+    print(f"Loading Moondream2 (revision: {revision})...")
+
+    # Auto-detect device if not specified
+    if device is None:
+        detected_device, dtype = detect_device()
+        device = detected_device
+    else:
+        device = torch.device(device)
+        dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+        print(f"Using device: {device} with dtype: {dtype}")
+
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+
+    # Load model with trust_remote_code to get implementation from HuggingFace
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         revision=revision,
         trust_remote_code=True,
         device_map={"": device},
-        torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32
+        torch_dtype=dtype
     )
+    model.eval()
 
     print("Model loaded successfully!")
-    return model
+    return model, tokenizer
 
 
 def load_image(image_path: str):
-    """Load an image from file path or URL."""
+    """
+    Load an image from file path or URL.
+
+    Args:
+        image_path: Path to image file or URL
+
+    Returns:
+        PIL.Image: Loaded image in RGB format
+    """
     if image_path.startswith("http://") or image_path.startswith("https://"):
         from io import BytesIO
         import requests
@@ -52,34 +112,60 @@ def load_image(image_path: str):
     return image.convert("RGB")
 
 
-def run_ocr(model, image, prompt: str, stream: bool = False):
-    """Run OCR on an image using Moondream2."""
+def run_ocr(model, tokenizer, image, prompt: str):
+    """
+    Run OCR on an image using Moondream2.
+
+    Args:
+        model: Loaded Moondream2 model
+        tokenizer: Model tokenizer
+        image: PIL Image
+        prompt: OCR prompt/question
+
+    Returns:
+        str: OCR result text
+    """
     print("Running OCR...")
 
-    result = model.query(image, prompt)
+    # Encode image
+    image_embeds = model.encode_image(image)
 
-    return result["answer"]
+    # Get answer using old API (most reliable for OCR)
+    answer = model.answer_question(image_embeds, prompt, tokenizer)
+
+    return answer
 
 
-def run_caption(model, image, length: str = "normal", stream: bool = False):
-    """Generate caption for an image."""
+def run_caption(model, tokenizer, image, length: str = "normal"):
+    """
+    Generate caption for an image.
+
+    Args:
+        model: Loaded Moondream2 model
+        tokenizer: Model tokenizer
+        image: PIL Image
+        length: Caption length (short, normal, long)
+
+    Returns:
+        str: Generated caption
+    """
     print("Generating caption...")
 
-    result = model.caption(image, length=length, stream=stream)
+    # Use old API with images list
+    result = model.caption(images=[image], tokenizer=tokenizer)
 
-    if stream:
-        full_caption = ""
-        for token in result["caption"]:
-            print(token, end="", flush=True)
-            full_caption += token
-        print()  # New line after streaming
-        return full_caption
-    else:
-        return result["caption"]
+    return result[0] if isinstance(result, list) else result
 
 
 def save_output(output: str, output_path: str, format: str = "txt"):
-    """Save the output to a file."""
+    """
+    Save the output to a file.
+
+    Args:
+        output: Text output to save
+        output_path: Path to output file
+        format: Output format (txt or json)
+    """
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -88,7 +174,7 @@ def save_output(output: str, output_path: str, format: str = "txt"):
         data = {
             "text": output,
             "model": "moondream2",
-            "version": "2025-06-21"
+            "revision": REVISION
         }
         with open(output_file, "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
@@ -112,13 +198,13 @@ def main():
     parser.add_argument(
         "--model-id",
         type=str,
-        default="vikhyatk/moondream2",
+        default=MODEL_ID,
         help="HuggingFace model ID"
     )
     parser.add_argument(
         "--revision",
         type=str,
-        default="2025-06-21",
+        default=REVISION,
         help="Model revision/version"
     )
     parser.add_argument(
@@ -164,20 +250,15 @@ def main():
     parser.add_argument(
         "--device",
         type=str,
-        default="cuda",
-        choices=["cuda", "cpu"],
-        help="Device to run inference on"
-    )
-    parser.add_argument(
-        "--stream",
-        action="store_true",
-        help="Stream output for caption task"
+        default=None,
+        choices=["cuda", "cpu", "mps"],
+        help="Device to run inference on (auto-detect if not specified)"
     )
 
     args = parser.parse_args()
 
     # Load model
-    model = load_model(args.model_id, args.revision, args.device)
+    model, tokenizer = load_model(args.model_id, args.revision, args.device)
 
     # Load image
     print(f"Loading image from {args.image}...")
@@ -187,22 +268,21 @@ def main():
     # Run task
     if args.task == "ocr":
         prompt = args.prompt if args.prompt else OCR_PROMPTS[args.ocr_mode]
-        output = run_ocr(model, image, prompt)
+        output = run_ocr(model, tokenizer, image, prompt)
     elif args.task == "caption":
-        output = run_caption(model, image, args.caption_length, args.stream)
+        output = run_caption(model, tokenizer, image, args.caption_length)
     elif args.task == "query":
         if not args.prompt:
             print("Error: --prompt is required for query task")
             return
-        output = run_ocr(model, image, args.prompt)
+        output = run_ocr(model, tokenizer, image, args.prompt)
 
     # Print output
-    if args.task != "caption" or not args.stream:
-        print("\n" + "="*80)
-        print(f"{args.task.upper()} OUTPUT:")
-        print("="*80)
-        print(output)
-        print("="*80 + "\n")
+    print("\n" + "="*80)
+    print(f"{args.task.upper()} OUTPUT:")
+    print("="*80)
+    print(output)
+    print("="*80 + "\n")
 
     # Save output
     save_output(output, args.output, args.format)
