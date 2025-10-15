@@ -1,0 +1,14 @@
+# Core dependencies for Nanonets-OCR2-3B
+torch>=2.0.0
+torchvision
+transformers>=4.40.0
+accelerate
+qwen-vl-utils
+
+# Image processing
+pillow
+pdf2image
+
+# Optional for advanced features
+# numpy
+# opencv-python
