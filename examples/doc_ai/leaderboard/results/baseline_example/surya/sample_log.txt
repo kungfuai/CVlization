@@ -1,0 +1,36 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+Loading image from /inputs/sample.jpg...
+Image loaded: (800, 600)
+Loading models...
+Running OCR...
+Detecting bboxes:   0%|          | 0/1 [00:00<?, ?it/s]Detecting bboxes: 100%|██████████| 1/1 [00:02<00:00,  2.05s/it]Detecting bboxes: 100%|██████████| 1/1 [00:02<00:00,  2.05s/it]
+Recognizing Text:   0%|          | 0/7 [00:00<?, ?it/s]Recognizing Text:  14%|█▍        | 1/7 [00:00<00:02,  2.10it/s]Recognizing Text:  43%|████▎     | 3/7 [00:00<00:00,  6.08it/s]Recognizing Text: 100%|██████████| 7/7 [00:00<00:00, 10.25it/s]
+
+================================================================================
+OCR OUTPUT:
+================================================================================
+INVOICE
+Date: October 9, 2025
+Invoice #: 12345
+Item Qty Price
+Widget A 2 $10.00
+Widget B 1 $25.00
+Total: $45.00
+================================================================================
+
+Output saved to /outputs/sample_output.txt
+Done!
