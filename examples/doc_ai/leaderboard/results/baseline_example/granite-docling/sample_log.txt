@@ -1,0 +1,7 @@
+Loading Granite-Docling model: ibm-granite/granite-docling-258M...
+/usr/local/lib/python3.11/site-packages/transformers/models/auto/modeling_auto.py:2284: FutureWarning: The class `AutoModelForVision2Seq` is deprecated and will be removed in v5.0. Please use `AutoModelForImageTextToText` instead.
+  warnings.warn(
+`torch_dtype` is deprecated! Use `dtype` instead!
+Processing: sample.jpg
+Generating extraction...
+Output written to: /app/outputs/sample_output.txt
