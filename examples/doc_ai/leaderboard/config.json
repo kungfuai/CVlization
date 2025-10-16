@@ -1,0 +1,32 @@
+{
+  "test_images": [
+    "test_data/sample.jpg"
+  ],
+  "models": {
+    "moondream2": {
+      "script": "adapters/moondream2.sh",
+      "args": "--task ocr"
+    },
+    "granite-docling": {
+      "script": "adapters/granite-docling.sh",
+      "args": "--format markdown --device cuda"
+    },
+    "moondream3": {
+      "script": "adapters/moondream3.sh",
+      "args": "--task ocr"
+    },
+    "surya": {
+      "script": "adapters/surya.sh",
+      "args": ""
+    },
+    "docling-serve": {
+      "script": "adapters/docling-serve.sh",
+      "args": "--format markdown"
+    },
+    "nanonets-ocr": {
+      "script": "adapters/nanonets-ocr.sh",
+      "args": "--format markdown"
+    }
+  },
+  "output_dir": "results"
+}
