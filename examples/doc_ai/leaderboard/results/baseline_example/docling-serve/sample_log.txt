@@ -1,0 +1,21 @@
+Loading Docling models...
+Processing: sample.jpg
+2025-10-16 14:45:55,215 - INFO - detected formats: [<InputFormat.IMAGE: 'image'>]
+2025-10-16 14:45:55,249 - INFO - Going to convert document batch...
+2025-10-16 14:45:55,249 - INFO - Initializing pipeline for StandardPdfPipeline with options hash e647edf348883bed75367b22fbe60347
+2025-10-16 14:45:55,252 - INFO - Loading plugin 'docling_defaults'
+2025-10-16 14:45:55,252 - INFO - Registered picture descriptions: ['vlm', 'api']
+2025-10-16 14:45:55,257 - INFO - Loading plugin 'docling_defaults'
+2025-10-16 14:45:55,258 - INFO - Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2025-10-16 14:45:55,302 - INFO - Accelerator device: 'cpu'
+2025-10-16 14:45:55,304 - WARNING - Downloading detection model, please wait. This may take several minutes depending upon your network connection.
+2025-10-16 14:45:56,439 - INFO - Download complete
+2025-10-16 14:45:56,439 - WARNING - Downloading recognition model, please wait. This may take several minutes depending upon your network connection.
+2025-10-16 14:45:56,825 - INFO - Download complete.
+2025-10-16 14:45:58,373 - INFO - Accelerator device: 'cpu'
+2025-10-16 14:46:01,127 - INFO - Accelerator device: 'cpu'
+2025-10-16 14:46:01,404 - INFO - Processing document sample.jpg
+/usr/local/lib/python3.11/site-packages/torch/utils/data/dataloader.py:666: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+2025-10-16 14:46:11,193 - INFO - Finished converting document sample.jpg in 15.98 sec.
+Output written to: /app/outputs/sample_output.txt
