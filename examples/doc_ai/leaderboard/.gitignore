@@ -1,0 +1,9 @@
+# Ignore test data and results (except baseline example)
+test_data/*
+results/*
+
+# Keep baseline example for documentation
+!test_data/.gitkeep
+!test_data/sample.jpg
+!results/.gitkeep
+!results/baseline_example/
