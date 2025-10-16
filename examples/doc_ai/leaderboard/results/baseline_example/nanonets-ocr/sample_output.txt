@@ -1,0 +1,10 @@
+INVOICE
+Date: October 9, 2025
+Invoice #: 12345
+
+| Item | Qty | Price |
+| :--- | :-- | :---- |
+| Widget A | 2 | $10.00 |
+| Widget B | 1 | $25.00 |
+
+Total: $45.00
