@@ -1,0 +1,7 @@
+model,image,time_seconds,status
+docling-serve,sample.jpg,22.210416770,success
+granite-docling,sample.jpg,18.871429996,success
+moondream2,sample.jpg,6.770287622,success
+moondream3,sample.jpg,14.459550763,success
+nanonets-ocr,sample.jpg,12.550378969,success
+surya,sample.jpg,7.432639683,success

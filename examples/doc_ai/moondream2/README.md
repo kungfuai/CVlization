@@ -4,13 +4,13 @@ This example demonstrates how to use Moondream2, a compact 1.93B parameter visio
 
 ### Features
 
-- **Compact Size**: Only 1.93B parameters - runs on consumer GPUs
-- **OCR Capabilities**: Improved text transcription with natural reading order
-- **Image Captioning**: Generate short, normal, or long captions
-- **Visual QA**: Ask questions about images
-- **Fast Inference**: Optimized for speed
-- **Multiple Tasks**: OCR, captioning, object detection, and more
-- **Self-contained**: Fully dockerized with all dependencies
+- Compact Size: Only 1.93B parameters - runs on consumer GPUs
+- OCR Capabilities: Improved text transcription with natural reading order
+- Image Captioning: Generate short, normal, or long captions
+- Visual QA: Ask questions about images
+- Fast Inference: Optimized for speed
+- Multiple Tasks: OCR, captioning, object detection, and more
+- Self-contained: Fully dockerized with all dependencies
 
 ### Prerequisites
 
@@ -111,44 +111,29 @@ docker run --runtime nvidia \
         --ocr-mode ordered
 ```
 
-#### Streaming Captions
-
-Stream captions as they're generated:
-```bash
-docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/moondream2:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
-    moondream2 \
-    python3 predict.py \
-        --image image.jpg \
-        --task caption \
-        --stream
-```
-
 ### Command-Line Options
 
 The `predict.py` script supports:
 
 - `--image` - Path to input image or URL (default: `examples/sample.jpg`)
 - `--model-id` - HuggingFace model ID (default: `vikhyatk/moondream2`)
-- `--revision` - Model version (default: `2025-06-21`)
+- `--revision` - Model version (default: `2024-08-26`)
 - `--task` - Task type: `ocr`, `caption`, or `query` (default: `ocr`)
 - `--prompt` - Custom prompt for OCR or query tasks
 - `--ocr-mode` - OCR preset: `default`, `ordered`, `detailed` (default: `ordered`)
 - `--caption-length` - Caption length: `short`, `normal`, `long` (default: `normal`)
 - `--output` - Output file path (default: `outputs/result.txt`)
 - `--format` - Output format: `txt` or `json` (default: `txt`)
-- `--device` - Device: `cuda` or `cpu` (default: `cuda`)
-- `--stream` - Stream output for caption task
+- `--device` - Device: `cuda`, `mps`, or `cpu` (default: auto-detect)
 
 ### Model Details
 
-- **Name**: Moondream2
-- **Size**: 1.93B parameters
-- **Revision**: 2025-06-21 (latest stable)
-- **Architecture**: Vision Language Model
-- **License**: Apache 2.0
-- **Context**: Efficient for document OCR and visual understanding
+- Name: Moondream2
+- Size: 1.93B parameters
+- Revision: 2024-08-26
+- Architecture: Vision Language Model
+- License: Apache 2.0
+- Context: Efficient for document OCR and visual understanding
 
 ### Performance
 
@@ -210,7 +195,17 @@ A: The total amount is $45.00
 
 ### How It Works
 
-Moondream2 automatically downloads from HuggingFace on first run (~4GB). The model is cached in `data/container_cache` and reused for subsequent runs. No special workarounds needed - the model loads directly from HuggingFace.
+This is a **simple, clean implementation** using standard transformers library with `trust_remote_code=True`. The model code is automatically downloaded from HuggingFace, keeping everything up-to-date and maintainable.
+
+Moondream2 automatically downloads from HuggingFace on first run (~4GB). The model is cached in `data/container_cache` and reused for subsequent runs.
+
+**Key Implementation Details:**
+- Uses `AutoModelForCausalLM` with `trust_remote_code=True` (standard transformers approach)
+- Revision `2024-08-26` - most stable with best OCR quality
+- Transformers `4.43.0` - compatible version (newer 4.57.0 gives incomplete OCR)
+- Old API (`answer_question`, `caption`) - more reliable than new `query()` API
+- Auto-detects optimal device and dtype (bfloat16 on CUDA, float16 on MPS, float32 on CPU)
+- Simple ~290 line implementation with excellent docstrings
 
 ### Troubleshooting
 
@@ -269,17 +264,6 @@ Model weights are cached in:
 - `data/container_cache/huggingface/`
 
 Size: ~4GB (persists across runs)
-
-### Comparison with Other Models
-
-| Feature | Moondream2 | dots.ocr | PaddleOCR |
-|---------|-----------|----------|-----------|
-| Size | 1.93B | 1.7B | Various |
-| OCR | ✅ Good | ✅ Excellent | ✅ Excellent |
-| Captioning | ✅ Yes | ❌ No | ❌ No |
-| Visual QA | ✅ Yes | ❌ No | ❌ No |
-| Speed | ⚡ Fast | ⚡ Fast | ⚡⚡ Very Fast |
-| Setup | 🟢 Easy | 🟡 Moderate | 🟢 Easy |
 
 ### References
 
