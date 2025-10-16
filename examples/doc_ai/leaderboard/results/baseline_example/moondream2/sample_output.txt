@@ -1,0 +1,6 @@
+- INVOICE
+- Date: October 9, 2025
+- Invoice #: 12345
+- Item A 2 $10.00
+- Item B 1 $25.00
+- Total: $45.00
