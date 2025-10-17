@@ -26,13 +26,30 @@ This copies the nanochat source from `~/zz/nanochat` and builds the container.
 
 ### 2. Run Training (Single GPU)
 
-For quick experimentation on a single GPU:
+The `train.sh` script supports all 4 training stages:
 
 ```bash
-bash train_single.sh
+# Base pretraining (default)
+bash train.sh base --depth=8 --num_iterations=100
+
+# Midtraining on curated data
+bash train.sh mid --depth=8
+
+# Supervised fine-tuning for chat
+bash train.sh sft --depth=8
+
+# Reinforcement learning
+bash train.sh rl --depth=8
+
+# Run full pipeline (base -> mid -> sft -> rl)
+bash train.sh all --depth=4
 ```
 
-This runs a minimal training script with reduced parameters to fit on a single GPU.
+For quick testing, run base training with minimal iterations:
+
+```bash
+bash train.sh base --depth=4 --num_iterations=20
+```
 
 ### 3. Run Speedrun (8xH100)
 
@@ -85,10 +102,11 @@ Key parameters to adjust for your GPU:
 ## Scripts
 
 - `build.sh` - Build Docker image
-- `train_single.sh` - Train on single GPU
+- `train.sh` - Train on single GPU (supports base/mid/sft/rl/all modes)
 - `speedrun.sh` - Full 8xH100 speedrun
 - `chat_web.sh` - Launch web UI
 - `shell.sh` - Interactive container shell
+- `test.sh` - Verify Docker setup
 
 ## Architecture
 
