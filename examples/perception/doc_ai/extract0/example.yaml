@@ -1,0 +1,14 @@
+name: extract0
+capability: perception/doc_ai
+modalities: [text]
+datasets: [synthetic]
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 10
+presets: [predict]
+tags: [structured-extraction, text-to-json, llm, placeholder]
+tasks: [information_extraction]
+frameworks: [pytorch]
+description: Structured JSON extraction from document text (placeholder - not implemented)

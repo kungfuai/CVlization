@@ -1,0 +1,14 @@
+name: granite-docling
+capability: perception/doc_ai
+modalities: [vision, text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 5
+presets: [predict]
+tags: [granite, docling, vlm, document-extraction, qwen2-vl, pytorch]
+tasks: [document_understanding, ocr]
+frameworks: [pytorch]
+description: End-to-end document extraction using Granite-Docling-258M VLM

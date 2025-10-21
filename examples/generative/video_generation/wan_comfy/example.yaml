@@ -1,0 +1,14 @@
+name: wan-comfy
+capability: generative/video_generation
+modalities: [vision]
+datasets: []
+stability: beta
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 50
+presets: [predict]
+tags: [wan, comfyui, video-generation, pytorch]
+tasks: [video_generation]
+frameworks: [pytorch, comfyui]
+description: WAN video generation with ComfyUI (under development - may have OOM issues)

@@ -1,0 +1,14 @@
+name: deforum
+capability: generative/video_generation
+modalities: [vision, text]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 30
+presets: [predict]
+tags: [deforum, stable-diffusion, animation, cog, pytorch]
+tasks: [text_to_video]
+frameworks: [pytorch, cog]
+description: Deforum Stable Diffusion for animated video generation with camera motion

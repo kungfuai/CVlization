@@ -1,0 +1,14 @@
+name: flux
+capability: generative/image_generation
+modalities: [vision, text]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 30
+presets: [predict]
+tags: [flux, text-to-image, cog, pytorch]
+tasks: [text_to_image]
+frameworks: [pytorch]
+description: Flux Schnell text-to-image generation (via Replicate/Cog)

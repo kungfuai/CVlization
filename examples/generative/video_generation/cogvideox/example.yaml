@@ -1,0 +1,14 @@
+name: cogvideox
+capability: generative/video_generation
+modalities: [vision, text]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 40
+presets: [predict]
+tags: [cogvideox, text-to-video, pytorch]
+tasks: [text_to_video]
+frameworks: [pytorch]
+description: CogVideoX text-to-video generation model
