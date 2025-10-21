@@ -1,0 +1,14 @@
+name: animate-diff
+capability: generative/video_generation
+modalities: [vision, text]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 30
+presets: [predict]
+tags: [animatediff, stable-diffusion, motion, pytorch]
+tasks: [text_to_video]
+frameworks: [pytorch, diffusers]
+description: AnimateDiff for animating stable diffusion models with motion modules

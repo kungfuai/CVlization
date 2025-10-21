@@ -1,0 +1,14 @@
+name: mimic-motion
+capability: generative/video_generation
+modalities: [vision]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 30
+presets: [predict]
+tags: [mimic-motion, tencent, motion-transfer, pytorch]
+tasks: [video_generation]
+frameworks: [pytorch]
+description: MimicMotion from Tencent for motion transfer and character animation

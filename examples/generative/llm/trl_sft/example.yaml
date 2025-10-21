@@ -1,0 +1,14 @@
+name: trl-llama-3b-sft
+capability: generative/llm
+modalities: [text]
+datasets: [yahma/alpaca-cleaned]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 10
+presets: [train]
+tags: [trl, llama, fine-tuning, lora, sft, pytorch]
+tasks: [text_generation]
+frameworks: [pytorch, trl]
+description: Fine-tune Llama 3.2 3B with HuggingFace TRL (supervised fine-tuning with LoRA)
