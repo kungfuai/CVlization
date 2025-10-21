@@ -1,0 +1,14 @@
+name: cfm
+capability: generative/image_generation
+modalities: [vision]
+datasets: [custom]
+stability: beta
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 10
+presets: [train]
+tags: [conditional-flow-matching, diffusion, pytorch]
+tasks: [image_generation]
+frameworks: [pytorch]
+description: Conditional Flow Matching for image generation

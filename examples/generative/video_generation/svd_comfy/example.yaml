@@ -1,0 +1,14 @@
+name: svd-comfy
+capability: generative/video_generation
+modalities: [vision]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 30
+presets: [predict]
+tags: [svd, stable-video-diffusion, comfyui, image-to-video, pytorch]
+tasks: [image_to_video]
+frameworks: [pytorch, comfyui]
+description: Stable Video Diffusion with ComfyUI (works with only 12GB VRAM)

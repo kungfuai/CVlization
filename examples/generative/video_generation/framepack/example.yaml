@@ -1,0 +1,14 @@
+name: framepack
+capability: generative/video_generation
+modalities: [vision]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 20
+presets: [predict]
+tags: [framepack, video-generation, pytorch]
+tasks: [video_generation]
+frameworks: [pytorch]
+description: FramePack video generation with frame packing techniques

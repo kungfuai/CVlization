@@ -1,0 +1,14 @@
+name: moondream2-finetune
+capability: perception/vision_language
+modalities: [vision, text]
+datasets: [captcha-images]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 10
+presets: [train]
+tags: [moondream, fine-tuning, pytorch, document-qa]
+tasks: [visual_question_answering, document_understanding]
+frameworks: [pytorch]
+description: Fine-tune Moondream2 for document Q&A with pure PyTorch
