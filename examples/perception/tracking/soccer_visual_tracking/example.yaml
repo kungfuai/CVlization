@@ -1,0 +1,14 @@
+name: soccer-visual-tracking
+capability: perception/tracking
+modalities: [vision]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 3
+  disk_gb: 5
+presets: [predict]
+tags: [sports, soccer, tracking, bird's-eye-view, roboflow, pytorch]
+tasks: [object_tracking, sports_analytics]
+frameworks: [pytorch]
+description: Track soccer players and generate bird's eye view visualization

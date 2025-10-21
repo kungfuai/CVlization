@@ -1,0 +1,14 @@
+name: vqgan
+capability: generative/image_generation
+modalities: [vision]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 20
+presets: [train]
+tags: [vqgan, vector-quantization, gan, pytorch]
+tasks: [image_generation]
+frameworks: [pytorch]
+description: VQGAN (Vector Quantized GAN) for high-quality image generation

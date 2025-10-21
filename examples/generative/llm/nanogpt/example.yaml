@@ -1,0 +1,14 @@
+name: nanogpt
+capability: generative/llm
+modalities: [text]
+datasets: [shakespeare]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 2
+presets: [train]
+tags: [nanogpt, gpt, language-model, pytorch]
+tasks: [text_generation]
+frameworks: [pytorch]
+description: Train GPT model from scratch using Andrej Karpathy's nanoGPT

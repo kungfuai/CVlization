@@ -1,0 +1,14 @@
+name: sam
+capability: perception/segmentation
+modalities: [vision]
+datasets: [custom]
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 10
+presets: [train]
+tags: [sam, segment-anything, meta, pytorch, placeholder]
+tasks: [instance_segmentation]
+frameworks: [pytorch]
+description: Segment Anything Model training (under construction - not working yet)

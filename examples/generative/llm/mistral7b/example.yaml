@@ -1,0 +1,14 @@
+name: mistral-7b-finetune
+capability: generative/llm
+modalities: [text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 20
+presets: [train]
+tags: [mistral, fine-tuning, pytorch]
+tasks: [text_generation]
+frameworks: [pytorch]
+description: Fine-tune Mistral 7B model (requires HuggingFace access)

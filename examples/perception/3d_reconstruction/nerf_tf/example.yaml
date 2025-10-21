@@ -1,0 +1,14 @@
+name: nerf-tf
+capability: perception/3d_reconstruction
+modalities: [vision]
+datasets: [custom]
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 5
+presets: [train]
+tags: [nerf, 3d-reconstruction, tensorflow, broken]
+tasks: [3d_reconstruction]
+frameworks: [tensorflow]
+description: Neural Radiance Fields for 3D reconstruction (broken - TensorFlow migration issue)

@@ -1,0 +1,14 @@
+name: minisora
+capability: generative/video_generation
+modalities: [vision]
+datasets: [flying-mnist]
+stability: beta
+resources:
+  gpu: 8
+  vram_gb: 80
+  disk_gb: 100
+presets: [train]
+tags: [minisora, sora-like, dit, video-dit, pytorch]
+tasks: [video_generation]
+frameworks: [pytorch]
+description: MiniSora - Train a Sora-like model with small scope and low cost (11k videos)

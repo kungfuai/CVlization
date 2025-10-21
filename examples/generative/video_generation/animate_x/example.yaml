@@ -1,0 +1,14 @@
+name: animate-x
+capability: generative/video_generation
+modalities: [vision]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 20
+presets: [predict]
+tags: [animatex, pose-driven, video-animation, pytorch]
+tasks: [video_generation]
+frameworks: [pytorch]
+description: AnimateX pose-driven character animation from reference videos

@@ -1,0 +1,14 @@
+name: pixart
+capability: generative/image_generation
+modalities: [vision, text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 50
+presets: [train]
+tags: [pixart, text-to-image, diffusion, pytorch]
+tasks: [text_to_image]
+frameworks: [pytorch]
+description: PixArt efficient text-to-image diffusion model training

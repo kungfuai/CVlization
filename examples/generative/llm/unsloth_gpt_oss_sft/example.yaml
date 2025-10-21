@@ -1,0 +1,14 @@
+name: unsloth-gpt-oss-sft
+capability: generative/llm
+modalities: [text]
+datasets: [HuggingFaceH4/Multilingual-Thinking]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 50
+presets: [train]
+tags: [unsloth, gpt-oss, fine-tuning, lora, sft, reasoning, pytorch]
+tasks: [text_generation, reasoning]
+frameworks: [pytorch, unsloth]
+description: Fine-tune OpenAI GPT-OSS 20B for reasoning with Unsloth (128k context support)
