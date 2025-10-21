@@ -1,0 +1,14 @@
+name: uva-energy
+capability: generative/image_generation
+modalities: [vision]
+datasets: [custom]
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 10
+presets: [train]
+tags: [energy-based, ebm, pytorch]
+tasks: [image_generation]
+frameworks: [pytorch]
+description: Energy-based model for image generation (experimental)

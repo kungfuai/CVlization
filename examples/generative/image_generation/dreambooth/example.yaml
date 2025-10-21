@@ -1,0 +1,14 @@
+name: dreambooth
+capability: generative/image_generation
+modalities: [vision, text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 20
+presets: [train]
+tags: [dreambooth, fine-tuning, stable-diffusion, pytorch]
+tasks: [image_generation]
+frameworks: [pytorch, diffusers]
+description: DreamBooth fine-tuning for personalized image generation from few images

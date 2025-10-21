@@ -1,0 +1,14 @@
+name: instance-segmentation-torchvision
+capability: perception/segmentation
+modalities: [vision]
+datasets: [penn-fudan-pedestrian]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 10
+presets: [train]
+tags: [torchvision, instance-segmentation, mask-rcnn, pytorch]
+tasks: [instance_segmentation]
+frameworks: [pytorch, torchvision]
+description: Instance segmentation training with Torchvision (Mask R-CNN)

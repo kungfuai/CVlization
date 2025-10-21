@@ -1,0 +1,14 @@
+name: instance-segmentation-mmdet
+capability: perception/segmentation
+modalities: [vision]
+datasets: [coco, penn-fudan-pedestrian]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 10
+presets: [train]
+tags: [mmdetection, instance-segmentation, mask-rcnn, pytorch]
+tasks: [instance_segmentation]
+frameworks: [pytorch, mmdetection]
+description: Instance segmentation training with MMDetection framework
