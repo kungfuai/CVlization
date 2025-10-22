@@ -1,6 +1,8 @@
 """Run command - execute example presets."""
 import os
+import sys
 import subprocess
+import time
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 
@@ -55,6 +57,32 @@ def find_script(example_path: str, script_name: str) -> Optional[str]:
     if os.path.isfile(script_path):
         return script_path
     return None
+
+
+def check_docker_running() -> Tuple[bool, str]:
+    """Check if Docker daemon is running.
+
+    Returns:
+        Tuple of (is_running, error_message)
+        is_running is True if Docker is accessible, error_message is empty if running
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            check=False,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return (True, "")
+        else:
+            return (False, "Docker daemon is not responding")
+    except FileNotFoundError:
+        return (False, "Docker command not found. Is Docker installed?")
+    except subprocess.TimeoutExpired:
+        return (False, "Docker command timed out. Is Docker running?")
+    except Exception as e:
+        return (False, f"Failed to check Docker status: {e}")
 
 
 def check_docker_image_exists(image_name: str) -> bool:
@@ -132,6 +160,9 @@ def run_script(script_path: str, extra_args: List[str]) -> Tuple[int, str]:
     # Get the example directory to run script from
     example_dir = os.path.dirname(script_path)
 
+    # Track execution time
+    start_time = time.time()
+
     try:
         # Run script from its directory using basename since cwd is set
         script_name = os.path.basename(script_path)
@@ -140,9 +171,60 @@ def run_script(script_path: str, extra_args: List[str]) -> Tuple[int, str]:
             cwd=example_dir,
             check=False,
         )
+
+        # Calculate duration
+        duration = time.time() - start_time
+        duration_str = _format_duration(duration)
+
+        # Show completion message
+        if result.returncode == 0:
+            print(f"\n✓ Completed in {duration_str}")
+        else:
+            print(f"\n✗ Failed after {duration_str}")
+
         return (result.returncode, "")
+    except KeyboardInterrupt:
+        duration = time.time() - start_time
+        duration_str = _format_duration(duration)
+        print(f"\n✗ Cancelled by user after {duration_str}")
+        return (130, "")  # Standard exit code for SIGINT
     except Exception as e:
         return (1, f"Failed to execute script: {e}")
+
+
+def _format_duration(seconds: float) -> str:
+    """Format duration in human-readable format.
+
+    Args:
+        seconds: Duration in seconds
+
+    Returns:
+        Formatted string like "5m 32s" or "45s"
+    """
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    minutes = int(seconds // 60)
+    secs = int(seconds % 60)
+    return f"{minutes}m {secs}s"
+
+
+def _prompt_user_yes_no(question: str, default: bool = True) -> bool:
+    """Prompt user for yes/no response.
+
+    Args:
+        question: Question to ask
+        default: Default answer if user just presses Enter
+
+    Returns:
+        True for yes, False for no
+    """
+    prompt_suffix = "[Y/n]" if default else "[y/N]"
+    response = input(f"{question} {prompt_suffix} ").strip().lower()
+
+    if not response:
+        return default
+
+    return response in ["y", "yes"]
 
 
 def run_example(
@@ -165,6 +247,11 @@ def run_example(
     """
     if extra_args is None:
         extra_args = []
+
+    # Check if Docker is running
+    docker_running, docker_error = check_docker_running()
+    if not docker_running:
+        return (1, f"✗ Docker is not running\n{docker_error}")
 
     # Find the example
     example_path = get_example_path(examples, example_identifier)
@@ -199,11 +286,39 @@ def run_example(
     if preset_name != "build":
         image_name = get_docker_image_name(example_path)
         if image_name and not check_docker_image_exists(image_name):
-            return (
-                1,
-                f"Docker image '{image_name}' not found.\n"
-                f"Build it first: cvl run {example_identifier} build"
-            )
+            # Check if build preset exists
+            build_preset = get_preset_info(example, "build")
+
+            print(f"✗ Docker image '{image_name}' not found\n")
+            print(f"Build it first:")
+            print(f"  cvl run {example_identifier} build")
+            print(f"  or")
+            print(f"  bash {example_path}/{script_name.replace(preset_name, 'build') if preset_name in script_name else 'build.sh'}\n")
+
+            # Offer to build now if build preset exists
+            if build_preset:
+                if _prompt_user_yes_no("Build it now?"):
+                    print()  # Blank line before build output
+                    exit_code, error_msg = run_example(
+                        examples,
+                        example_identifier,
+                        "build",
+                        []
+                    )
+                    if exit_code != 0:
+                        return (exit_code, "Build failed")
+                    print()  # Blank line after build
+                else:
+                    return (1, "Cancelled by user")
+            else:
+                return (1, "Docker image not found")
+
+    # Show what we're running
+    example_name = example.get("name", Path(example_path).name)
+    print(f"Running {example_name} {preset_name}...")
+    print(f"Example: {example_identifier}")
+    print(f"Script:  {script_name}")
+    print()  # Blank line before script output
 
     # Run the script
     return run_script(script_path, extra_args)
