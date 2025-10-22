@@ -1,4 +1,7 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
+
 set -e
 
 if [ -z "$HF_TOKEN" ]; then
@@ -14,7 +17,7 @@ echo "Running training in Docker container..."
 docker run --runtime nvidia \
     --rm \
     -v $(pwd):/workspace \
-    -v $(pwd)/../../../data/container_cache:/root/.cache \
+    -v $REPO_ROOT/data/container_cache:/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \
     $IMAGE_NAME \
     python3 train.py

@@ -1,4 +1,7 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
+
 # Smoke test for qwen_7b_finetune
 # Validates config loading and runs 2 training steps
 
@@ -52,7 +55,7 @@ cp config.yaml config.yaml.bak
 echo "Running test..."
 docker run --runtime nvidia \
     -v $(pwd):/workspace \
-    -v $(pwd)/../../../data/container_cache:/root/.cache \
+    -v $REPO_ROOT/data/container_cache:/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \
     qwen_7b_finetune \
     bash -c "cp config_test.yaml config.yaml && python3 train.py && rm -rf test-output"

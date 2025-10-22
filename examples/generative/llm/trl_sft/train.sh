@@ -13,7 +13,7 @@ echo "=== Llama 3B SFT Training with TRL ==="
 echo "Running training in Docker container..."
 
 # Get absolute path to repo root (3 levels up from this script)
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")" && git rev-parse --show-toplevel)"
 CACHE_DIR="$REPO_ROOT/data/container_cache"
 
 # Create cache directory if it doesn't exist
