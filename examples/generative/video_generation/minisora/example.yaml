@@ -1,17 +1,30 @@
 name: minisora
 capability: generative/video_generation
-modalities: [vision]
-datasets: [flying-mnist]
+modalities:
+- vision
+datasets:
+- flying-mnist
 stability: beta
 resources:
   gpu: 8
   vram_gb: 80
   disk_gb: 100
 presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
   train:
     script: train.sh
     description: Train the MiniSora model
-tags: [minisora, sora-like, dit, video-dit, pytorch]
-tasks: [video_generation]
-frameworks: [pytorch]
-description: MiniSora - Train a Sora-like model with small scope and low cost (11k videos)
+tags:
+- minisora
+- sora-like
+- dit
+- video-dit
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
+description: MiniSora - Train a Sora-like model with small scope and low cost (11k
+  videos)

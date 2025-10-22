@@ -186,8 +186,8 @@ Graduation is SUCCESS, not failure—it proves the example's value and reduces m
 - ✅ 67/69 have `example.yaml` (97% coverage)
 - ✅ 59/59 have `build.sh`
 - ✅ 59/59 have `Dockerfile`
-- ❌ 1/59 have `build` preset in example.yaml (moondream2 only)
-- ❌ 13 scripts use fragile `../../../` paths
+- ✅ 57/57 have `build` preset in example.yaml (100% coverage for examples with example.yaml)
+- ✅ 0 scripts use fragile `../../../` paths (all fixed)
 
 **Standardization Pattern (established via moondream2):**
 ```yaml
@@ -210,9 +210,9 @@ CACHE_DIR="$REPO_ROOT/data/container_cache"
 
 **Rollout Plan:**
 1. **Phase 1 (Completed):** Establish pattern via moondream2 ✅
-2. **Phase 2 (Next 2 weeks):** Add build presets to 10-15 stable examples
-3. **Phase 3 (Ongoing):** Fix fragile paths on-demand
-4. **Phase 4 (Background):** Document pattern in CONTRIBUTING.md
+2. **Phase 2 (Completed):** Add build presets to all 56 examples ✅
+3. **Phase 3 (Completed):** Fix fragile paths in 13 scripts ✅
+4. **Phase 4 (Pending):** Document pattern in CONTRIBUTING.md
 
 **Priority Examples for Standardization:**
 - Stable perception: granite_docling, surya, moondream3

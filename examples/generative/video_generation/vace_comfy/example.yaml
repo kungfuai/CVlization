@@ -1,14 +1,28 @@
 name: vace-comfy
 capability: generative/video_generation
-modalities: [vision]
+modalities:
+- vision
 datasets: []
 stability: experimental
 resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 50
-presets: [predict]
-tags: [vace, comfyui, video-animation, pytorch]
-tasks: [video_generation]
-frameworks: [pytorch, comfyui]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- vace
+- comfyui
+- video-animation
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
+- comfyui
 description: VACE with ComfyUI integration (under construction)

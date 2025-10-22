@@ -1,14 +1,32 @@
 name: granite-docling-finetune
 capability: perception/doc_ai
-modalities: [vision, text]
-datasets: [ds4sd/docling-dpbench]
+modalities:
+- vision
+- text
+datasets:
+- ds4sd/docling-dpbench
 stability: stable
 resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 15
-presets: [train]
-tags: [granite, docling, fine-tuning, lora, dora, trl, pytorch]
-tasks: [document_understanding]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- granite
+- docling
+- fine-tuning
+- lora
+- dora
+- trl
+- pytorch
+tasks:
+- document_understanding
+frameworks:
+- pytorch
 description: Fine-tune Granite-Docling-258M for document extraction with LoRA/DoRA

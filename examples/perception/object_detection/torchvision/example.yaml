@@ -1,14 +1,33 @@
 name: object-detection-torchvision
 capability: perception/object_detection
-modalities: [vision]
-datasets: [kitti-tiny, penn-fudan-pedestrian]
+modalities:
+- vision
+datasets:
+- kitti-tiny
+- penn-fudan-pedestrian
 stability: stable
 resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 5
-presets: [train]
-tags: [torchvision, object-detection, fcos, faster-rcnn, retinanet, pytorch]
-tasks: [object_detection]
-frameworks: [pytorch, torchvision]
-description: Object detection training with Torchvision (FCOS, Faster R-CNN, RetinaNet, etc.)
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- torchvision
+- object-detection
+- fcos
+- faster-rcnn
+- retinanet
+- pytorch
+tasks:
+- object_detection
+frameworks:
+- pytorch
+- torchvision
+description: Object detection training with Torchvision (FCOS, Faster R-CNN, RetinaNet,
+  etc.)

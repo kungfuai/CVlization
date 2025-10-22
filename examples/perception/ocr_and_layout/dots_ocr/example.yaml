@@ -1,14 +1,28 @@
 name: dots-ocr
 capability: perception/ocr_and_layout
-modalities: [vision, text]
-datasets: [custom]
+modalities:
+- vision
+- text
+datasets:
+- custom
 stability: stable
 resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 5
-presets: [predict]
-tags: [ocr, document-understanding, pytorch]
-tasks: [ocr]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- ocr
+- document-understanding
+- pytorch
+tasks:
+- ocr
+frameworks:
+- pytorch
 description: Document OCR using DOTS (Document-Oriented Text Spotting)

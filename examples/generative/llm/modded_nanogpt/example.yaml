@@ -1,14 +1,30 @@
 name: modded-nanogpt
 capability: generative/llm
-modalities: [text]
-datasets: [fineweb]
+modalities:
+- text
+datasets:
+- fineweb
 stability: stable
 resources:
   gpu: 8
   vram_gb: 80
   disk_gb: 20
-presets: [train]
-tags: [nanogpt, speedrun, muon, flex-attention, pytorch]
-tasks: [text_generation]
-frameworks: [pytorch]
-description: NanoGPT speedrun with advanced optimizations (sub-3 minute training on 8xH100)
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- nanogpt
+- speedrun
+- muon
+- flex-attention
+- pytorch
+tasks:
+- text_generation
+frameworks:
+- pytorch
+description: NanoGPT speedrun with advanced optimizations (sub-3 minute training on
+  8xH100)
