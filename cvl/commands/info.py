@@ -83,8 +83,10 @@ def format_info(example: Dict) -> str:
         elif isinstance(presets, dict):
             for preset_name, preset_info in presets.items():
                 if isinstance(preset_info, dict):
+                    script = preset_info.get('script', f'{preset_name}.sh')
                     desc = preset_info.get('description', preset_name)
                     lines.append(f"  - {preset_name}: {desc}")
+                    lines.append(f"    Script: {script}")
                 else:
                     lines.append(f"  - {preset_name}")
 
