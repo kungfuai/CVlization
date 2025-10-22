@@ -1,5 +1,5 @@
 # FROM cvlization-torch-gpu
-FROM pytorch/pytorch:2.0.0-cuda11.7-cudnn8-runtime
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 RUN apt-get update -y && apt-get install -y git
 # RUN pip install transformers==4.27.4 accelerate==0.18.0 wandb==0.14.2 timm
 

@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
 
 COPY requirements.txt .

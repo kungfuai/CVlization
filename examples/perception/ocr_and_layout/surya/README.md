@@ -24,12 +24,12 @@ This example demonstrates how to use Surya, a multilingual OCR toolkit supportin
 
 1. Build the Docker image:
 ```bash
-bash examples/doc_ai/surya/build.sh
+bash examples/perception/ocr_and_layout/surya/build.sh
 ```
 
 2. Run OCR on an image:
 ```bash
-bash examples/doc_ai/surya/predict.sh --image examples/sample.jpg
+bash examples/perception/ocr_and_layout/surya/predict.sh --image examples/sample.jpg
 ```
 
 ### Usage
@@ -38,7 +38,7 @@ bash examples/doc_ai/surya/predict.sh --image examples/sample.jpg
 
 Extract text from a document (automatically detects all 90+ languages):
 ```bash
-bash examples/doc_ai/surya/predict.sh \
+bash examples/perception/ocr_and_layout/surya/predict.sh \
     --image path/to/document.jpg \
     --task ocr
 ```
@@ -47,7 +47,7 @@ bash examples/doc_ai/surya/predict.sh \
 
 Analyze document layout and structure:
 ```bash
-bash examples/doc_ai/surya/predict.sh \
+bash examples/perception/ocr_and_layout/surya/predict.sh \
     --image path/to/document.jpg \
     --task layout
 ```
@@ -56,7 +56,7 @@ bash examples/doc_ai/surya/predict.sh \
 
 Determine natural reading order:
 ```bash
-bash examples/doc_ai/surya/predict.sh \
+bash examples/perception/ocr_and_layout/surya/predict.sh \
     --image path/to/document.jpg \
     --task order
 ```
@@ -72,7 +72,7 @@ Set environment variables to optimize VRAM usage:
 export RECOGNITION_BATCH_SIZE=8
 export DETECTOR_BATCH_SIZE=1
 export LAYOUT_BATCH_SIZE=1
-bash examples/doc_ai/surya/predict.sh --image document.jpg
+bash examples/perception/ocr_and_layout/surya/predict.sh --image document.jpg
 ```
 
 **For 12-16GB VRAM:**
@@ -80,7 +80,7 @@ bash examples/doc_ai/surya/predict.sh --image document.jpg
 export RECOGNITION_BATCH_SIZE=16
 export DETECTOR_BATCH_SIZE=2
 export LAYOUT_BATCH_SIZE=2
-bash examples/doc_ai/surya/predict.sh --image document.jpg
+bash examples/perception/ocr_and_layout/surya/predict.sh --image document.jpg
 ```
 
 **For 24GB+ VRAM (default):**
@@ -88,7 +88,7 @@ bash examples/doc_ai/surya/predict.sh --image document.jpg
 export RECOGNITION_BATCH_SIZE=32
 export DETECTOR_BATCH_SIZE=4
 export LAYOUT_BATCH_SIZE=4
-bash examples/doc_ai/surya/predict.sh --image document.jpg
+bash examples/perception/ocr_and_layout/surya/predict.sh --image document.jpg
 ```
 
 **VRAM per batch item:**
@@ -100,7 +100,7 @@ bash examples/doc_ai/surya/predict.sh --image document.jpg
 
 Save results as JSON with metadata:
 ```bash
-bash examples/doc_ai/surya/predict.sh \
+bash examples/perception/ocr_and_layout/surya/predict.sh \
     --image document.jpg \
     --output results.json \
     --format json
@@ -111,7 +111,7 @@ bash examples/doc_ai/surya/predict.sh \
 For more control:
 ```bash
 docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/surya:/workspace \
+    -v $(pwd)/examples/perception/ocr_and_layout/surya:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     -e RECOGNITION_BATCH_SIZE=32 \
     -e DETECTOR_BATCH_SIZE=4 \
@@ -209,13 +209,13 @@ For faster inference:
 
 Run the smoke test to verify installation:
 ```bash
-bash examples/doc_ai/surya/test.sh
+bash examples/perception/ocr_and_layout/surya/test.sh
 ```
 
 ### Directory Structure
 
 ```
-examples/doc_ai/surya/
+examples/perception/ocr_and_layout/surya/
 ├── Dockerfile           # Container definition
 ├── requirements.txt     # Python dependencies
 ├── predict.py          # Main inference script
@@ -231,7 +231,7 @@ examples/doc_ai/surya/
 ### Output Location
 
 By default, outputs are saved to:
-- `examples/doc_ai/surya/outputs/`
+- `examples/perception/ocr_and_layout/surya/outputs/`
 
 ### Model Cache
 
