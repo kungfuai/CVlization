@@ -4,6 +4,7 @@ import argparse
 
 from cvl.core.discovery import find_all_examples
 from cvl.commands.list import list_examples
+from cvl.commands.info import get_example_info
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -33,6 +34,16 @@ def create_parser() -> argparse.ArgumentParser:
         help="Filter by stability (stable, beta, experimental)"
     )
 
+    # info command
+    info_parser = subparsers.add_parser(
+        "info",
+        help="Show detailed information about an example"
+    )
+    info_parser.add_argument(
+        "example",
+        help="Example path (e.g., generative/minisora)"
+    )
+
     return parser
 
 
@@ -60,6 +71,30 @@ def cmd_list(args) -> int:
         return 1
 
 
+def cmd_info(args) -> int:
+    """Handle the info command.
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        examples = find_all_examples()
+        output = get_example_info(examples, args.example)
+
+        if output is None:
+            print(f"Error: Example '{args.example}' not found", file=sys.stderr)
+            return 1
+
+        print(output)
+        return 0
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        return 1
+
+
 def main() -> int:
     """Main entry point."""
     parser = create_parser()
@@ -67,6 +102,8 @@ def main() -> int:
 
     if args.command == "list":
         return cmd_list(args)
+    elif args.command == "info":
+        return cmd_info(args)
     else:
         parser.print_help()
         return 1
