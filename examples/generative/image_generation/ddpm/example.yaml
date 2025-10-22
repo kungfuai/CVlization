@@ -1,0 +1,14 @@
+name: ddpm
+capability: generative/image_generation
+modalities: [vision]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 10
+presets: [train]
+tags: [ddpm, diffusion, denoising, pytorch]
+tasks: [image_generation]
+frameworks: [pytorch]
+description: Denoising Diffusion Probabilistic Models (DDPM) for image generation

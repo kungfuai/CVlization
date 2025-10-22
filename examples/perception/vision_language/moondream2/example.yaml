@@ -1,0 +1,14 @@
+name: moondream2
+capability: perception/vision_language
+modalities: [vision, text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 6
+  disk_gb: 5
+presets: [predict]
+tags: [moondream, vlm, ocr, vqa, captioning, pytorch]
+tasks: [ocr, image_captioning, visual_question_answering]
+frameworks: [pytorch]
+description: Compact 1.93B vision-language model for OCR, captioning, and visual QA

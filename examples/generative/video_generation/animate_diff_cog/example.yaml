@@ -1,0 +1,14 @@
+name: animate-diff-cog
+capability: generative/video_generation
+modalities: [vision, text]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 30
+presets: [predict]
+tags: [animatediff, cog, replicate, motion, pytorch]
+tasks: [text_to_video]
+frameworks: [pytorch, cog]
+description: AnimateDiff containerized with Cog for text-to-animation generation

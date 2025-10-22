@@ -1,0 +1,14 @@
+name: mdt
+capability: generative/image_generation
+modalities: [vision]
+datasets: [flying-mnist, imagenet]
+stability: beta
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 50
+presets: [train]
+tags: [mdt, masked-diffusion, transformer, pytorch]
+tasks: [image_generation]
+frameworks: [pytorch]
+description: Masked Diffusion Transformer for efficient image generation

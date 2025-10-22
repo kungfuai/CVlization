@@ -1,0 +1,14 @@
+name: skyreals
+capability: generative/video_generation
+modalities: [vision, text]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 40
+presets: [predict]
+tags: [skyreels, text-to-video, image-to-video, pytorch]
+tasks: [text_to_video, image_to_video]
+frameworks: [pytorch]
+description: SkyReels V1 for text and image to video generation

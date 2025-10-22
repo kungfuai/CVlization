@@ -1,0 +1,14 @@
+name: panoptic-segmentation-torchvision
+capability: perception/segmentation
+modalities: [vision]
+datasets: [coco-panoptic]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 15
+presets: [train]
+tags: [torchvision, panoptic-segmentation, pytorch]
+tasks: [panoptic_segmentation]
+frameworks: [pytorch, torchvision]
+description: Panoptic segmentation training with Torchvision

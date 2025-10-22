@@ -1,0 +1,14 @@
+name: dit
+capability: generative/image_generation
+modalities: [vision]
+datasets: [imagenet]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 50
+presets: [train]
+tags: [dit, diffusion-transformer, flash-attention, pytorch]
+tasks: [image_generation]
+frameworks: [pytorch]
+description: DiT-XL/2 Diffusion Transformer for class-conditional image generation
