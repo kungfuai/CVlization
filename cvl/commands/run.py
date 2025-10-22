@@ -98,9 +98,10 @@ def run_script(script_path: str, extra_args: List[str]) -> Tuple[int, str]:
     example_dir = os.path.dirname(script_path)
 
     try:
-        # Run script from its directory
+        # Run script from its directory using basename since cwd is set
+        script_name = os.path.basename(script_path)
         result = subprocess.run(
-            ["bash", script_path] + extra_args,
+            ["bash", script_name] + extra_args,
             cwd=example_dir,
             check=False,
         )

@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# Default values
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Default values (relative to script directory)
 IMAGE_PATH="examples/sample.jpg"
 OUTPUT_PATH="outputs/result.txt"
 
@@ -21,9 +24,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Run from script directory, works from anywhere
 docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/moondream2:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v "$SCRIPT_DIR":/workspace \
+    -v "$SCRIPT_DIR/../../../data/container_cache":/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \
     moondream2 \
     python3 predict.py --image "$IMAGE_PATH" --output "$OUTPUT_PATH" "$@"
