@@ -16,27 +16,42 @@ CVlization provides ready-to-use, dockerized workflows for various computer visi
 
 ## Examples
 
-Our `examples/` directory contains a variety of computer vision and language processing tasks. Each example is self-contained with its own Dockerfile and dependencies.
+Our `examples/` directory is organized by capability (what the model does) rather than modality (what data it processes). Each example is self-contained with its own Dockerfile and dependencies.
 
+### Directory Structure
+
+```
+examples/
+  analytical/          # Prediction on structured/unstructured data (future)
+  perception/          # Understand signals (vision, speech, multimodal)
+  generative/          # Create content (text, images, video, audio)
+  agentic/             # Planning, tools, RAG, workflows (future)
+```
 
 ### Catalog of Examples
 
-| Task Type | Workflow | Example Directory | Implementations | Status |
-|-----------|----------|-------------------|-----------------|--------|
-| ![Image Classification](./doc/images/plant_classification.png) Image Classification | Training | [`examples/image_classification`](./examples/image_classification) | torch | ✅ |
-| ![Object Detection](./doc/images/object_detection.jpg) Object Detection | Training | [`examples/object_detection`](./examples/object_detection) | mmdet, torchvision | ✅ |
-| ![Semantic Segmentation](./doc/images/semantic_segmentation.png) Semantic Segmentation | Training | [`examples/semantic_segmentation`](./examples/semantic_segmentation) | mmseg, torchvision | ✅ |
-| ![Instance Segmentation](./doc/images/instance_segmentation.png) Instance Segmentation | Training | [`examples/instance_segmentation`](./examples/instance_segmentation) | mmdet, sam, seem, torchvision | ✅ |
-| ![Panoptic Segmentation](./doc/images/panoptic_segmentation.png) Panoptic Segmentation | Training | [`examples/panoptic_segmentation`](./examples/panoptic_segmentation) | mmdet, torchvision | ✅ |
-| ![Pose Estimation](./doc/images/pose_estimation.jpeg) Pose Estimation | Training | [`examples/pose_estimation`](./examples/pose_estimation) | mmpose | ✅ |
-| ![Object Tracking](./doc/images/player_tracking.gif) Object Tracking | Inference | [`examples/object_tracking`](./examples/object_tracking) | global tracking transformer | ✅ |
-| ![Line Detection](./doc/images/line_detection.png) Line Detection | Training | [`examples/line_detection`](./examples/line_detection) | torch | ✅ |
-| ![Image Generation](./doc/images/controlnet.png) Image Generation | Training, Inference | [`examples/image_gen`](./examples/image_gen) | diffuser_unconditional, dit, dreambooth, flux, mdt, pixart, stable_diffusion, uva_energy, vqgan | ✅ |
-| ![Text Generation](./doc/images/llm.png) Text Generation | Training, Inference | [`examples/text_gen`](./examples/text_gen) | Small-scale pretraining ([nanogpt](./examples/text_gen/nanogpt), [modded-nanogpt](./examples/text_gen/modded-nanogpt), [nanomamba](./examples/text_gen/nanomamba)), Fine-tuning ([unsloth](./examples/text_gen/unsloth): [gpt-oss](./examples/text_gen/unsloth/gpt_oss_sft), [llama](./examples/text_gen/unsloth/llama_3b_sft), [qwen](./examples/text_gen/unsloth/qwen_7b_sft); [trl](./examples/text_gen/trl): [sft](./examples/text_gen/trl/sft)), Inference ([mistral7b](./examples/text_gen/mistral7b), [mixtral8x7b](./examples/text_gen/mixtral8x7b)). [See README](./examples/text_gen/README.md) for details. | ✅ |
-| ![Video Generation](./doc/images/sora.gif) Video Generation | Training, Inference | [`examples/video_gen`](./examples/video_gen) | [animate_diff](./examples/video_gen/animate_diff), [animate_x](./examples/video_gen/animate_x), [cogvideox](./examples/video_gen/cogvideox), [deforum](./examples/video_gen/deforum), [framepack](./examples/video_gen/framepack), [kandinsky](./examples/video_gen/kandinsky), [mamba](./examples/video_gen/mamba), [mimic_motion](./examples/video_gen/mimic_motion), [minisora](./examples/video_gen/minisora), [phantom](./examples/video_gen/phantom), [skyreals](./examples/video_gen/skyreals), [svd_cog](./examples/video_gen/svd_cog)/[svd_comfy](./examples/video_gen/svd_comfy), [vace](./examples/video_gen/vace), [video_in_between](./examples/video_gen/video_in_between), [wan_comfy](./examples/video_gen/wan_comfy)/[wan2gp](./examples/video_gen/wan2gp) | ✅ |
-| ![3D: rendering and reconstruction](./doc/images/nerf.gif) 3D: rendering and reconstruction | Training | [`examples/nerf`](./examples/nerf) | tf | ✅ |
-| ![Document AI](./doc/images/layoutlm.png) Document AI | Training, Inference | [`examples/doc_ai`](./examples/doc_ai) | [docling](./examples/doc_ai/docling-serve), [granite-docling](./examples/doc_ai/granite-docling) (VLM + [fine-tuning](./examples/doc_ai/granite-docling-finetune)), [moondream2](./examples/doc_ai/moondream2)/[moondream3](./examples/doc_ai/moondream3) (VLM + [fine-tuning](./examples/doc_ai/moondream2_finetune)), [surya](./examples/doc_ai/surya), [dots-ocr](./examples/doc_ai/dots-ocr), [huggingface](./examples/doc_ai/huggingface) | ✅ |
-| ![Sports Analysis](./doc/images/0bfacc_0-radar.gif) Sports Analysis | Inference | [`examples/sports`](./examples/sports) | soccer_game_visual_tracking | ✅ |
+#### 🔍 Perception (Understanding Signals)
+
+| Capability | Example Directory | Implementations | Status |
+|------------|-------------------|-----------------|--------|
+| ![Image Classification](./doc/images/plant_classification.png) Image Classification | [`examples/perception/image_classification`](./examples/perception/image_classification) | torch | ✅ |
+| ![Object Detection](./doc/images/object_detection.jpg) Object Detection | [`examples/perception/object_detection`](./examples/perception/object_detection) | mmdet, torchvision | ✅ |
+| ![Segmentation](./doc/images/semantic_segmentation.png) Segmentation | [`examples/perception/segmentation`](./examples/perception/segmentation) | instance (mmdet, sam, torchvision), semantic (mmseg, torchvision), panoptic (mmdet, torchvision) | ✅ |
+| ![Pose Estimation](./doc/images/pose_estimation.jpeg) Pose Estimation | [`examples/perception/pose_estimation`](./examples/perception/pose_estimation) | dwpose, mmpose | ✅ |
+| ![Object Tracking](./doc/images/player_tracking.gif) Tracking | [`examples/perception/tracking`](./examples/perception/tracking) | global_tracking_transformer, soccer_visual_tracking | ✅ |
+| ![Line Detection](./doc/images/line_detection.png) Line Detection | [`examples/perception/line_detection`](./examples/perception/line_detection) | torch | ✅ |
+| ![Document AI](./doc/images/layoutlm.png) OCR & Layout | [`examples/perception/ocr_and_layout`](./examples/perception/ocr_and_layout) | docling_serve, dots_ocr, nanonets_ocr, surya | ✅ |
+| ![Document AI](./doc/images/layoutlm.png) Document AI (VLMs) | [`examples/perception/doc_ai`](./examples/perception/doc_ai) | donut (doc_classification, doc_parse), granite_docling (+ finetune) | ✅ |
+| ![Vision-Language](./doc/images/layoutlm.png) Vision-Language Models | [`examples/perception/vision_language`](./examples/perception/vision_language) | moondream2 (+ finetune), moondream3 | ✅ |
+| ![3D: rendering and reconstruction](./doc/images/nerf.gif) 3D Reconstruction | [`examples/perception/3d_reconstruction`](./examples/perception/3d_reconstruction) | nerf_tf | ✅ |
+
+#### ✨ Generative (Creating Content)
+
+| Capability | Example Directory | Implementations | Status |
+|------------|-------------------|-----------------|--------|
+| ![LLMs](./doc/images/llm.png) LLMs (text generation) | [`examples/generative/llm`](./examples/generative/llm) | Small-scale pretraining (nanogpt, modded_nanogpt, nanomamba, nanochat), Fine-tuning (unsloth: gpt_oss, llama_3b, qwen_7b; trl_sft), Inference (mistral7b, mixtral8x7b) | ✅ |
+| ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, mdt, pixart, stable_diffusion, uva_energy, vqgan | ✅ |
+| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_diff_cog, animate_x, cogvideox, deforum, framepack, kandinsky, mimic_motion, minisora, phantom, skyreals, svd_cog, svd_comfy, vace, vace_comfy, video_in_between, wan_comfy, wan2gp | ✅ |
 
 ✅ = Tested and maintained
 
@@ -97,11 +112,11 @@ For GPU support on Ubuntu, you may need to install `nvidia-container-toolkit`:
 sudo apt-get install -y nvidia-container-toolkit
 ```
 
-We can use the the image classification example to run an experiment on cifar10.
+We can use the image classification example to run an experiment on cifar10.
 
 ```bash
-bash examples/image_classification/torch/build.sh
-bash examples/image_classification/torch/train.sh
+bash examples/perception/image_classification/torch/build.sh
+bash examples/perception/image_classification/torch/train.sh
 ```
 
 ### Use CVlization on Colab

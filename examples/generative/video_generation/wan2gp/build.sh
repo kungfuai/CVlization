@@ -1,0 +1,1 @@
+docker build -t wan2gp .

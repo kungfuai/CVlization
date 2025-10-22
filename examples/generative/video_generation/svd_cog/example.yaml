@@ -1,0 +1,14 @@
+name: svd-cog
+capability: generative/video_generation
+modalities: [vision]
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 40
+presets: [predict]
+tags: [svd, stable-video-diffusion, image-to-video, cog, pytorch]
+tasks: [image_to_video]
+frameworks: [pytorch, cog]
+description: Stable Video Diffusion with Cog (non-commercial license, 24GB VRAM)

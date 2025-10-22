@@ -1,0 +1,14 @@
+name: doc-ai-leaderboard
+capability: perception/doc_ai
+modalities: [vision, text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 1
+presets: [eval]
+tags: [benchmark, evaluation, comparison, tooling]
+tasks: [benchmarking]
+frameworks: [bash]
+description: Benchmark tool to compare document AI models on test images
