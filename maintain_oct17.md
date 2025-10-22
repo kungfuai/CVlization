@@ -213,7 +213,7 @@ CACHE_DIR="$REPO_ROOT/data/container_cache"
 1. **Phase 1 (Completed):** Establish pattern via moondream2 ✅
 2. **Phase 2 (Completed):** Add build presets to all 56 examples ✅
 3. **Phase 3 (Completed):** Fix fragile paths in 13 scripts ✅
-4. **Phase 4 (Pending):** Document pattern in CONTRIBUTING.md
+4. **Phase 4 (Completed):** Document pattern in CONTRIBUTING.md ✅
 
 **Priority Examples for Standardization:**
 - Stable perception: granite_docling, surya, moondream3
