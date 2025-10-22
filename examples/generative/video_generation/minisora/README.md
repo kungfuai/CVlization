@@ -55,7 +55,7 @@ bash examples/video_gen/minisora/train.sh python train_vqvae.py --batch_size 2 -
 
 ### Use VAE to extract latents or tokenize videos
 
-The following script uses a pretrained VAE to extract latents or tokenize videos. An WANDB API key is needed. If you want to use your own VAE, please adapt the script.
+The following script uses a pretrained VAE to extract latents or tokenize videos. Public WandB VAE models can be accessed anonymously by setting `WANDB_API_KEY=anonymous`. If you want to use your own VAE, please adapt the script.
 
 ```bash
 # extract latents from the video using vae
@@ -70,9 +70,12 @@ bash examples/video_gen/minisora/train.sh python tokenize_videos.py --dataset fl
 Some precomputed latents for your convenience:
 
 ```
-https://storage.googleapis.com/research-datasets-public/minisora/data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy (4.9GB)
-https://storage.googleapis.com/research-datasets-public/minisora/data/latents/flying_mnist_11k__model-kbu39ped_tokens_32frames_train.npy (2.4GB)
+# Download from HuggingFace
+wget https://huggingface.co/datasets/zzsi/minisora_data/resolve/main/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy -P data/latents/  # 4.9GB
+wget https://huggingface.co/datasets/zzsi/minisora_data/resolve/main/latents/flying_mnist_11k__model-kbu39ped_tokens_32frames_train.npy -P data/latents/  # 2.4GB
 ```
+
+Browse all available files at: https://huggingface.co/datasets/zzsi/minisora_data/tree/main/latents
 
 ### Train a latent generative model
 
@@ -94,7 +97,7 @@ Using spatial temporal DiT (adatped from ColossalAI's OpenSora):
 
 ```bash
 # This will use a VAE trained on Flying MNIST (VAE and latents files must match)
-bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 4 --accumulate_grad_batches 8 --latent_frames_to_generate 8 --diffusion_steps 1000 --max_steps 1000000 --log_every 50 --sample_every 2000 --clip_grad 1.0 --vae zzsi_kungfu/videogpt/model-nilqq143:v14 --latents_input_file data/latents/flying_mnist__model-nilqq143_latents_32frames_train.npy --track
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 4 --accumulate_grad_batches 8 --latent_frames_to_generate 8 --diffusion_steps 1000 --max_steps 1000000 --log_every 50 --sample_every 2000 --clip_grad 1.0 --vae zzsi_kungfu/videogpt/model-nilqq143:v14 --latents_input_file data/latents/flying_mnist_11k__model-nilqq143_latents_32frames_train.npy --track
 
 # or train a larger net
 bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 50 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 8 --tokens_input_file data/latents/flying_mnist_110k__model-kbu39ped_tokens_32frames_train.npy --vae zzsi_kungfu/videogpt/model-kbu39ped:v11 --track
@@ -103,14 +106,15 @@ bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accum
 
 
 # or train with stablediffusion VAE
-bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 50 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 32 --latents_input_file data/latents/flying_mnist__sd-vae-ft-mse_latents_32frames_train.npy --vae stabilityai/sd-vae-ft-mse --track
+bash examples/video_gen/minisora/train.sh python iddpm.py --batch_size 1 --accumulate_grad_batches 32 --depth 16 --num_heads 12 --hidden_size 768 --max_steps 1000000 --log_every 50 --sample_every 2000 --diffusion_steps 1000 --clip_grad 1.0 --latent_frames_to_generate 32 --latents_input_file data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy --vae stabilityai/sd-vae-ft-mse --track
 ```
 
 2. Train an autoregressive transformer-based language model (next token predictor)
 
 ```bash
 # Instead of training a diffusion model, one can also train a next token predictor.
-bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 512 --tokens_input_file data/latents/flying_mnist__model-kbu39ped_tokens_32frames_train.npy --sample_interval 2000 --batch_size 8 --gradient_accumulation_steps 4 --max_iters 10000000 --wandb_log
+# For anonymous WandB VAE access, add: WANDB_API_KEY=anonymous bash ...
+bash examples/video_gen/minisora/train.sh python train_latent_nanogpt.py --block_size 512 --tokens_input_file data/latents/flying_mnist_11k__model-kbu39ped_tokens_32frames_train.npy --sample_interval 2000 --batch_size 8 --gradient_accumulation_steps 4 --max_iters 10000000 --wandb_log
 ```
 
 A variant of GPT (under development):
