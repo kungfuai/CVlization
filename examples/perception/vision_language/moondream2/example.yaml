@@ -7,7 +7,13 @@ resources:
   gpu: 1
   vram_gb: 6
   disk_gb: 5
-presets: [predict]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run OCR inference on an image
 tags: [moondream, vlm, ocr, vqa, captioning, pytorch]
 tasks: [ocr, image_captioning, visual_question_answering]
 frameworks: [pytorch]
