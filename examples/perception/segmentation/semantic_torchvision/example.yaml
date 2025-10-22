@@ -1,0 +1,14 @@
+name: semantic-segmentation-torchvision
+capability: perception/segmentation
+modalities: [vision]
+datasets: [voc, coco]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 20
+presets: [train]
+tags: [torchvision, semantic-segmentation, fcn, deeplabv3, pytorch]
+tasks: [semantic_segmentation]
+frameworks: [pytorch, torchvision]
+description: Semantic segmentation training with Torchvision (FCN, DeepLabV3)

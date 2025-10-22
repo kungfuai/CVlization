@@ -1,0 +1,14 @@
+name: panoptic-segmentation-mmdet
+capability: perception/segmentation
+modalities: [vision]
+datasets: [coco-panoptic]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 15
+presets: [train]
+tags: [mmdetection, panoptic-segmentation, maskformer, pytorch]
+tasks: [panoptic_segmentation]
+frameworks: [pytorch, mmdetection]
+description: Panoptic segmentation training with MMDetection framework

@@ -1,0 +1,14 @@
+name: unsloth-qwen-7b-sft
+capability: generative/llm
+modalities: [text]
+datasets: [yahma/alpaca-cleaned]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 20
+presets: [train]
+tags: [unsloth, qwen, fine-tuning, lora, sft, pytorch]
+tasks: [text_generation]
+frameworks: [pytorch, unsloth]
+description: Fine-tune Qwen 2.5 7B with Unsloth for fast and efficient training

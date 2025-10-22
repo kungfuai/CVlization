@@ -1,0 +1,14 @@
+name: stable-diffusion
+capability: generative/image_generation
+modalities: [vision, text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 20
+presets: [predict, train]
+tags: [stable-diffusion, text-to-image, diffusers, pytorch]
+tasks: [text_to_image]
+frameworks: [pytorch, diffusers]
+description: Stable Diffusion text-to-image generation and training
