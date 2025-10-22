@@ -13,7 +13,7 @@ CONTAINER_NAME="trl_sft_test"
 echo "=== TRL SFT Smoke Test (2 steps) ==="
 
 # Get absolute path to repo root
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")" && git rev-parse --show-toplevel)"
 CACHE_DIR="$REPO_ROOT/data/container_cache"
 
 # Create cache directory

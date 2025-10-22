@@ -40,7 +40,7 @@ OUTPUT_NAME=$(basename "$OUTPUT_ABS")
 mkdir -p "$OUTPUT_DIR"
 
 # Run docker directly with proper mounts
-REPO_ROOT="$SCRIPT_DIR/../../../.."
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 cd "$SCRIPT_DIR/../../moondream2"
 
 docker run --runtime nvidia --rm \

@@ -58,7 +58,7 @@ run_stage() {
     echo ">>> Starting: $description"
     echo ""
 
-    REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+    REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 
     docker run --rm --gpus all \
         -v "$SCRIPT_DIR/data:/workspace/data" \
