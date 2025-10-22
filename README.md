@@ -101,6 +101,42 @@ docker run --shm-size 16G --runtime nvidia -it \
 - Docker
 - NVIDIA GPU (for GPU-accelerated examples)
 
+## CLI Installation & Usage
+
+CVlization is an examples-first monorepo. Clone the repository to get started:
+
+```bash
+# Full clone
+git clone https://github.com/kungfuai/CVlization
+cd CVlization
+pipx install .
+
+# Or lightweight clone (no git history, faster)
+git clone --depth 1 https://github.com/kungfuai/CVlization
+cd CVlization
+pipx install .
+```
+
+### Using the CLI
+
+```bash
+# Discover available examples
+cvl list
+cvl list --stability stable --tag ocr
+
+# Get detailed info about an example
+cvl info perception/ocr_and_layout/surya
+
+# Build and run an example
+cvl run perception/ocr_and_layout/surya build
+cvl run perception/ocr_and_layout/surya predict
+
+# Run with extra arguments
+cvl run generative/llm/nanogpt train --lr 0.001
+```
+
+The CLI provides a unified interface for discovering and running examples. Each example includes an `example.yaml` file with metadata (GPU requirements, datasets, stability level, etc.) and standardized presets (build, train, predict, etc.).
+
 ## Quickstart
 
 ### Use CVlization with Docker
