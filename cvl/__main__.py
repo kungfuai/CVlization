@@ -5,6 +5,7 @@ import argparse
 from cvl.core.discovery import find_all_examples
 from cvl.commands.list import list_examples
 from cvl.commands.info import get_example_info
+from cvl.commands.run import run_example
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -42,6 +43,25 @@ def create_parser() -> argparse.ArgumentParser:
     info_parser.add_argument(
         "example",
         help="Example path (e.g., generative/minisora)"
+    )
+
+    # run command
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run an example with a specific preset"
+    )
+    run_parser.add_argument(
+        "example",
+        help="Example path (e.g., generative/video_generation/minisora)"
+    )
+    run_parser.add_argument(
+        "preset",
+        help="Preset to run (e.g., train, predict)"
+    )
+    run_parser.add_argument(
+        "extra_args",
+        nargs="*",
+        help="Additional arguments to pass to the script"
     )
 
     return parser
@@ -95,6 +115,33 @@ def cmd_info(args) -> int:
         return 1
 
 
+def cmd_run(args) -> int:
+    """Handle the run command.
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        examples = find_all_examples()
+        exit_code, error_msg = run_example(
+            examples,
+            args.example,
+            args.preset,
+            args.extra_args
+        )
+
+        if error_msg:
+            print(f"Error: {error_msg}", file=sys.stderr)
+
+        return exit_code
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        return 1
+
+
 def main() -> int:
     """Main entry point."""
     parser = create_parser()
@@ -104,6 +151,8 @@ def main() -> int:
         return cmd_list(args)
     elif args.command == "info":
         return cmd_info(args)
+    elif args.command == "run":
+        return cmd_run(args)
     else:
         parser.print_help()
         return 1
