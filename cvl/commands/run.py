@@ -2,6 +2,7 @@
 import os
 import subprocess
 from typing import List, Dict, Optional, Tuple
+from pathlib import Path
 
 
 def get_preset_info(example: Dict, preset_name: str) -> Optional[Dict]:
@@ -54,6 +55,40 @@ def find_script(example_path: str, script_name: str) -> Optional[str]:
     if os.path.isfile(script_path):
         return script_path
     return None
+
+
+def check_docker_image_exists(image_name: str) -> bool:
+    """Check if a Docker image exists locally.
+
+    Args:
+        image_name: Name of the Docker image
+
+    Returns:
+        True if image exists, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", image_name],
+            capture_output=True,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def get_docker_image_name(example_path: str) -> Optional[str]:
+    """Extract Docker image name from example directory.
+
+    Uses the directory name as the image name (following build.sh convention).
+
+    Args:
+        example_path: Absolute path to example directory
+
+    Returns:
+        Image name, or None if cannot determine
+    """
+    return Path(example_path).name
 
 
 def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[str]:
@@ -159,6 +194,16 @@ def run_example(
     script_path = find_script(example_path, script_name)
     if script_path is None:
         return (1, f"Script not found: {script_name} in {example_path}")
+
+    # Check if Docker image exists (except for build preset)
+    if preset_name != "build":
+        image_name = get_docker_image_name(example_path)
+        if image_name and not check_docker_image_exists(image_name):
+            return (
+                1,
+                f"Docker image '{image_name}' not found.\n"
+                f"Build it first: cvl run {example_identifier} build"
+            )
 
     # Run the script
     return run_script(script_path, extra_args)

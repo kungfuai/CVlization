@@ -170,6 +170,7 @@ Graduation is SUCCESS, not failure—it proves the example's value and reduces m
 * ✅ Build `cvl list` and `cvl info` for discovery (leverage existing example.yaml).
 * ✅ Build `cvl run` for executing presets.
 * Implement cache modes (isolated/host/volume) with warnings.
+* **TODO**: Push pre-built Docker images to Docker Hub public registry (enables 2-min pull vs 10-30 min build).
 
 **90 days - Comparison & Automation**
 
