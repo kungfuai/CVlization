@@ -44,6 +44,5 @@ Repository = "https://github.com/kungfuai/CVlization"
 Documentation = "https://github.com/kungfuai/CVlization"
 Issues = "https://github.com/kungfuai/CVlization/issues"
 
-[tool.setuptools.packages.find]
-include = ["cvl*"]
-exclude = ["cvlization*", "examples*", "tests*"]
+[tool.setuptools]
+packages = ["cvl", "cvl.commands", "cvl.core"]
