@@ -2,6 +2,7 @@
 import sys
 import argparse
 
+from cvl._version import get_full_version
 from cvl.core.discovery import find_all_examples
 from cvl.commands.list import list_examples
 from cvl.commands.info import get_example_info
@@ -13,6 +14,12 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cvl",
         description="CVlization CLI - Discover and run ML examples"
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=get_full_version()
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
