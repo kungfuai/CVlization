@@ -181,6 +181,109 @@ Graduation is SUCCESS, not failure—it proves the example's value and reduces m
 
 ---
 
+## 16) Improving `cvl run` - Making CLI Actually Useful (Nov 2025)
+
+**Current Problem:** `cvl run` provides minimal value over bash scripts - same experience, no error prevention, no helpful feedback.
+
+**Goal:** Make `cvl run` noticeably better than bash with 5 simple improvements.
+
+### What to Ship (2 hours total)
+
+**These 5 things make `cvl run` genuinely useful:**
+
+1. **Show "Running..." header** (15 min)
+   ```
+   Running surya build...
+   Example: perception/ocr_and_layout/surya
+   Script:  build.sh
+   ```
+   Users know what's happening, can cancel if wrong.
+
+2. **Handle Ctrl+C gracefully** (15 min)
+   ```python
+   except KeyboardInterrupt:
+       print("\n✗ Cancelled by user")
+       return (130, "")
+   ```
+   No ugly Python tracebacks.
+
+3. **Better missing image error + auto-fix** (30 min)
+   ```
+   ✗ Docker image 'surya' not found
+
+   Build it first:
+     cvl run perception/ocr_and_layout/surya build
+     or
+     bash examples/perception/ocr_and_layout/surya/build.sh
+
+   Build it now? [Y/n]
+   ```
+   Prevents #1 user frustration, offers fix.
+
+4. **Show completion time** (15 min)
+   ```
+   ✓ Completed in 5m 32s
+   # or
+   ✗ Failed after 2m 15s
+   ```
+   Visual feedback, sense of progress.
+
+5. **Check Docker is running** (30 min)
+   ```python
+   try:
+       subprocess.run(["docker", "info"], capture_output=True, check=True, timeout=5)
+   except:
+       print("✗ Docker is not running")
+       print("Start it: sudo systemctl start docker  # Linux")
+       return (1, "")
+   ```
+   Prevents confusing errors.
+
+### What NOT to Build (Yet)
+
+**Skip these until users ask for them:**
+
+- ❌ VRAM/disk space checks (fragile, edge cases)
+- ❌ Error analysis & auto-retry (too ambitious)
+- ❌ Progress indicators (Docker already shows output)
+- ❌ Parameter overrides (just edit the script)
+
+**Why skip:** Each adds complexity and maintenance burden. Ship simple first, add features based on real user requests.
+
+### Implementation
+
+**File:** `cvl/commands/run.py`
+
+**Week 1:** Implement all 5 improvements (2 hours)
+**Week 2:** Get user feedback, iterate only if needed
+**Week 3:** Don't build more features unless users specifically request them
+
+### Success Criteria
+
+- ✅ New users don't get confused by missing Docker image
+- ✅ Ctrl+C doesn't show scary traceback
+- ✅ Users know what's running and when it's done
+- ✅ `cvl run` feels slightly smoother than bash
+
+**Anti-goal:** Don't try to be smarter than bash. Just be friendlier.
+
+### Philosophy
+
+**Do:**
+- Make common errors less frustrating
+- Provide helpful context and feedback
+- Offer simple recovery options
+
+**Don't:**
+- Try to prevent all possible errors
+- Parse complex error messages
+- Add features "just in case"
+- Abstract away what's really happening
+
+Keep it simple. Ship it. Get feedback. Iterate.
+
+---
+
 ## 15) Standardization Audit (Oct 2025)
 
 **Current State (59 dockerized examples):**
