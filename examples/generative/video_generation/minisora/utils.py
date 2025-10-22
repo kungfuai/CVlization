@@ -61,7 +61,7 @@ def tensor_slice(x, begin, size):
 
 import math
 import numpy as np
-import skvideo.io
+from moviepy.editor import ImageSequenceClip
 
 
 def save_video_grid(video, fname, nrow=None):
@@ -85,5 +85,7 @@ def save_video_grid(video, fname, nrow=None):
         start_c = (padding + w) * c
         video_grid[:, start_r : start_r + h, start_c : start_c + w] = video[i]
 
-    skvideo.io.vwrite(fname, video_grid, inputdict={"-r": "5"})
+    # Use moviepy instead of skvideo
+    clip = ImageSequenceClip([frame for frame in video_grid], fps=5)
+    clip.write_videofile(fname, codec='libx264', logger=None)
     print("saved videos to", fname)
