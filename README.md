@@ -1,16 +1,28 @@
-# CVlization: Practical and sample-efficient training pipelines for vision, language and more modalities
+# CVlization: Dockerized ML Examples
 
-## Introduction
+Ready-to-use, reproducible examples for vision, language, and multimodal ML. Each example is self-contained with frozen dependencies.
 
-CVlization provides ready-to-use, dockerized workflows for various computer vision and language tasks. Each example has frozen dependencies, ensuring reproducibility and ease of use.
+## Quick Start
+
+```bash
+# Clone the repository
+git clone --depth 1 https://github.com/kungfuai/CVlization
+cd CVlization
+
+# Run any example
+bash examples/perception/image_classification/torch/build.sh
+bash examples/perception/image_classification/torch/train.sh
+```
+
+That's it! Each example has its own Dockerfile and bash scripts. No framework to learn.
 
 ## Table of Contents
 
 - [Examples](#examples)
+- [Browse Examples](#browse-examples)
+- [Running an Example](#running-an-example)
 - [Requirements](#requirements)
-- [Quickstart](#quickstart)
 - [Project Structure](#project-structure)
-- [Library (Legacy)](#library-legacy)
 - [Documentation](#documentation)
 - [License](#licenses)
 
@@ -57,30 +69,51 @@ examples/
 
 Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. Each example may contain one or more implementations using different frameworks or models. To start with, we recommend starting with the Image Classification example.
 
-### Running an Example
+## Browse Examples
 
-To run an example:
+With 60+ examples, there are a few ways to find what you need:
 
-1. Build the docker image:
+**Option 1: Browse on GitHub** (recommended)
+- [Perception examples](./examples/perception/) - Image classification, object detection, OCR, segmentation...
+- [Generative examples](./examples/generative/) - LLMs, image generation, video generation...
+
+**Option 2: Use the CLI** (optional, for convenience)
+
+The `cvl` CLI is a lightweight discovery tool that helps you explore examples:
+
 ```bash
-bash examples/<example_directory>/build.sh
-```
-2. Run the following command to run the training workflow:
-```bash
-bash examples/<example_directory>/train.sh
-```
-3. If you want to run the inference workflow, run the following command:
-```bash
-bash examples/<example_directory>/predict.sh
-```
-or
-```bash
-bash examples/<example_directory>/generate.sh
+# From inside the CVlization directory
+pipx install .
+
+# Browse examples
+cvl list --stability stable --tag ocr
+cvl info perception/ocr_and_layout/surya
 ```
 
-4. For more information, see the README.md file in the example directory.
+> **Note:** The CLI doesn't replace bash scripts. You still clone this repo and run the scripts directly. The CLI just helps you discover examples and see their metadata (GPU requirements, datasets, etc.).
 
-**License.** Each example typically references a project that has its own license. Please refer to the license file in the example sub-directory or the referenced project for more details.
+## Running an Example
+
+Every example follows the same simple pattern:
+
+```bash
+cd examples/<category>/<example_name>
+bash build.sh       # Build Docker image
+bash train.sh       # Train the model
+bash predict.sh     # Run inference
+```
+
+**Example: Train an image classifier on CIFAR-10**
+
+```bash
+cd examples/perception/image_classification/torch
+bash build.sh
+bash train.sh
+```
+
+For detailed instructions and available options, see the README.md in each example directory.
+
+**License Note:** Each example may reference projects with different licenses. Check the license file in each example directory.
 
 #### Design choices
 
@@ -98,65 +131,17 @@ docker run --shm-size 16G --runtime nvidia -it \
 
 ## Requirements
 
-- Docker
-- NVIDIA GPU (for GPU-accelerated examples)
+- Docker ([Install Docker](https://docs.docker.com/get-docker/))
+- NVIDIA GPU + nvidia-docker (for GPU-accelerated examples)
+  ```bash
+  # Ubuntu
+  sudo apt-get install -y nvidia-container-toolkit
+  ```
 
-## CLI Installation & Usage
+## Use CVlization on Colab
 
-CVlization is an examples-first monorepo. Clone the repository to get started:
-
-```bash
-# Full clone
-git clone https://github.com/kungfuai/CVlization
-cd CVlization
-pipx install .
-
-# Or lightweight clone (no git history, faster)
-git clone --depth 1 https://github.com/kungfuai/CVlization
-cd CVlization
-pipx install .
-```
-
-### Using the CLI
-
-```bash
-# Discover available examples
-cvl list
-cvl list --stability stable --tag ocr
-
-# Get detailed info about an example
-cvl info perception/ocr_and_layout/surya
-
-# Build and run an example
-cvl run perception/ocr_and_layout/surya build
-cvl run perception/ocr_and_layout/surya predict
-
-# Run with extra arguments
-cvl run generative/llm/nanogpt train --lr 0.001
-```
-
-The CLI provides a unified interface for discovering and running examples. Each example includes an `example.yaml` file with metadata (GPU requirements, datasets, stability level, etc.) and standardized presets (build, train, predict, etc.).
-
-## Quickstart
-
-### Use CVlization with Docker
-
-Please follow the instructions above in the [Running an Example](#running-an-example) section.
-
-For GPU support on Ubuntu, you may need to install `nvidia-container-toolkit`:
-```
-sudo apt-get install -y nvidia-container-toolkit
-```
-
-We can use the image classification example to run an experiment on cifar10.
-
-```bash
-bash examples/perception/image_classification/torch/build.sh
-bash examples/perception/image_classification/torch/train.sh
-```
-
-### Use CVlization on Colab
-[Colab notebook: running experiments on cifar10](https://colab.research.google.com/drive/1FkZcZnJC_z-PuFSYM91kU1-d63-LecMJ?usp=sharing)
+No installation needed - run examples directly in Google Colab:
+[Colab notebook: CIFAR-10 classification](https://colab.research.google.com/drive/1FkZcZnJC_z-PuFSYM91kU1-d63-LecMJ?usp=sharing)
 
 ## Project Structure
 
