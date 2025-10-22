@@ -28,12 +28,12 @@ export HF_TOKEN=your_huggingface_token
 
 2. Build the Docker image:
 ```bash
-bash examples/doc_ai/dots-ocr/build.sh
+bash examples/perception/ocr_and_layout/dots_ocr/build.sh
 ```
 
 3. Run inference on a sample image:
 ```bash
-bash examples/doc_ai/dots-ocr/predict.sh --image examples/sample.jpg
+bash examples/perception/ocr_and_layout/dots_ocr/predict.sh --image examples/sample.jpg
 ```
 
 ### Usage
@@ -42,14 +42,14 @@ bash examples/doc_ai/dots-ocr/predict.sh --image examples/sample.jpg
 
 Process a document image:
 ```bash
-bash examples/doc_ai/dots-ocr/predict.sh --image path/to/document.jpg
+bash examples/perception/ocr_and_layout/dots_ocr/predict.sh --image path/to/document.jpg
 ```
 
 #### Custom Output Path
 
 Save results to a specific location:
 ```bash
-bash examples/doc_ai/dots-ocr/predict.sh \
+bash examples/perception/ocr_and_layout/dots_ocr/predict.sh \
     --image path/to/document.jpg \
     --output outputs/my_result.txt
 ```
@@ -58,7 +58,7 @@ bash examples/doc_ai/dots-ocr/predict.sh \
 
 Get structured JSON output:
 ```bash
-bash examples/doc_ai/dots-ocr/predict.sh \
+bash examples/perception/ocr_and_layout/dots_ocr/predict.sh \
     --image path/to/document.jpg \
     --output outputs/result.json \
     --format json
@@ -68,7 +68,7 @@ bash examples/doc_ai/dots-ocr/predict.sh \
 
 Use the detailed prompt for comprehensive analysis:
 ```bash
-bash examples/doc_ai/dots-ocr/predict.sh \
+bash examples/perception/ocr_and_layout/dots_ocr/predict.sh \
     --image path/to/document.jpg \
     --detailed
 ```
@@ -77,7 +77,7 @@ bash examples/doc_ai/dots-ocr/predict.sh \
 
 Process images from URLs:
 ```bash
-bash examples/doc_ai/dots-ocr/predict.sh \
+bash examples/perception/ocr_and_layout/dots_ocr/predict.sh \
     --image https://example.com/document.jpg
 ```
 
@@ -89,7 +89,7 @@ For more control, run the Docker container directly:
 
 ```bash
 docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/dots-ocr:/workspace \
+    -v $(pwd)/examples/perception/ocr_and_layout/dots_ocr:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \
     dots_ocr \
@@ -105,7 +105,7 @@ Create your own prompt for specific extraction tasks:
 
 ```bash
 docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/dots-ocr:/workspace \
+    -v $(pwd)/examples/perception/ocr_and_layout/dots_ocr:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     dots_ocr \
     python3 predict.py \
@@ -193,13 +193,13 @@ For faster inference:
 
 Run the smoke test to verify installation:
 ```bash
-bash examples/doc_ai/dots-ocr/test.sh
+bash examples/perception/ocr_and_layout/dots_ocr/test.sh
 ```
 
 ### Directory Structure
 
 ```
-examples/doc_ai/dots-ocr/
+examples/perception/ocr_and_layout/dots_ocr/
 ├── Dockerfile           # Container definition
 ├── requirements.txt     # Python dependencies
 ├── predict.py          # Main inference script
@@ -215,7 +215,7 @@ examples/doc_ai/dots-ocr/
 ### Output Location
 
 By default, outputs are saved to:
-- `examples/doc_ai/dots-ocr/outputs/`
+- `examples/perception/ocr_and_layout/dots_ocr/outputs/`
 
 This location is inside the example directory for easy access and review.
 
