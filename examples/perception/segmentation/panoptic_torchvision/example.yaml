@@ -1,14 +1,28 @@
 name: panoptic-segmentation-torchvision
 capability: perception/segmentation
-modalities: [vision]
-datasets: [coco-panoptic]
+modalities:
+- vision
+datasets:
+- coco-panoptic
 stability: stable
 resources:
   gpu: 1
   vram_gb: 16
   disk_gb: 15
-presets: [train]
-tags: [torchvision, panoptic-segmentation, pytorch]
-tasks: [panoptic_segmentation]
-frameworks: [pytorch, torchvision]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- torchvision
+- panoptic-segmentation
+- pytorch
+tasks:
+- panoptic_segmentation
+frameworks:
+- pytorch
+- torchvision
 description: Panoptic segmentation training with Torchvision

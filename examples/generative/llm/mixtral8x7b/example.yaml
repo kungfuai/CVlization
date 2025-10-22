@@ -1,14 +1,29 @@
 name: mixtral-8x7b-inference
 capability: generative/llm
-modalities: [text]
+modalities:
+- text
 datasets: []
 stability: stable
 resources:
   gpu: 1
   vram_gb: 20
   disk_gb: 100
-presets: [predict]
-tags: [mixtral, moe, inference, offloading, pytorch]
-tasks: [text_generation]
-frameworks: [pytorch]
-description: Mixtral 8x7B MoE model inference with layer offloading (requires HuggingFace access)
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- mixtral
+- moe
+- inference
+- offloading
+- pytorch
+tasks:
+- text_generation
+frameworks:
+- pytorch
+description: Mixtral 8x7B MoE model inference with layer offloading (requires HuggingFace
+  access)

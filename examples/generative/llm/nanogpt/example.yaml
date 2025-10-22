@@ -1,14 +1,28 @@
 name: nanogpt
 capability: generative/llm
-modalities: [text]
-datasets: [shakespeare]
+modalities:
+- text
+datasets:
+- shakespeare
 stability: stable
 resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 2
-presets: [train]
-tags: [nanogpt, gpt, language-model, pytorch]
-tasks: [text_generation]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- nanogpt
+- gpt
+- language-model
+- pytorch
+tasks:
+- text_generation
+frameworks:
+- pytorch
 description: Train GPT model from scratch using Andrej Karpathy's nanoGPT

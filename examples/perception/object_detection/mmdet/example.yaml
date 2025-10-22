@@ -1,14 +1,33 @@
 name: object-detection-mmdet
 capability: perception/object_detection
-modalities: [vision]
-datasets: [kitti-tiny, penn-fudan-pedestrian]
+modalities:
+- vision
+datasets:
+- kitti-tiny
+- penn-fudan-pedestrian
 stability: stable
 resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 5
-presets: [train]
-tags: [mmdetection, object-detection, fcos, detr, retinanet, pytorch]
-tasks: [object_detection]
-frameworks: [pytorch, mmdetection]
-description: Object detection training with MMDetection framework (FCOS, Deformable DETR, etc.)
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- mmdetection
+- object-detection
+- fcos
+- detr
+- retinanet
+- pytorch
+tasks:
+- object_detection
+frameworks:
+- pytorch
+- mmdetection
+description: Object detection training with MMDetection framework (FCOS, Deformable
+  DETR, etc.)

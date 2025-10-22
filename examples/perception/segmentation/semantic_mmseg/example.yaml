@@ -1,14 +1,31 @@
 name: semantic-segmentation-mmseg
 capability: perception/segmentation
-modalities: [vision]
-datasets: [ade20k, cityscapes]
+modalities:
+- vision
+datasets:
+- ade20k
+- cityscapes
 stability: stable
 resources:
   gpu: 1
   vram_gb: 12
   disk_gb: 20
-presets: [train]
-tags: [mmsegmentation, semantic-segmentation, segformer, pspnet, pytorch]
-tasks: [semantic_segmentation]
-frameworks: [pytorch, mmsegmentation]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- mmsegmentation
+- semantic-segmentation
+- segformer
+- pspnet
+- pytorch
+tasks:
+- semantic_segmentation
+frameworks:
+- pytorch
+- mmsegmentation
 description: Semantic segmentation training with MMSegmentation framework

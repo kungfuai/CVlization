@@ -1,14 +1,28 @@
 name: global-tracking-transformer
 capability: perception/tracking
-modalities: [vision]
-datasets: [custom]
+modalities:
+- vision
+datasets:
+- custom
 stability: stable
 resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 10
-presets: [predict]
-tags: [gtr, object-tracking, transformer, pytorch]
-tasks: [object_tracking]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- gtr
+- object-tracking
+- transformer
+- pytorch
+tasks:
+- object_tracking
+frameworks:
+- pytorch
 description: Global Tracking Transformer for multi-object tracking in videos

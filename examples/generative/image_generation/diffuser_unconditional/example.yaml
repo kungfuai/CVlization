@@ -1,14 +1,30 @@
 name: diffuser-unconditional
 capability: generative/image_generation
-modalities: [vision]
-datasets: [huggan/flowers-102-categories, cifar10]
+modalities:
+- vision
+datasets:
+- huggan/flowers-102-categories
+- cifar10
 stability: stable
 resources:
   gpu: 1
   vram_gb: 12
   disk_gb: 10
-presets: [train]
-tags: [diffusers, unconditional, ddpm, pytorch]
-tasks: [image_generation]
-frameworks: [pytorch, diffusers]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- diffusers
+- unconditional
+- ddpm
+- pytorch
+tasks:
+- image_generation
+frameworks:
+- pytorch
+- diffusers
 description: Train unconditional image generator with DDPM using HuggingFace Diffusers

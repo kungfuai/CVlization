@@ -1,14 +1,30 @@
 name: docling-serve
 capability: perception/ocr_and_layout
-modalities: [vision, text]
-datasets: [custom]
+modalities:
+- vision
+- text
+datasets:
+- custom
 stability: stable
 resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 10
-presets: [serve]
-tags: [ocr, document-conversion, docling, api-server]
-tasks: [ocr, document_conversion]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  serve:
+    script: serve.sh
+    description: Run serve
+tags:
+- ocr
+- document-conversion
+- docling
+- api-server
+tasks:
+- ocr
+- document_conversion
+frameworks:
+- pytorch
 description: Document conversion and OCR server using Docling

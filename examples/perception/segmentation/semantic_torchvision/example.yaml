@@ -1,14 +1,31 @@
 name: semantic-segmentation-torchvision
 capability: perception/segmentation
-modalities: [vision]
-datasets: [voc, coco]
+modalities:
+- vision
+datasets:
+- voc
+- coco
 stability: stable
 resources:
   gpu: 1
   vram_gb: 12
   disk_gb: 20
-presets: [train]
-tags: [torchvision, semantic-segmentation, fcn, deeplabv3, pytorch]
-tasks: [semantic_segmentation]
-frameworks: [pytorch, torchvision]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- torchvision
+- semantic-segmentation
+- fcn
+- deeplabv3
+- pytorch
+tasks:
+- semantic_segmentation
+frameworks:
+- pytorch
+- torchvision
 description: Semantic segmentation training with Torchvision (FCN, DeepLabV3)
