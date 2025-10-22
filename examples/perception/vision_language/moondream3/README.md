@@ -51,12 +51,12 @@ export HF_TOKEN=your_huggingface_token
 
 3. Build the Docker image:
 ```bash
-bash examples/doc_ai/moondream3/build.sh
+bash examples/perception/vision_language/moondream3/build.sh
 ```
 
 4. Run OCR on an image:
 ```bash
-bash examples/doc_ai/moondream3/predict.sh --image examples/sample.jpg
+bash examples/perception/vision_language/moondream3/predict.sh --image examples/sample.jpg
 ```
 
 ### Usage
@@ -65,7 +65,7 @@ bash examples/doc_ai/moondream3/predict.sh --image examples/sample.jpg
 
 Extract text from a document:
 ```bash
-bash examples/doc_ai/moondream3/predict.sh \
+bash examples/perception/vision_language/moondream3/predict.sh \
     --image path/to/document.jpg \
     --task ocr \
     --ocr-mode ordered
@@ -81,7 +81,7 @@ OCR modes:
 
 Generate image captions:
 ```bash
-bash examples/doc_ai/moondream3/predict.sh \
+bash examples/perception/vision_language/moondream3/predict.sh \
     --image path/to/image.jpg \
     --task caption \
     --caption-length normal
@@ -93,7 +93,7 @@ Caption lengths: `short`, `normal`, `long`
 
 Ask questions about an image:
 ```bash
-bash examples/doc_ai/moondream3/predict.sh \
+bash examples/perception/vision_language/moondream3/predict.sh \
     --image path/to/image.jpg \
     --task query \
     --prompt "How many people are in this image?"
@@ -103,14 +103,14 @@ bash examples/doc_ai/moondream3/predict.sh \
 
 Detect objects in an image:
 ```bash
-bash examples/doc_ai/moondream3/predict.sh \
+bash examples/perception/vision_language/moondream3/predict.sh \
     --image path/to/image.jpg \
     --task detect
 ```
 
 Detect specific objects:
 ```bash
-bash examples/doc_ai/moondream3/predict.sh \
+bash examples/perception/vision_language/moondream3/predict.sh \
     --image invoice.jpg \
     --task detect \
     --object "table"
@@ -120,7 +120,7 @@ bash examples/doc_ai/moondream3/predict.sh \
 
 Get coordinates of objects:
 ```bash
-bash examples/doc_ai/moondream3/predict.sh \
+bash examples/perception/vision_language/moondream3/predict.sh \
     --image photo.jpg \
     --task point \
     --object "person"
@@ -132,7 +132,7 @@ bash examples/doc_ai/moondream3/predict.sh \
 
 Save results as JSON with metadata:
 ```bash
-bash examples/doc_ai/moondream3/predict.sh \
+bash examples/perception/vision_language/moondream3/predict.sh \
     --image document.jpg \
     --output results.json \
     --format json
@@ -143,7 +143,7 @@ bash examples/doc_ai/moondream3/predict.sh \
 For more control:
 ```bash
 docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/moondream3:/workspace \
+    -v $(pwd)/examples/perception/vision_language/moondream3:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \
     moondream3 \
@@ -158,7 +158,7 @@ docker run --runtime nvidia \
 For better compatibility (slower inference):
 ```bash
 docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/moondream3:/workspace \
+    -v $(pwd)/examples/perception/vision_language/moondream3:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     moondream3 \
     python3 predict.py \
@@ -309,13 +309,13 @@ For faster inference:
 
 Run the smoke test to verify installation:
 ```bash
-bash examples/doc_ai/moondream3/test.sh
+bash examples/perception/vision_language/moondream3/test.sh
 ```
 
 ### Directory Structure
 
 ```
-examples/doc_ai/moondream3/
+examples/perception/vision_language/moondream3/
 ├── Dockerfile           # Container definition
 ├── requirements.txt     # Python dependencies
 ├── predict.py          # Main inference script
@@ -331,7 +331,7 @@ examples/doc_ai/moondream3/
 ### Output Location
 
 By default, outputs are saved to:
-- `examples/doc_ai/moondream3/outputs/`
+- `examples/perception/vision_language/moondream3/outputs/`
 
 ### Model Cache
 

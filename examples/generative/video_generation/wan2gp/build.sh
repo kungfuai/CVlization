@@ -1,1 +1,1 @@
-docker build -t wangp .
+docker build -t wan2gp .

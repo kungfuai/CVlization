@@ -58,10 +58,12 @@ run_stage() {
     echo ">>> Starting: $description"
     echo ""
 
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
     docker run --rm --gpus all \
         -v "$SCRIPT_DIR/data:/workspace/data" \
         -v "$SCRIPT_DIR/outputs:/workspace/outputs" \
-        -v "$HOME/.cache/nanochat:/root/.cache/nanochat" \
+        -v "$REPO_ROOT/data/container_cache/nanochat:/root/.cache/nanochat" \
         nanochat \
         bash -c "
             cd /workspace/nanochat

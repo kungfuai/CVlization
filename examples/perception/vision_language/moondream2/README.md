@@ -27,12 +27,12 @@ export HF_TOKEN=your_huggingface_token
 
 2. Build the Docker image:
 ```bash
-bash examples/doc_ai/moondream2/build.sh
+bash examples/perception/vision_language/moondream2/build.sh
 ```
 
 3. Run OCR on an image:
 ```bash
-bash examples/doc_ai/moondream2/predict.sh --image examples/sample.jpg
+bash examples/perception/vision_language/moondream2/predict.sh --image examples/sample.jpg
 ```
 
 ### Usage
@@ -41,7 +41,7 @@ bash examples/doc_ai/moondream2/predict.sh --image examples/sample.jpg
 
 Extract text from a document:
 ```bash
-bash examples/doc_ai/moondream2/predict.sh \
+bash examples/perception/vision_language/moondream2/predict.sh \
     --image path/to/document.jpg \
     --task ocr \
     --ocr-mode ordered
@@ -56,7 +56,7 @@ OCR modes:
 
 Generate image captions:
 ```bash
-bash examples/doc_ai/moondream2/predict.sh \
+bash examples/perception/vision_language/moondream2/predict.sh \
     --image path/to/image.jpg \
     --task caption \
     --caption-length normal
@@ -68,7 +68,7 @@ Caption lengths: `short`, `normal`, `long`
 
 Ask questions about an image:
 ```bash
-bash examples/doc_ai/moondream2/predict.sh \
+bash examples/perception/vision_language/moondream2/predict.sh \
     --image path/to/image.jpg \
     --task query \
     --prompt "How many people are in this image?"
@@ -78,7 +78,7 @@ bash examples/doc_ai/moondream2/predict.sh \
 
 Use custom prompts for specific tasks:
 ```bash
-bash examples/doc_ai/moondream2/predict.sh \
+bash examples/perception/vision_language/moondream2/predict.sh \
     --image invoice.jpg \
     --task query \
     --prompt "Extract the invoice number and total amount"
@@ -90,7 +90,7 @@ bash examples/doc_ai/moondream2/predict.sh \
 
 Save results as JSON with metadata:
 ```bash
-bash examples/doc_ai/moondream2/predict.sh \
+bash examples/perception/vision_language/moondream2/predict.sh \
     --image document.jpg \
     --output results.json \
     --format json
@@ -101,7 +101,7 @@ bash examples/doc_ai/moondream2/predict.sh \
 For more control:
 ```bash
 docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/moondream2:/workspace \
+    -v $(pwd)/examples/perception/vision_language/moondream2:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \
     moondream2 \
@@ -234,13 +234,13 @@ For faster inference:
 
 Run the smoke test to verify installation:
 ```bash
-bash examples/doc_ai/moondream2/test.sh
+bash examples/perception/vision_language/moondream2/test.sh
 ```
 
 ### Directory Structure
 
 ```
-examples/doc_ai/moondream2/
+examples/perception/vision_language/moondream2/
 ├── Dockerfile           # Container definition
 ├── requirements.txt     # Python dependencies
 ├── predict.py          # Main inference script
@@ -256,7 +256,7 @@ examples/doc_ai/moondream2/
 ### Output Location
 
 By default, outputs are saved to:
-- `examples/doc_ai/moondream2/outputs/`
+- `examples/perception/vision_language/moondream2/outputs/`
 
 ### Model Cache
 
