@@ -239,7 +239,7 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default=None,
         help="Output file path"
     )
     parser.add_argument(
@@ -263,6 +263,15 @@ def main():
     # If CVL_INPUTS/CVL_OUTPUTS are set (running via cvl run), use them as base
     cvl_inputs = os.getenv('CVL_INPUTS')
     cvl_outputs = os.getenv('CVL_OUTPUTS')
+
+    # Smart defaults based on execution mode
+    if args.output is None:
+        if cvl_outputs:
+            # CVL mode: user already specified output directory, use simple filename
+            args.output = "result.txt"
+        else:
+            # Standalone mode: use workspace-relative path
+            args.output = "outputs/result.txt"
 
     # Resolve image path
     if cvl_inputs and not args.image.startswith(('http://', 'https://', '/')):
