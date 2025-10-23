@@ -17,7 +17,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # CVL dual-mode execution support
-from cvlization.dual_mode import (
+from cvlization.paths import (
     get_input_dir,
     get_output_dir,
     resolve_input_path,

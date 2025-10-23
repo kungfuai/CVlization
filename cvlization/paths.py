@@ -1,10 +1,11 @@
-"""Utilities for CVL dual-mode execution.
+"""Path resolution utilities for CVL dual-mode execution.
 
-This module provides helpers for examples to work in both:
+This module provides path helpers for examples to work in both:
 1. Standalone mode: bash predict.sh (workspace-relative paths)
 2. CVL docker mode: cvl run --inputs/--outputs (user-specified directories)
 
-Examples can import these helpers to handle path resolution and params.
+Examples can import these utilities to handle input/output path resolution
+and parameter loading across both execution modes.
 """
 
 import os
