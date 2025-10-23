@@ -5,6 +5,8 @@ import os
 import subprocess
 import yaml
 
+from cvl.core.config import get_repo_root_from_config, save_repo_root
+
 
 def find_repo_root(start_path: Optional[Path] = None) -> Path:
     """Find CVlization repository root.
@@ -12,8 +14,9 @@ def find_repo_root(start_path: Optional[Path] = None) -> Path:
     Precedence order:
     1. Git clone (via git rev-parse) - if running inside CVlization repo
     2. CVLIZATION_ROOT environment variable
-    3. Managed checkout in platform data directory
-    4. Fail with helpful message
+    3. Saved config from editable install (pip install -e .)
+    4. Managed checkout in platform data directory
+    5. Fail with helpful message
 
     Args:
         start_path: Starting directory (defaults to current working directory)
@@ -35,6 +38,15 @@ def find_repo_root(start_path: Optional[Path] = None) -> Path:
         )
         repo_root = Path(result.stdout.strip()).resolve()
         if (repo_root / "examples").exists():
+            # Save to config for future use (allows cvl to work from anywhere)
+            # Only save if not already configured or if different location
+            saved_root = get_repo_root_from_config()
+            if saved_root != str(repo_root):
+                try:
+                    save_repo_root(str(repo_root))
+                except (IOError, OSError):
+                    # Silently fail if we can't write config (e.g., permissions)
+                    pass
             return repo_root
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
@@ -51,7 +63,14 @@ def find_repo_root(start_path: Optional[Path] = None) -> Path:
                 "Unset CVLIZATION_ROOT or point it to a valid CVlization repository."
             )
 
-    # 3. Check managed checkout location (platform-specific)
+    # 3. Check saved config from editable install
+    config_root = get_repo_root_from_config()
+    if config_root:
+        config_path = Path(config_root).resolve()
+        if config_path.exists() and (config_path / "examples").exists():
+            return config_path
+
+    # 4. Check managed checkout location (platform-specific)
     # Note: Using simple approach; could use platformdirs library for production
     if os.name == 'nt':  # Windows
         data_dir = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData' / 'Local'))
@@ -64,11 +83,14 @@ def find_repo_root(start_path: Optional[Path] = None) -> Path:
     if managed_path.exists() and (managed_path / "examples").exists():
         return managed_path
 
-    # 4. Nothing found - fail with helpful message
+    # 5. Nothing found - fail with helpful message
     raise RuntimeError(
         "CVlization repository not found.\n\n"
         "Options:\n"
-        "  1. Run from inside a CVlization git clone\n"
+        "  1. Clone CVlization and install:\n"
+        "     git clone https://github.com/kungfuai/CVlization\n"
+        "     cd CVlization\n"
+        "     pip install -e .\n"
         "  2. Set CVLIZATION_ROOT=/path/to/CVlization\n"
         f"  3. Clone to managed location: {managed_path}\n"
         "     (future: run 'cvl init' to do this automatically)"
