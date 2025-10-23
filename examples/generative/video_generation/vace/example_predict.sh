@@ -3,7 +3,7 @@
 # Example script to run VACE (Video Animation Control Extension) video generation
 # This calls the predict.py script with sample arguments
 
-# docker run --shm-size 16G --runtime nvidia -it \
+# docker run --shm-size 16G --runtime nvidia \
 # 	-v $(pwd)/examples/video_gen/vace/:/workspace \
 # 	-v $(pwd)/data/container_cache:/root/.cache \
 #     -e CUDA_VISIBLE_DEVICES='0' \
@@ -14,7 +14,7 @@
 # 		--image "assets/images/drone0.png" \
 # 		--prompt "a guy happily explains he likes the drone"
 
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --runtime nvidia \
 	-v $(pwd)/examples/video_gen/vace/:/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
     -e CUDA_VISIBLE_DEVICES='0' \

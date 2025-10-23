@@ -1,7 +1,7 @@
 # TODO: simplify the mounts. Only mount $(pwd) and container cache.
 # PYTHONPATH=/workspace/cvlization/examples/video_gen/minisora python my_script.py
 # For anonymous access to public WandB VAE models: WANDB_API_KEY=anonymous bash train.sh ...
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --runtime nvidia \
 	-v $(pwd)/examples/video_gen/minisora:/workspace \
     -v $(pwd)/cvlization:/workspace/cvlization \
     -v $(pwd)/data:/workspace/data \

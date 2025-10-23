@@ -1,4 +1,4 @@
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --runtime nvidia \
 	-v $(pwd)/examples/image_gen/pixart:/workspace \
     -v $(pwd)/cvlization:/workspace/cvlization \
     -v $(pwd)/data:/workspace/data \

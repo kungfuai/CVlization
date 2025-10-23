@@ -1,4 +1,4 @@
-docker run --runtime nvidia -it \
+docker run --runtime nvidia \
 	-v $(pwd)/examples/image_gen/edm:/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
 	edm2 \

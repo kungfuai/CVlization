@@ -1,4 +1,4 @@
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --runtime nvidia \
 	-v $(pwd)/examples/video_gen/vace_comfy/:/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
     -v $(pwd)/examples/video_gen/animate_x/data/images:/workspace/examples/video_gen/animate_x/data/images \
