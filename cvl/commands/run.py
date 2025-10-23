@@ -129,13 +129,18 @@ def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[
     Returns:
         Absolute path to example directory, or None if not found
     """
+    from cvl.core.discovery import find_repo_root
+
     # Normalize path - remove leading "examples/" if present
     normalized_path = example_identifier.removeprefix("examples/").rstrip("/")
 
     for example in examples:
         example_rel_path = example.get("_path", "").removeprefix("examples/").rstrip("/")
         if example_rel_path == normalized_path:
-            return example.get("_path")
+            # Convert relative path to absolute using repo root
+            repo_root = find_repo_root()
+            rel_path = example.get("_path")
+            return str(repo_root / rel_path)
 
     return None
 
