@@ -63,7 +63,7 @@ class Table:
         self.log.append(data)
         data = {" ".join(p): v for p, v in path_iter(data)}
         self.keys = self.keys or data.keys()
-        if len(self.log) is 1:
+        if len(self.log) == 1:
             print(*(self.formatter(k, True) for k in self.keys))
         if self.report(data):
             try:
