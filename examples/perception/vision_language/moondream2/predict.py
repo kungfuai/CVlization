@@ -10,10 +10,19 @@ Simple implementation using transformers AutoModelForCausalLM with trust_remote_
 
 import argparse
 import json
+import os
 from pathlib import Path
 from PIL import Image
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# CVL dual-mode execution support
+from cvlization.dual_mode import (
+    get_input_dir,
+    get_output_dir,
+    resolve_input_path,
+    resolve_output_path,
+)
 
 
 # Model configuration
@@ -37,8 +46,10 @@ def detect_device():
     """
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        dtype = torch.bfloat16
-        print(f"Using CUDA device: {torch.cuda.get_device_name()}")
+        # Check compute capability for bfloat16 support (requires SM 8.0+)
+        major_cc = torch.cuda.get_device_capability()[0]
+        dtype = torch.bfloat16 if major_cc >= 8 else torch.float16
+        print(f"Using CUDA device: {torch.cuda.get_device_name()} (compute {major_cc}.x, dtype: {dtype})")
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         device = torch.device("mps")
         dtype = torch.float16
@@ -71,7 +82,12 @@ def load_model(model_id: str = MODEL_ID, revision: str = REVISION, device: str =
         device = detected_device
     else:
         device = torch.device(device)
-        dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+        # Apply same dtype logic as detect_device()
+        if device.type == "cuda":
+            major_cc = torch.cuda.get_device_capability()[0]
+            dtype = torch.bfloat16 if major_cc >= 8 else torch.float16
+        else:
+            dtype = torch.float32 if device.type == "cpu" else torch.float16
         print(f"Using device: {device} with dtype: {dtype}")
 
     # Load tokenizer
@@ -186,8 +202,6 @@ def save_output(output: str, output_path: str, format: str = "txt"):
 
 
 def main():
-    import os
-
     parser = argparse.ArgumentParser(
         description="Run Moondream2 OCR and document understanding"
     )
@@ -260,34 +274,21 @@ def main():
     args = parser.parse_args()
 
     # Resolve paths for CVL dual-mode support
-    # If CVL_INPUTS/CVL_OUTPUTS are set (running via cvl run), use them as base
-    cvl_inputs = os.getenv('CVL_INPUTS')
-    cvl_outputs = os.getenv('CVL_OUTPUTS')
+    INP = get_input_dir()
+    OUT = get_output_dir()
 
-    # Smart defaults based on execution mode
+    # Smart default for output path
     if args.output is None:
-        if cvl_outputs:
+        if os.getenv('CVL_OUTPUTS'):
             # CVL mode: user already specified output directory, use simple filename
             args.output = "result.txt"
         else:
             # Standalone mode: use workspace-relative path
             args.output = "outputs/result.txt"
 
-    # Resolve image path
-    if cvl_inputs and not args.image.startswith(('http://', 'https://', '/')):
-        # Relative path + CVL_INPUTS set → resolve against CVL_INPUTS
-        image_path = str(Path(cvl_inputs) / args.image)
-    else:
-        # Absolute path, URL, or no CVL_INPUTS → use as-is
-        image_path = args.image
-
-    # Resolve output path
-    if cvl_outputs and not args.output.startswith('/'):
-        # Relative path + CVL_OUTPUTS set → resolve against CVL_OUTPUTS
-        output_path = str(Path(cvl_outputs) / args.output)
-    else:
-        # Absolute path or no CVL_OUTPUTS → use as-is
-        output_path = args.output
+    # Resolve paths using cvlization utilities
+    image_path = resolve_input_path(args.image, INP)
+    output_path = resolve_output_path(args.output, OUT)
 
     # Load model
     model, tokenizer = load_model(args.model_id, args.revision, args.device)

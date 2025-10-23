@@ -1,57 +1,25 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Get the directory where this script is located
+# Always run from this folder
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Find repo root and set cache directory
-REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
-CACHE_DIR="$REPO_ROOT/data/container_cache"
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
-# Default values (relative to script directory)
-IMAGE_PATH="examples/sample.jpg"
-OUTPUT_PATH="outputs/result.txt"
+# Inputs/Outputs: if CVL set these, great; else Python will default to ./inputs, ./outputs
+IMG="${CVL_IMAGE:-moondream2}"
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --image)
-            IMAGE_PATH="$2"
-            shift 2
-            ;;
-        --output)
-            OUTPUT_PATH="$2"
-            shift 2
-            ;;
-        *)
-            break
-            ;;
-    esac
-done
+# In CVL docker mode, workspace is readonly; in standalone mode, it's writable for outputs
+WORKSPACE_RO="${CVL_OUTPUTS:+,readonly}"
 
-# Create outputs directory if it doesn't exist
-mkdir -p "$SCRIPT_DIR/outputs"
-
-# Run from script directory, works from anywhere
-# CVL dual-mode: If CVL_INPUTS/CVL_OUTPUTS are set (by user or cvl run), mount and use them
-# Otherwise, use workspace-relative paths (existing behavior)
-DOCKER_MOUNTS="-v $SCRIPT_DIR:/workspace -v $CACHE_DIR:/root/.cache"
-DOCKER_ENVS="-e HF_TOKEN=$HF_TOKEN"
-
-if [ -n "$CVL_INPUTS" ]; then
-    # User or cvl set CVL_INPUTS - mount it
-    DOCKER_MOUNTS="$DOCKER_MOUNTS -v $CVL_INPUTS:/mnt/cvl/inputs:ro"
-    DOCKER_ENVS="$DOCKER_ENVS -e CVL_INPUTS=/mnt/cvl/inputs"
-fi
-
-if [ -n "$CVL_OUTPUTS" ]; then
-    # User or cvl set CVL_OUTPUTS - mount it
-    mkdir -p "$CVL_OUTPUTS"
-    DOCKER_MOUNTS="$DOCKER_MOUNTS -v $CVL_OUTPUTS:/mnt/cvl/outputs"
-    DOCKER_ENVS="$DOCKER_ENVS -e CVL_OUTPUTS=/mnt/cvl/outputs"
-fi
-
-docker run --runtime nvidia \
-    $DOCKER_MOUNTS \
-    $DOCKER_ENVS \
-    moondream2 \
-    python3 predict.py --image "$IMAGE_PATH" --output "$OUTPUT_PATH" "$@"
+docker run --rm --gpus=all \
+  --workdir /workspace \
+  --mount "type=bind,src=$SCRIPT_DIR,dst=/workspace$WORKSPACE_RO" \
+  --mount "type=bind,src=$REPO_ROOT,dst=/cvlization_repo,readonly" \
+  --env "PYTHONPATH=/cvlization_repo" \
+  ${CVL_INPUTS:+--mount "type=bind,src=$CVL_INPUTS,dst=/mnt/cvl/inputs,readonly"} \
+  ${CVL_OUTPUTS:+--mount "type=bind,src=$CVL_OUTPUTS,dst=/mnt/cvl/outputs"} \
+  ${CVL_INPUTS:+-e CVL_INPUTS=/mnt/cvl/inputs} \
+  ${CVL_OUTPUTS:+-e CVL_OUTPUTS=/mnt/cvl/outputs} \
+  "$IMG" bash -lc "python3 predict.py $*"
