@@ -124,28 +124,57 @@ def get_docker_image_name(example_path: str) -> Optional[str]:
     return Path(example_path).name
 
 
+def find_matching_examples(examples: List[Dict], identifier: str) -> List[Dict]:
+    """Find examples matching identifier (exact or suffix match).
+
+    Supports flexible matching:
+    - Exact: "perception/vision_language/moondream2"
+    - Short: "moondream2" matches "perception/vision_language/moondream2"
+    - Partial: "line_detection/torch" matches "perception/line_detection/torch"
+
+    Args:
+        examples: List of example metadata dicts
+        identifier: Example identifier (full path, partial path, or short name)
+
+    Returns:
+        List of matching examples (empty if none found, multiple if ambiguous)
+    """
+    normalized = identifier.removeprefix("examples/").rstrip("/")
+    matches = []
+
+    for example in examples:
+        path = example.get("_path", "").removeprefix("examples/").rstrip("/")
+
+        # Exact match - return immediately
+        if path == normalized:
+            return [example]
+
+        # Suffix match - path ends with identifier
+        if path.endswith("/" + normalized):
+            matches.append(example)
+
+    return matches
+
+
 def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[str]:
     """Get the absolute path to an example directory.
 
     Args:
         examples: List of example metadata dicts
-        example_identifier: Example path (e.g., "generative/minisora")
+        example_identifier: Example path (full, partial, or short name)
 
     Returns:
         Absolute path to example directory, or None if not found
     """
     from cvl.core.discovery import find_repo_root
 
-    # Normalize path - remove leading "examples/" if present
-    normalized_path = example_identifier.removeprefix("examples/").rstrip("/")
+    matches = find_matching_examples(examples, example_identifier)
 
-    for example in examples:
-        example_rel_path = example.get("_path", "").removeprefix("examples/").rstrip("/")
-        if example_rel_path == normalized_path:
-            # Convert relative path to absolute using repo root
-            repo_root = find_repo_root()
-            rel_path = example.get("_path")
-            return str(repo_root / rel_path)
+    if len(matches) == 1:
+        # Single match - return its path
+        repo_root = find_repo_root()
+        rel_path = matches[0].get("_path")
+        return str(repo_root / rel_path)
 
     return None
 
@@ -402,22 +431,19 @@ def run_example(
     if not docker_running:
         return (1, f"✗ Docker is not running\n{docker_error}")
 
-    # Find the example
+    # Find matching examples
+    matches = find_matching_examples(examples, example_identifier)
+
+    if len(matches) == 0:
+        return (1, f"✗ No example found for: {example_identifier}")
+    elif len(matches) > 1:
+        # Ambiguous - show all matches
+        paths = "\n  • ".join([ex.get("_path", "").removeprefix("examples/") for ex in matches])
+        return (1, f"✗ Multiple examples found for '{example_identifier}':\n  • {paths}\n\nUse a more specific path to disambiguate.")
+
+    # Single match found
+    example = matches[0]
     example_path = get_example_path(examples, example_identifier)
-    if example_path is None:
-        return (1, f"Example not found: {example_identifier}")
-
-    # Find the example metadata
-    normalized_path = example_identifier.removeprefix("examples/").rstrip("/")
-    example = None
-    for ex in examples:
-        ex_rel_path = ex.get("_path", "").removeprefix("examples/").rstrip("/")
-        if ex_rel_path == normalized_path:
-            example = ex
-            break
-
-    if example is None:
-        return (1, f"Example metadata not found: {example_identifier}")
 
     # Get preset info
     preset_info = get_preset_info(example, preset_name)
@@ -480,8 +506,16 @@ def run_example(
 
     # Show what we're running
     example_name = example.get("name", Path(example_path).name)
+    example_full_path = example.get("_path", "").removeprefix("examples/")
+
     print(f"Running {example_name} {preset_name}...")
-    print(f"Example: {example_identifier}")
+
+    # Show full path if user provided short/partial name
+    if example_full_path != example_identifier.removeprefix("examples/").rstrip("/"):
+        print(f"Example: {example_full_path} (matched: {example_identifier})")
+    else:
+        print(f"Example: {example_full_path}")
+
     print(f"Script:  {script_name}")
     print()  # Blank line before script output
 
