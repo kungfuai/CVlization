@@ -122,6 +122,7 @@ docker run --rm \
   --gpus all \
   --ipc=host \
   -v "$SCRIPT_DIR:/workspace" \
+  -e PYTHONUNBUFFERED=1 \
   -e WANDB_MODE="$WANDB_MODE" \
   -e WANDB_PROJECT="$WANDB_PROJECT" \
   -e WANDB_API_KEY="$WANDB_API_KEY" \
