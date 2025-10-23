@@ -1,5 +1,5 @@
 SkyReelsModel='Skywork/SkyReels-V1-Hunyuan-T2V'
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --runtime nvidia \
 	-v $(pwd)/examples/video_gen/skyreals/:/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
     -e CUDA_VISIBLE_DEVICES='0' \

@@ -1,4 +1,4 @@
-docker run --runtime nvidia -it \
+docker run --runtime nvidia \
 	-v $(pwd):/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
 	sam_is \

@@ -5,7 +5,7 @@ noise_injection_steps=5
 noise_injection_ratio=0.5
 out_fn=$OUT_DIR/001.gif
 
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --runtime nvidia \
 	-v $(pwd)/examples/video_gen/video_in_between:/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
     -e CUDA_VISIBLE_DEVICES='0' \

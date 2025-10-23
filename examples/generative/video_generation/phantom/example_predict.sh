@@ -1,4 +1,4 @@
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --runtime nvidia \
 	-v $(pwd)/examples/video_gen/phantom/:/workspace \
     -v $(pwd)/examples/video_gen/vace/assets/:/workspace/assets \
 	-v $(pwd)/data/container_cache/huggingface/hub/Wan-AI/Wan2.1-T2V-1.3B:/workspace/Wan2.1-T2V-1.3B \

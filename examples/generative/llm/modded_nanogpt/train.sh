@@ -118,7 +118,7 @@ echo "  - Muon learning rate: $MUON_LR"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Run the Docker container
-docker run -it --rm \
+docker run --rm \
   --gpus all \
   --ipc=host \
   -v "$SCRIPT_DIR:/workspace" \

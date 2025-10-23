@@ -1,4 +1,4 @@
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --runtime nvidia \
 	-v $(pwd)/examples/object_tracking/global_tracking_transformer:/workspace \
     -v $(pwd)/data:/workspace/data \
     -e CUDA_VISIBLE_DEVICES='0' \
