@@ -186,6 +186,8 @@ def save_output(output: str, output_path: str, format: str = "txt"):
 
 
 def main():
+    import os
+
     parser = argparse.ArgumentParser(
         description="Run Moondream2 OCR and document understanding"
     )
@@ -257,12 +259,33 @@ def main():
 
     args = parser.parse_args()
 
+    # Resolve paths for CVL dual-mode support
+    # If CVL_INPUTS/CVL_OUTPUTS are set (running via cvl run), use them as base
+    cvl_inputs = os.getenv('CVL_INPUTS')
+    cvl_outputs = os.getenv('CVL_OUTPUTS')
+
+    # Resolve image path
+    if cvl_inputs and not args.image.startswith(('http://', 'https://', '/')):
+        # Relative path + CVL_INPUTS set → resolve against CVL_INPUTS
+        image_path = str(Path(cvl_inputs) / args.image)
+    else:
+        # Absolute path, URL, or no CVL_INPUTS → use as-is
+        image_path = args.image
+
+    # Resolve output path
+    if cvl_outputs and not args.output.startswith('/'):
+        # Relative path + CVL_OUTPUTS set → resolve against CVL_OUTPUTS
+        output_path = str(Path(cvl_outputs) / args.output)
+    else:
+        # Absolute path or no CVL_OUTPUTS → use as-is
+        output_path = args.output
+
     # Load model
     model, tokenizer = load_model(args.model_id, args.revision, args.device)
 
     # Load image
-    print(f"Loading image from {args.image}...")
-    image = load_image(args.image)
+    print(f"Loading image from {image_path}...")
+    image = load_image(image_path)
     print(f"Image loaded: {image.size}")
 
     # Run task
@@ -285,7 +308,7 @@ def main():
     print("="*80 + "\n")
 
     # Save output
-    save_output(output, args.output, args.format)
+    save_output(output, output_path, args.format)
     print("Done!")
 
 

@@ -66,6 +66,16 @@ def create_parser() -> argparse.ArgumentParser:
         help="Preset to run (e.g., train, predict)"
     )
     run_parser.add_argument(
+        "--inputs",
+        type=str,
+        help="Input directory (absolute or relative to cwd). Enables CVL docker mode."
+    )
+    run_parser.add_argument(
+        "--outputs",
+        type=str,
+        help="Output directory (absolute or relative to cwd). Defaults to ./cvl-outputs/<example>/<timestamp>"
+    )
+    run_parser.add_argument(
         "extra_args",
         nargs="*",
         help="Additional arguments to pass to the script"
@@ -134,7 +144,9 @@ def cmd_run(args) -> int:
             examples,
             args.example,
             args.preset,
-            args.extra_args
+            args.extra_args,
+            inputs=getattr(args, 'inputs', None),
+            outputs=getattr(args, 'outputs', None)
         )
 
         if error_msg:
