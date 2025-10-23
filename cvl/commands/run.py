@@ -3,6 +3,7 @@ import os
 import sys
 import subprocess
 import time
+from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 
@@ -27,10 +28,14 @@ def get_preset_info(example: Dict, preset_name: str) -> Optional[Dict]:
 
         # Support both dict and simple string values
         if isinstance(preset_data, dict):
-            return {
+            result = {
                 "script": preset_data.get("script", f"{preset_name}.sh"),
                 "description": preset_data.get("description", ""),
             }
+            # Include optional 'command' field for CVL docker mode
+            if "command" in preset_data:
+                result["command"] = preset_data["command"]
+            return result
         else:
             # Simple string value is treated as script name
             return {"script": str(preset_data), "description": ""}
@@ -232,11 +237,145 @@ def _prompt_user_yes_no(question: str, default: bool = True) -> bool:
     return response in ["y", "yes"]
 
 
+def run_via_cvl_docker(
+    example: Dict,
+    preset_info: Dict,
+    inputs: Optional[str],
+    outputs: Optional[str],
+    extra_args: List[str],
+) -> int:
+    """Run preset via CVL-managed docker with explicit mounts.
+
+    This is the "Cog-like" execution path where CVL owns the docker run
+    command and mounts user-specified input/output directories.
+
+    Args:
+        example: Example metadata dict
+        preset_info: Preset metadata dict with 'command' field
+        inputs: Path to inputs directory (absolute or relative to cwd)
+        outputs: Path to outputs directory (absolute or relative to cwd)
+        extra_args: Additional arguments to pass to the command
+
+    Returns:
+        Exit code from docker run
+    """
+    from cvl.core.discovery import find_repo_root
+
+    # Get example directory
+    repo_root = find_repo_root()
+    example_rel_path = example.get('_path', '')
+    example_dir = repo_root / example_rel_path
+
+    # Get image name
+    image_name = example.get('image', Path(example_rel_path).name)
+
+    # Get command to run
+    command = preset_info.get('command')
+    if not command:
+        return (1, "No 'command' field in preset - cannot run via CVL docker mode")
+
+    # Resolve input path
+    if inputs:
+        inputs_abs = Path(inputs).resolve()
+        if not inputs_abs.exists():
+            print(f"✗ Input directory not found: {inputs_abs}")
+            return 1
+    else:
+        inputs_abs = None
+
+    # Resolve output path with smart defaults
+    if outputs:
+        outputs_abs = Path(outputs).resolve()
+    else:
+        # Default: ./cvl-outputs/<example-name>/<timestamp>
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        outputs_abs = Path.cwd() / "cvl-outputs" / example['name'] / timestamp
+
+    # Create outputs directory
+    outputs_abs.mkdir(parents=True, exist_ok=True)
+
+    # Build docker command with security defaults
+    docker_cmd = [
+        "docker", "run", "--rm",
+        "--user", f"{os.getuid()}:{os.getgid()}",
+        "--read-only",
+        "--workdir", "/workspace",
+        # Mount example directory as workspace
+        "--mount", f"type=bind,src={example_dir},dst=/workspace,ro",
+        # Mount outputs (read-write)
+        "--mount", f"type=bind,src={outputs_abs},dst=/mnt/cvl/outputs",
+        # Tmpfs for temporary files
+        "--mount", "type=tmpfs,dst=/tmp",
+        # Environment variables
+        "--env", "CVL_OUTPUTS=/mnt/cvl/outputs",
+        "--env", "HF_HOME=/cache/huggingface",
+        "--env", "HF_HUB_CACHE=/cache/huggingface/hub",
+        "--env", "HF_DATASETS_CACHE=/cache/huggingface/datasets",
+        "--env", "TRANSFORMERS_CACHE=/cache/huggingface/hub",
+        "--env", "TORCH_HOME=/cache/torch",
+    ]
+
+    # Add inputs mount if provided
+    if inputs_abs:
+        docker_cmd.extend([
+            "--mount", f"type=bind,src={inputs_abs},dst=/mnt/cvl/inputs,ro",
+            "--env", "CVL_INPUTS=/mnt/cvl/inputs",
+        ])
+
+    # Add GPU support if needed
+    if example.get('resources', {}).get('gpu'):
+        docker_cmd.extend(["--runtime", "nvidia"])
+
+    # Add cache mount (optional - use repo's container_cache)
+    repo_cache = repo_root / "data" / "container_cache"
+    if repo_cache.exists():
+        docker_cmd.extend([
+            "--mount", f"type=bind,src={repo_cache},dst=/cache",
+        ])
+
+    # Add image and command
+    docker_cmd.append(image_name)
+    docker_cmd.extend(["bash", "-c", f"{command} {' '.join(extra_args)}"])
+
+    # Show what we're running
+    print(f"Running {example['name']} via CVL docker mode...")
+    print(f"Inputs:  {inputs_abs or '(none)'}")
+    print(f"Outputs: {outputs_abs}")
+    print()
+
+    # Track execution time
+    start_time = time.time()
+
+    try:
+        result = subprocess.run(docker_cmd)
+
+        # Calculate duration
+        duration = time.time() - start_time
+        duration_str = _format_duration(duration)
+
+        # Show completion message
+        if result.returncode == 0:
+            print(f"\n✓ Completed in {duration_str}")
+            print(f"✓ Outputs saved to: {outputs_abs}")
+        else:
+            print(f"\n✗ Failed after {duration_str}")
+
+        return result.returncode
+
+    except KeyboardInterrupt:
+        duration = time.time() - start_time
+        duration_str = _format_duration(duration)
+        print(f"\n✗ Cancelled by user after {duration_str}")
+        return 130
+
+
 def run_example(
     examples: List[Dict],
     example_identifier: str,
     preset_name: str,
     extra_args: Optional[List[str]] = None,
+    inputs: Optional[str] = None,
+    outputs: Optional[str] = None,
 ) -> Tuple[int, str]:
     """Run an example with a specific preset.
 
@@ -245,6 +384,8 @@ def run_example(
         example_identifier: Example path (e.g., "generative/minisora")
         preset_name: Preset to run (e.g., "train")
         extra_args: Additional arguments to pass to script
+        inputs: Input directory for CVL docker mode (optional)
+        outputs: Output directory for CVL docker mode (optional)
 
     Returns:
         Tuple of (exit_code, error_message)
@@ -281,6 +422,22 @@ def run_example(
         available = _get_available_presets(example)
         return (1, f"Preset '{preset_name}' not found. Available: {available}")
 
+    # Check if we should use CVL docker mode (Cog-like execution)
+    # Use CVL mode if --inputs or --outputs provided AND preset has 'command' field
+    use_cvl_docker = (inputs is not None or outputs is not None) and 'command' in preset_info
+
+    if use_cvl_docker:
+        # CVL docker mode: CVL owns docker run with explicit mounts
+        exit_code = run_via_cvl_docker(
+            example=example,
+            preset_info=preset_info,
+            inputs=inputs,
+            outputs=outputs,
+            extra_args=extra_args
+        )
+        return (exit_code, "")
+
+    # Standalone mode: run the script (which calls docker itself)
     # Find the script
     script_name = preset_info["script"]
     script_path = find_script(example_path, script_name)
