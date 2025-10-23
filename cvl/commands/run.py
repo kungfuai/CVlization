@@ -301,12 +301,15 @@ def run_via_cvl_docker(
         "--read-only",
         "--workdir", "/workspace",
         # Mount example directory as workspace
-        "--mount", f"type=bind,src={example_dir},dst=/workspace,ro",
+        "--mount", f"type=bind,src={example_dir},dst=/workspace,readonly",
+        # Mount cvlization package for dual-mode helpers
+        "--mount", f"type=bind,src={repo_root},dst=/cvlization_repo,readonly",
         # Mount outputs (read-write)
         "--mount", f"type=bind,src={outputs_abs},dst=/mnt/cvl/outputs",
         # Tmpfs for temporary files
         "--mount", "type=tmpfs,dst=/tmp",
         # Environment variables
+        "--env", "PYTHONPATH=/cvlization_repo",
         "--env", "CVL_OUTPUTS=/mnt/cvl/outputs",
         "--env", "HF_HOME=/cache/huggingface",
         "--env", "HF_HUB_CACHE=/cache/huggingface/hub",
@@ -324,7 +327,7 @@ def run_via_cvl_docker(
 
     # Add GPU support if needed
     if example.get('resources', {}).get('gpu'):
-        docker_cmd.extend(["--runtime", "nvidia"])
+        docker_cmd.extend(["--gpus", "all"])
 
     # Add cache mount (optional - use repo's container_cache)
     repo_cache = repo_root / "data" / "container_cache"
