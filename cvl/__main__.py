@@ -76,6 +76,11 @@ def create_parser() -> argparse.ArgumentParser:
         help="Output directory (absolute or relative to cwd). Defaults to ./cvl-outputs/<example>/<timestamp>"
     )
     run_parser.add_argument(
+        "--no-live",
+        action="store_true",
+        help="Disable live status display (simpler output)"
+    )
+    run_parser.add_argument(
         "extra_args",
         nargs="*",
         help="Additional arguments to pass to the script"
@@ -146,7 +151,8 @@ def cmd_run(args) -> int:
             args.preset,
             args.extra_args,
             inputs=getattr(args, 'inputs', None),
-            outputs=getattr(args, 'outputs', None)
+            outputs=getattr(args, 'outputs', None),
+            no_live=getattr(args, 'no_live', False)
         )
 
         if error_msg:
