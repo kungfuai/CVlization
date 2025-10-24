@@ -527,7 +527,19 @@ def run_example(
     print()  # Blank line before script output
 
     # Run the script
-    return run_script(script_path, extra_args)
+    exit_code, error_msg = run_script(script_path, extra_args)
+
+    # Show path mappings after completion (if successful)
+    if exit_code == 0:
+        print("\nPath Mappings (Container → Host):")
+        print(f"  /workspace → {example_path}")
+
+        # Show outputs directory for standalone mode
+        outputs_dir = Path(example_path) / "outputs"
+        if outputs_dir.exists():
+            print(f"  /workspace/outputs → {outputs_dir}")
+
+    return (exit_code, error_msg)
 
 
 def _get_available_presets(example: Dict) -> str:
