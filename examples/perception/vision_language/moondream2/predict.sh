@@ -19,9 +19,11 @@ docker run --rm --gpus=all \
   --mount "type=bind,src=$REPO_ROOT,dst=/cvlization_repo,readonly" \
   --env "PYTHONPATH=/cvlization_repo" \
   --env "PYTHONUNBUFFERED=1" \
-  --env "NVIDIA_DISABLE_REQUIRE=1" \
+  --env "CVL_HOST_WORKSPACE=$SCRIPT_DIR" \
   ${CVL_INPUTS:+--mount "type=bind,src=$CVL_INPUTS,dst=/mnt/cvl/inputs,readonly"} \
   ${CVL_OUTPUTS:+--mount "type=bind,src=$CVL_OUTPUTS,dst=/mnt/cvl/outputs"} \
   ${CVL_INPUTS:+-e CVL_INPUTS=/mnt/cvl/inputs} \
   ${CVL_OUTPUTS:+-e CVL_OUTPUTS=/mnt/cvl/outputs} \
-  "$IMG" bash -lc "python3 predict.py $*"
+  ${CVL_INPUTS:+-e CVL_HOST_INPUTS=$CVL_INPUTS} \
+  ${CVL_OUTPUTS:+-e CVL_HOST_OUTPUTS=$CVL_OUTPUTS} \
+  "$IMG" bash -c "python3 predict.py $*"

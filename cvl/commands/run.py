@@ -512,6 +512,7 @@ def run_example(
     # Show what we're running
     example_name = example.get("name", Path(example_path).name)
     example_full_path = example.get("_path", "").removeprefix("examples/")
+    image_name = get_docker_image_name(example_path)
 
     print(f"Running {example_name} {preset_name}...")
 
@@ -521,6 +522,7 @@ def run_example(
     else:
         print(f"Example: {example_full_path}")
 
+    print(f"Docker:  {image_name}")
     print(f"Script:  {script_name}")
     print()  # Blank line before script output
 
