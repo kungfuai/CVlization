@@ -1,7 +1,7 @@
 #!/bin/bash
 
-IMAGE_NAME="trl_sft"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Building Docker image: $IMAGE_NAME"
-docker build -t $IMAGE_NAME .
-echo "✅ Build complete! Image: $IMAGE_NAME"
+# Build from the script's directory, works from anywhere
+docker build -t trl_sft "$SCRIPT_DIR"

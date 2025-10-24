@@ -1,37 +1,39 @@
-#!/bin/bash
-# Works from both repo root and example directory
+#!/usr/bin/env bash
+set -euo pipefail
 
+# Always run from this folder
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
+
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+
+# Image name
+IMG="${CVL_IMAGE:-nanogpt}"
 
 # Check if training data exists, prepare it if not
 if [ ! -f "$SCRIPT_DIR/data/shakespeare_char/train.bin" ]; then
 	echo "Training data not found. Preparing dataset..."
 	echo "Running: python data/shakespeare_char/prepare.py"
 	docker run --rm \
-		--user $(id -u):$(id -g) \
 		--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
-		nanogpt \
+		"$IMG" \
 		python data/shakespeare_char/prepare.py
 	echo "Dataset preparation complete!"
 	echo ""
 fi
 
-# Mount workspace as writable (training needs to write logs/checkpoints)
-docker run --runtime nvidia \
+# Create outputs directory
+mkdir -p "$SCRIPT_DIR/logs"
+
+# Mount workspace as writable (training writes logs/checkpoints to /workspace)
+docker run --rm --gpus=all --shm-size 16G \
 	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
-	--user $(id -u):$(id -g) \
 	--workdir /workspace \
 	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
-	--mount "type=bind,src=${HOME}/.cache,dst=/cache" \
-	--mount "type=bind,src=${REPO_ROOT}/cvlization,dst=/workspace/cvlization,readonly" \
-	-e PYTHONUNBUFFERED=1 \
-	-e HOME=/cache \
-	-e HF_HOME=/cache/huggingface \
-	-e TORCH_HOME=/cache/torch \
-	${CVL_WORK_DIR:+--mount "type=bind,src=${CVL_WORK_DIR},dst=/mnt/cvl/workspace"} \
-	${CVL_WORK_DIR:+-e CVL_INPUTS=/mnt/cvl/workspace} \
-	${CVL_WORK_DIR:+-e CVL_OUTPUTS=/mnt/cvl/workspace} \
+	--mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
+	--mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+	--env "PYTHONPATH=/cvlization_repo" \
+	--env "PYTHONUNBUFFERED=1" \
 	${WANDB_API_KEY:+-e WANDB_API_KEY=$WANDB_API_KEY} \
-	nanogpt \
+	"$IMG" \
 	python train.py config/train_shakespeare_char.py "$@"

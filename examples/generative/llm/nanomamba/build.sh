@@ -1,2 +1,7 @@
-bash bin/build_torch_gpu.sh
-docker build -t nanomamba examples/text_gen/nanomamba
+#!/bin/bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t nanomamba "$SCRIPT_DIR"
