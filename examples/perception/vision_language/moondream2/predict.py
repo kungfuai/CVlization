@@ -198,30 +198,9 @@ def save_output(output: str, output_path: str, format: str = "txt"):
         with open(output_file, "w") as f:
             f.write(output)
 
-    # Show both container and host paths
+    # Show container path (CVL will translate to host path)
     container_path = str(output_file)
-    display_path = container_path
-
-    # Make container path relative
-    if display_path.startswith("/workspace/"):
-        display_path = display_path.replace("/workspace/", "./")
-    elif display_path.startswith("/mnt/cvl/outputs/"):
-        display_path = display_path.replace("/mnt/cvl/outputs/", "./")
-
-    # Get host path if available
-    host_path = None
-    if container_path.startswith("/workspace/"):
-        host_workspace = os.getenv("CVL_HOST_WORKSPACE")
-        if host_workspace:
-            host_path = container_path.replace("/workspace", host_workspace)
-    elif container_path.startswith("/mnt/cvl/outputs/"):
-        host_outputs = os.getenv("CVL_HOST_OUTPUTS")
-        if host_outputs:
-            host_path = container_path.replace("/mnt/cvl/outputs", host_outputs)
-
-    print(f"Output saved to {display_path}")
-    if host_path:
-        print(f"  (Host path: {host_path})")
+    print(f"Output saved to {container_path}")
 
 
 def main():
@@ -316,27 +295,7 @@ def main():
     print(f"\n{'='*80}")
     print("INPUT")
     print('='*80)
-
-    # Show container path
-    display_input = image_path
-    if display_input.startswith("/workspace/"):
-        display_input = display_input.replace("/workspace/", "./")
-    elif display_input.startswith("/mnt/cvl/inputs/"):
-        display_input = display_input.replace("/mnt/cvl/inputs/", "./")
-
-    print(f"Image: {display_input}")
-
-    # Show host path if available
-    if image_path.startswith("/workspace/"):
-        host_workspace = os.getenv("CVL_HOST_WORKSPACE")
-        if host_workspace:
-            host_input = image_path.replace("/workspace", host_workspace)
-            print(f"  (Host path: {host_input})")
-    elif image_path.startswith("/mnt/cvl/inputs/"):
-        host_inputs = os.getenv("CVL_HOST_INPUTS")
-        if host_inputs:
-            host_input = image_path.replace("/mnt/cvl/inputs", host_inputs)
-            print(f"  (Host path: {host_input})")
+    print(f"Image: {image_path}")
 
     image = load_image(image_path)
     print(f"Size:  {image.size[0]}x{image.size[1]} pixels")
