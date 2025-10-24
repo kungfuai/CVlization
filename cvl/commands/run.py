@@ -224,9 +224,19 @@ def run_script(
     try:
         # Run script from its directory using basename since cwd is set
         script_name = os.path.basename(script_path)
+
+        # Generate deterministic container name for easy debugging
+        # Format: cvl-{example_short_name}-{short_timestamp}
+        # Use only last 6 digits of timestamp to keep name short
+        timestamp_short = str(int(start_time))[-6:]
+        # Extract just the example name from job_name (e.g., "moondream2" from "moondream2 predict")
+        example_short = job_name.split()[0] if job_name else "job"
+        container_name = f"cvl-{example_short}-{timestamp_short}"
+
         # Use env to set PYTHONUNBUFFERED for all Python scripts
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
+        env["CVL_CONTAINER_NAME"] = container_name
 
         if use_live:
             # Live mode with rich
@@ -247,8 +257,8 @@ def run_script(
                 bufsize=1  # Line buffered
             )
 
-            # Create status panel
-            status_text = f"▸ {job_name} ({image_name})\nStarting..."
+            # Create status panel with container name
+            status_text = f"▸ {job_name} ({image_name})\n📦 {container_name}\nStarting..."
             with Live(
                 Panel(status_text, title="CVL Status", border_style="cyan"),
                 refresh_per_second=2,
@@ -263,7 +273,7 @@ def run_script(
                     # Update status with elapsed time
                     elapsed = time.time() - start_time
                     duration_str = _format_duration(elapsed)
-                    status_text = f"▸ {job_name} ({image_name})\n⏱  {duration_str} elapsed"
+                    status_text = f"▸ {job_name} ({image_name})\n📦 {container_name}\n⏱  {duration_str} elapsed"
                     live.update(Panel(status_text, title="CVL Status", border_style="cyan"))
 
                 process.wait()
