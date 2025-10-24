@@ -234,7 +234,7 @@ def run_script(
             from rich.panel import Panel
             from rich.console import Console
 
-            console = Console()
+            console = Console(highlight=False, markup=False)
 
             # Run with Popen to stream output
             process = subprocess.Popen(
