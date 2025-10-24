@@ -4,6 +4,18 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 
+# Check if training data exists, prepare it if not
+if [ ! -f "$SCRIPT_DIR/data/shakespeare_char/train.bin" ]; then
+	echo "Training data not found. Preparing dataset..."
+	echo "Running: python data/shakespeare_char/prepare.py"
+	docker run --rm \
+		--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+		nanogpt \
+		python data/shakespeare_char/prepare.py
+	echo "Dataset preparation complete!"
+	echo ""
+fi
+
 # In CVL docker mode, workspace is readonly; in standalone mode, it's writable for outputs
 WORKSPACE_RO="${CVL_WORK_DIR:+,readonly}"
 
