@@ -8,6 +8,7 @@ docker run --runtime nvidia \
 	-v "$SCRIPT_DIR:/workspace" \
 	-v "$REPO_ROOT/data/container_cache:/root/.cache" \
 	-v "$REPO_ROOT/cvlization:/workspace/cvlization" \
+	-e PYTHONUNBUFFERED=1 \
 	-e WANDB_API_KEY=$WANDB_API_KEY \
 	nanogpt \
 	python train.py config/train_shakespeare_char.py "$@"
