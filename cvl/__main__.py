@@ -66,14 +66,10 @@ def create_parser() -> argparse.ArgumentParser:
         help="Preset to run (e.g., train, predict)"
     )
     run_parser.add_argument(
-        "--inputs",
+        "-w", "--work-dir",
         type=str,
-        help="Input directory (absolute or relative to cwd). Enables CVL docker mode."
-    )
-    run_parser.add_argument(
-        "--outputs",
-        type=str,
-        help="Output directory (absolute or relative to cwd). Defaults to ./cvl-outputs/<example>/<timestamp>"
+        default=None,  # Will be set to cwd in run.py if None
+        help="Working directory for inputs/outputs (default: current directory)"
     )
     run_parser.add_argument(
         "--no-live",
@@ -152,8 +148,7 @@ def cmd_run(args) -> int:
             args.example,
             args.preset,
             args.extra_args,
-            inputs=getattr(args, 'inputs', None),
-            outputs=getattr(args, 'outputs', None),
+            work_dir=getattr(args, 'work_dir', None),
             no_live=getattr(args, 'no_live', False)
         )
 
