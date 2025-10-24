@@ -1,4 +1,4 @@
-name: granite-docling
+name: granite_docling
 capability: perception/doc_ai
 modalities:
 - vision

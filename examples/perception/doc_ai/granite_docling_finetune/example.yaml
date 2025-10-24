@@ -1,4 +1,4 @@
-name: granite-docling-finetune
+name: granite_docling_finetune
 capability: perception/doc_ai
 modalities:
 - vision

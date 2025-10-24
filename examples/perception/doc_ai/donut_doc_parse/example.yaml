@@ -1,4 +1,4 @@
-name: donut-doc-parse
+name: donut_doc_parse
 capability: perception/doc_ai
 modalities:
 - vision

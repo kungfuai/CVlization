@@ -1,5 +1,5 @@
-name: surya
-capability: perception/ocr_and_layout
+name: dots_ocr
+capability: perception/doc_ai
 modalities:
 - vision
 - text
@@ -19,13 +19,10 @@ presets:
     description: Run predict
 tags:
 - ocr
-- layout-detection
-- multilingual
-- surya
+- document-understanding
 - pytorch
 tasks:
 - ocr
-- layout_analysis
 frameworks:
 - pytorch
-description: Multilingual OCR and layout detection using Surya
+description: Document OCR using DOTS (Document-Oriented Text Spotting)

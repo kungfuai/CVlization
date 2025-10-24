@@ -124,36 +124,55 @@ def get_docker_image_name(example_path: str) -> Optional[str]:
     return Path(example_path).name
 
 
-def find_matching_examples(examples: List[Dict], identifier: str) -> List[Dict]:
+def find_matching_examples(examples: List[Dict], identifier: str) -> Tuple[List[Dict], List[str]]:
     """Find examples matching identifier (exact or suffix match).
 
     Supports flexible matching:
     - Exact: "perception/vision_language/moondream2"
     - Short: "moondream2" matches "perception/vision_language/moondream2"
     - Partial: "line_detection/torch" matches "perception/line_detection/torch"
+    - Fuzzy: "moondrem" suggests "moondream2" if no exact/suffix matches
 
     Args:
         examples: List of example metadata dicts
         identifier: Example identifier (full path, partial path, or short name)
 
     Returns:
-        List of matching examples (empty if none found, multiple if ambiguous)
+        Tuple of (matching_examples, suggestions)
+        - matching_examples: List of matching examples (empty if none found)
+        - suggestions: List of suggested paths for fuzzy matching (only when no matches)
     """
+    from difflib import get_close_matches
+
     normalized = identifier.removeprefix("examples/").rstrip("/")
     matches = []
+    all_paths = []
 
     for example in examples:
         path = example.get("_path", "").removeprefix("examples/").rstrip("/")
+        all_paths.append(path)
 
         # Exact match - return immediately
         if path == normalized:
-            return [example]
+            return [example], []
 
         # Suffix match - path ends with identifier
         if path.endswith("/" + normalized):
             matches.append(example)
 
-    return matches
+    if matches:
+        return matches, []
+
+    # No matches - try fuzzy matching on both full paths and just the last component
+    suggestions = get_close_matches(normalized, all_paths, n=5, cutoff=0.5)
+
+    # Also try matching just the example name (last component)
+    if not suggestions:
+        example_names = {path.split("/")[-1]: path for path in all_paths}
+        name_matches = get_close_matches(normalized, example_names.keys(), n=5, cutoff=0.5)
+        suggestions = [example_names[name] for name in name_matches]
+
+    return [], suggestions
 
 
 def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[str]:
@@ -168,7 +187,7 @@ def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[
     """
     from cvl.core.discovery import find_repo_root
 
-    matches = find_matching_examples(examples, example_identifier)
+    matches, _ = find_matching_examples(examples, example_identifier)
 
     if len(matches) == 1:
         # Single match - return its path
@@ -554,10 +573,15 @@ def run_example(
         return (1, f"✗ Docker is not running\n{docker_error}")
 
     # Find matching examples
-    matches = find_matching_examples(examples, example_identifier)
+    matches, suggestions = find_matching_examples(examples, example_identifier)
 
     if len(matches) == 0:
-        return (1, f"✗ No example found for: {example_identifier}")
+        error_msg = f"✗ Example '{example_identifier}' not found"
+        if suggestions:
+            error_msg += "\n\nDid you mean:"
+            for suggestion in suggestions:
+                error_msg += f"\n  • {suggestion}"
+        return (1, error_msg)
     elif len(matches) > 1:
         # Ambiguous - show all matches
         paths = "\n  • ".join([ex.get("_path", "").removeprefix("examples/") for ex in matches])
@@ -630,6 +654,10 @@ def run_example(
     example_full_path = example.get("_path", "").removeprefix("examples/")
     image_name = get_docker_image_name(example_path)
 
+    # CVL startup header with delimiter
+    print("=" * 80)
+    print("CVL")
+    print("=" * 80)
     print(f"Running {example_name} {preset_name}...")
 
     # Show full path if user provided short/partial name
@@ -640,6 +668,20 @@ def run_example(
 
     print(f"Docker:  {image_name}")
     print(f"Script:  {script_name}")
+
+    # Show directory mounting information
+    print("\nMounts:")
+    print(f"  {example_path}")
+    print(f"    → /workspace (container)")
+
+    if work_dir:
+        work_dir_abs = Path(work_dir).resolve()
+        print(f"  {work_dir_abs}")
+    else:
+        print(f"  {os.getcwd()}")
+    print(f"    → /mnt/cvl/workspace (container)")
+
+    print("=" * 80)
     print()  # Blank line before script output
 
     # Run the script
@@ -660,25 +702,10 @@ def run_example(
         # Show work directory if CVL_WORK_DIR was set
         if work_dir:
             work_dir_abs = Path(work_dir).resolve()
-            print(f"  /mnt/cvl/workspace → {work_dir_abs}")
+            print(f"  /mnt/cvl/workspace → {work_dir_abs} (current directory)")
         else:
             # Show current directory as default work directory
-            print(f"  /mnt/cvl/workspace → {os.getcwd()}")
-
-        # Show outputs directory for standalone mode
-        outputs_dir = Path(example_path) / "outputs"
-        if outputs_dir.exists():
-            print(f"  /workspace/outputs → {outputs_dir}")
-
-        # Show logs directory if it exists
-        logs_dir = Path(example_path) / "logs"
-        if logs_dir.exists():
-            print(f"  /workspace/logs → {logs_dir}")
-
-        # Show data directory if it exists
-        data_dir = Path(example_path) / "data"
-        if data_dir.exists():
-            print(f"  /workspace/data → {data_dir}")
+            print(f"  /mnt/cvl/workspace → {os.getcwd()} (current directory)")
 
     return (exit_code, error_msg)
 

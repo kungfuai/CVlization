@@ -1,5 +1,5 @@
-name: nanonets-ocr
-capability: perception/ocr_and_layout
+name: nanonets_ocr
+capability: perception/doc_ai
 modalities:
 - vision
 - text

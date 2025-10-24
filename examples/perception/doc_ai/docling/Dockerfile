@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install PyTorch with CUDA support (matching granite_docling pattern)
+RUN pip install --no-cache-dir \
+    torch torchvision --index-url https://download.pytorch.org/whl/cu124
+
 # Install docling and docling-serve
 RUN pip install --no-cache-dir \
     docling \
@@ -19,6 +23,10 @@ RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
     python-multipart
+
+# Pre-download RapidOCR PyTorch models during build
+# Initialize DocumentConverter which triggers RapidOCR torch model downloads
+RUN python3 -c "from docling.document_converter import DocumentConverter; DocumentConverter()" || true
 
 # Create directories
 RUN mkdir -p /app/inputs /app/outputs

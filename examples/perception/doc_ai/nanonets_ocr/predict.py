@@ -2,6 +2,7 @@
 """
 Document OCR using Nanonets-OCR2-3B VLM model.
 Supports complex document extraction with tables, forms, equations, and visual question answering.
+Dual-mode execution: standalone or via CVL with --inputs/--outputs.
 """
 import argparse
 import json
@@ -10,6 +11,14 @@ import torch
 from transformers import AutoModelForImageTextToText, AutoProcessor, AutoTokenizer
 from PIL import Image
 from pdf2image import convert_from_path
+
+# CVL dual-mode execution support
+from cvlization.paths import (
+    get_input_dir,
+    get_output_dir,
+    resolve_input_path,
+    resolve_output_path,
+)
 
 
 def load_image(image_path):
@@ -76,20 +85,22 @@ def main():
         epilog="""
 Examples:
   # Basic OCR to markdown
-  python predict.py document.jpg
+  python predict.py --input document.jpg
 
   # Save output to file
-  python predict.py document.jpg --output output.md
+  python predict.py --input document.jpg --output output.md
 
   # Visual Question Answering
-  python predict.py chart.png --mode vqa --question "What is the total revenue?"
+  python predict.py --input chart.png --mode vqa --question "What is the total revenue?"
 
   # JSON output
-  python predict.py form.jpg --format json --output result.json
+  python predict.py --input form.jpg --format json --output result.json
         """
     )
-    parser.add_argument("input_file", type=str, help="Path to input image file (PNG, JPG, PDF, etc.)")
-    parser.add_argument("--output", type=str, help="Output file path (optional, prints to stdout if not specified)")
+    parser.add_argument("--input", type=str, default="examples/sample.jpg",
+                       help="Path to input image file (default: examples/sample.jpg)")
+    parser.add_argument("--output", type=str, default=None,
+                       help="Output file path (default: outputs/result.{format})")
     parser.add_argument("--format", type=str, choices=["markdown", "json"], default="markdown",
                        help="Output format: markdown (default) or json")
     parser.add_argument("--mode", type=str, choices=["ocr", "vqa"], default="ocr",
@@ -104,10 +115,22 @@ Examples:
 
     args = parser.parse_args()
 
+    # Resolve paths for CVL dual-mode support
+    INP = get_input_dir()
+    OUT = get_output_dir()
+
+    # Smart default for output path
+    if args.output is None:
+        ext = {"json": "json", "markdown": "md"}[args.format]
+        args.output = f"result.{ext}"
+
+    # Resolve paths using cvlization utilities
+    input_path = Path(resolve_input_path(args.input, INP))
+    output_path = Path(resolve_output_path(args.output, OUT))
+
     # Validate input file
-    input_path = Path(args.input_file)
     if not input_path.exists():
-        print(f"Error: Input file '{args.input_file}' not found")
+        print(f"Error: Input file '{input_path}' not found")
         return 1
 
     # Validate VQA mode
@@ -140,8 +163,18 @@ Examples:
     else:
         prompt = "Convert this document to markdown format, preserving all structure, tables, equations, and content."
 
+    # Show input
+    print(f"\n{'='*80}")
+    print("INPUT")
+    print('='*80)
+    print(f"Image: {input_path}")
+    print(f"Mode: {args.mode}")
+    if args.mode == "vqa":
+        print(f"Question: {args.question}")
+    print('='*80 + '\n')
+
     # Process document
-    print(f"Processing: {input_path.name}", flush=True)
+    print(f"Processing document...", flush=True)
     output_text = process_document(
         str(input_path),
         model,
@@ -163,16 +196,21 @@ Examples:
             output_data["question"] = args.question
         output_text = json.dumps(output_data, indent=2, ensure_ascii=False)
 
-    # Write or print output
-    if args.output:
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(output_text, encoding='utf-8')
-        print(f"✓ Output written to: {output_path}")
-    else:
-        print("\n" + "="*80)
-        print(output_text)
-        print("="*80)
+    # Print output preview
+    print("\n" + "="*80)
+    print(f"{args.format.upper()} OUTPUT (preview):")
+    print("="*80)
+    preview = output_text[:500] + ("..." if len(output_text) > 500 else "")
+    print(preview)
+    print("="*80 + "\n")
+
+    # Write output
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(output_text, encoding='utf-8')
+
+    # Show container path (CVL will translate to host path)
+    print(f"Output saved to {output_path}")
+    print("Done!")
 
     return 0
 
