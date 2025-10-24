@@ -198,7 +198,11 @@ def save_output(output: str, output_path: str, format: str = "txt"):
         with open(output_file, "w") as f:
             f.write(output)
 
-    print(f"Output saved to {output_file}")
+    # Show relative path if inside /workspace, otherwise show full path
+    display_path = str(output_file)
+    if display_path.startswith("/workspace/"):
+        display_path = display_path.replace("/workspace/", "./")
+    print(f"Output saved to {display_path}")
 
 
 def main():
@@ -279,12 +283,8 @@ def main():
 
     # Smart default for output path
     if args.output is None:
-        if os.getenv('CVL_OUTPUTS'):
-            # CVL mode: user already specified output directory, use simple filename
-            args.output = "result.txt"
-        else:
-            # Standalone mode: use workspace-relative path
-            args.output = "outputs/result.txt"
+        # Use simple filename - resolve_output_path will add directory
+        args.output = "result.txt"
 
     # Resolve paths using cvlization utilities
     image_path = resolve_input_path(args.image, INP)
