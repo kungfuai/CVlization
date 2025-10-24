@@ -205,10 +205,14 @@ def run_script(script_path: str, extra_args: List[str]) -> Tuple[int, str]:
     try:
         # Run script from its directory using basename since cwd is set
         script_name = os.path.basename(script_path)
+        # Use env to set PYTHONUNBUFFERED for all Python scripts
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
         result = subprocess.run(
             ["bash", script_name] + extra_args,
             cwd=example_dir,
             check=False,
+            env=env,
         )
 
         # Calculate duration
@@ -338,6 +342,7 @@ def run_via_cvl_docker(
         # Tmpfs for temporary files
         "--mount", "type=tmpfs,dst=/tmp",
         # Environment variables
+        "--env", "PYTHONUNBUFFERED=1",
         "--env", "PYTHONPATH=/cvlization_repo",
         "--env", "CVL_OUTPUTS=/mnt/cvl/outputs",
         "--env", "HF_HOME=/cache/huggingface",
