@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 
 docker run --runtime nvidia \
+	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
 	-v "$SCRIPT_DIR:/workspace" \
 	-v "$REPO_ROOT/data/container_cache:/root/.cache" \
 	-v "$REPO_ROOT/cvlization:/workspace/cvlization" \

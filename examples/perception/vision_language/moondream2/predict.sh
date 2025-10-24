@@ -14,6 +14,7 @@ IMG="${CVL_IMAGE:-moondream2}"
 WORKSPACE_RO="${CVL_OUTPUTS:+,readonly}"
 
 docker run --rm --gpus=all \
+  ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
   --workdir /workspace \
   --mount "type=bind,src=$SCRIPT_DIR,dst=/workspace$WORKSPACE_RO" \
   --mount "type=bind,src=$REPO_ROOT,dst=/cvlization_repo,readonly" \
