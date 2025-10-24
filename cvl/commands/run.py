@@ -184,7 +184,8 @@ def run_script(
     extra_args: List[str],
     no_live: bool = False,
     job_name: str = "",
-    image_name: str = ""
+    image_name: str = "",
+    work_dir: Optional[str] = None
 ) -> Tuple[int, str]:
     """Execute a script with optional arguments.
 
@@ -194,6 +195,7 @@ def run_script(
         no_live: Disable live status display
         job_name: Name of the job (for live display)
         image_name: Docker image name (for live display)
+        work_dir: Working directory for inputs/outputs (defaults to cwd if None)
 
     Returns:
         Tuple of (exit_code, error_message)
@@ -237,6 +239,12 @@ def run_script(
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         env["CVL_CONTAINER_NAME"] = container_name
+
+        # Set CVL_WORK_DIR (default to cwd if not provided)
+        if work_dir:
+            env["CVL_WORK_DIR"] = str(Path(work_dir).resolve())
+        else:
+            env["CVL_WORK_DIR"] = os.getcwd()
 
         if use_live:
             # Live mode with rich
@@ -497,8 +505,7 @@ def run_example(
     example_identifier: str,
     preset_name: str,
     extra_args: Optional[List[str]] = None,
-    inputs: Optional[str] = None,
-    outputs: Optional[str] = None,
+    work_dir: Optional[str] = None,
     no_live: bool = False,
 ) -> Tuple[int, str]:
     """Run an example with a specific preset.
@@ -508,8 +515,7 @@ def run_example(
         example_identifier: Example path (e.g., "generative/minisora")
         preset_name: Preset to run (e.g., "train")
         extra_args: Additional arguments to pass to script
-        inputs: Input directory for CVL docker mode (optional)
-        outputs: Output directory for CVL docker mode (optional)
+        work_dir: Working directory for inputs/outputs (defaults to cwd if None)
         no_live: Disable live status display (default: False, use rich live mode)
 
     Returns:
@@ -544,20 +550,9 @@ def run_example(
         available = _get_available_presets(example)
         return (1, f"Preset '{preset_name}' not found. Available: {available}")
 
-    # Check if we should use CVL docker mode (Cog-like execution)
-    # Use CVL mode if --inputs or --outputs provided AND preset has 'command' field
-    use_cvl_docker = (inputs is not None or outputs is not None) and 'command' in preset_info
-
-    if use_cvl_docker:
-        # CVL docker mode: CVL owns docker run with explicit mounts
-        exit_code = run_via_cvl_docker(
-            example=example,
-            preset_info=preset_info,
-            inputs=inputs,
-            outputs=outputs,
-            extra_args=extra_args
-        )
-        return (exit_code, "")
+    # Note: CVL docker mode (run_via_cvl_docker) is deprecated in favor of
+    # the work_dir pattern where scripts handle docker themselves.
+    # Keeping the function for backward compatibility but not using it.
 
     # Standalone mode: run the script (which calls docker itself)
     # Find the script
@@ -620,13 +615,22 @@ def run_example(
         extra_args,
         no_live=no_live,
         job_name=f"{example_name} {preset_name}",
-        image_name=image_name
+        image_name=image_name,
+        work_dir=work_dir
     )
 
     # Show path mappings after completion (if successful)
     if exit_code == 0:
         print("\nPath Mappings (Container → Host):")
         print(f"  /workspace → {example_path}")
+
+        # Show work directory if CVL_WORK_DIR was set
+        if work_dir:
+            work_dir_abs = Path(work_dir).resolve()
+            print(f"  /mnt/cvl/workspace → {work_dir_abs}")
+        else:
+            # Show current directory as default work directory
+            print(f"  /mnt/cvl/workspace → {os.getcwd()}")
 
         # Show outputs directory for standalone mode
         outputs_dir = Path(example_path) / "outputs"
