@@ -33,4 +33,22 @@ doc/tmp_notes
 *.ckpt
 *.pt
 *.pth
+*.safetensors
+*.bin
+!setup.py  # Don't ignore Python package setup.py
+
+# outputs directories (including in subdirectories)
+outputs/
+**/outputs/
+
+# training artifacts
+**/checkpoint-*/
+**/final_model/
+**/lora_adapters/
+
+# training data
+**/train.bin
+**/val.bin
+**/test.bin
+
 .env
