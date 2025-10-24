@@ -1,4 +1,4 @@
-docker run --shm-size 16G --runtime nvidia --rm \
+docker run --shm-size 16G --gpus=all --rm \
 	-v $(pwd):/workspace \
     -e CUDA_VISIBLE_DEVICES='0' \
     -p 7860:7860 \
