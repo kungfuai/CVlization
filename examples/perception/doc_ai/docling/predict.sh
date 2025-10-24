@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Inputs/Outputs: if CVL set these, great; else Python will default to ./inputs, ./outputs
-IMG="${CVL_IMAGE:-docling_serve}"
+IMG="${CVL_IMAGE:-docling}"
 
 # In CVL docker mode, workspace is readonly; in standalone mode, it's writable for outputs
 WORKSPACE_RO="${CVL_OUTPUTS:+,readonly}"

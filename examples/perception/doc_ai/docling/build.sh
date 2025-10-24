@@ -3,9 +3,9 @@ set -e
 
 # Build the Docling Docker image
 echo "Building Docling container..."
-docker build -t docling_serve .
+docker build -t docling .
 
-echo "Build complete! Image: docling_serve"
+echo "Build complete! Image: docling"
 echo ""
 echo "Usage:"
 echo "  ./predict.sh <input_file> [options]"
