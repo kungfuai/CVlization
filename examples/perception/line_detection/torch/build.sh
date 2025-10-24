@@ -1,1 +1,7 @@
-docker build -t line_detection_torch examples/line_detection/torch
+#!/bin/bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t line_detection_torch "$SCRIPT_DIR"
