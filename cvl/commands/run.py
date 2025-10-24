@@ -179,12 +179,21 @@ def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[
     return None
 
 
-def run_script(script_path: str, extra_args: List[str]) -> Tuple[int, str]:
+def run_script(
+    script_path: str,
+    extra_args: List[str],
+    no_live: bool = False,
+    job_name: str = "",
+    image_name: str = ""
+) -> Tuple[int, str]:
     """Execute a script with optional arguments.
 
     Args:
         script_path: Absolute path to script
         extra_args: Additional arguments to pass to script
+        no_live: Disable live status display
+        job_name: Name of the job (for live display)
+        image_name: Docker image name (for live display)
 
     Returns:
         Tuple of (exit_code, error_message)
@@ -199,6 +208,16 @@ def run_script(script_path: str, extra_args: List[str]) -> Tuple[int, str]:
     # Get the example directory to run script from
     example_dir = os.path.dirname(script_path)
 
+    # Check if rich is available and not disabled
+    use_live = not no_live
+    if use_live:
+        try:
+            from rich.live import Live
+            from rich.panel import Panel
+            from rich.console import Console
+        except ImportError:
+            use_live = False  # Fallback to simple mode if rich not available
+
     # Track execution time
     start_time = time.time()
 
@@ -208,24 +227,81 @@ def run_script(script_path: str, extra_args: List[str]) -> Tuple[int, str]:
         # Use env to set PYTHONUNBUFFERED for all Python scripts
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
-        result = subprocess.run(
-            ["bash", script_name] + extra_args,
-            cwd=example_dir,
-            check=False,
-            env=env,
-        )
 
-        # Calculate duration
-        duration = time.time() - start_time
-        duration_str = _format_duration(duration)
+        if use_live:
+            # Live mode with rich
+            from rich.live import Live
+            from rich.panel import Panel
+            from rich.console import Console
 
-        # Show completion message
-        if result.returncode == 0:
-            print(f"\n✓ Completed in {duration_str}")
+            console = Console()
+
+            # Run with Popen to stream output
+            process = subprocess.Popen(
+                ["bash", script_name] + extra_args,
+                cwd=example_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=env,
+                universal_newlines=True,
+                bufsize=1  # Line buffered
+            )
+
+            # Create status panel
+            status_text = f"▸ {job_name} ({image_name})\nStarting..."
+            with Live(
+                Panel(status_text, title="CVL Status", border_style="cyan"),
+                refresh_per_second=2,
+                console=console
+            ) as live:
+                # Stream output and update status
+                for line in iter(process.stdout.readline, ''):
+                    if not line:
+                        break
+                    console.print(line, end='')
+
+                    # Update status with elapsed time
+                    elapsed = time.time() - start_time
+                    duration_str = _format_duration(elapsed)
+                    status_text = f"▸ {job_name} ({image_name})\n⏱  {duration_str} elapsed"
+                    live.update(Panel(status_text, title="CVL Status", border_style="cyan"))
+
+                process.wait()
+                return_code = process.returncode
+
+            # Calculate final duration
+            duration = time.time() - start_time
+            duration_str = _format_duration(duration)
+
+            # Show completion message
+            if return_code == 0:
+                console.print(f"\n✓ {duration_str}", style="green bold")
+            else:
+                console.print(f"\n✗ Failed after {duration_str}", style="red bold")
+
+            return (return_code, "")
+
         else:
-            print(f"\n✗ Failed after {duration_str}")
+            # Simple mode (no rich)
+            result = subprocess.run(
+                ["bash", script_name] + extra_args,
+                cwd=example_dir,
+                check=False,
+                env=env,
+            )
 
-        return (result.returncode, "")
+            # Calculate duration
+            duration = time.time() - start_time
+            duration_str = _format_duration(duration)
+
+            # Show completion message
+            if result.returncode == 0:
+                print(f"\n✓ {duration_str}")
+            else:
+                print(f"\n✗ Failed after {duration_str}")
+
+            return (result.returncode, "")
+
     except KeyboardInterrupt:
         duration = time.time() - start_time
         duration_str = _format_duration(duration)
@@ -413,6 +489,7 @@ def run_example(
     extra_args: Optional[List[str]] = None,
     inputs: Optional[str] = None,
     outputs: Optional[str] = None,
+    no_live: bool = False,
 ) -> Tuple[int, str]:
     """Run an example with a specific preset.
 
@@ -423,6 +500,7 @@ def run_example(
         extra_args: Additional arguments to pass to script
         inputs: Input directory for CVL docker mode (optional)
         outputs: Output directory for CVL docker mode (optional)
+        no_live: Disable live status display (default: False, use rich live mode)
 
     Returns:
         Tuple of (exit_code, error_message)
@@ -527,7 +605,13 @@ def run_example(
     print()  # Blank line before script output
 
     # Run the script
-    exit_code, error_msg = run_script(script_path, extra_args)
+    exit_code, error_msg = run_script(
+        script_path,
+        extra_args,
+        no_live=no_live,
+        job_name=f"{example_name} {preset_name}",
+        image_name=image_name
+    )
 
     # Show path mappings after completion (if successful)
     if exit_code == 0:
