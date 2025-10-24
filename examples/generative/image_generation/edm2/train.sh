@@ -1,11 +1,24 @@
-docker run --runtime nvidia \
-	-v $(pwd)/examples/image_gen/edm:/workspace \
-	-v $(pwd)/data/container_cache:/root/.cache \
-	edm2 \
-	torchrun --standalone --nproc_per_node=1 train_edm2.py \
-    --outdir=training-runs/00000-edm2-img512-xs \
-    --data=datasets/img512-sd.zip \
-    --preset=edm2-img512-xs \
-    --batch-gpu=32
+#!/usr/bin/env bash
+set -euo pipefail
 
-	# python train.py
+# Always run from this folder
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+
+# Image name
+IMG="${CVL_IMAGE:-edm2}"
+
+# Mount workspace as writable (training writes outputs to /workspace)
+docker run --rm --gpus=all --shm-size 16G \
+	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
+	--workdir /workspace \
+	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+	--mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
+	--mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+	--env "PYTHONPATH=/cvlization_repo" \
+	--env "PYTHONUNBUFFERED=1" \
+	${WANDB_API_KEY:+-e WANDB_API_KEY=$WANDB_API_KEY} \
+	"$IMG" \
+	python train.py "$@"

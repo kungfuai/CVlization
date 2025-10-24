@@ -1,1 +1,7 @@
-docker build -t mimic_motion examples/video_gen/mimic_motion
+#!/bin/bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t mimic_motion "$SCRIPT_DIR"

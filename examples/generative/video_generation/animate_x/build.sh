@@ -1,1 +1,7 @@
-docker build -t animate-x examples/video_gen/animate_x/
+#!/bin/bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t animate-x "$SCRIPT_DIR"

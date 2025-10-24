@@ -1,15 +1,7 @@
 #!/bin/bash
-set -e
 
-# Build the Docling Docker image
-echo "Building Docling container..."
-docker build -t docling .
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Build complete! Image: docling"
-echo ""
-echo "Usage:"
-echo "  ./predict.sh <input_file> [options]"
-echo ""
-echo "Example:"
-echo "  ./predict.sh sample.pdf"
-echo "  ./predict.sh sample.pdf --format markdown"
+# Build from the script's directory, works from anywhere
+docker build -t docling "$SCRIPT_DIR"
