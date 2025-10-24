@@ -128,12 +128,69 @@ def update_train_sh(script_path):
     print(f"Updating {script_path} (image: {image_name})")
     script_path.write_text(new_content)
 
+def update_predict_sh(script_path):
+    """Update a predict.sh file"""
+    content = script_path.read_text()
+
+    # Extract image name
+    image_name = extract_image_name(script_path)
+
+    # Create standardized predict.sh content
+    new_content = f'''#!/usr/bin/env bash
+set -euo pipefail
+
+# Always run from this folder
+SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
+
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+
+# Image name
+IMG="${{CVL_IMAGE:-{image_name}}}"
+
+# Mount workspace as writable (predict script writes outputs to /workspace)
+docker run --rm --gpus=all \\
+\t${{CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"}} \\
+\t--workdir /workspace \\
+\t--mount "type=bind,src=${{SCRIPT_DIR}},dst=/workspace" \\
+\t--mount "type=bind,src=${{REPO_ROOT}},dst=/cvlization_repo,readonly" \\
+\t--mount "type=bind,src=${{HOME}}/.cache/huggingface,dst=/root/.cache/huggingface" \\
+\t--env "PYTHONPATH=/cvlization_repo" \\
+\t--env "PYTHONUNBUFFERED=1" \\
+\t${{HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"}} \\
+\t"$IMG" \\
+\tpython predict.py "$@"
+'''
+
+    print(f"Updating {script_path} (image: {image_name})")
+    script_path.write_text(new_content)
+
+def should_update_predict(script_path):
+    """Check if predict.sh needs updating"""
+    if not script_path.exists():
+        return False
+
+    content = script_path.read_text()
+
+    # Skip if already updated
+    if 'set -euo pipefail' in content and 'REPO_ROOT' in content and '--gpus=all' in content:
+        return False
+
+    # Skip complex scripts
+    lines = content.split('\n')
+    if len(lines) > 30 or 'function ' in content or '() {' in content:
+        print(f"  Skipping complex script: {script_path}")
+        return False
+
+    return True
+
 def main():
     repo_root = Path(__file__).parent.parent
     examples_dir = repo_root / "examples"
 
     build_count = 0
     train_count = 0
+    predict_count = 0
 
     # Find all build.sh and train.sh files
     for script_path in examples_dir.rglob("build.sh"):
@@ -146,8 +203,14 @@ def main():
             update_train_sh(script_path)
             train_count += 1
 
+    for script_path in examples_dir.rglob("predict.sh"):
+        if should_update_predict(script_path):
+            update_predict_sh(script_path)
+            predict_count += 1
+
     print(f"\nUpdated {build_count} build.sh files")
     print(f"Updated {train_count} train.sh files")
+    print(f"Updated {predict_count} predict.sh files")
 
 if __name__ == "__main__":
     main()

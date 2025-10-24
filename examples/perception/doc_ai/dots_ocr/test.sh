@@ -3,7 +3,7 @@
 # Quick smoke test for dots.ocr example
 echo "Running dots.ocr smoke test..."
 
-docker run --runtime nvidia \
+docker run --gpus=all \
     -v $(pwd)/examples/doc_ai/dots-ocr:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \
