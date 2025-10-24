@@ -18,6 +18,8 @@ docker run --rm --gpus=all \
   --mount "type=bind,src=$SCRIPT_DIR,dst=/workspace$WORKSPACE_RO" \
   --mount "type=bind,src=$REPO_ROOT,dst=/cvlization_repo,readonly" \
   --env "PYTHONPATH=/cvlization_repo" \
+  --env "PYTHONUNBUFFERED=1" \
+  --env "NVIDIA_DISABLE_REQUIRE=1" \
   ${CVL_INPUTS:+--mount "type=bind,src=$CVL_INPUTS,dst=/mnt/cvl/inputs,readonly"} \
   ${CVL_OUTPUTS:+--mount "type=bind,src=$CVL_OUTPUTS,dst=/mnt/cvl/outputs"} \
   ${CVL_INPUTS:+-e CVL_INPUTS=/mnt/cvl/inputs} \
