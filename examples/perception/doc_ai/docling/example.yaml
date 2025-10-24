@@ -1,4 +1,4 @@
-name: docling-serve
+name: docling
 capability: perception/doc_ai
 modalities:
 - vision
