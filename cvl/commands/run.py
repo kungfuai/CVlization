@@ -364,17 +364,28 @@ def _prompt_user_yes_no(question: str, default: bool = True) -> bool:
     return response in ["y", "yes"]
 
 
-def run_via_cvl_docker(
+def _run_via_cvl_docker_DEPRECATED(
     example: Dict,
     preset_info: Dict,
     inputs: Optional[str],
     outputs: Optional[str],
     extra_args: List[str],
 ) -> int:
-    """Run preset via CVL-managed docker with explicit mounts.
+    """DEPRECATED: Run preset via CVL-managed docker with explicit mounts.
 
-    This is the "Cog-like" execution path where CVL owns the docker run
-    command and mounts user-specified input/output directories.
+    ⚠️ DEPRECATED: This function is deprecated and should not be used.
+
+    Use the work_dir pattern instead where predict.sh scripts handle docker
+    themselves and CVL just sets CVL_WORK_DIR environment variable.
+
+    This old "Cog-like" execution path had CVL own the docker run command
+    and mount user-specified input/output directories. It also used
+    data/container_cache which is no longer needed.
+
+    Deprecated in favor of:
+    - predict.sh scripts that handle their own docker run
+    - Single CVL_WORK_DIR instead of separate inputs/outputs
+    - ${HOME}/.cache/huggingface instead of data/container_cache
 
     Args:
         example: Example metadata dict
@@ -550,9 +561,19 @@ def run_example(
         available = _get_available_presets(example)
         return (1, f"Preset '{preset_name}' not found. Available: {available}")
 
-    # Note: CVL docker mode (run_via_cvl_docker) is deprecated in favor of
+    # Note: CVL docker mode (_run_via_cvl_docker_DEPRECATED) is deprecated in favor of
     # the work_dir pattern where scripts handle docker themselves.
-    # Keeping the function for backward compatibility but not using it.
+    # The deprecated function is kept for reference but is no longer called.
+    #
+    # Old pattern (DEPRECATED):
+    #   - CVL owned docker run command
+    #   - Used --inputs/--outputs flags
+    #   - Mounted data/container_cache to /cache
+    #
+    # New pattern (CURRENT):
+    #   - predict.sh handles docker run
+    #   - Uses -w/--work-dir flag (defaults to cwd)
+    #   - Mounts ${HOME}/.cache/huggingface
 
     # Standalone mode: run the script (which calls docker itself)
     # Find the script
