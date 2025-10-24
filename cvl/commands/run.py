@@ -226,12 +226,12 @@ def run_script(
         script_name = os.path.basename(script_path)
 
         # Generate deterministic container name for easy debugging
-        # Format: cvl-{example_short_name}-{short_timestamp}
+        # Format: {example}-{timestamp}
         # Use only last 6 digits of timestamp to keep name short
         timestamp_short = str(int(start_time))[-6:]
         # Extract just the example name from job_name (e.g., "moondream2" from "moondream2 predict")
         example_short = job_name.split()[0] if job_name else "job"
-        container_name = f"cvl-{example_short}-{timestamp_short}"
+        container_name = f"{example_short}-{timestamp_short}"
 
         # Use env to set PYTHONUNBUFFERED for all Python scripts
         env = os.environ.copy()
