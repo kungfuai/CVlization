@@ -3,7 +3,7 @@
 # Quick smoke test for Moondream2
 echo "Running Moondream2 smoke test..."
 
-docker run --runtime nvidia \
+docker run --gpus=all \
     -v $(pwd)/examples/doc_ai/moondream2:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \

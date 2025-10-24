@@ -1,22 +1,24 @@
-CHECKPOINT_DIR=svd_reverse_motion_with_attnflip
-MODEL_NAME=stabilityai/stable-video-diffusion-img2vid-xt
-OUT_DIR=results
-noise_injection_steps=5
-noise_injection_ratio=0.5
-out_fn=$OUT_DIR/001.gif
+#!/usr/bin/env bash
+set -euo pipefail
 
-docker run --shm-size 16G --runtime nvidia \
-	-v $(pwd)/examples/video_gen/video_in_between:/workspace \
-	-v $(pwd)/data/container_cache:/root/.cache \
-    -e CUDA_VISIBLE_DEVICES='0' \
-	video_in_between \
-	python keyframe_interpolation.py \
-        --frame1_path=examples/example_001/frame1.png \
-        --frame2_path=examples/example_001/frame2.png \
-        --pretrained_model_name_or_path=$MODEL_NAME \
-        --checkpoint_dir=$CHECKPOINT_DIR \
-        --noise_injection_steps=$noise_injection_steps \
-        --noise_injection_ratio=$noise_injection_ratio \
-        --decode_chunk_size=4 \
-        --num_inference_steps=50 \
-        --out_path=$out_fn
+# Always run from this folder
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+
+# Image name
+IMG="${CVL_IMAGE:-video_in_between}"
+
+# Mount workspace as writable (predict script writes outputs to /workspace)
+docker run --rm --gpus=all \
+	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
+	--workdir /workspace \
+	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+	--mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
+	--mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+	--env "PYTHONPATH=/cvlization_repo" \
+	--env "PYTHONUNBUFFERED=1" \
+	${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
+	"$IMG" \
+	python predict.py "$@"
