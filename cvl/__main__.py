@@ -41,6 +41,18 @@ def create_parser() -> argparse.ArgumentParser:
         "--stability",
         help="Filter by stability (stable, beta, experimental)"
     )
+    list_parser.add_argument(
+        "--keyword",
+        "-k",
+        help="Search by keyword in name, description, or tags"
+    )
+    list_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["list", "table"],
+        default="list",
+        help="Output format (default: list)"
+    )
 
     # info command
     info_parser = subparsers.add_parser(
@@ -99,7 +111,9 @@ def cmd_list(args) -> int:
             examples,
             capability=args.capability,
             tag=args.tag,
-            stability=args.stability
+            stability=args.stability,
+            keyword=getattr(args, 'keyword', None),
+            format_type=getattr(args, 'format', 'list')
         )
         print(output)
         return 0
