@@ -1,5 +1,5 @@
 name: docling-serve
-capability: perception/ocr_and_layout
+capability: perception/doc_ai
 modalities:
 - vision
 - text
@@ -14,6 +14,9 @@ presets:
   build:
     script: build.sh
     description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run document extraction on a PDF or image
   serve:
     script: serve.sh
     description: Run serve
