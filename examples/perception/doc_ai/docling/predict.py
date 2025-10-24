@@ -69,8 +69,22 @@ def main():
     input_path = Path(resolve_input_path(args.input, INP))
     output_path = Path(resolve_output_path(args.output, OUT))
 
-    # Validate input file
-    if not input_path.exists():
+    # Validate input file - if using default and not found, look in example directory
+    if not input_path.exists() and args.input == "sample.pdf":
+        # Try to find sample.pdf in the example directory
+        script_dir = Path(__file__).parent
+        example_sample = script_dir / "sample.pdf"
+        if example_sample.exists():
+            input_path = example_sample
+            print(f"Note: Using sample file from example directory: {input_path}")
+        else:
+            print(f"Error: Input file '{input_path}' not found")
+            print(f"\nTo run docling, either:")
+            print(f"  1. Run from the docling directory: cd examples/perception/doc_ai/docling && cvl run docling predict")
+            print(f"  2. Use -w flag: cvl run -w examples/perception/doc_ai/docling docling predict")
+            print(f"  3. Specify your own PDF: cvl run docling predict --input your-file.pdf")
+            return 1
+    elif not input_path.exists():
         print(f"Error: Input file '{input_path}' not found")
         return 1
 
