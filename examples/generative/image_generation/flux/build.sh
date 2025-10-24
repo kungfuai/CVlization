@@ -1,1 +1,7 @@
-docker build -t flux examples/image_gen/flux
+#!/bin/bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t flux "$SCRIPT_DIR"

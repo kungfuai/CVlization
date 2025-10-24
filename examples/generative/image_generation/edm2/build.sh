@@ -1,1 +1,7 @@
-docker build -t edm2 examples/image_gen/edm2
+#!/bin/bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t edm2 "$SCRIPT_DIR"
