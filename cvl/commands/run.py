@@ -265,8 +265,20 @@ def run_script(
                 bufsize=1  # Line buffered
             )
 
-            # Create status panel with container name
-            status_text = f"▸ {job_name} ({image_name})\n📦 {container_name}\nStarting..."
+            # Create status panel with container name and output location
+            # Show brief output path so user can find results even if run fails
+            logs_dir = Path(example_dir) / "logs"
+            outputs_dir = Path(example_dir) / "outputs"
+
+            # Determine which directory to show (prefer logs, fallback to outputs, fallback to example_dir)
+            if logs_dir.exists():
+                output_hint = f"📁 {logs_dir}"
+            elif outputs_dir.exists():
+                output_hint = f"📁 {outputs_dir}"
+            else:
+                output_hint = f"📁 {example_dir}"
+
+            status_text = f"▸ {job_name} ({image_name})\n📦 {container_name}\n{output_hint}\nStarting..."
             with Live(
                 Panel(status_text, title="CVL Status", border_style="cyan"),
                 refresh_per_second=2,
@@ -281,7 +293,7 @@ def run_script(
                     # Update status with elapsed time
                     elapsed = time.time() - start_time
                     duration_str = _format_duration(elapsed)
-                    status_text = f"▸ {job_name} ({image_name})\n📦 {container_name}\n⏱  {duration_str} elapsed"
+                    status_text = f"▸ {job_name} ({image_name})\n📦 {container_name}\n{output_hint}\n⏱  {duration_str} elapsed"
                     live.update(Panel(status_text, title="CVL Status", border_style="cyan"))
 
                 process.wait()
@@ -657,6 +669,16 @@ def run_example(
         outputs_dir = Path(example_path) / "outputs"
         if outputs_dir.exists():
             print(f"  /workspace/outputs → {outputs_dir}")
+
+        # Show logs directory if it exists
+        logs_dir = Path(example_path) / "logs"
+        if logs_dir.exists():
+            print(f"  /workspace/logs → {logs_dir}")
+
+        # Show data directory if it exists
+        data_dir = Path(example_path) / "data"
+        if data_dir.exists():
+            print(f"  /workspace/data → {data_dir}")
 
     return (exit_code, error_msg)
 

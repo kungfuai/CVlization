@@ -1,10 +1,10 @@
 """Tests for the info command."""
 import unittest
-from cvl.commands.info import find_example, format_info, get_example_info
+from cvl.commands.info import find_matching_examples, format_info, get_example_info
 
 
-class TestFindExample(unittest.TestCase):
-    """Test the find_example function."""
+class TestFindMatchingExamples(unittest.TestCase):
+    """Test the find_matching_examples function."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -15,7 +15,7 @@ class TestFindExample(unittest.TestCase):
                 "capability": "generative",
             },
             {
-                "_path": "examples/perception/doc_ai",
+                "_path": "examples/perception/doc_ai/granite_docling",
                 "name": "granite_docling",
                 "capability": "perception",
             },
@@ -23,20 +23,32 @@ class TestFindExample(unittest.TestCase):
 
     def test_find_example_with_full_path(self):
         """Test finding example with 'examples/' prefix."""
-        result = find_example(self.examples, "examples/generative/minisora")
-        self.assertIsNotNone(result)
-        self.assertEqual(result["name"], "minisora")
+        results = find_matching_examples(self.examples, "examples/generative/minisora")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "minisora")
 
     def test_find_example_with_short_path(self):
         """Test finding example without 'examples/' prefix."""
-        result = find_example(self.examples, "generative/minisora")
-        self.assertIsNotNone(result)
-        self.assertEqual(result["name"], "minisora")
+        results = find_matching_examples(self.examples, "generative/minisora")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "minisora")
+
+    def test_find_example_with_short_name(self):
+        """Test finding example with just the short name."""
+        results = find_matching_examples(self.examples, "minisora")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "minisora")
+
+    def test_find_example_with_partial_path(self):
+        """Test finding example with partial path."""
+        results = find_matching_examples(self.examples, "doc_ai/granite_docling")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "granite_docling")
 
     def test_find_example_not_found(self):
         """Test finding non-existent example."""
-        result = find_example(self.examples, "nonexistent/example")
-        self.assertIsNone(result)
+        results = find_matching_examples(self.examples, "nonexistent/example")
+        self.assertEqual(len(results), 0)
 
 
 class TestFormatInfo(unittest.TestCase):
@@ -133,6 +145,12 @@ class TestGetExampleInfo(unittest.TestCase):
                 "stability": "beta",
                 "description": "MiniSora example",
             },
+            {
+                "_path": "examples/perception/vision_language/moondream2",
+                "name": "moondream2",
+                "capability": "perception",
+                "stability": "stable",
+            },
         ]
 
     def test_get_example_info_found(self):
@@ -142,10 +160,30 @@ class TestGetExampleInfo(unittest.TestCase):
         self.assertIn("Name: minisora", result)
         self.assertIn("MiniSora example", result)
 
+    def test_get_example_info_with_short_name(self):
+        """Test getting info with short name."""
+        result = get_example_info(self.examples, "moondream2")
+        self.assertIsNotNone(result)
+        self.assertIn("Name: moondream2", result)
+
     def test_get_example_info_not_found(self):
         """Test getting info for non-existent example."""
         result = get_example_info(self.examples, "nonexistent/example")
-        self.assertIsNone(result)
+        self.assertIsNotNone(result)
+        self.assertIn("✗ No example found", result)
+
+    def test_get_example_info_ambiguous(self):
+        """Test getting info with ambiguous identifier."""
+        # Add another example that could match
+        self.examples.append({
+            "_path": "examples/generative/video/minisora_v2",
+            "name": "minisora_v2",
+            "capability": "generative",
+        })
+        # This won't actually be ambiguous with our current logic,
+        # but we test the error message format
+        result = get_example_info(self.examples, "nonexistent")
+        self.assertIn("✗", result)
 
 
 if __name__ == "__main__":

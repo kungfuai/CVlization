@@ -2,25 +2,36 @@
 from typing import List, Dict, Optional
 
 
-def find_example(examples: List[Dict], example_path: str) -> Optional[Dict]:
-    """Find an example by its path.
+def find_matching_examples(examples: List[Dict], identifier: str) -> List[Dict]:
+    """Find examples matching identifier (exact or suffix match).
+
+    Supports flexible matching:
+    - Exact: "perception/vision_language/moondream2"
+    - Short: "moondream2" matches "perception/vision_language/moondream2"
+    - Partial: "line_detection/torch" matches "perception/line_detection/torch"
 
     Args:
         examples: List of example metadata dicts
-        example_path: Path to example (e.g., "generative/minisora" or "examples/generative/minisora")
+        identifier: Example identifier (full path, partial path, or short name)
 
     Returns:
-        Example dict if found, None otherwise
+        List of matching examples (empty if none found, multiple if ambiguous)
     """
-    # Normalize path - remove leading "examples/" if present
-    normalized_path = example_path.removeprefix("examples/").rstrip("/")
+    normalized = identifier.removeprefix("examples/").rstrip("/")
+    matches = []
 
     for example in examples:
-        example_rel_path = example.get("_path", "").removeprefix("examples/").rstrip("/")
-        if example_rel_path == normalized_path:
-            return example
+        path = example.get("_path", "").removeprefix("examples/").rstrip("/")
 
-    return None
+        # Exact match - return immediately
+        if path == normalized:
+            return [example]
+
+        # Suffix match - path ends with identifier
+        if path.endswith("/" + normalized):
+            matches.append(example)
+
+    return matches
 
 
 def format_info(example: Dict) -> str:
@@ -95,19 +106,26 @@ def format_info(example: Dict) -> str:
 
 def get_example_info(
     examples: List[Dict],
-    example_path: str
+    example_identifier: str
 ) -> Optional[str]:
     """Get formatted info for an example.
 
     Args:
         examples: All examples from discovery
-        example_path: Path to the example
+        example_identifier: Example identifier (full path, partial path, or short name)
 
     Returns:
-        Formatted info string, or None if example not found
+        Formatted info string, or error message if not found/ambiguous
     """
-    example = find_example(examples, example_path)
-    if example is None:
-        return None
+    matches = find_matching_examples(examples, example_identifier)
 
+    if len(matches) == 0:
+        return f"✗ No example found for: {example_identifier}"
+    elif len(matches) > 1:
+        # Ambiguous - show all matches
+        paths = "\n  • ".join([ex.get("_path", "").removeprefix("examples/") for ex in matches])
+        return f"✗ Multiple examples found for '{example_identifier}':\n  • {paths}\n\nUse a more specific path to disambiguate."
+
+    # Single match found
+    example = matches[0]
     return format_info(example)

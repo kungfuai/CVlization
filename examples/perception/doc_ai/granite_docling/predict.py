@@ -12,14 +12,15 @@ from transformers.image_utils import load_image
 
 def main():
     parser = argparse.ArgumentParser(description="Extract content from document images using Granite-Docling-258M")
-    parser.add_argument("input_file", type=str, help="Path to input image file (PNG, JPG, etc.)")
+    parser.add_argument("input_file", type=str, nargs='?', default="examples/sample.jpg",
+                       help="Path to input image file (PNG, JPG, etc.) (default: examples/sample.jpg)")
     parser.add_argument("--output", type=str, help="Output file path (optional, prints to stdout if not specified)")
     parser.add_argument("--format", type=str, choices=["markdown", "json", "docling"], default="markdown",
                        help="Output format: markdown (default), json, or docling")
     parser.add_argument("--model", type=str, default="ibm-granite/granite-docling-258M",
                        help="Model to use (default: ibm-granite/granite-docling-258M)")
-    parser.add_argument("--device", type=str, choices=["cpu", "cuda"], default="cpu",
-                       help="Device to run inference on")
+    parser.add_argument("--device", type=str, choices=["cpu", "cuda"], default="cuda",
+                       help="Device to run inference on (default: cuda)")
 
     args = parser.parse_args()
 

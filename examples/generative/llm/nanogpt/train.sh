@@ -9,6 +9,7 @@ if [ ! -f "$SCRIPT_DIR/data/shakespeare_char/train.bin" ]; then
 	echo "Training data not found. Preparing dataset..."
 	echo "Running: python data/shakespeare_char/prepare.py"
 	docker run --rm \
+		--user $(id -u):$(id -g) \
 		--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
 		nanogpt \
 		python data/shakespeare_char/prepare.py
@@ -16,16 +17,18 @@ if [ ! -f "$SCRIPT_DIR/data/shakespeare_char/train.bin" ]; then
 	echo ""
 fi
 
-# In CVL docker mode, workspace is readonly; in standalone mode, it's writable for outputs
-WORKSPACE_RO="${CVL_WORK_DIR:+,readonly}"
-
+# Mount workspace as writable (training needs to write logs/checkpoints)
 docker run --runtime nvidia \
 	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
+	--user $(id -u):$(id -g) \
 	--workdir /workspace \
-	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace${WORKSPACE_RO}" \
-	--mount "type=bind,src=${HOME}/.cache,dst=/root/.cache" \
+	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+	--mount "type=bind,src=${HOME}/.cache,dst=/cache" \
 	--mount "type=bind,src=${REPO_ROOT}/cvlization,dst=/workspace/cvlization,readonly" \
 	-e PYTHONUNBUFFERED=1 \
+	-e HOME=/cache \
+	-e HF_HOME=/cache/huggingface \
+	-e TORCH_HOME=/cache/torch \
 	${CVL_WORK_DIR:+--mount "type=bind,src=${CVL_WORK_DIR},dst=/mnt/cvl/workspace"} \
 	${CVL_WORK_DIR:+-e CVL_INPUTS=/mnt/cvl/workspace} \
 	${CVL_WORK_DIR:+-e CVL_OUTPUTS=/mnt/cvl/workspace} \
