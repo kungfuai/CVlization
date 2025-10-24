@@ -82,7 +82,9 @@ def create_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument(
         "extra_args",
-        nargs="*",
+        nargs=argparse.REMAINDER,  # Captures all remaining args without parsing
+        # Note: Using REMAINDER allows `cvl run example preset --flag value` without needing `--` separator
+        # To require explicit `--` separator (standard Unix convention), change to: nargs="*"
         help="Additional arguments to pass to the script"
     )
 
