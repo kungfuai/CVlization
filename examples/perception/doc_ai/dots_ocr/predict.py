@@ -4,6 +4,7 @@ dots.ocr Inference Script
 
 This script demonstrates document OCR and layout parsing using the dots.ocr model.
 It supports both local images and URLs, with flexible output formats (JSON, Markdown).
+Dual-mode execution: standalone or via CVL with --inputs/--outputs.
 """
 
 import argparse
@@ -14,6 +15,14 @@ from PIL import Image
 import torch
 from transformers import AutoModelForCausalLM, AutoProcessor
 from qwen_vl_utils import process_vision_info
+
+# CVL dual-mode execution support
+from cvlization.paths import (
+    get_input_dir,
+    get_output_dir,
+    resolve_input_path,
+    resolve_output_path,
+)
 
 
 # Default prompt for document layout parsing
@@ -153,8 +162,6 @@ def save_output(output: str, output_path: str, format: str = "txt"):
         with open(output_file, "w") as f:
             f.write(output)
 
-    print(f"Output saved to {output_file}")
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -164,7 +171,7 @@ def main():
         "--image",
         type=str,
         default="examples/sample.jpg",
-        help="Path to input image or URL"
+        help="Path to input image or URL (default: examples/sample.jpg)"
     )
     parser.add_argument(
         "--model-path",
@@ -186,8 +193,8 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
-        help="Output file path"
+        default=None,
+        help="Output file path (default: outputs/result.{format})"
     )
     parser.add_argument(
         "--format",
@@ -211,6 +218,24 @@ def main():
 
     args = parser.parse_args()
 
+    # Resolve paths for CVL dual-mode support
+    INP = get_input_dir()
+    OUT = get_output_dir()
+
+    # Smart default for output path
+    if args.output is None:
+        ext = {"json": "json", "txt": "txt"}[args.format]
+        args.output = f"result.{ext}"
+
+    # Resolve paths using cvlization utilities
+    input_path = resolve_input_path(args.image, INP) if not args.image.startswith("http") else args.image
+    output_path = Path(resolve_output_path(args.output, OUT))
+
+    # Validate input file (if not URL)
+    if not args.image.startswith("http") and not Path(input_path).exists():
+        print(f"Error: Input file '{input_path}' not found")
+        return 1
+
     # Use detailed prompt if requested
     if args.detailed:
         prompt = DETAILED_PROMPT
@@ -221,24 +246,36 @@ def main():
     model, processor = load_model(args.model_path, args.device)
 
     # Load image (just to verify it exists and get size)
-    print(f"Loading image from {args.image}...")
-    image = load_image(args.image)
+    print(f"\n{'='*80}")
+    print("INPUT")
+    print('='*80)
+    print(f"Image: {input_path}")
+    print('='*80 + '\n')
+
+    print(f"Loading image...")
+    image = load_image(str(input_path))
     print(f"Image loaded: {image.size}")
 
     # Run inference (pass path for process_vision_info)
-    output = run_inference(model, processor, args.image, prompt, args.max_tokens)
+    output = run_inference(model, processor, str(input_path), prompt, args.max_tokens)
 
     # Print output
     print("\n" + "="*80)
-    print("OCR OUTPUT:")
+    print(f"{args.format.upper()} OUTPUT (preview):")
     print("="*80)
-    print(output)
+    preview = output[:500] + ("..." if len(output) > 500 else "")
+    print(preview)
     print("="*80 + "\n")
 
     # Save output
-    save_output(output, args.output, args.format)
+    save_output(output, str(output_path), args.format)
+
+    # Show container path (CVL will translate to host path)
+    print(f"Output saved to {output_path}")
     print("Done!")
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    exit(main())

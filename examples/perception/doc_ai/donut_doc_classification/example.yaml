@@ -1,4 +1,4 @@
-name: donut-doc-classification
+name: donut_doc_classification
 capability: perception/doc_ai
 modalities:
 - vision

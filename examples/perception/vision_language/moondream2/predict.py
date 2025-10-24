@@ -210,8 +210,8 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/perception/vision_language/moondream2/examples/sample.jpg",
-        help="Path to input image or URL"
+        default="examples/sample.jpg",
+        help="Path to input image or URL (default: examples/sample.jpg)"
     )
     parser.add_argument(
         "--model-id",

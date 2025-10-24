@@ -4,6 +4,7 @@ Surya OCR - Multilingual Document OCR
 
 This script demonstrates OCR, layout analysis, and reading order detection
 using Surya, supporting 90+ languages.
+Dual-mode execution: standalone or via CVL with --inputs/--outputs.
 
 Model: https://github.com/datalab-to/surya
 """
@@ -15,6 +16,14 @@ from pathlib import Path
 from PIL import Image
 import requests
 from io import BytesIO
+
+# CVL dual-mode execution support
+from cvlization.paths import (
+    get_input_dir,
+    get_output_dir,
+    resolve_input_path,
+    resolve_output_path,
+)
 
 
 def load_image(image_path: str):
@@ -137,8 +146,6 @@ def save_output(output: str, output_path: str, format: str = "txt", metadata: di
         with open(output_file, "w") as f:
             f.write(output)
 
-    print(f"Output saved to {output_file}")
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -148,7 +155,7 @@ def main():
         "--image",
         type=str,
         default="examples/sample.jpg",
-        help="Path to input image or URL"
+        help="Path to input image or URL (default: examples/sample.jpg)"
     )
     parser.add_argument(
         "--task",
@@ -160,8 +167,8 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
-        help="Output file path"
+        default=None,
+        help="Output file path (default: outputs/result.{format})"
     )
     parser.add_argument(
         "--format",
@@ -173,9 +180,35 @@ def main():
 
     args = parser.parse_args()
 
+    # Resolve paths for CVL dual-mode support
+    INP = get_input_dir()
+    OUT = get_output_dir()
+
+    # Smart default for output path
+    if args.output is None:
+        ext = {"json": "json", "txt": "txt"}[args.format]
+        args.output = f"result.{ext}"
+
+    # Resolve paths using cvlization utilities
+    input_path = resolve_input_path(args.image, INP) if not args.image.startswith("http") else args.image
+    output_path = Path(resolve_output_path(args.output, OUT))
+
+    # Validate input file (if not URL)
+    if not args.image.startswith("http") and not Path(input_path).exists():
+        print(f"Error: Input file '{input_path}' not found")
+        return 1
+
+    # Show input
+    print(f"\n{'='*80}")
+    print("INPUT")
+    print('='*80)
+    print(f"Image: {input_path}")
+    print(f"Task: {args.task}")
+    print('='*80 + '\n')
+
     # Load image
-    print(f"Loading image from {args.image}...")
-    image = load_image(args.image)
+    print(f"Loading image...")
+    image = load_image(str(input_path))
     print(f"Image loaded: {image.size}")
 
     # Run task
@@ -194,17 +227,23 @@ def main():
         predictions = run_reading_order(images)
         output = format_layout_output(predictions)  # Similar format
 
-    # Print output
+    # Print output preview
     print("\n" + "="*80)
-    print(f"{args.task.upper()} OUTPUT:")
+    print(f"{args.format.upper()} OUTPUT (preview):")
     print("="*80)
-    print(output)
+    preview = output[:500] + ("..." if len(output) > 500 else "")
+    print(preview)
     print("="*80 + "\n")
 
     # Save output
-    save_output(output, args.output, args.format, metadata)
+    save_output(output, str(output_path), args.format, metadata)
+
+    # Show container path (CVL will translate to host path)
+    print(f"Output saved to {output_path}")
     print("Done!")
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    exit(main())
