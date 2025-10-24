@@ -43,7 +43,7 @@ mkdir -p "$OUTPUT_DIR"
 REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 cd "$SCRIPT_DIR/../../moondream2"
 
-docker run --runtime nvidia --rm \
+docker run --gpus=all --rm \
     -v "$(pwd):/workspace" \
     -v "$INPUT_DIR:/inputs:ro" \
     -v "$OUTPUT_DIR:/outputs" \

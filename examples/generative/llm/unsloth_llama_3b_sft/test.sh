@@ -53,7 +53,7 @@ cp config.yaml config.yaml.bak
 
 # Run test
 echo "Running test..."
-docker run --runtime nvidia \
+docker run --gpus=all \
     -v $(pwd):/workspace \
     -v $REPO_ROOT/data/container_cache:/root/.cache \
     -e HF_TOKEN=$HF_TOKEN \

@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 # In CVL docker mode, workspace is readonly; in standalone mode, it's writable for outputs
 WORKSPACE_RO="${CVL_WORK_DIR:+,readonly}"
 
-docker run --runtime nvidia \
+docker run --gpus=all \
 	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
 	--workdir /workspace \
 	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace${WORKSPACE_RO}" \

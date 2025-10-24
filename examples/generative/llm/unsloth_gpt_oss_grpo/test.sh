@@ -14,7 +14,7 @@ sed 's/max_steps: 10/max_steps: 2/' config.yaml > config_test.yaml
 
 # Run smoke test
 echo "Running 2-step GRPO training for smoke test..."
-docker run --runtime nvidia \
+docker run --gpus=all \
     --rm \
     -v $(pwd):/workspace \
     -v $REPO_ROOT/data/container_cache:/root/.cache \

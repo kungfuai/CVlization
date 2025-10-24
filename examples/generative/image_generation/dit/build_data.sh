@@ -1,4 +1,4 @@
-docker run --runtime nvidia \
+docker run --gpus=all \
 	-v $(pwd)/examples/image_gen/dit:/workspace \
 	-v $(pwd)/data/container_cache:/root/.cache \
     -e "RANK=0" \
