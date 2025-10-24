@@ -3,7 +3,7 @@
 # Quick smoke test for Surya OCR
 echo "Running Surya OCR smoke test..."
 
-docker run --runtime nvidia \
+docker run --gpus=all \
     -v $(pwd)/examples/doc_ai/surya:/workspace \
     -v $(pwd)/data/container_cache:/root/.cache \
     surya \
