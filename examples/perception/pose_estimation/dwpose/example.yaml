@@ -25,3 +25,6 @@ tasks:
 frameworks:
 - onnx
 description: 2D pose estimation inference using DWPose ONNX models
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Verified build, inference with video/image inputs, model caching (470MB models), and JSON outputs. Fixed crashes and output saving. Runs on GPU."
