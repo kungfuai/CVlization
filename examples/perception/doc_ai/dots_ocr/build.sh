@@ -8,6 +8,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Building dots.ocr container..."
 docker build -t dots_ocr "$SCRIPT_DIR"
 
+# Download required model (idempotent - skips if already exists)
+echo ""
+echo "Downloading required model..."
+python3 "$SCRIPT_DIR/download_model.py"
+
 echo "Build complete! Image: dots_ocr"
 echo ""
 echo "Usage:"
