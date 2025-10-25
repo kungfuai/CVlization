@@ -21,4 +21,4 @@ docker run --rm --gpus=all --shm-size 16G \
 	--env "PYTHONUNBUFFERED=1" \
 	${WANDB_API_KEY:+-e WANDB_API_KEY=$WANDB_API_KEY} \
 	"$IMG" \
-	python train.py "$@"
+	python train_cifar10.py "$@"
