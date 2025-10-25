@@ -43,11 +43,9 @@
 **Core (keep tiny):**
 
 * **Protocols** (no runtime coupling):
-
   * `example.yaml` descriptor ✅ **already exists in 97% of examples** (task/datasets/tags/resources/presets/files).
   * **Run‑record JSON** schema (params, env, metrics, timings, artifacts).
-* **CLI** (`cvlz` via `pipx`):
-
+* **CLI** (`cvl` via `pipx`):
   * `list | info | run | compare | export | doctor`.
   * Cache strategies: `--cache host | volume` (HF/Torch reuse vs fastest IO).
   * Compose orchestration from anywhere (resolves repo root).
@@ -68,12 +66,11 @@
 ```bash
 cvl list                      # discover examples w/ tags & stability
 cvl info video/minisora       # GPU/VRAM/ETA, dataset, last-green badge
-cvl run  nlp/bert --preset train --cache host --param lr=3e-5 --param epochs=3
+cvl run  nlp/bert --preset train --cache host
 cvl run  vis/resnet --preset eval --profile gpu
 cvl compare runs/a.json runs/b.json --key val/accuracy
 cvl export  vis/resnet --as-repo  # minimal standalone repo w/ pins + CI
 cvl doctor                    # docker/nvidia/cache/disk checks
-cvl cache info                # show cache sizes and locations
 ```
 
 **Presets** provide contrastive comparisons (e.g., baseline vs policy aug vs mixing; LoRA vs full fine‑tune; CPU vs GPU).
@@ -82,17 +79,14 @@ cvl cache info                # show cache sizes and locations
 
 ## 5) Caching & Data Reuse
 
-**Default:** Repo-scoped cache (`./data/container_cache` → container `/cache`) for isolation & reproducibility.
+**Default:** Repo-scoped cache (`./data/container_cache` → container `/root/.cache/huggingface`) for isolation & reproducibility.
 
 **Opt-in modes:**
 * `--cache=host`: Mount `~/.cache` to reuse models downloaded outside Docker (saves disk space, faster cold starts)
   * ⚠️ Warning displayed about non-determinism
-  * Requires running as host user to avoid permission issues
 * `--cache=volume`: Named Docker volume (macOS performance optimization)
 
-**Always run containers as host user** (`--user $(id -u):$(id -g)`) to avoid root-owned files.
-
-Respect official envs: `HF_HOME=/cache/huggingface`, `TORCH_HOME=/cache/torch`.
+Respect official envs: `HF_HOME=/root/.cache/huggingface`, `TORCH_HOME=/root/.cache/torch`.
 
 ---
 
@@ -100,14 +94,14 @@ Respect official envs: `HF_HOME=/cache/huggingface`, `TORCH_HOME=/cache/torch`.
 
 * **Scheduled CI smoke builds** (weekly): build images + 30‑sec CPU check per example.
 * **Badges**: last‑green date, GPU required/optional, stability tier (Stable/Beta/Experimental).
-* **Run‑record JSON** written on each run → source of truth for `cvlz compare`.
+* **Run‑record JSON** written on each run → source of truth for `cvl compare`.
 
 ---
 
 ## 7) Docs as a Gallery
 
 * Auto‑generate a searchable gallery (MkDocs) from `example.yaml` + READMEs.
-* Filters: task, modality, GPU/VRAM, ETA, stability; quick copy buttons for `cvlz` commands.
+* Filters: task, modality, GPU/VRAM, ETA, stability; quick copy buttons for `cvl` commands.
 
 ---
 
@@ -132,7 +126,7 @@ Respect official envs: `HF_HOME=/cache/huggingface`, `TORCH_HOME=/cache/torch`.
 
 1. Duplicated in ≥3 examples **and** stable?
 2. Can be a **pure helper/protocol** (files/env/json) vs. a base class?
-3. Won’t force core to pin heavy ML libs?
+3. Won't force core to pin heavy ML libs?
 4. If removed, replacing it is ≤100 LOC copy?
 5. Materially lowers TTFE or speeds Compare/Export?
 
@@ -152,180 +146,36 @@ Graduation is SUCCESS, not failure—it proves the example's value and reduces m
 
 ---
 
-## 12) Roadmap (30/60/90) - REVISED
+## 12) Roadmap - UPDATED (Oct 2025)
 
-**30 days - Triage & Export First**
+**Completed ✅**
+- ✅ Add `example.yaml` to 97% of examples
+- ✅ Build `cvl list` and `cvl info` with fuzzy matching
+- ✅ Build `cvl run` for executing presets
+- ✅ Standardize 160 scripts across all examples
+- ✅ Add directory mounting info to `cvl run` output
+- ✅ Fix all fragile hardcoded paths
 
-* Audit all 73 examples: test builds, tag Green/Yellow/Red.
-* Archive Red examples to `/archived-examples/` with explanation.
-* Move `cvlization/torch` and `cvlization/tensorflow` to `/legacy`.
-* Build minimal `cvl export --as-repo` (Dockerfile + pins + basic CI).
-* Graduate 3-5 active examples (those with >500MB artifacts or active external users).
+**Next 30 days**
+- Push pre-built Docker images to Docker Hub (2-min pull vs 10-30 min build)
+- Build `cvl export --as-repo` (standalone repo with pins + CI)
+- Audit examples: tag Green/Yellow/Red, archive Red ones
+- Graduate 3-5 high-maintenance examples (>500MB artifacts)
 
-**60 days - Stabilize Core Set**
+**Next 60 days**
+- Add run-record JSON schema and writer
+- Build `cvl compare` (HTML/Markdown reports)
+- Turn on weekly smoke CI for stable examples
+- Publish auto-generated docs gallery (MkDocs)
 
-* Identify 10-15 Green examples worth keeping in monorepo.
-* ✅ Add `example.yaml` to examples (**67/69 complete**, 97% coverage).
-* Add run-record JSON schema and writer to examples.
-* ✅ Build `cvl list` and `cvl info` for discovery (leverage existing example.yaml).
-* ✅ Build `cvl run` for executing presets.
-* Implement cache modes (isolated/host/volume) with warnings.
-* **TODO**: Push pre-built Docker images to Docker Hub public registry (enables 2-min pull vs 10-30 min build).
-
-**90 days - Comparison & Automation**
-
-* Build `cvl compare` (HTML/Markdown reports).
-* Turn on weekly smoke CI for survivors only.
-* Publish auto-generated docs gallery (MkDocs).
-* Add stability badges (last-green date, GPU tier).
-
----
-
-## 16) Improving `cvl run` - Making CLI Actually Useful (Nov 2025)
-
-**Current Problem:** `cvl run` provides minimal value over bash scripts - same experience, no error prevention, no helpful feedback.
-
-**Goal:** Make `cvl run` noticeably better than bash with 5 simple improvements.
-
-### What to Ship (2 hours total)
-
-**These 5 things make `cvl run` genuinely useful:**
-
-1. **Show "Running..." header** (15 min)
-   ```
-   Running surya build...
-   Example: perception/ocr_and_layout/surya
-   Script:  build.sh
-   ```
-   Users know what's happening, can cancel if wrong.
-
-2. **Handle Ctrl+C gracefully** (15 min)
-   ```python
-   except KeyboardInterrupt:
-       print("\n✗ Cancelled by user")
-       return (130, "")
-   ```
-   No ugly Python tracebacks.
-
-3. **Better missing image error + auto-fix** (30 min)
-   ```
-   ✗ Docker image 'surya' not found
-
-   Build it first:
-     cvl run perception/ocr_and_layout/surya build
-     or
-     bash examples/perception/ocr_and_layout/surya/build.sh
-
-   Build it now? [Y/n]
-   ```
-   Prevents #1 user frustration, offers fix.
-
-4. **Show completion time** (15 min)
-   ```
-   ✓ Completed in 5m 32s
-   # or
-   ✗ Failed after 2m 15s
-   ```
-   Visual feedback, sense of progress.
-
-5. **Check Docker is running** (30 min)
-   ```python
-   try:
-       subprocess.run(["docker", "info"], capture_output=True, check=True, timeout=5)
-   except:
-       print("✗ Docker is not running")
-       print("Start it: sudo systemctl start docker  # Linux")
-       return (1, "")
-   ```
-   Prevents confusing errors.
-
-### What NOT to Build (Yet)
-
-**Skip these until users ask for them:**
-
-- ❌ VRAM/disk space checks (fragile, edge cases)
-- ❌ Error analysis & auto-retry (too ambitious)
-- ❌ Progress indicators (Docker already shows output)
-- ❌ Parameter overrides (just edit the script)
-
-**Why skip:** Each adds complexity and maintenance burden. Ship simple first, add features based on real user requests.
-
-### Implementation
-
-**File:** `cvl/commands/run.py`
-
-**Week 1:** Implement all 5 improvements (2 hours)
-**Week 2:** Get user feedback, iterate only if needed
-**Week 3:** Don't build more features unless users specifically request them
-
-### Success Criteria
-
-- ✅ New users don't get confused by missing Docker image
-- ✅ Ctrl+C doesn't show scary traceback
-- ✅ Users know what's running and when it's done
-- ✅ `cvl run` feels slightly smoother than bash
-
-**Anti-goal:** Don't try to be smarter than bash. Just be friendlier.
-
-### Philosophy
-
-**Do:**
-- Make common errors less frustrating
-- Provide helpful context and feedback
-- Offer simple recovery options
-
-**Don't:**
-- Try to prevent all possible errors
-- Parse complex error messages
-- Add features "just in case"
-- Abstract away what's really happening
-
-Keep it simple. Ship it. Get feedback. Iterate.
+**Next 90 days**
+- Add stability badges (last-green date, GPU tier)
+- Identify 10-15 Green examples for long-term maintenance
+- Move `cvlization/torch` and `cvlization/tensorflow` to `/legacy`
 
 ---
 
-## 15) Standardization Audit (Oct 2025)
-
-**Current State (59 dockerized examples):**
-- ✅ 67/69 have `example.yaml` (97% coverage)
-- ✅ 59/59 have `build.sh`
-- ✅ 59/59 have `Dockerfile`
-- ✅ 57/57 have `build` preset in example.yaml (100% coverage for examples with example.yaml)
-- ✅ 0 scripts use fragile `../../../` paths (all fixed)
-
-**Standardization Pattern (established via moondream2):**
-```yaml
-# example.yaml
-presets:
-  build:
-    script: build.sh
-    description: Build the Docker image
-  predict/generate/train:
-    script: <name>.sh
-    description: <semantic description>
-```
-
-```bash
-# Shell scripts pattern
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
-CACHE_DIR="$REPO_ROOT/data/container_cache"
-```
-
-**Rollout Plan:**
-1. **Phase 1 (Completed):** Establish pattern via moondream2 ✅
-2. **Phase 2 (Completed):** Add build presets to all 56 examples ✅
-3. **Phase 3 (Completed):** Fix fragile paths in 13 scripts ✅
-4. **Phase 4 (Completed):** Document pattern in CONTRIBUTING.md ✅
-
-**Priority Examples for Standardization:**
-- Stable perception: granite_docling, surya, moondream3
-- Stable generative: minisora, wan2gp, nanochat
-- High-traffic: flux, dreambooth, nanogpt
-
----
-
-## 13) KPIs - REVISED
+## 13) KPIs
 
 * Median **time‑to‑first‑experiment** (target: <5 min).
 * % examples with **green weekly smoke** (target: >90%).
@@ -342,3 +192,78 @@ Keep CVlization laser‑focused on **fast runs, fair comparisons, clean copy‑o
 
 **Critical mindset shift:** The repo's health is measured by **what you remove**, not what you manage. Build export tooling first, archive aggressively, and maintain only 10-15 pristine examples. Successful examples should graduate to standalone repos—that's a win, not a loss.
 
+---
+
+## 15) Standardization Status (Oct 2025) ✅ COMPLETE
+
+**Scripts Standardized (160 total across 5 commits):**
+- ✅ 48 build.sh files → use `$SCRIPT_DIR` pattern
+- ✅ 29 train.sh files → standardized CVL pattern
+- ✅ 13 predict.sh files → standardized CVL pattern
+- ✅ 23 other scripts → GPU flag updates, test scripts
+- ✅ 67/69 have `example.yaml` (97% coverage)
+- ✅ 0 scripts use `--runtime nvidia` (all use `--gpus=all`)
+- ✅ 0 scripts use fragile hardcoded paths
+
+**Standard Pattern:**
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"  # Go up 4 levels
+IMG="${CVL_IMAGE:-example_name}"
+
+docker run --rm --gpus=all --shm-size 16G \
+  --workdir /workspace \
+  --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+  --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
+  --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+  --env "PYTHONPATH=/cvlization_repo" \
+  "$IMG" python train.py "$@"
+```
+
+---
+
+## 16) Examples Requiring Manual Downloads
+
+**12 examples need manual setup before running:**
+
+### Video Generation (6 examples - run download_models.sh):
+- `animate_x` - Animate-X + DWPose models (~2-3GB from HF)
+- `mimic_motion` - MimicMotion + DWPose models (HF)
+- `phantom` - Phantom model weights
+- `vace` - VACE model weights
+- `vace_comfy` - Wan 2.1 models (~15-20GB from HF)
+- `wan_comfy` - Wan 2.1 models (similar to vace_comfy)
+
+### Tracking (2 examples - use gdown):
+- `global_tracking_transformer` - Soccer video + GTR model from Google Drive
+- `soccer_visual_tracking` - `bash download_data.sh` (video + 3 YOLO models)
+
+### LLM (3 examples - HF token/access):
+- `mistral7b` - Gated model, requires HF account + access request
+- `mixtral8x7b` - Gated model, requires HF account + access request
+- `trl_sft` - Llama models, requires `export HF_TOKEN=...`
+
+### Other (1 example):
+- `nanochat` - `git clone https://github.com/karpathy/nanochat $HOME/zz/nanochat`
+
+**All other examples** auto-download models/data on first run (HuggingFace, datasets, etc.)
+
+---
+
+## 17) CLI UX Improvements
+
+**Completed ✅**
+- ✅ Show "Running..." header with example/script/docker info
+- ✅ Show directory mounting information
+- ✅ Fuzzy matching with suggestions for typos
+- ✅ Check Docker is running before execution
+
+**TODO (Ship when users ask):**
+- Handle Ctrl+C gracefully (no ugly tracebacks)
+- Better missing image error + auto-build prompt
+- Show completion time (✓ Completed in 5m 32s)
+- VRAM/disk space checks (⚠️ fragile, wait for user requests)
+
+**Philosophy:** Keep it simple. Don't try to be smarter than bash, just friendlier.
