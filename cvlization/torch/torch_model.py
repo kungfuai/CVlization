@@ -3,7 +3,7 @@ import logging
 from typing import List, Optional, Any
 import torch
 from torch import nn, optim
-# from pytorch_lightning.core.lightning import LightningModule
+# from pytorch_lightning import LightningModule
 from pytorch_lightning import LightningModule
 from torchmetrics import Metric
 

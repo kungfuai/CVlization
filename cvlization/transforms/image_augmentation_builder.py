@@ -10,10 +10,22 @@ class ImageAugmentationBuilder:
 
     def run(self):
         if self.spec.provider == ImageAugmentationProvider.IMGAUG:
+            import warnings
+            warnings.warn(
+                "IMGAUG provider is deprecated due to NumPy 2.x compatibility issues. "
+                "Please use ALBUMENTATIONS provider instead for better compatibility with modern dependencies.",
+                DeprecationWarning,
+                stacklevel=2
+            )
             from ..transforms.img_aug_transforms import ImgAugTransform
 
             img_aug_object = ImgAugTransform(config_file_or_dict=self.spec.config)
             return img_aug_object
+        elif self.spec.provider == ImageAugmentationProvider.ALBUMENTATIONS:
+            from ..transforms.albumentations_transform import AlbumentationsTransform
+
+            albumentations_object = AlbumentationsTransform(config_file_or_dict=self.spec.config)
+            return albumentations_object
         elif self.spec.provider == ImageAugmentationProvider.TORCHVISION:
             from ..torch.transforms.torchvision_transform import TorchvisionTransform
 
