@@ -162,7 +162,7 @@ class YorkLinesDataset:
 
     def download(self):
         assert self.download_url is not None, f"download_url is None"
-        check_output("mkdir -p ./data".split())
+        os.makedirs(self.data_dir, exist_ok=True)
         outfile = os.path.join(self.data_dir, f"{self.dataset_folder}.zip")
         check_output(f"wget {self.download_url} -O {outfile}".split())
 
