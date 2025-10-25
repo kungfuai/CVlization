@@ -1,4 +1,5 @@
 name: semantic-segmentation-mmseg
+docker: mmseg_ss
 capability: perception/segmentation
 modalities:
 - vision
