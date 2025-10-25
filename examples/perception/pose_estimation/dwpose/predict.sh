@@ -16,7 +16,7 @@ docker run --rm --gpus=all \
 	--workdir /workspace \
 	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
 	--mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
-	--mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+	--mount "type=bind,src=${HOME}/.cache,dst=/root/.cache" \
 	--env "PYTHONPATH=/cvlization_repo" \
 	--env "PYTHONUNBUFFERED=1" \
 	${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
