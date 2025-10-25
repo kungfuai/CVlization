@@ -46,8 +46,11 @@ cd examples/<capability>/<task>/<framework>/
 ### 2. Build Verification
 
 ```bash
-# Build the Docker image
+# Option 1: Build using script directly
 ./build.sh
+
+# Option 2: Build using CVL CLI (recommended)
+cvl run <example-name> build
 
 # Verify image was created
 docker images | grep <example-name>
@@ -56,19 +59,23 @@ docker images | grep <example-name>
 ```
 
 **What to check:**
-- Build completes without errors
+- Build completes without errors (both methods)
 - All dependencies install successfully
 - Image size is reasonable (check for unnecessary files)
+- `cvl info <example-name>` shows correct metadata
 
 ### 3. Training Verification
 
 Start training and monitor for proper initialization:
 
 ```bash
-# Run training with default settings
+# Option 1: Run training using script directly
 ./train.sh
 
-# Or with custom parameters (if supported)
+# Option 2: Run training using CVL CLI (recommended)
+cvl run <example-name> train
+
+# With custom parameters (if supported)
 BATCH_SIZE=2 NUM_EPOCHS=1 ./train.sh
 ```
 
@@ -287,11 +294,12 @@ cvl run granite_docling_finetune train
 A training pipeline passes verification when:
 
 1. ✅ **Structure**: All required files present, example.yaml valid
-2. ✅ **Build**: Docker image builds without errors
-3. ✅ **Start**: Training starts, dataset loads, model initializes
-4. ✅ **Metrics**: Appropriate metrics logged and improving
+2. ✅ **Build**: Docker image builds without errors (both `./build.sh` and `cvl run <name> build`)
+3. ✅ **Start**: Training starts, dataset loads, model initializes (both `./train.sh` and `cvl run <name> train`)
+4. ✅ **Metrics Improve**: Training loss decreases OR model accuracy/mAP/IoU improves over epochs
 5. ✅ **Outputs**: Checkpoints/adapters/logs saved to outputs/
-6. ✅ **Documentation**: README explains how to use the example
+6. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
+7. ✅ **Documentation**: README explains how to use the example
 
 ## Related Files
 
