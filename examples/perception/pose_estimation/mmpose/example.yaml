@@ -28,3 +28,6 @@ frameworks:
 - pytorch
 - mmpose
 description: 2D pose estimation training with MMPose framework
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Verified build, CVL CLI integration, and lazy downloading to ~/.cache/cvlization/data/. Training not fully verified due to GPU memory constraints (CUDA OOM on shared A10 GPU)."
