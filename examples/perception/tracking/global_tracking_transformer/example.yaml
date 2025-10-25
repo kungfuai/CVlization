@@ -9,6 +9,11 @@ resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 10
+  downloads:
+    - url: "gdrive://1TqkLpFZvOMY5HTTaAWz25RxtLHdzQ-CD"
+      dest: "models/gtr/gtr_model.pth"
+    - url: "gdrive://18E9eRgZBaYlH_O6gB2Evrv96swa8MabU"
+      dest: "data/global_tracking_transformer/soccer1_clip1.mp4"
 presets:
   build:
     script: build.sh

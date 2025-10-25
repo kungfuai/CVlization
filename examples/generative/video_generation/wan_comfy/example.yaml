@@ -8,6 +8,15 @@ resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 50
+  downloads:
+    - url: "hf://Comfy-Org/Wan_2.1_ComfyUI_repackaged/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+      dest: "models/wan/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+    - url: "hf://Comfy-Org/Wan_2.1_ComfyUI_repackaged/split_files/vae/wan_2.1_vae.safetensors"
+      dest: "models/wan/wan_2.1_vae.safetensors"
+    - url: "hf://Comfy-Org/Wan_2.1_ComfyUI_repackaged/split_files/diffusion_models/wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors"
+      dest: "models/wan/wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors"
+    - url: "hf://Comfy-Org/Wan_2.1_ComfyUI_repackaged/split_files/clip_vision/clip_vision_h.safetensors"
+      dest: "models/wan/clip_vision_h.safetensors"
 presets:
   build:
     script: build.sh

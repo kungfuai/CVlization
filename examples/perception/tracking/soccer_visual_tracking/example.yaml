@@ -9,6 +9,15 @@ resources:
   gpu: 1
   vram_gb: 3
   disk_gb: 5
+  downloads:
+    - url: "gdrive://12TqauVZ9tLAv8kWxTTBFWtgt2hNQ4_ZF"
+      dest: "data/soccer_tracking/0bfacc_0.mp4"
+    - url: "gdrive://1isw4wx-MK9h9LMr36VvIWlJD6ppUvw7V"
+      dest: "models/soccer_tracking/football-ball-detection.pt"
+    - url: "gdrive://17PXFNlx-jI7VjVo_vQnB1sONjRyvoB-q"
+      dest: "models/soccer_tracking/football-player-detection.pt"
+    - url: "gdrive://1Ma5Kt86tgpdjCTKfum79YMgNnSjcoOyf"
+      dest: "models/soccer_tracking/football-pitch-detection.pt"
 presets:
   build:
     script: build.sh
