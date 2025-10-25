@@ -240,6 +240,45 @@ MAX_TRAIN_SAMPLES=10 NUM_EPOCHS=1 ./train.sh
 # Verify: Completes without errors, metrics logged
 ```
 
+### 8. Update Verification Metadata
+
+After successful verification, update the example.yaml with verification metadata:
+
+```bash
+# Edit example.yaml to add verification field
+# Add this at the end of the file (after all other fields)
+```
+
+**Format:**
+```yaml
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Verified build, training initialization, lazy downloading, and metrics logging"
+```
+
+**What to include in the note:**
+- What was verified: build, training, metrics
+- Key aspects: lazy downloading, caching, GPU utilization
+- Training extent: e.g., "1 epoch quick test" or "Full 10 epoch training"
+- Any limitations: e.g., "Verified on A10 GPU only", "CUDA OOM on full batch size"
+
+**Example complete entry:**
+```yaml
+name: pose-estimation-mmpose
+docker: mmpose
+capability: perception/pose_estimation
+# ... other fields ...
+
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Verified build, CVL CLI integration, and lazy downloading. Training not fully verified due to GPU constraints (CUDA OOM)."
+```
+
+**When to update:**
+- After completing full verification checklist (steps 1-7)
+- Partial verification is acceptable - note what was verified
+- When re-verifying after CVlization updates or fixes
+
 ## Common Issues and Fixes
 
 ### Build Failures
@@ -345,6 +384,7 @@ A training pipeline passes verification when:
 7. ✅ **Outputs**: Checkpoints/adapters/logs saved to outputs/
 8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
 9. ✅ **Documentation**: README explains how to use the example
+10. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
 
 ## Related Files
 

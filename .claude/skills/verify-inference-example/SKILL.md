@@ -177,6 +177,45 @@ For fast verification during development:
 # Verify: Completes without errors, output generated
 ```
 
+### 8. Update Verification Metadata
+
+After successful verification, update the example.yaml with verification metadata:
+
+```bash
+# Edit example.yaml to add verification field
+# Add this at the end of the file (after all other fields)
+```
+
+**Format:**
+```yaml
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Verified build, inference, model caching, and outputs"
+```
+
+**What to include in the note:**
+- What was verified: build, inference, outputs
+- Key aspects: model caching, GPU/CPU inference
+- Any limitations: e.g., "Verified on A10 GPU only"
+- Quick notes: e.g., "First run downloads 470MB models"
+
+**Example complete entry:**
+```yaml
+name: pose-estimation-dwpose
+docker: dwpose
+capability: perception/pose_estimation
+# ... other fields ...
+
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Verified build, inference with video/image inputs, model caching (470MB models), and JSON outputs. Runs on GPU."
+```
+
+**When to update:**
+- After completing full verification checklist (steps 1-7)
+- Only if ALL success criteria pass
+- When re-verifying after CVlization updates or fixes
+
 ## Common Issues and Fixes
 
 ### Build Failures
@@ -263,6 +302,7 @@ An inference example passes verification when:
 5. ✅ **Model Caching**: Models cached to `~/.cache/` (typically `~/.cache/huggingface/`), avoiding repeated downloads
 6. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and predict presets work
 7. ✅ **Documentation**: README explains how to use the example
+8. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
 
 ## Related Files
 
