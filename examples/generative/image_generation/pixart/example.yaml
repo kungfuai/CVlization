@@ -27,3 +27,6 @@ tasks:
 frameworks:
 - pytorch
 description: PixArt efficient text-to-image diffusion model training
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Build in progress (slow xformers download). Training cannot be verified - requires pre-computed latent files (data/latents/flying_mnist_11k__sd-vae-ft-mse_latents_32frames_train.npy) that are not included. README lacks data preparation instructions. Example incomplete without dataset setup on NVIDIA A10 (23028 MiB)."
