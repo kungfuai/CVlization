@@ -51,12 +51,15 @@ def parse_url(url: str) -> Tuple[str, Dict]:
         return ("gdrive", {"file_id": file_id, "original_url": url})
 
     elif url.startswith("hf://"):
-        # Format: hf://repo-id/path/to/file
+        # Format: hf://org/repo/path/to/file or hf://repo/path/to/file
+        # HuggingFace repos are either "username/repo" or "org/repo"
+        # Split into max 3 parts to handle org/repo/file
         path = url.replace("hf://", "")
-        parts = path.split("/", 1)
-        if len(parts) != 2:
-            raise DownloadError(f"Invalid HuggingFace URL format: {url}")
-        return ("hf", {"repo_id": parts[0], "filename": parts[1]})
+        parts = path.split("/", 2)
+        if len(parts) < 3:
+            raise DownloadError(f"Invalid HuggingFace URL format (expected hf://org/repo/file): {url}")
+        # First two parts are repo_id, rest is filename
+        return ("hf", {"repo_id": f"{parts[0]}/{parts[1]}", "filename": parts[2]})
 
     elif "huggingface.co" in url:
         # Parse HF URL: https://huggingface.co/repo/resolve/main/file.safetensors
