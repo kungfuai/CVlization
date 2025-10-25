@@ -44,7 +44,8 @@ def filter_examples(
     Returns:
         Filtered list of examples
     """
-    filtered = examples
+    # Exclude archived examples by default
+    filtered = [e for e in examples if not e.get('archived', False)]
 
     if capability:
         filtered = [e for e in filtered if capability.lower() in e.get('capability', '').lower()]
