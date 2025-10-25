@@ -181,22 +181,25 @@ For fast verification during development:
 
 After successful verification, update the example.yaml with verification metadata:
 
+**First, check GPU info:**
 ```bash
-# Edit example.yaml to add verification field
-# Add this at the end of the file (after all other fields)
+# Get GPU model and VRAM
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 ```
 
 **Format:**
 ```yaml
 verification:
   last_verified: 2025-10-25
-  last_verification_note: "Verified build, inference, model caching, and outputs"
+  last_verification_note: "Verified build, inference, model caching, and outputs on [GPU_MODEL] ([VRAM]GB VRAM)"
 ```
 
 **What to include in the note:**
 - What was verified: build, inference, outputs
 - Key aspects: model caching, GPU/CPU inference
-- Any limitations: e.g., "Verified on A10 GPU only"
+- **GPU info**: Dynamically determine GPU model and VRAM using nvidia-smi (e.g., "A10 GPU (24GB VRAM)", "RTX 4090 (24GB)")
+  - If no GPU: Use "CPU-only"
+- Any limitations: e.g., "Requires 8GB VRAM", "GPU memory constraints"
 - Quick notes: e.g., "First run downloads 470MB models"
 
 **Example complete entry:**
@@ -208,7 +211,7 @@ capability: perception/pose_estimation
 
 verification:
   last_verified: 2025-10-25
-  last_verification_note: "Verified build, inference with video/image inputs, model caching (470MB models), and JSON outputs. Runs on GPU."
+  last_verification_note: "Verified build, inference with video/image inputs, model caching (470MB models), and JSON outputs on [detected GPU]."
 ```
 
 **When to update:**
