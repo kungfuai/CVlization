@@ -1,4 +1,5 @@
 name: panoptic-segmentation-mmdet
+docker: mmdet_ps
 capability: perception/segmentation
 modalities:
 - vision
