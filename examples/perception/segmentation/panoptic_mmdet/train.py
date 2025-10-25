@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 try:
     from mmdet.datasets import build_dataset
 except ImportError:
@@ -22,12 +23,23 @@ from cvlization.torch.net.panoptic_segmentation.mmdet import (
 )
 
 
+def get_cache_dir() -> Path:
+    """Get the CVlization cache directory for datasets."""
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = Path(cache_home) / "cvlization" / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
 class TrainingSession:
     def __init__(self, args):
         self.args = args
 
     def run(self):
-        dsb = CocoPanopticTinyDatasetBuilder(preload=True, flavor=None)
+        # Use centralized cache directory for datasets
+        cache_dir = str(get_cache_dir())
+        print(f"Using cache directory: {cache_dir}")
+        dsb = CocoPanopticTinyDatasetBuilder(preload=True, flavor=None, data_dir=cache_dir)
         self.model, self.cfg = self.create_model(
             num_things_classes=len(dsb.things_classes),
             num_stuff_classes=len(dsb.stuff_classes),
