@@ -1,4 +1,5 @@
 name: semantic-segmentation-torchvision
+docker: torchvision_ss
 capability: perception/segmentation
 modalities:
 - vision

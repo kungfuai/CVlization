@@ -1,4 +1,5 @@
 name: instance-segmentation-torchvision
+docker: torchvision_is
 capability: perception/segmentation
 modalities:
 - vision
