@@ -14,6 +14,14 @@ Systematically verify that a CVlization training example is complete, properly s
 - Ensuring example completeness before commits
 - Verifying example works after CVlization updates
 
+## Important Context
+
+**Shared GPU Environment**: This machine may be used by multiple users simultaneously. Before running GPU-intensive training:
+1. Check GPU memory availability with `nvidia-smi`
+2. Wait for sufficient VRAM and low GPU utilization if needed
+3. Consider stopping other processes if you have permission
+4. If CUDA OOM errors occur, wait and retry when GPU is less busy
+
 ## Verification Checklist
 
 ### 1. Structure Verification
@@ -332,10 +340,11 @@ A training pipeline passes verification when:
 2. ✅ **Build**: Docker image builds without errors (both `./build.sh` and `cvl run <name> build`)
 3. ✅ **Start**: Training starts, dataset loads, model initializes (both `./train.sh` and `cvl run <name> train`)
 4. ✅ **Metrics Improve**: Training loss decreases OR model accuracy/mAP/IoU improves over epochs
-5. ✅ **Lazy Downloading**: Training data and pretrained weights cached to `~/.cache/` (cvlization or framework-specific), avoiding repeated downloads on subsequent runs
-6. ✅ **Outputs**: Checkpoints/adapters/logs saved to outputs/
-7. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
-8. ✅ **Documentation**: README explains how to use the example
+5. ✅ **Central Caching**: Training data cached to `~/.cache/cvlization/data/` (NOT to local `./data/`), pretrained weights cached to framework-specific locations (`~/.cache/torch/`, `~/.cache/huggingface/`)
+6. ✅ **Lazy Downloading**: Datasets and pretrained weights download only when needed, avoiding repeated downloads on subsequent runs
+7. ✅ **Outputs**: Checkpoints/adapters/logs saved to outputs/
+8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
+9. ✅ **Documentation**: README explains how to use the example
 
 ## Related Files
 
