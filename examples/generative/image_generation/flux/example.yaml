@@ -26,3 +26,6 @@ tasks:
 frameworks:
 - pytorch
 description: Flux Schnell text-to-image generation (via Replicate/Cog)
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Verified build (both ./build.sh and cvl run), inference execution with both methods (./predict.sh and cvl run flux predict), output generation (1024x1024 PNG, 1.4MB), and model caching to HuggingFace hub (~/.cache/huggingface/). All Python packages are pinned in requirements.txt. Fixed script naming (generate.sh → predict.sh) and added proper output directory handling. CPU offloading optimizations allow inference to run with ~14GB VRAM instead of the full 24GB requirement."
