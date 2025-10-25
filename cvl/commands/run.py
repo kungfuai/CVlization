@@ -572,6 +572,10 @@ def run_example(
     if not docker_running:
         return (1, f"✗ Docker is not running\n{docker_error}")
 
+    # Handle downloads before finding the example
+    # (so we can show better error messages if example not found)
+    downloads_to_run = None
+
     # Find matching examples
     matches, suggestions = find_matching_examples(examples, example_identifier)
 
@@ -596,6 +600,36 @@ def run_example(
     if preset_info is None:
         available = _get_available_presets(example)
         return (1, f"Preset '{preset_name}' not found. Available: {available}")
+
+    # Handle downloads if this is a build preset and downloads are specified
+    if preset_name == "build":
+        downloads = example.get("resources", {}).get("downloads", [])
+        if downloads:
+            from cvl.core.downloads import download_resources, DownloadError
+
+            print("\n" + "=" * 80)
+            print("DOWNLOADING REQUIRED RESOURCES")
+            print("=" * 80)
+
+            try:
+                results = download_resources(
+                    downloads,
+                    base_path=Path(example_path),
+                    quiet=False
+                )
+
+                # Show summary
+                downloaded_count = sum(1 for was_downloaded in results.values() if was_downloaded)
+                if downloaded_count > 0:
+                    print(f"\n✓ Downloaded {downloaded_count} file(s)")
+                else:
+                    print("\n✓ All files already exist (skipped)")
+
+                print("=" * 80)
+                print()
+
+            except DownloadError as e:
+                return (1, f"Download failed: {e}")
 
     # Note: CVL docker mode (_run_via_cvl_docker_DEPRECATED) is deprecated in favor of
     # the work_dir pattern where scripts handle docker themselves.
