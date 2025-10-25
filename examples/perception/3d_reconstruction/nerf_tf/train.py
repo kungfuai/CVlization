@@ -52,9 +52,10 @@ class TrainingSession:
         optimizer = keras.optimizers.Adam(5e-4)
         model.compile(
             optimizer=optimizer,
-            metrics=[keras.metrics.MeanSquaredError()],
+            # Removed metrics to fix TF 2.x compatibility with run_eagerly=True
+            # Loss (MSE) is still tracked and logged
             loss=keras.losses.MeanSquaredError(),
-            run_eagerly=True,
+            run_eagerly=True,  # Required by TinyNerfModel.train_step()
         )
         print(f"Model compiled successfully.")
         # model.summary()
