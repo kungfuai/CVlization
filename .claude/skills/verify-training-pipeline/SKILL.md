@@ -244,23 +244,26 @@ MAX_TRAIN_SAMPLES=10 NUM_EPOCHS=1 ./train.sh
 
 After successful verification, update the example.yaml with verification metadata:
 
+**First, check GPU info:**
 ```bash
-# Edit example.yaml to add verification field
-# Add this at the end of the file (after all other fields)
+# Get GPU model and VRAM
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 ```
 
 **Format:**
 ```yaml
 verification:
   last_verified: 2025-10-25
-  last_verification_note: "Verified build, training initialization, lazy downloading, and metrics logging"
+  last_verification_note: "Verified build, training initialization, lazy downloading, and metrics logging on [GPU_MODEL] ([VRAM]GB VRAM)"
 ```
 
 **What to include in the note:**
 - What was verified: build, training, metrics
 - Key aspects: lazy downloading, caching, GPU utilization
+- **GPU info**: Dynamically determine GPU model and VRAM using nvidia-smi (e.g., "A10 GPU (24GB VRAM)", "RTX 4090 (24GB)")
+  - If no GPU: Use "CPU-only"
 - Training extent: e.g., "1 epoch quick test" or "Full 10 epoch training"
-- Any limitations: e.g., "Verified on A10 GPU only", "CUDA OOM on full batch size"
+- Any limitations: e.g., "CUDA OOM on full batch size"
 
 **Example complete entry:**
 ```yaml
@@ -271,7 +274,7 @@ capability: perception/pose_estimation
 
 verification:
   last_verified: 2025-10-25
-  last_verification_note: "Verified build, CVL CLI integration, and lazy downloading. Training not fully verified due to GPU constraints (CUDA OOM)."
+  last_verification_note: "Verified build, CVL CLI integration, and lazy downloading to ~/.cache/cvlization/data/. Training not fully verified due to GPU memory constraints (CUDA OOM on shared GPU)."
 ```
 
 **When to update:**
