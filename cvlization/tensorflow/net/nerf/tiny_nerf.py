@@ -115,6 +115,11 @@ class TinyNerfModel(tf.keras.Model):
         LOGGER.debug(self.metrics)
         LOGGER.debug("compiled:", self.compiled_metrics)
         # self.metrics[0] is the mean loss.
+        # Check if user metrics exist (TF 2.x compatibility fix)
+        if len(self.metrics) < 2:
+            LOGGER.debug("No user metrics defined, returning empty metrics")
+            return return_metrics
+
         compiled_metrics = self.metrics[1]
         for target_idx, metrics_for_this_target in enumerate(
             compiled_metrics._user_metrics
@@ -137,7 +142,7 @@ class TinyNerfModel(tf.keras.Model):
                     except Exception as e:
                         LOGGER.error(f"Failed to update metric {metric}. Target idx: {target_idx}")
                         raise e
-                    
+
         for metric in compiled_metrics.metrics:
             try:
                 result = metric.result()

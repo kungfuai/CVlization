@@ -25,4 +25,13 @@ tasks:
 - 3d_reconstruction
 frameworks:
 - tensorflow
-description: Neural Radiance Fields for 3D reconstruction using TensorFlow 2.16. Legacy educational example - consider Instant-NGP or 3DGS for production use.
+description: |
+  ⚠️ LEGACY EDUCATIONAL EXAMPLE - Neural Radiance Fields using TensorFlow 2.16.
+
+  For production use, consider modern alternatives:
+  - Instant-NGP (100-1000x faster, real-time rendering)
+  - 3D Gaussian Splatting (real-time quality)
+  - Nerfstudio (production-ready toolkit)
+
+  This is "Tiny NeRF" - a minimal demo for learning NeRF concepts.
+  The 3D/NeRF community has standardized on PyTorch for newer methods.
