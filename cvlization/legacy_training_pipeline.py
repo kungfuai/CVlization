@@ -669,7 +669,7 @@ class LegacyTrainingPipeline:
         return trainer
 
     def _ensure_torch_model(self):
-        from pytorch_lightning.core.lightning import LightningModule
+        from pytorch_lightning import LightningModule
         from torch import nn
         from .torch.torch_model import TorchLitModel
 

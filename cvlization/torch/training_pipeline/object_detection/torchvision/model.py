@@ -4,7 +4,7 @@ import torch
 import torchvision
 from torchvision.models import detection
 from torchvision.models.detection.rpn import AnchorGenerator
-from pytorch_lightning.core.lightning import LightningModule
+from pytorch_lightning import LightningModule
 try:
     from torchmetrics.detection.map import MeanAveragePrecision
 except ImportError:
@@ -113,10 +113,17 @@ class LitDetector(LightningModule):
         # LOGGER.info(f"targets={targets}")
         self.val_mAP.update(preds=detections, target=targets)
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         mAP = self.val_mAP.to("cpu").compute()
+
+        # Convert multi-element tensors to scalars (Lightning 2.x requires scalar values)
+        scalar_metrics = {
+            k: v.mean() if v.numel() > 1 else v
+            for k, v in mAP.items()
+        }
+
         self.log_dict(
-            mAP,
+            scalar_metrics,
             on_step=False,
             on_epoch=True,
             prog_bar=True,
