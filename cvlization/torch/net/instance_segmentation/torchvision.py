@@ -2,7 +2,7 @@ import logging
 import torch
 import torchvision
 from typing import Union
-from pytorch_lightning.core.lightning import LightningModule
+from pytorch_lightning import LightningModule
 
 try:
     from torchmetrics.detection.map import MeanAveragePrecision
@@ -95,7 +95,7 @@ class LitDetector(LightningModule):
         # TODO: add metric for masks!
         self.val_mAP.update(preds=detections, target=targets)
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         mAP = self.val_mAP.compute()
         self.log_dict(
             mAP,

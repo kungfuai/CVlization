@@ -3,7 +3,7 @@ import logging
 from typing import Union, Callable, Optional
 import torch
 from torch import nn
-from pytorch_lightning.core.lightning import LightningModule
+from pytorch_lightning import LightningModule
 from ..specs import ModelSpec, MLFramework
 from .training_pipeline.utils.dataloader_utils import DataLoaderUtils
 from .training_pipeline.utils.model_utils import ModelUtils

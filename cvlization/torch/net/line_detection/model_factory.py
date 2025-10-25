@@ -2,7 +2,7 @@ import logging
 from itertools import combinations
 import torch
 import numpy as np
-from pytorch_lightning.core.lightning import LightningModule
+from pytorch_lightning import LightningModule
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from scipy.ndimage import zoom
 from skimage.draw import line_aa
@@ -153,7 +153,7 @@ class LitDetector(LightningModule):
             self.lcnn_fp.append(fp)
             self.lcnn_scores.append(lcnn_score)
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         lcnn_tp = np.concatenate(self.lcnn_tp)
         lcnn_fp = np.concatenate(self.lcnn_fp)
         lcnn_scores = np.concatenate(self.lcnn_scores)

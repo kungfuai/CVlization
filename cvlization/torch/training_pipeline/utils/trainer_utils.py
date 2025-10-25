@@ -70,9 +70,6 @@ class TrainerUtils:
         logger_for_experiment_tracking = self.create_experiment_tracker()
 
         trainer = Trainer(
-            # TODO: RuntimeError: No GPUs available.
-            gpus=self.gpus,
-            auto_select_gpus=self.auto_select_gpus,
             max_epochs=self.epochs,
             limit_train_batches=limit_train_batches,
             limit_val_batches=limit_val_batches,
@@ -86,7 +83,8 @@ class TrainerUtils:
             accumulate_grad_batches=self.n_gradients,
             precision=self.precision,
             num_nodes=self.num_nodes,
-            accelerator=self.accelerator,
+            accelerator=self.accelerator or ("gpu" if self.gpus > 0 else "cpu"),
+            devices=self.gpus if self.gpus > 0 else "auto",
             callbacks=self.create_callbacks(),
             enable_progress_bar=self.enable_progress_bar,
             log_every_n_steps=self.log_every_n_steps,

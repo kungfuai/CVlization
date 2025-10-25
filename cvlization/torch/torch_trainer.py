@@ -117,10 +117,9 @@ class TorchTrainer(BaseTrainer):
                 )
             )
         self._lightning_trainer = Trainer(
-            # TODO: RuntimeError: No GPUs available.
-            # auto_select_gpus=True,
-            gpus=1 if torch.cuda.is_available() else 0,
-            auto_select_gpus=False,
+            # Lightning 2.x: use accelerator and devices instead of gpus
+            accelerator="gpu" if torch.cuda.is_available() else "cpu",
+            devices=1 if torch.cuda.is_available() else "auto",
             max_epochs=self.epochs,
             limit_train_batches=limit_train_batches,
             limit_val_batches=limit_val_batches,
