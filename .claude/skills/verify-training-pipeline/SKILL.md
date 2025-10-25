@@ -185,7 +185,42 @@ ls -la wandb/
 # Expected: run-<timestamp>-<id> directories
 ```
 
-### 6. Quick Validation Test
+### 6. Lazy Downloading & Caching Verification
+
+Verify that datasets and pretrained weights are cached properly:
+
+```bash
+# Check CVlization dataset cache
+ls -la ~/.cache/cvlization/data/
+# Expected: Dataset archives and extracted folders
+# Examples: coco_panoptic_tiny/, stanford_background/, etc.
+
+# Check framework-specific caches
+ls -la ~/.cache/torch/hub/checkpoints/       # PyTorch pretrained weights
+ls -la ~/.cache/huggingface/                 # HuggingFace models
+
+# Verify no repeated downloads on second run
+# First run: Should see "Downloading..." messages
+./train.sh 2>&1 | tee first_run.log
+
+# Clean workspace data (but keep cache)
+rm -rf ./data/
+
+# Second run: Should NOT download again, uses cache
+./train.sh 2>&1 | tee second_run.log
+
+# Verify no download messages in second run
+grep -i "download" second_run.log
+# Expected: Minimal or no download activity (weights already cached)
+```
+
+**What to verify:**
+- Training data downloads to `~/.cache/cvlization/data/` (not `./data/`)
+- Pretrained weights cached by framework (PyTorch: `~/.cache/torch/`, HuggingFace: `~/.cache/huggingface/`)
+- Second run reuses cached files without re-downloading
+- Check train.py for `data_dir` parameter passed to dataset builders
+
+### 7. Quick Validation Test
 
 For fast verification (useful during development):
 
@@ -297,9 +332,10 @@ A training pipeline passes verification when:
 2. ✅ **Build**: Docker image builds without errors (both `./build.sh` and `cvl run <name> build`)
 3. ✅ **Start**: Training starts, dataset loads, model initializes (both `./train.sh` and `cvl run <name> train`)
 4. ✅ **Metrics Improve**: Training loss decreases OR model accuracy/mAP/IoU improves over epochs
-5. ✅ **Outputs**: Checkpoints/adapters/logs saved to outputs/
-6. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
-7. ✅ **Documentation**: README explains how to use the example
+5. ✅ **Lazy Downloading**: Training data and pretrained weights cached to `~/.cache/` (cvlization or framework-specific), avoiding repeated downloads on subsequent runs
+6. ✅ **Outputs**: Checkpoints/adapters/logs saved to outputs/
+7. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
+8. ✅ **Documentation**: README explains how to use the example
 
 ## Related Files
 
