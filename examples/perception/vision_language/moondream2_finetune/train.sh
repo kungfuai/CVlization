@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Image name
-IMG="${CVL_IMAGE:-moondream2_finetune}"
+IMG="${CVL_IMAGE:-moondream2-finetune}"
 
 # Mount workspace as writable (training writes outputs to /workspace)
 docker run --rm --gpus=all --shm-size 16G \
