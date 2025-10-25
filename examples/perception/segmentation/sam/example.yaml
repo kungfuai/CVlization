@@ -15,15 +15,15 @@ presets:
     description: Build the Docker image
   train:
     script: train.sh
-    description: Run train
+    description: Run SAM training
 tags:
 - sam
 - segment-anything
 - meta
 - pytorch
-- placeholder
+- mobile-sam
 tasks:
 - instance_segmentation
 frameworks:
 - pytorch
-description: Segment Anything Model training (under construction - not working yet)
+description: Fine-tune Meta's Segment Anything Model (SAM) using MobileSAM for instance segmentation on custom datasets
