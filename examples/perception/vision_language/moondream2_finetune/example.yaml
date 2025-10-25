@@ -28,3 +28,6 @@ tasks:
 frameworks:
 - pytorch
 description: Fine-tune Moondream2 for document Q&A with pure PyTorch
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Fully verified: build successful (13.9GB image), training completed (10 samples, 1 epoch), metrics logged (loss=3.8320, token_acc=0.531), model saved to outputs/. HuggingFace cache working (3.5GB moondream2 model), torch hub cache working (25MB DINO encoder). Lazy downloading verified - no re-downloads on second run."
