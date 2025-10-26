@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-IMG="${CVL_IMAGE:-mixtral}"
+IMG="${CVL_IMAGE:-mixtral8x7b}"
 
 # Ensure outputs directory exists on host for convenience
 mkdir -p "$SCRIPT_DIR/outputs"
@@ -16,4 +16,4 @@ docker run --rm --gpus=all --shm-size 16G \
   --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
   ${HF_TOKEN:+-e HF_TOKEN=$HF_TOKEN} \
   "$IMG" \
-  python predict.py "$@"
+  python generate.py "$@"

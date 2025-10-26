@@ -144,16 +144,36 @@ grep -i "downloading" second_run.log
 
 ### 6. Runtime Checks
 
-**GPU Utilization (if applicable):**
+**GPU VRAM Usage Monitoring (REQUIRED for GPU models):**
+
+Monitor GPU VRAM usage before, during, and after inference:
+
 ```bash
-# In another terminal
+# In another terminal, watch GPU memory in real-time
 watch -n 1 nvidia-smi
 
-# Expected:
-# - GPU memory usage increases during model load
-# - GPU utilization spikes during inference
-# - Memory released after inference completes
+# Or get detailed memory breakdown
+nvidia-smi --query-gpu=index,name,memory.used,memory.total,memory.free,utilization.gpu --format=csv,noheader,nounits
+
+# Record peak VRAM usage during inference
+nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | awk '{print $1 " MB"}'
 ```
+
+**Expected metrics:**
+- **Model loading**: VRAM usage increases as model loads into memory
+- **Inference peak**: VRAM spikes during forward pass
+- **Cleanup**: Memory released after inference completes (for short-running containers)
+- **Temperature**: Stable (<85°C)
+
+**What to record for verification metadata:**
+- Peak VRAM usage in GB (e.g., "8.2GB VRAM" or "12.5GB VRAM")
+- Percentage of total VRAM (e.g., "52%" for 12.5GB on 24GB GPU)
+- Whether 4-bit/8-bit quantization was used (affects VRAM requirements)
+
+**Troubleshooting:**
+- **CUDA OOM**: Use smaller model variant, enable quantization (4-bit/8-bit), or run on CPU
+- **High VRAM idle usage**: Check if other processes are using GPU
+- **Memory not released**: Container may still be running (`docker ps`)
 
 **Docker Container Health:**
 ```bash
@@ -199,6 +219,10 @@ verification:
 - Key aspects: model caching, GPU/CPU inference
 - **GPU info**: Dynamically determine GPU model and VRAM using nvidia-smi (e.g., "A10 GPU (24GB VRAM)", "RTX 4090 (24GB)")
   - If no GPU: Use "CPU-only"
+- **VRAM usage**: Peak VRAM used during inference (e.g., "Uses 8.2GB VRAM (34%) with 4-bit quantization")
+  - Get with: `nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits`
+  - Convert to GB and calculate percentage of total VRAM
+  - Note if quantization (4-bit/8-bit) was used
 - Any limitations: e.g., "Requires 8GB VRAM", "GPU memory constraints"
 - Quick notes: e.g., "First run downloads 470MB models"
 

@@ -158,16 +158,36 @@ ls -la outputs/*/lora_adapters/
 
 ### 5. Runtime Checks
 
-**GPU Utilization:**
+**GPU VRAM Usage Monitoring (REQUIRED):**
+
+Before, during, and after training, actively monitor GPU VRAM usage:
+
 ```bash
-# In another terminal
+# In another terminal, watch GPU memory in real-time
 watch -n 1 nvidia-smi
 
-# Expected:
-# - GPU memory usage 60-95% (adjust batch size if 100% or <30%)
-# - GPU utilization 70-100%
-# - Temperature stable (<85°C)
+# Or get detailed memory breakdown
+nvidia-smi --query-gpu=index,name,memory.used,memory.total,memory.free,utilization.gpu --format=csv,noheader,nounits
+
+# Record peak VRAM usage during training
+nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | awk '{print $1 " MB"}'
 ```
+
+**Expected metrics:**
+- **GPU memory usage**: 60-95% of available VRAM (adjust batch size if 100% or <30%)
+- **GPU utilization**: 70-100% during training steps
+- **Temperature**: Stable (<85°C)
+- **Memory behavior**: Should stabilize after model loading, spike during forward/backward passes
+
+**What to record for verification metadata:**
+- Peak VRAM usage in GB (e.g., "7.4GB VRAM" or "3.2GB VRAM")
+- Percentage of total VRAM (e.g., "32%" for 7.4GB on 24GB GPU)
+- GPU utilization percentage (e.g., "100% GPU utilization")
+
+**Troubleshooting:**
+- **CUDA OOM**: Reduce `BATCH_SIZE`, `MAX_SEQ_LEN`, or model size
+- **Low GPU utilization (<50%)**: Check data loading bottlenecks, increase batch size
+- **Memory keeps growing**: Possible memory leak, check gradient accumulation
 
 **Docker Container Health:**
 ```bash
@@ -262,6 +282,9 @@ verification:
 - Key aspects: lazy downloading, caching, GPU utilization
 - **GPU info**: Dynamically determine GPU model and VRAM using nvidia-smi (e.g., "A10 GPU (24GB VRAM)", "RTX 4090 (24GB)")
   - If no GPU: Use "CPU-only"
+- **VRAM usage**: Peak VRAM used during training (e.g., "GPU usage: 7.4GB VRAM (32%), 100% GPU utilization")
+  - Get with: `nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits`
+  - Convert to GB and calculate percentage of total VRAM
 - Training extent: e.g., "1 epoch quick test" or "Full 10 epoch training"
 - Any limitations: e.g., "CUDA OOM on full batch size"
 
