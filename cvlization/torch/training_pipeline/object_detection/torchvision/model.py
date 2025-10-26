@@ -118,7 +118,7 @@ class LitDetector(LightningModule):
 
         # Convert multi-element tensors to scalars (Lightning 2.x requires scalar values)
         scalar_metrics = {
-            k: v.mean() if v.numel() > 1 else v
+            k: v.float().mean() if v.numel() > 1 else v
             for k, v in mAP.items()
         }
 
