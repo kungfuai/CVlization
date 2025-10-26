@@ -1,12 +1,13 @@
 """
 Source data: https://www.elderlab.yorku.ca/resources/york-urban-line-segment-database-information/s
 Prepared using script: https://github.com/zzsi/LETR/blob/dev/helper/york_split.py.
-Much of the code here is thanks to the authors of the LETR model: https://github.com/mlpc-ucsd/LETR. 
+Much of the code here is thanks to the authors of the LETR model: https://github.com/mlpc-ucsd/LETR.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import os
+from pathlib import Path
 from subprocess import check_output
 import torch
 from torchvision.datasets import CocoDetection
@@ -14,6 +15,14 @@ from typing import Union, List
 from . import york_transforms as T
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..torch.net.line_detection.letr.util import collate_fn
+from cvl.core.downloads import get_cache_dir
+
+
+def _default_data_dir() -> Path:
+    """Return the centralized cache directory for York Lines data."""
+    cache_dir = get_cache_dir() / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 @dataclass
@@ -28,7 +37,7 @@ class YorkLinesDatasetBuilder:
     """
 
     channels_first: bool = True
-    data_dir: str = "./data"
+    data_dir: str = field(default_factory=lambda: str(_default_data_dir()))
     dataset_folder: str = "york_lines"
     train_ann_file: str = "annotations/lines_train.json"
     val_ann_file: str = "annotations/lines_val.json"

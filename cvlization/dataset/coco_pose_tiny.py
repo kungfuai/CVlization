@@ -2,10 +2,11 @@
 Dataset adapted from: https://github.com/open-mmlab/mmpose/blob/master/demo/MMPose_Tutorial.ipynb
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import numpy as np
 import os
+from pathlib import Path
 from subprocess import check_output
 from PIL import Image
 from typing import Union, List, Tuple
@@ -13,6 +14,14 @@ from panopticapi.utils import rgb2id
 from pycocotools.coco import COCO
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
+from cvl.core.downloads import get_cache_dir
+
+
+def _default_data_dir() -> Path:
+    """Return the centralized cache directory for COCO Pose Tiny data."""
+    cache_dir = get_cache_dir() / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 @dataclass
@@ -29,7 +38,7 @@ class CocoPoseTinyDatasetBuilder:
     channels_first: bool = True
     to_torch_tensor: bool = False
     flavor: str = None  # one of None, "torchvision"
-    data_dir: str = "./data"
+    data_dir: str = field(default_factory=lambda: str(_default_data_dir()))
     dataset_folder: str = "coco_pose_tiny"
     train_ann_file: str = "person_keypoints_val2017_first80.json"
     val_ann_file: str = "person_keypoints_val2017_last20.json"

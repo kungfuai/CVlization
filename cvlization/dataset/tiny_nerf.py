@@ -1,11 +1,20 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import os
+from pathlib import Path
 import random
 from subprocess import check_output
 from typing import Union, List
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
+from cvl.core.downloads import get_cache_dir
+
+
+def _default_data_dir() -> Path:
+    """Return the centralized cache directory for Tiny Nerf data."""
+    cache_dir = get_cache_dir() / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 @dataclass
@@ -13,7 +22,7 @@ class TinyNerfDatasetBuilder:
 
     channels_first: bool = False
     to_torch_tensor: bool = False
-    data_dir: str = "./data"
+    data_dir: str = field(default_factory=lambda: str(_default_data_dir()))
     download_url: str = (
         # "https://people.eecs.berkeley.edu/~bmild/nerf/tiny_nerf_data.npz"
         "http://cseweb.ucsd.edu/~viscomp/projects/LF/papers/ECCV20/nerf/tiny_nerf_data.npz"
