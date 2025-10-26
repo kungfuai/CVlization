@@ -13,6 +13,10 @@ tasks: [image_to_video]
 frameworks: [pytorch, cog]
 cog:
   enabled: true
+  cache:
+    huggingface: true  # OpenCLIP models
+    custom:
+      SVD_WEIGHTS_CACHE: svd  # Custom SVD weights
 description: Stable Video Diffusion with Cog (non-commercial license, 24GB VRAM)
 notes: |
   This example uses Cog for containerization instead of Docker directly.
@@ -34,4 +38,4 @@ notes: |
   Cog manages Docker images internally via cog.yaml configuration.
 verification:
   last_verified: 2025-10-26
-  last_verification_note: "Fully verified end-to-end on A10 (23GB VRAM). Build succeeds (17.6GB image). Fixed num_steps parameter implementation (passes to sampler.__call__). Fixed seed parameter type (Optional[int]). Inference completes successfully with decoding_t=1 (decode 1 frame at a time) to stay within VRAM limits. Default decoding_t=14 causes CUDA OOM on 23GB GPU. CVL Cog integration working correctly. Model downloads 19GB weights on first run."
+  last_verification_note: "Build successful (17.6GB image). End-to-end inference verified on A10 (23GB VRAM). Inference completes with decoding_t=1 (decode 1 frame at a time) to stay within VRAM limits. Default decoding_t=14 causes CUDA OOM on 23GB GPU. CVL Cog integration working correctly. Model downloads 19GB weights on first run."

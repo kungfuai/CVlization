@@ -100,7 +100,7 @@ def load_model(
     return model
 
 
-SVD_MODEL_CACHE = "./checkpoints"
+SVD_MODEL_CACHE = os.environ.get("SVD_WEIGHTS_CACHE", "./checkpoints")
 SVD_URL = "https://weights.replicate.delivery/default/svd/svd_and_svd_xt.tar"
 
 SVD_DEFAULT_FRAMES = 14
