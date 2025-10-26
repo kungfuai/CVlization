@@ -33,3 +33,8 @@ OSError: You are trying to access a gated repo.
 ## Reference
 
 This is adapted from https://brev.dev/blog/fine-tuning-mistral
+
+## What this example does
+- Demonstrates LoRA fine-tuning, not pure inference. By default it downloads a base chat model (TinyLlama for smoke tests, or `mistralai/Mistral-7B-v0.1` for full runs) and optimises it using the Hugging Face Trainer.
+- After training, checkpoints are stored under `./<run-name>` inside the example directory. You can then load those adapters with any standard Transformers inference script.
+- For a ready-made inference example (prompt in, text out) see `examples/generative/llm/mixtral8x7b` after supplying your Hugging Face token.

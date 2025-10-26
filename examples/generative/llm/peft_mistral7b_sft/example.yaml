@@ -1,0 +1,35 @@
+name: peft-mistral7b-sft
+capability: generative/llm
+modalities:
+- text
+datasets:
+- custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 20
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run supervised fine-tuning (use --sample_prompt for generation after training)
+tags:
+- peft
+- lora
+- sft
+- mistral
+- fine-tuning
+- pytorch
+- 4bit-quant
+- causal-lm
+tasks:
+- text_generation
+frameworks:
+- pytorch
+description: Supervised fine-tuning for causal LMs using LoRA (PEFT). Supports Mistral, Llama, Gemma, etc. Default model is Mistral 7B with 4-bit quantization (requires HuggingFace access)
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Verified full Mistral 7B training with 4-bit quantization. Build succeeds via CVL CLI. Training shows strong loss decrease (0.5126 → 0.1176 over 30 steps). LoRA adapters saved successfully. GPU usage: 7.4GB VRAM (32%), 100% GPU utilization. Model cached to ~/.cache/huggingface/. Fixed tokenizer compatibility (use_fast=False + sentencepiece). Also smoke-tested with TinyLlama 1.1B (3.2GB VRAM). Tested on NVIDIA A10 GPU (24GB VRAM)."

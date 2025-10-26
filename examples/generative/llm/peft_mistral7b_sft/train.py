@@ -249,6 +249,7 @@ def load_model_and_tokenizer(args: argparse.Namespace):
         padding_side="left",
         add_eos_token=True,
         trust_remote_code=args.trust_remote_code,
+        use_fast=False,  # Workaround for tokenizer compatibility
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
