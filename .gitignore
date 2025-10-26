@@ -68,3 +68,10 @@ results/
 **/ImageNet*/
 
 .env
+
+# Temporary reports and skill outputs
+/reports/
+/var/
+
+# Temporary result files
+/result.json
