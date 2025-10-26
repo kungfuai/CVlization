@@ -325,3 +325,9 @@ Check these files for debugging:
 - For HuggingFace models, set `HF_TOKEN` environment variable if needed
 - Most examples support custom input paths as arguments to predict.sh
 - Check example.yaml for supported parameters and environment variables
+- **For diffusion/flow matching models**: Reduce sampling steps for faster validation (e.g., `--num_steps 5` or `-i num_steps=5` for Cog). Most models support step parameters:
+  - Common parameter names: `num_steps`, `num_inference_steps`, `steps`
+  - Typical defaults: 20-50 steps
+  - Fast validation: 5-10 steps (lower quality but completes quickly)
+  - Production: Full step count for best quality
+  - Examples: Stable Diffusion, SVD, FLUX, AnimateDiff, Flow Matching models
