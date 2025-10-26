@@ -28,4 +28,4 @@ notes: |
   Cog manages Docker images internally via cog.yaml configuration.
 verification:
   last_verified: 2025-10-26
-  last_verification_note: "Fully fixed and verified. CVL Cog integration working correctly. Fixed numpy<2.0.0 constraint to resolve opencv-python ABI compatibility. Migrated from deprecated python_packages to python_requirements. Build succeeds (17.6GB image). Inference runs successfully through 96% (25/26 steps), downloading 19GB model (917 MB/s) and completing sampling. Fails at final decode step with CUDA OOM (needs 24GB, A10 has 23GB). All dependencies resolved - only VRAM limitation remains."
+  last_verification_note: "Fully verified end-to-end on A10 (23GB VRAM). Build succeeds (17.6GB image). Fixed num_steps parameter implementation (passes to sampler.__call__). Fixed seed parameter type (Optional[int]). Inference completes successfully with decoding_t=1 (decode 1 frame at a time) to stay within VRAM limits. Default decoding_t=14 causes CUDA OOM on 23GB GPU. CVL Cog integration working correctly. Model downloads 19GB weights on first run."

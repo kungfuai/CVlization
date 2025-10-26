@@ -167,11 +167,11 @@ class Predictor(BasePredictor):
         decoding_t: int = Input(
             description="Number of frames to decode at a time", default=14
         ),
-        seed: int = Input(
+        seed: Optional[int] = Input(
             description="Random seed. Leave blank to randomize the seed", default=None
         ),
         num_steps: int = Input(
-            description="Number of sampling/denoising steps. Lower values run faster but may reduce quality.",
+            description="Number of sampling/denoising steps. Note: Due to EDM discretization, actual steps will be num_steps+1. Lower values run faster but may reduce quality.",
             default=25,
             ge=1,
             le=50,
@@ -239,10 +239,6 @@ class Predictor(BasePredictor):
         value_dict["cond_frames"] = image + cond_aug * torch.randn_like(image)
         value_dict["cond_aug"] = cond_aug
 
-        # Update num_steps if different from default
-        if num_steps != SVD_DEFAULT_STEPS:
-            model.sampler.num_steps = num_steps
-
         # low vram mode
         model.conditioner.cpu()
         model.first_stage_model.cpu()
@@ -298,7 +294,7 @@ class Predictor(BasePredictor):
                         model.model, input, sigma, c, **additional_model_inputs
                     )
 
-                samples_z = model.sampler(denoiser, randn, cond=c, uc=uc)
+                samples_z = model.sampler(denoiser, randn, cond=c, uc=uc, num_steps=num_steps)
                 samples_z.to(dtype=model.first_stage_model.dtype)
                 model.en_and_decode_n_samples_a_time = decoding_t
                 model.first_stage_model.to(device)
