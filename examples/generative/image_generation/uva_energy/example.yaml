@@ -25,3 +25,6 @@ tasks:
 frameworks:
 - pytorch
 description: Energy-based model for image generation (experimental)
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Verified build (both ./build.sh and cvl run), training initialization, dataset downloading (MNIST), and 1-epoch training completion. Fixed missing Dockerfile with pinned dependencies and CVlization library torchvision API compatibility. Data downloads to local ./data directory (not centralized cache)."
