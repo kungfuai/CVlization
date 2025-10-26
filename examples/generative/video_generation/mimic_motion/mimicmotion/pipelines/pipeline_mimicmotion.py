@@ -114,6 +114,12 @@ class MimicMotionPipeline(DiffusionPipeline):
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
 
+    def _cpu_offload_active(self) -> bool:
+        return bool(
+            getattr(self, "_use_sequential_cpu_offload", False)
+            or getattr(self, "_use_model_cpu_offload", False)
+        )
+
     def _encode_image(
         self, 
         image: PipelineImageInput, 
@@ -468,7 +474,8 @@ class MimicMotionPipeline(DiffusionPipeline):
         self._guidance_scale = max_guidance_scale
 
         # 3. Encode input image
-        self.image_encoder.to(device)
+        if not self._cpu_offload_active():
+            self.image_encoder.to(device)
         image_embeddings = self._encode_image(image, device, num_videos_per_prompt, self.do_classifier_free_guidance)
         self.image_encoder.cpu()
 
@@ -481,7 +488,8 @@ class MimicMotionPipeline(DiffusionPipeline):
         noise = randn_tensor(image.shape, generator=generator, device=device, dtype=image.dtype)
         image = image + noise_aug_strength * noise
 
-        self.vae.to(device)
+        if not self._cpu_offload_active():
+            self.vae.to(device)
         image_latents = self._encode_vae_image(
             image,
             device=device,
@@ -543,8 +551,9 @@ class MimicMotionPipeline(DiffusionPipeline):
         if indices[-1][-1] < num_frames - 1:
             indices.append([0, *range(num_frames - tile_size + 1, num_frames)])
 
-        self.pose_net.to(device)
-        self.unet.to(device)
+        if not self._cpu_offload_active():
+            self.pose_net.to(device)
+            self.unet.to(device)
 
         with torch.cuda.device(device):
             torch.cuda.empty_cache()
@@ -614,7 +623,8 @@ class MimicMotionPipeline(DiffusionPipeline):
         self.unet.cpu()
 
         if not output_type == "latent":
-            self.vae.decoder.to(device)
+            if not self._cpu_offload_active():
+                self.vae.decoder.to(device)
             frames = self.decode_latents(latents, num_frames, decode_chunk_size)
             frames = tensor2vid(frames, self.image_processor, output_type=output_type)
         else:

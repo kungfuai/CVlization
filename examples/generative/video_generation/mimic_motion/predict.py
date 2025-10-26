@@ -27,6 +27,44 @@ logger = logging.getLogger(__name__)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def apply_memory_optimizations(pipeline: MimicMotionPipeline, memory_config, device: torch.device):
+    if memory_config is None:
+        pipeline.to(device)
+        return
+
+    opts = OmegaConf.to_container(memory_config, resolve=True)
+    if not isinstance(opts, dict):
+        opts = {}
+    cpu_offload = opts.get("cpu_offload", "none")
+    offload_applied = False
+
+    # Ensure Diffusers registers the device attribute before we try offloading.
+    pipeline.to(device)
+
+    try:
+        if cpu_offload == "sequential":
+            pipeline.enable_sequential_cpu_offload()
+            offload_applied = True
+        elif cpu_offload == "model":
+            pipeline.enable_model_cpu_offload()
+            offload_applied = True
+    except (ImportError, ValueError) as exc:
+        logger.warning("Unable to enable CPU offload (%s); keeping pipeline on %s", exc, device)
+
+    if not offload_applied:
+        # Already moved to requested device above
+        pass
+
+    if opts.get("attention_slicing") and hasattr(pipeline, "enable_attention_slicing"):
+        pipeline.enable_attention_slicing()
+    if opts.get("vae_slicing") and hasattr(pipeline, "enable_vae_slicing"):
+        pipeline.enable_vae_slicing()
+    if opts.get("vae_tiling") and hasattr(pipeline, "enable_vae_tiling"):
+        pipeline.enable_vae_tiling()
+    if opts.get("vae_cpu"):
+        pipeline.vae.to("cpu")
+
+
 def preprocess(video_path, image_path, resolution=576, sample_stride=2):
     """preprocess ref image pose and video pose
 
@@ -87,7 +125,18 @@ def main(args):
         torch.set_default_dtype(torch.float16)
 
     infer_config = OmegaConf.load(args.inference_config)
+
+    if hasattr(infer_config, "dwpose"):
+        dwpose_cfg = infer_config.dwpose
+        if hasattr(dwpose_cfg, "det_path"):
+            os.environ.setdefault("DWPOSE_MODEL_DET", str(dwpose_cfg.det_path))
+        if hasattr(dwpose_cfg, "pose_path"):
+            os.environ.setdefault("DWPOSE_MODEL_POSE", str(dwpose_cfg.pose_path))
+
     pipeline = create_pipeline(infer_config, device)
+    apply_memory_optimizations(
+        pipeline, getattr(infer_config, "memory_optimization", None), device
+    )
 
     for task in infer_config.test_case:
         ############################################## Pre-process data ##############################################

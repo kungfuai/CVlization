@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from .wholebody import Wholebody
+from ..utils.hf_cache import resolve_asset_path
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -20,7 +21,21 @@ class DWposeDetector:
         device: (str) 'cpu' or 'cuda:{device_id}'
     """
     def __init__(self, model_det, model_pose, device='cpu'):
-        self.args = model_det, model_pose, device
+        self.model_det = model_det
+        self.model_pose = model_pose
+        self.device = device
+        self._resolved_args = None
+
+    def _get_args(self):
+        if self._resolved_args is None:
+            resolved_det = resolve_asset_path(
+                self.model_det, env_override="DWPOSE_MODEL_DET"
+            )
+            resolved_pose = resolve_asset_path(
+                self.model_pose, env_override="DWPOSE_MODEL_POSE"
+            )
+            self._resolved_args = (resolved_det, resolved_pose, self.device)
+        return self._resolved_args
 
     def release_memory(self):
         if hasattr(self, 'pose_estimation'):
@@ -29,7 +44,7 @@ class DWposeDetector:
 
     def __call__(self, oriImg):
         if not hasattr(self, 'pose_estimation'):
-            self.pose_estimation = Wholebody(*self.args)
+            self.pose_estimation = Wholebody(*self._get_args())
 
         oriImg = oriImg.copy()
         H, W, C = oriImg.shape
@@ -67,6 +82,6 @@ class DWposeDetector:
             return pose
 
 dwpose_detector = DWposeDetector(
-    model_det="models/DWPose/yolox_l.onnx",
-    model_pose="models/DWPose/dw-ll_ucoco_384.onnx",
+    model_det="hf://yzd-v/DWPose/yolox_l.onnx",
+    model_pose="hf://yzd-v/DWPose/dw-ll_ucoco_384.onnx",
     device=device)

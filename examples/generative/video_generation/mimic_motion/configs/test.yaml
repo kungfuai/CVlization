@@ -2,14 +2,23 @@
 base_model_path: stabilityai/stable-video-diffusion-img2vid-xt-1-1
 
 # checkpoint path
-ckpt_path: models/MimicMotion_1-1.pth
+ckpt_path: hf://tencent/MimicMotion/MimicMotion_1-1.pth
+
+dwpose:
+  det_path: hf://yzd-v/DWPose/yolox_l.onnx
+  pose_path: hf://yzd-v/DWPose/dw-ll_ucoco_384.onnx
+
+memory_optimization:
+  cpu_offload: none  # options: none, model, sequential
+  attention_slicing: true
+  vae_slicing: true
 
 test_case:
   - ref_video_path: example_data/videos/pose1.mp4  # path to your reference video
     ref_image_path: example_data/images/demo1.jpg  # path to your reference image
-    num_frames: 72  # number of frames in the reference video
-    resolution: 576  # resolution of the reference video
-    frames_overlap: 6  # number of frames to overlap between tiles
+    num_frames: 48  # number of frames in the reference video
+    resolution: 512  # resolution of the reference video
+    frames_overlap: 4  # number of frames to overlap between tiles
     num_inference_steps: 25  # number of inference steps
     noise_aug_strength: 0  # noise augmentation strength
     guidance_scale: 2.0  # guidance scale
