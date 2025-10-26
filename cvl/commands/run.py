@@ -169,6 +169,22 @@ def run_cog_command(
         Tuple of (exit_code, error_message)
         Exit code 0 means success, error_message is empty on success
     """
+    # Try using cache adapter for centralized caching (if configured)
+    try:
+        from cvl.adapters.cog import CogCacheAdapter
+        from cvl.core.discovery import find_repo_root
+
+        repo_root = find_repo_root()
+        adapter = CogCacheAdapter(str(repo_root))
+
+        if adapter.should_use_cache(example_dir):
+            return adapter.run_with_cache(
+                example_dir, cog_command, extra_args, no_live, job_name
+            )
+    except Exception:
+        # Silently fallback to original behavior if adapter fails
+        pass
+
     # Check if cog is installed
     try:
         subprocess.run(
