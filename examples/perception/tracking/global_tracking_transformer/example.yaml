@@ -33,4 +33,4 @@ frameworks:
 description: Global Tracking Transformer for multi-object tracking in videos
 verification:
   last_verified: 2025-10-25
-  last_verification_note: "Verified build, inference on soccer video, model caching (489MB GTR model), and valid MP4 output (1280x720, 25fps). Runs on GPU."
+  last_verification_note: "Build successful. Inference on soccer video verified with model caching (489MB GTR model) and valid MP4 output (1280x720, 25fps). Runs on GPU."

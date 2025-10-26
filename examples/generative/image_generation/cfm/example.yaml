@@ -27,4 +27,4 @@ frameworks:
 description: Conditional Flow Matching for image generation
 verification:
   last_verified: 2025-10-25
-  last_verification_note: "Verified build, training initialization, CIFAR10 dataset lazy downloading (170MB), and loss decreasing (1.20→1.16 over 100 steps). Model: 34.09M params, ~4 it/s. Fixed train.sh to call train_cifar10.py. Added console loss logging. Tested on NVIDIA A10 (24GB VRAM)."
+  last_verification_note: "Build successful. Training initialization verified with CIFAR10 dataset lazy downloading (170MB), loss decreasing (1.20→1.16 over 100 steps). Model: 34.09M params, ~4 it/s. Tested on NVIDIA A10 (24GB VRAM)."

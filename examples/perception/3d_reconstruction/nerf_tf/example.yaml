@@ -37,4 +37,4 @@ description: |
   The 3D/NeRF community has standardized on PyTorch for newer methods.
 verification:
   last_verified: 2025-10-25
-  last_verification_note: "Fully verified: build successful (TF 2.16.1-gpu), training working correctly through 21+ epochs. Loss decreasing properly (0.0606 → 0.0151). Dataset downloads to workspace (12MB tiny_nerf_data.npz). Fixed: TF 2.x metrics compatibility issue, Docker image name, added cache mounts. Requires dedicated GPU (~12GB VRAM)."
+  last_verification_note: "Build successful (TF 2.16.1-gpu). Training verified through 21+ epochs with loss decreasing properly (0.0606 → 0.0151). Dataset downloads to workspace (12MB tiny_nerf_data.npz). Requires dedicated GPU (~12GB VRAM)."
