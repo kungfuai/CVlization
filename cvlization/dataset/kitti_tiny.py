@@ -1,11 +1,20 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import os
+from pathlib import Path
 from subprocess import check_output
 from PIL import Image
 from typing import Union, List
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
+from cvl.core.downloads import get_cache_dir
+
+
+def _default_data_dir() -> Path:
+    """Return the centralized cache directory for Kitti data."""
+    cache_dir = get_cache_dir() / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 @dataclass
@@ -22,7 +31,7 @@ class KittiTinyDatasetBuilder:
     channels_first: bool = True
     to_torch_tensor: bool = True
     flavor: str = None  # one of None, "torchvision"
-    data_dir: str = "./data"
+    data_dir: str = field(default_factory=lambda: str(_default_data_dir()))
     preload: bool = False
     label_offset: int = 1
 
