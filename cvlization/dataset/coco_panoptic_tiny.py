@@ -2,9 +2,10 @@
 Serves a subset of COCO val2017 panoptic segmentation dataset with 700 images.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import os
+from pathlib import Path
 from subprocess import check_output
 from PIL import Image
 from typing import Union, List, Tuple
@@ -12,6 +13,14 @@ from panopticapi.utils import rgb2id
 from mmdet.datasets.coco_panoptic import COCOPanoptic
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
+from cvl.core.downloads import get_cache_dir
+
+
+def _default_data_dir() -> Path:
+    """Return the centralized cache directory for COCO Panoptic Tiny data."""
+    cache_dir = get_cache_dir() / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 @dataclass
@@ -28,7 +37,7 @@ class CocoPanopticTinyDatasetBuilder:
     channels_first: bool = True
     to_torch_tensor: bool = False
     flavor: str = None  # one of None, "torchvision"
-    data_dir: str = "./data"
+    data_dir: str = field(default_factory=lambda: str(_default_data_dir()))
     dataset_folder: str = "coco_panoptic_tiny"
     train_ann_file: str = "annotations/panoptic_val2017_first500.json"
     val_ann_file: str = "annotations/panoptic_val2017_last200.json"
