@@ -79,7 +79,7 @@ With 60+ examples, there are a few ways to find what you need:
 
 **Option 2: Use the CLI** (optional, for convenience)
 
-The `cvl` CLI is a lightweight discovery tool that helps you explore examples:
+The `cvl` CLI is a lightweight tool that helps you explore and run examples:
 
 ```bash
 # From inside the CVlization directory
@@ -88,9 +88,35 @@ pipx install .
 # Browse examples
 cvl list --stability stable --tag ocr
 cvl info perception/ocr_and_layout/surya
+
+# Run examples (optional alternative to bash scripts)
+cvl run svd-cog build
+cvl run svd-cog predict -i input_image=@demo.png
 ```
 
-> **Note:** The CLI doesn't replace bash scripts. You still clone this repo and run the scripts directly. The CLI just helps you discover examples and see their metadata (GPU requirements, datasets, etc.).
+### Running Examples with CVL
+
+The `cvl run` command is an optional alternative to bash scripts:
+
+```bash
+# Equivalent commands:
+bash examples/path/to/example/train.sh --epochs 10
+cvl run example-name train --epochs 10
+
+# Pass CVL options before the example name:
+cvl run --no-live svd-cog predict -i num_steps=5
+
+# Or use -- separator for clarity (optional):
+cvl run --no-live svd-cog predict -- -i num_steps=5
+```
+
+**CVL options** (before example name):
+- `-w /path`: Set workspace directory
+- `--no-live`: Disable live output streaming
+
+**Container arguments** (after preset name): Passed directly to the script/container
+
+> **Note:** The CLI is completely optional. You can always use bash scripts directly.
 
 ## Running an Example
 
