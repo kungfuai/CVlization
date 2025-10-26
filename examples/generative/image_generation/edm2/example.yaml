@@ -16,9 +16,6 @@ presets:
   train:
     script: train.sh
     description: Run train
-  predict:
-    script: predict.sh
-    description: Run predict
 tags:
 - edm2
 - diffusion
@@ -29,3 +26,6 @@ tasks:
 frameworks:
 - pytorch
 description: EDM2 (Elucidating Diffusion Models 2) from NVIDIA
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Verified build successful (22.2GB Docker image), train script initialization, and --help output. Fixed train.sh to call train_edm2.py. Removed non-existent predict preset. Requires external datasets in ImageFolder format (e.g., ImageNet). Tested on NVIDIA A10 (24GB VRAM)."
