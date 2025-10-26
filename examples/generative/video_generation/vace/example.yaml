@@ -33,3 +33,6 @@ tasks:
 frameworks:
 - pytorch
 description: VACE (Video Animation Control Extension) for video generation
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Verified build successful (30.5GB Docker image), predict script initialization, and --help output. Fixed predict.sh to call vace/vace_pipeline.py. Models pre-downloaded (18GB total). Script supports --base {ltx,wan} parameter for different base models. Tested on NVIDIA A10 (24GB VRAM)."
