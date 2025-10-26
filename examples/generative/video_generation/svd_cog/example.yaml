@@ -17,9 +17,15 @@ description: Stable Video Diffusion with Cog (non-commercial license, 24GB VRAM)
 notes: |
   This example uses Cog for containerization instead of Docker directly.
 
+  VRAM Requirements:
+    - Default decoding_t=1: Works on 23GB GPUs (e.g., A10), ~20GB peak VRAM
+    - decoding_t=14: Fastest but requires 24GB+ VRAM
+    - Adjust decoding_t based on your GPU memory
+
   Usage with CVL:
     cvl run svd-cog build
     cvl run svd-cog predict -i input_image=@demo.png
+    cvl run svd-cog predict -i input_image=@demo.png -i decoding_t=14  # For 24GB+ GPUs
 
   Direct Cog usage:
     cog build
