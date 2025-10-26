@@ -2,7 +2,7 @@ name: svd-cog
 capability: generative/video_generation
 modalities: [vision]
 datasets: []
-stability: stable
+stability: archived
 resources:
   gpu: 1
   vram_gb: 24
