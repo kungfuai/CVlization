@@ -5,7 +5,7 @@ echo "Running Surya OCR smoke test..."
 
 docker run --gpus=all \
     -v $(pwd)/examples/doc_ai/surya:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     surya \
     python3 -c "
 import torch

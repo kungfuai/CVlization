@@ -47,7 +47,7 @@ docker run --gpus=all --rm \
     -v "$(pwd):/workspace" \
     -v "$INPUT_DIR:/inputs:ro" \
     -v "$OUTPUT_DIR:/outputs" \
-    -v "$REPO_ROOT/data/container_cache:/root/.cache" \
+    -v "${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface" \
     -e HF_TOKEN=$HF_TOKEN \
     moondream3 \
     python3 predict.py --image "/inputs/$INPUT_NAME" --output "/outputs/$OUTPUT_NAME" "${ARGS[@]}"
