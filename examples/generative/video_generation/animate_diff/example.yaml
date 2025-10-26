@@ -2,7 +2,7 @@ name: animate-diff
 capability: generative/video_generation
 modalities: [vision, text]
 datasets: []
-stability: stable
+stability: archived
 resources:
   gpu: 1
   vram_gb: 16
