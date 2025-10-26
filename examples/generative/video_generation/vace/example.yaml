@@ -3,7 +3,7 @@ capability: generative/video_generation
 modalities:
 - vision
 datasets: []
-stability: stable
+stability: beta
 resources:
   gpu: 1
   vram_gb: 24
@@ -35,4 +35,4 @@ frameworks:
 description: VACE (Video Animation Control Extension) for video generation
 verification:
   last_verified: 2025-10-26
-  last_verification_note: "Verified build successful (30.5GB Docker image), predict script initialization, and --help output. Fixed predict.sh to call vace/vace_pipeline.py. Models pre-downloaded (18GB total). Script supports --base {ltx,wan} parameter for different base models. Tested on NVIDIA A10 (24GB VRAM)."
+  last_verification_note: "Fixed predict.sh to call vace/vace_pipeline.py. Upgraded Dockerfile base image from pytorch:2.1.2-cuda11.8-cudnn8-devel to pytorch:2.4.0-cuda12.1-cudnn9-devel to resolve GLIBC 2.32+ requirement for flash_attn. Build successful (30.5GB image). GLIBC/flash_attn import error resolved. Preprocessing pipeline works (tested frameref task). Models pre-downloaded (18GB). Script supports --base {ltx,wan}, --sample_steps, and --num_inference_steps. Remaining upstream bugs in VACE code prevent full end-to-end inference (tokenizer path config, PlainImageAnnotator device param). Tested on NVIDIA A10 (24GB VRAM)."
