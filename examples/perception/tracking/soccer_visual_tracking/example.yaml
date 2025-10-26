@@ -40,4 +40,4 @@ frameworks:
 description: Track soccer players and generate bird's eye view visualization
 verification:
   last_verified: 2025-10-25
-  last_verification_note: "Fully verified: build successful (cached), inference ran twice successfully. Input: soccer1_clip1.mp4 (1.4MB), outputs: 7.5MB each. Models loaded from local data/ directory (395MB total). No downloads or errors. Fixed: Docker image name mismatch, wrong script name (predict.py → main.py), added cache mounts."
+  last_verification_note: "Build successful (cached). Inference ran twice successfully. Input: soccer1_clip1.mp4 (1.4MB), outputs: 7.5MB each. Models loaded from local data/ directory (395MB total)."
