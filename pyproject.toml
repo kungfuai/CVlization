@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools_scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cvl"
-version = "0.1.0"
+dynamic = ["version"]
 description = "CVL - Command-line tool for discovering and running CVlization ML examples"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -47,3 +47,11 @@ Issues = "https://github.com/kungfuai/CVlization/issues"
 
 [tool.setuptools]
 packages = ["cvl", "cvl.commands", "cvl.core"]
+
+[tool.setuptools_scm]
+# Automatically determine version from git tags
+# Examples:
+#   v0.1.9 tag → 0.1.9
+#   136 commits after v0.1.9 → 0.1.10.dev136+geb937bd
+version_scheme = "post-release"
+local_scheme = "node-and-date"

@@ -9,13 +9,6 @@ resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 30
-  downloads:
-    - url: "hf://yzd-v/DWPose/yolox_l.onnx"
-      dest: "models/DWPose/yolox_l.onnx"
-    - url: "hf://yzd-v/DWPose/dw-ll_ucoco_384.onnx"
-      dest: "models/DWPose/dw-ll_ucoco_384.onnx"
-    - url: "hf://tencent/MimicMotion/MimicMotion_1-1.pth"
-      dest: "models/mimic_motion/MimicMotion_1-1.pth"
 presets:
   build:
     script: build.sh
