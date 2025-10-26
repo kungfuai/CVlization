@@ -102,13 +102,29 @@ def run_pipeline(pipeline: MimicMotionPipeline, image_pixels, pose_pixels, devic
     image_pixels = [to_pil_image(img.to(torch.uint8)) for img in (image_pixels + 1.0) * 127.5]
     generator = torch.Generator(device=device)
     generator.manual_seed(task_config.seed)
+    total_steps = getattr(task_config, "num_inference_steps", None)
+
+    def progress_callback(pipeline, step: int, timestep, kwargs):
+        if total_steps is None:
+            return {}
+        interval = max(total_steps // 10, 1)
+        if step == 0 or (step + 1) % interval == 0 or (step + 1) == total_steps:
+            logger.info(
+                "Diffusion progress: %d/%d steps (t=%s)",
+                step + 1,
+                total_steps,
+                int(timestep) if hasattr(timestep, "__int__") else timestep,
+            )
+        return {}
+
     frames = pipeline(
         image_pixels, image_pose=pose_pixels, num_frames=pose_pixels.size(0),
         tile_size=task_config.num_frames, tile_overlap=task_config.frames_overlap,
         height=pose_pixels.shape[-2], width=pose_pixels.shape[-1], fps=7,
         noise_aug_strength=task_config.noise_aug_strength, num_inference_steps=task_config.num_inference_steps,
         generator=generator, min_guidance_scale=task_config.guidance_scale, 
-        max_guidance_scale=task_config.guidance_scale, decode_chunk_size=8, output_type="pt", device=device
+        max_guidance_scale=task_config.guidance_scale, decode_chunk_size=8, output_type="pt", device=device,
+        callback_on_step_end=progress_callback,
     ).frames.cpu()
     video_frames = (frames * 255.0).to(torch.uint8)
 
@@ -126,6 +142,14 @@ def main(args):
 
     infer_config = OmegaConf.load(args.inference_config)
 
+    if getattr(infer_config, "memory_optimization", None) is None:
+        infer_config.memory_optimization = OmegaConf.create({})
+
+    if args.attention_slicing is not None:
+        infer_config.memory_optimization.attention_slicing = args.attention_slicing == "on"
+    if args.vae_slicing is not None:
+        infer_config.memory_optimization.vae_slicing = args.vae_slicing == "on"
+
     if hasattr(infer_config, "dwpose"):
         dwpose_cfg = infer_config.dwpose
         if hasattr(dwpose_cfg, "det_path"):
@@ -139,6 +163,14 @@ def main(args):
     )
 
     for task in infer_config.test_case:
+        if args.num_inference_steps is not None:
+            task.num_inference_steps = args.num_inference_steps
+        if args.num_frames is not None:
+            task.num_frames = args.num_frames
+        if args.resolution is not None:
+            task.resolution = args.resolution
+        if args.sample_stride is not None:
+            task.sample_stride = args.sample_stride
         ############################################## Pre-process data ##############################################
         pose_pixels, image_pixels = preprocess(
             task.ref_video_path, task.ref_image_path, 
@@ -154,6 +186,7 @@ def main(args):
             device, task
         )
         ################################### save results to output folder. ###########################################
+        logger.info("Saving video (%d frames) to %s", _video_frames.shape[0], args.output_dir)
         save_to_mp4(
             _video_frames, 
             f"{args.output_dir}/{os.path.basename(task.ref_video_path).split('.')[0]}" \
@@ -175,6 +208,42 @@ if __name__ == "__main__":
     parser.add_argument("--log_file", type=str, default=None)
     parser.add_argument("--inference_config", type=str, default="configs/test.yaml") #ToDo
     parser.add_argument("--output_dir", type=str, default="outputs/", help="path to output")
+    parser.add_argument(
+        "--num_inference_steps",
+        type=int,
+        default=None,
+        help="Override inference steps for every task defined in the config",
+    )
+    parser.add_argument(
+        "--attention_slicing",
+        choices=["on", "off"],
+        default=None,
+        help="Force attention slicing on or off (overrides config).",
+    )
+    parser.add_argument(
+        "--vae_slicing",
+        choices=["on", "off"],
+        default=None,
+        help="Force VAE slicing on or off (overrides config).",
+    )
+    parser.add_argument(
+        "--num_frames",
+        type=int,
+        default=None,
+        help="Override number of frames processed per test case (must be <= reference video length).",
+    )
+    parser.add_argument(
+        "--resolution",
+        type=int,
+        default=None,
+        help="Force square resolution (long side) for preprocessing (e.g. 384).",
+    )
+    parser.add_argument(
+        "--sample_stride",
+        type=int,
+        default=None,
+        help="Increase sampling stride on the reference video to skip frames (>=1).",
+    )
     parser.add_argument("--no_use_float16",
                         action="store_true",
                         help="Whether use float16 to speed up inference",
