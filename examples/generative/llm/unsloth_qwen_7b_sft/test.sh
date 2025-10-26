@@ -55,7 +55,7 @@ cp config.yaml config.yaml.bak
 echo "Running test..."
 docker run --gpus=all \
     -v $(pwd):/workspace \
-    -v $REPO_ROOT/data/container_cache:/root/.cache \
+    -v ${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     qwen_7b_finetune \
     bash -c "cp config_test.yaml config.yaml && python3 train.py && rm -rf test-output"

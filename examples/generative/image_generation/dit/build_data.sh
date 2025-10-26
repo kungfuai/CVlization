@@ -1,6 +1,6 @@
 docker run --gpus=all \
 	-v $(pwd)/examples/image_gen/dit:/workspace \
-	-v $(pwd)/data/container_cache:/root/.cache \
+	-v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e "RANK=0" \
     -e "WORLD_SIZE=1" \
     -e "MASTER_ADDR=localhost" \

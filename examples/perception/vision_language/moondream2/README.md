@@ -102,7 +102,7 @@ For more control:
 ```bash
 docker run --runtime nvidia \
     -v $(pwd)/examples/perception/vision_language/moondream2:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     moondream2 \
     python3 predict.py \
@@ -197,7 +197,7 @@ A: The total amount is $45.00
 
 This is a **simple, clean implementation** using standard transformers library with `trust_remote_code=True`. The model code is automatically downloaded from HuggingFace, keeping everything up-to-date and maintainable.
 
-Moondream2 automatically downloads from HuggingFace on first run (~4GB). The model is cached in `data/container_cache` and reused for subsequent runs.
+Moondream2 automatically downloads from HuggingFace on first run (~4GB). The model is cached in `$HOME/.cache/huggingface` and reused for subsequent runs.
 
 **Key Implementation Details:**
 - Uses `AutoModelForCausalLM` with `trust_remote_code=True` (standard transformers approach)
@@ -261,7 +261,7 @@ By default, outputs are saved to:
 ### Model Cache
 
 Model weights are cached in:
-- `data/container_cache/huggingface/`
+- `~/.cache/huggingface/`
 
 Size: ~4GB (persists across runs)
 

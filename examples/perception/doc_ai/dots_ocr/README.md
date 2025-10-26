@@ -90,7 +90,7 @@ For more control, run the Docker container directly:
 ```bash
 docker run --runtime nvidia \
     -v $(pwd)/examples/perception/ocr_and_layout/dots_ocr:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     dots_ocr \
     python3 predict.py \
@@ -106,7 +106,7 @@ Create your own prompt for specific extraction tasks:
 ```bash
 docker run --runtime nvidia \
     -v $(pwd)/examples/perception/ocr_and_layout/dots_ocr:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     dots_ocr \
     python3 predict.py \
         --image examples/invoice.jpg \

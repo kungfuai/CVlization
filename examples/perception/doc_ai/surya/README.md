@@ -112,7 +112,7 @@ For more control:
 ```bash
 docker run --runtime nvidia \
     -v $(pwd)/examples/perception/ocr_and_layout/surya:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e RECOGNITION_BATCH_SIZE=32 \
     -e DETECTOR_BATCH_SIZE=4 \
     -e LAYOUT_BATCH_SIZE=4 \
@@ -179,7 +179,7 @@ Note: Surya automatically detects and supports 90+ languages without requiring e
 
 ### How It Works
 
-Surya automatically downloads model weights from HuggingFace on first run. Models are cached in `data/container_cache` and reused for subsequent runs. The toolkit uses separate models for detection, recognition, layout analysis, and reading order.
+Surya automatically downloads model weights from HuggingFace on first run. Models are cached in `$HOME/.cache/huggingface` and reused for subsequent runs. The toolkit uses separate models for detection, recognition, layout analysis, and reading order.
 
 ### Troubleshooting
 
@@ -236,7 +236,7 @@ By default, outputs are saved to:
 ### Model Cache
 
 Model weights are cached in:
-- `data/container_cache/huggingface/`
+- `~/.cache/huggingface/`
 
 Size: ~2-3GB (persists across runs)
 

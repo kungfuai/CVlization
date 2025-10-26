@@ -12,12 +12,11 @@ CONTAINER_NAME="trl_sft_test"
 
 echo "=== TRL SFT Smoke Test (2 steps) ==="
 
-# Get absolute path to repo root
-REPO_ROOT="$(cd "$(dirname "$0")" && git rev-parse --show-toplevel)"
-CACHE_DIR="$REPO_ROOT/data/container_cache"
+# Use configurable HuggingFace cache (defaults to $HOME/.cache/huggingface)
+CACHE_DIR="${CVL_HF_CACHE:-$HOME/.cache/huggingface}"
 
-# Create cache directory
-mkdir -p "$CACHE_DIR/huggingface"
+# Create cache directory if needed
+mkdir -p "$CACHE_DIR"
 
 # Create test config with reduced steps
 cat config.yaml | sed 's/max_steps: 20/max_steps: 2/' > config_test.yaml
@@ -26,7 +25,7 @@ cat config.yaml | sed 's/max_steps: 20/max_steps: 2/' > config_test.yaml
 docker run --rm --gpus all \
     --name "$CONTAINER_NAME" \
     -v "$(pwd)":/workspace \
-    -v "$CACHE_DIR/huggingface:/root/.cache/huggingface" \
+    -v "$CACHE_DIR:/root/.cache/huggingface" \
     -e HF_TOKEN="$HF_TOKEN" \
     "$IMAGE_NAME" \
     bash -c "cp config_test.yaml config.yaml && python3 train.py"
