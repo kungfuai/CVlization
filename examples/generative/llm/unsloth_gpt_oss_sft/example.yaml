@@ -32,3 +32,6 @@ frameworks:
 - unsloth
 description: Fine-tune OpenAI GPT-OSS 20B for reasoning with Unsloth (128k context
   support)
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Build successful (PyTorch 2.6.0, CUDA 12.4, Unsloth 2025.10.9). Model loaded successfully: unsloth/gpt-oss-20b (20B parameters with 4-bit quantization). Dataset: HuggingFaceH4/Multilingual-Thinking (1,000 examples). LoRA training verified with 3.98M trainable parameters (0.02% of total). Training progressed normally through 19/20 steps with loss decreasing from 2.13 to 1.44, demonstrating successful learning. Unsloth optimizations working (gradient offloading, 2x faster training)."
