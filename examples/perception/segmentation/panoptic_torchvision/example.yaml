@@ -26,3 +26,6 @@ frameworks:
 - pytorch
 - torchvision
 description: Panoptic segmentation training with Torchvision
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Build successful (PyTorch 2.4.0, Lightning 2.4.0). Training verified with FCOS detector on COCO panoptic dataset. First validation results (epoch 5): mAP 12.7%, mAP@50 33.3%."
