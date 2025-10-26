@@ -131,12 +131,16 @@ class CogCacheAdapter:
         # Get cache environment variables
         cache_env = self.get_cache_env_vars(example_dir)
 
-        # Build command
-        cmd = ["cog", cog_command] + extra_args
+        # Build command with -e flags for env vars (only for predict/run commands)
+        cmd = ["cog", cog_command]
 
-        # Prepare environment (inherit current + add cache vars)
-        env = os.environ.copy()
-        env.update(cache_env)
+        # Cog only supports -e flag for certain commands (predict, run, etc.)
+        commands_supporting_env = ["predict", "run", "train"]
+        if cog_command in commands_supporting_env and cache_env:
+            for var, value in cache_env.items():
+                cmd.extend(["-e", f"{var}={value}"])
+
+        cmd.extend(extra_args)
 
         # Log cache usage
         if cache_env:
@@ -151,7 +155,6 @@ class CogCacheAdapter:
                 result = subprocess.run(
                     cmd,
                     cwd=example_dir,
-                    env=env,
                     capture_output=True,
                     text=True,
                 )
@@ -165,7 +168,6 @@ class CogCacheAdapter:
                 process = subprocess.Popen(
                     cmd,
                     cwd=example_dir,
-                    env=env,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
