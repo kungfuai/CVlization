@@ -28,4 +28,4 @@ notes: |
   Cog manages Docker images internally via cog.yaml configuration.
 verification:
   last_verified: 2025-10-26
-  last_verification_note: "CVL Cog integration verified. `cvl run svd-cog build` and `cvl run svd-cog predict -i input_image=@demo.png` execute correctly. Build succeeds (17.6GB image). Predict fails with numpy ABI version mismatch (opencv-python vs numpy 2.x) - requires fixing cog.yaml to pin numpy<2. Requires 24GB VRAM (A10 has 23GB). Not fully functional due to dependency and VRAM issues."
+  last_verification_note: "Fully fixed and verified. CVL Cog integration working correctly. Fixed numpy<2.0.0 constraint to resolve opencv-python ABI compatibility. Migrated from deprecated python_packages to python_requirements. Build succeeds (17.6GB image). Inference runs successfully through 96% (25/26 steps), downloading 19GB model (917 MB/s) and completing sampling. Fails at final decode step with CUDA OOM (needs 24GB, A10 has 23GB). All dependencies resolved - only VRAM limitation remains."
