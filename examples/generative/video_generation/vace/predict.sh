@@ -22,4 +22,4 @@ docker run --rm --gpus=all \
 	--env "PYTHONUNBUFFERED=1" \
 	${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
 	"$IMG" \
-	python predict.py "$@"
+	python vace/vace_pipeline.py "$@"
