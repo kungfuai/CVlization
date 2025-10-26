@@ -7,16 +7,23 @@ resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 40
-presets: [predict]
+presets: [build, predict]
 tags: [svd, stable-video-diffusion, image-to-video, cog, pytorch]
 tasks: [image_to_video]
 frameworks: [pytorch, cog]
+cog:
+  enabled: true
 description: Stable Video Diffusion with Cog (non-commercial license, 24GB VRAM)
 notes: |
   This example uses Cog for containerization instead of Docker directly.
 
-  Build: cog build
-  Predict: cog predict -i input_image=@demo.png
+  Usage with CVL:
+    cvl run svd-cog build
+    cvl run svd-cog predict -i input_image=@demo.png
+
+  Direct Cog usage:
+    cog build
+    cog predict -i input_image=@demo.png
 
   Cog manages Docker images internally via cog.yaml configuration.
 verification:

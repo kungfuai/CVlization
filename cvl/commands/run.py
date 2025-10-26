@@ -149,6 +149,140 @@ def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[
     return None
 
 
+def run_cog_command(
+    example_dir: str,
+    cog_command: str,
+    extra_args: List[str],
+    no_live: bool = False,
+    job_name: str = "",
+) -> Tuple[int, str]:
+    """Execute a Cog command (build, predict, etc.).
+
+    Args:
+        example_dir: Absolute path to example directory
+        cog_command: Cog command to run (e.g., "build", "predict")
+        extra_args: Additional arguments to pass to cog command
+        no_live: Disable live status display
+        job_name: Name of the job (for live display)
+
+    Returns:
+        Tuple of (exit_code, error_message)
+        Exit code 0 means success, error_message is empty on success
+    """
+    # Check if cog is installed
+    try:
+        subprocess.run(
+            ["cog", "--version"],
+            capture_output=True,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return (1, "Cog not found. Install it with: curl -o /usr/local/bin/cog -L https://github.com/replicate/cog/releases/latest/download/cog_`uname -s`_`uname -m` && chmod +x /usr/local/bin/cog")
+
+    # Build cog command
+    cmd = ["cog", cog_command] + extra_args
+
+    # Check if rich is available and not disabled
+    use_live = not no_live
+    if use_live:
+        try:
+            from rich.live import Live
+            from rich.panel import Panel
+            from rich.console import Console
+        except ImportError:
+            use_live = False
+
+    # Track execution time
+    start_time = time.time()
+
+    # Use env to set PYTHONUNBUFFERED
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+
+    try:
+        if use_live:
+            # Live mode with rich
+            from rich.live import Live
+            from rich.panel import Panel
+            from rich.console import Console
+
+            console = Console(highlight=False, markup=False)
+
+            # Run with Popen to stream output
+            process = subprocess.Popen(
+                cmd,
+                cwd=example_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=env,
+                universal_newlines=True,
+                bufsize=1
+            )
+
+            # Create status panel
+            status_text = f"▸ {job_name} (cog)\nStarting..."
+            with Live(
+                Panel(status_text, title="CVL Status", border_style="cyan"),
+                refresh_per_second=2,
+                console=console
+            ) as live:
+                # Stream output and update status
+                for line in iter(process.stdout.readline, ''):
+                    if not line:
+                        break
+                    console.print(line, end='')
+
+                    # Update status with elapsed time
+                    elapsed = time.time() - start_time
+                    duration_str = _format_duration(elapsed)
+                    status_text = f"▸ {job_name} (cog)\n⏱  {duration_str} elapsed"
+                    live.update(Panel(status_text, title="CVL Status", border_style="cyan"))
+
+                process.wait()
+                return_code = process.returncode
+
+            # Calculate final duration
+            duration = time.time() - start_time
+            duration_str = _format_duration(duration)
+
+            # Show completion message
+            if return_code == 0:
+                console.print(f"\n✓ {duration_str}", style="green bold")
+            else:
+                console.print(f"\n✗ Failed after {duration_str}", style="red bold")
+
+            return (return_code, "")
+
+        else:
+            # Simple mode (no rich)
+            result = subprocess.run(
+                cmd,
+                cwd=example_dir,
+                check=False,
+                env=env,
+            )
+
+            # Calculate duration
+            duration = time.time() - start_time
+            duration_str = _format_duration(duration)
+
+            # Show completion message
+            if result.returncode == 0:
+                print(f"\n✓ {duration_str}")
+            else:
+                print(f"\n✗ Failed after {duration_str}")
+
+            return (result.returncode, "")
+
+    except KeyboardInterrupt:
+        duration = time.time() - start_time
+        duration_str = _format_duration(duration)
+        print(f"\n✗ Cancelled by user after {duration_str}")
+        return (130, "")
+    except Exception as e:
+        return (1, f"Failed to execute cog command: {e}")
+
+
 def run_script(
     script_path: str,
     extra_args: List[str],
@@ -595,6 +729,43 @@ def run_example(
     #   - predict.sh handles docker run
     #   - Uses -w/--work-dir flag (defaults to cwd)
     #   - Mounts ${HOME}/.cache/huggingface
+
+    # Check if this example uses Cog instead of Docker
+    uses_cog = example.get("cog", {}).get("enabled", False)
+
+    if uses_cog:
+        # Cog-based example - run cog commands instead of scripts
+        # Show what we're running
+        example_name = example.get("name", Path(example_path).name)
+        example_full_path = example.get("_path", "").removeprefix("examples/")
+
+        # CVL startup header with delimiter
+        print("=" * 80)
+        print("CVL (Cog Mode)")
+        print("=" * 80)
+        print(f"Running {example_name} {preset_name}...")
+
+        # Show full path if user provided short/partial name
+        if example_full_path != example_identifier.removeprefix("examples/").rstrip("/"):
+            print(f"Example: {example_full_path} (matched: {example_identifier})")
+        else:
+            print(f"Example: {example_full_path}")
+
+        print(f"Cog:     {preset_name}")
+        print(f"Command: cog {preset_name} {' '.join(extra_args)}")
+        print("=" * 80)
+        print()  # Blank line before cog output
+
+        # Run the cog command
+        exit_code, error_msg = run_cog_command(
+            example_path,
+            preset_name,
+            extra_args,
+            no_live=no_live,
+            job_name=f"{example_name} {preset_name}",
+        )
+
+        return (exit_code, error_msg)
 
     # Standalone mode: run the script (which calls docker itself)
     # Find the script
