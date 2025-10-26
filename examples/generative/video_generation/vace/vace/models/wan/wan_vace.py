@@ -74,7 +74,7 @@ class WanVace(WanT2V):
             dtype=config.t5_dtype,
             device=torch.device('cpu'),
             checkpoint_path=os.path.join(checkpoint_dir, config.t5_checkpoint),
-            tokenizer_path=os.path.join(checkpoint_dir, config.t5_tokenizer),
+            tokenizer_path=config.t5_tokenizer,  # Load from HuggingFace Hub, not local path
             shard_fn=shard_fn if t5_fsdp else None)
 
         self.vae_stride = config.vae_stride
@@ -534,7 +534,7 @@ class WanVaceMP(WanVace):
                 dtype=self.config.t5_dtype,
                 device=torch.device('cpu'),
                 checkpoint_path=os.path.join(self.checkpoint_dir, self.config.t5_checkpoint),
-                tokenizer_path=os.path.join(self.checkpoint_dir, self.config.t5_tokenizer),
+                tokenizer_path=self.config.t5_tokenizer,  # Load from HuggingFace Hub, not local path
                 shard_fn=shard_fn if True else None)
             text_encoder.model.to(gpu)
             vae_stride = self.config.vae_stride

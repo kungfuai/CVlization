@@ -213,7 +213,13 @@ def main(args):
                 input_data['mask_cfg'] = {"mode": args.maskaug_mode}
 
     # processing
-    pre_ins = getattr(annotators, class_name)(cfg=task_cfg, device=f'cuda:{os.getenv("RANK", 0)}')
+    # Check if the annotator class accepts device parameter
+    annotator_class = getattr(annotators, class_name)
+    sig = inspect.signature(annotator_class.__init__)
+    if 'device' in sig.parameters:
+        pre_ins = annotator_class(cfg=task_cfg, device=f'cuda:{os.getenv("RANK", 0)}')
+    else:
+        pre_ins = annotator_class(cfg=task_cfg)
     results = pre_ins.forward(**input_data)
 
     # output data
