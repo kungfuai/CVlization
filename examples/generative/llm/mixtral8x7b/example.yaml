@@ -27,3 +27,6 @@ frameworks:
 - pytorch
 description: Mixtral 8x7B MoE model inference with layer offloading (requires HuggingFace
   access)
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Verified build, inference with TinyLlama 1.1B (smoke test), text generation outputs, and model caching to ~/.cache/huggingface/. Tested on NVIDIA A10 GPU (24GB VRAM). Note: sentencepiece installed at runtime on each run."
