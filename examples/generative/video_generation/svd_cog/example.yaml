@@ -2,7 +2,7 @@ name: svd-cog
 capability: generative/video_generation
 modalities: [vision]
 datasets: []
-stability: archived
+stability: stable
 resources:
   gpu: 1
   vram_gb: 24
@@ -12,3 +12,13 @@ tags: [svd, stable-video-diffusion, image-to-video, cog, pytorch]
 tasks: [image_to_video]
 frameworks: [pytorch, cog]
 description: Stable Video Diffusion with Cog (non-commercial license, 24GB VRAM)
+notes: |
+  This example uses Cog for containerization instead of Docker directly.
+
+  Build: cog build
+  Predict: cog predict -i input_image=@demo.png
+
+  Cog manages Docker images internally via cog.yaml configuration.
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Unarchived and documented Cog-based workflow. Uses cog.yaml instead of Dockerfile. Requires 24GB VRAM (A10 has 23GB, may work with FP16 optimizations in code). Not fully tested due to VRAM constraints. Build command: cog build. Predict command: cog predict -i input_image=@image.png"
