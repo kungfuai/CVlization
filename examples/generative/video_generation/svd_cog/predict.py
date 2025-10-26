@@ -170,6 +170,12 @@ class Predictor(BasePredictor):
         seed: int = Input(
             description="Random seed. Leave blank to randomize the seed", default=None
         ),
+        num_steps: int = Input(
+            description="Number of sampling/denoising steps. Lower values run faster but may reduce quality.",
+            default=25,
+            ge=1,
+            le=50,
+        ),
     ) -> Path:
         """Run a single prediction on the model"""
 
@@ -232,6 +238,10 @@ class Predictor(BasePredictor):
         value_dict["cond_frames_without_noise"] = image
         value_dict["cond_frames"] = image + cond_aug * torch.randn_like(image)
         value_dict["cond_aug"] = cond_aug
+
+        # Update num_steps if different from default
+        if num_steps != SVD_DEFAULT_STEPS:
+            model.sampler.num_steps = num_steps
 
         # low vram mode
         model.conditioner.cpu()
