@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -43,10 +42,11 @@ The attributes must be one of the following: ['name', 'exp_release_date', 'relea
 """
 
 
-DEFAULT_VIGGO_FILES = {
-    "train": "https://huggingface.co/datasets/gem/viggo/resolve/main/data/train.json?download=1",
-    "validation": "https://huggingface.co/datasets/gem/viggo/resolve/main/data/validation.json?download=1",
-    "test": "https://huggingface.co/datasets/gem/viggo/resolve/main/data/test.json?download=1",
+LOCAL_SAMPLE_DIR = Path(__file__).parent / "data"
+SAMPLE_VIGGO_FILES = {
+    "train": str(LOCAL_SAMPLE_DIR / "train.json"),
+    "validation": str(LOCAL_SAMPLE_DIR / "validation.json"),
+    "test": str(LOCAL_SAMPLE_DIR / "test.json"),
 }
 
 
@@ -144,6 +144,8 @@ def set_seed(seed: Optional[int]) -> None:
 
 def prepare_datasets(args: argparse.Namespace, tokenizer) -> tuple[Dataset, Optional[Dataset]]:
     data_format = args.data_format
+    dataset_name_lower = args.dataset_name.lower()
+    default_viggo = dataset_name_lower == "gem/viggo"
     data_files = {}
     if args.train_file:
         data_files[args.train_split] = args.train_file
@@ -158,9 +160,10 @@ def prepare_datasets(args: argparse.Namespace, tokenizer) -> tuple[Dataset, Opti
             ext = Path(sample_path).suffix.lower().lstrip(".")
             guess_map = {"json": "json", "jsonl": "json", "parquet": "parquet", "csv": "csv", "txt": "text"}
             data_format = guess_map.get(ext, "json")
-        elif args.dataset_name == "gem/viggo":
+        elif default_viggo:
             data_format = "json"
-            data_files = DEFAULT_VIGGO_FILES.copy()
+            data_files = SAMPLE_VIGGO_FILES.copy()
+            LOGGER.info("Using bundled sample VIGGO dataset (data/*.json)")
         else:
             data_format = "dataset"
 
@@ -181,9 +184,14 @@ def prepare_datasets(args: argparse.Namespace, tokenizer) -> tuple[Dataset, Opti
             )
     else:
         if not data_files:
-            raise ValueError(
-                "No data files supplied. Provide --train_file/--eval_file or use a dataset name with --data_format dataset."
-            )
+            if default_viggo:
+                data_files = SAMPLE_VIGGO_FILES.copy()
+                data_format = "json"
+                LOGGER.info("Using bundled sample VIGGO dataset (data/*.json)")
+            else:
+                raise ValueError(
+                    "No data files supplied. Provide --train_file/--eval_file or use a dataset name with --data_format dataset."
+                )
         dataset_dict = load_dataset(data_format, data_files=data_files)
         if args.train_split not in dataset_dict:
             raise ValueError(f"Train split '{args.train_split}' not available in {list(dataset_dict.keys())}")

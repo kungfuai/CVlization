@@ -4,4 +4,4 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Build from the script's directory, works from anywhere
-docker build -t mixtral "$SCRIPT_DIR"
+docker build --pull --no-cache -t mixtral8x7b "$SCRIPT_DIR"

@@ -1,0 +1,2 @@
+{"target": "The game PuzzleQuest 5 is available on PC and rated PEGI 7.", "meaning_representation": "inform(name='PuzzleQuest 5', platforms='pc', esrb='pegi 7')"}
+{"target": "Space Mania releases next year with multiplayer support.", "meaning_representation": "inform(name='Space Mania', release_year='2026', has_multiplayer='yes')"}
