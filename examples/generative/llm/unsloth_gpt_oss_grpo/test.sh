@@ -17,7 +17,7 @@ echo "Running 2-step GRPO training for smoke test..."
 docker run --gpus=all \
     --rm \
     -v $(pwd):/workspace \
-    -v $REPO_ROOT/data/container_cache:/root/.cache \
+    -v ${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     gpt_oss_grpo \
     bash -c "cp config_test.yaml config.yaml && python3 train.py && rm -rf test-output"

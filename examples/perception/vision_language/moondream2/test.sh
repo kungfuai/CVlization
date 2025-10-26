@@ -5,7 +5,7 @@ echo "Running Moondream2 smoke test..."
 
 docker run --gpus=all \
     -v $(pwd)/examples/doc_ai/moondream2:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     moondream2 \
     python3 -c "

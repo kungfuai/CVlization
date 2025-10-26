@@ -5,7 +5,7 @@ echo "Running dots.ocr smoke test..."
 
 docker run --gpus=all \
     -v $(pwd)/examples/doc_ai/dots-ocr:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     dots_ocr \
     python3 -c "
