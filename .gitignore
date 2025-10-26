@@ -51,4 +51,20 @@ outputs/
 **/val.bin
 **/test.bin
 
+# training/inference logs
+**/training.log
+**/inference.log
+**/training_run*.log
+**/*_training.log
+**/*_inference.log
+
+# results directories (for generated outputs)
+**/results/
+results/
+
+# common dataset directories
+**/MNIST/
+**/CIFAR*/
+**/ImageNet*/
+
 .env
