@@ -165,7 +165,7 @@ class Predictor(BasePredictor):
             description="Amount of noise to add to input image", default=0.02
         ),
         decoding_t: int = Input(
-            description="Number of frames to decode at a time", default=14
+            description="Number of frames to decode at a time. Lower values use less VRAM but are slower. Use 1 for GPUs with <24GB VRAM.", default=1
         ),
         seed: Optional[int] = Input(
             description="Random seed. Leave blank to randomize the seed", default=None
