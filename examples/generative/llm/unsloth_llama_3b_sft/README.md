@@ -55,7 +55,7 @@ This dataset is ideal for teaching models to follow instructions and respond hel
 
 ### Using Your Own Data
 
-See [CUSTOM_DATASETS.md](../../CUSTOM_DATASETS.md) for detailed instructions on using your own datasets, including:
+See [CUSTOM_DATASETS.md](../CUSTOM_DATASETS.md) for detailed instructions on using your own datasets, including:
 - Supported formats (Alpaca, ShareGPT, Custom)
 - Local file loading (.json, .jsonl, .csv, .parquet)
 - HuggingFace dataset integration
