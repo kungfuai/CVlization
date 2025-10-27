@@ -29,11 +29,15 @@ classifiers = [
 dependencies = [
     "PyYAML>=6.0",
     "rich>=13.0.0",
+    "requests>=2.31.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
+]
+remote = [
+    "paramiko>=3.0.0",  # For SSH-based remote execution
 ]
 
 [project.scripts]
@@ -46,7 +50,7 @@ Documentation = "https://github.com/kungfuai/CVlization"
 Issues = "https://github.com/kungfuai/CVlization/issues"
 
 [tool.setuptools]
-packages = ["cvl", "cvl.commands", "cvl.core"]
+packages = ["cvl", "cvl.commands", "cvl.core", "cvl.runners"]
 
 [tool.setuptools_scm]
 # Automatically determine version from git tags
