@@ -1,0 +1,32 @@
+name: doctr
+capability: perception/doc_ai
+modalities:
+- vision
+- text
+datasets:
+- custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 4
+  disk_gb: 3
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run OCR prediction
+tags:
+- ocr
+- text-detection
+- text-recognition
+- doctr
+- pytorch
+tasks:
+- ocr
+- text_detection
+- text_recognition
+frameworks:
+- pytorch
+description: End-to-end document OCR using docTR (Document Text Recognition)
