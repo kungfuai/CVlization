@@ -100,7 +100,7 @@ def load_model(
     return model
 
 
-SVD_MODEL_CACHE = "./checkpoints"
+SVD_MODEL_CACHE = os.environ.get("SVD_WEIGHTS_CACHE", "./checkpoints")
 SVD_URL = "https://weights.replicate.delivery/default/svd/svd_and_svd_xt.tar"
 
 SVD_DEFAULT_FRAMES = 14
@@ -165,10 +165,16 @@ class Predictor(BasePredictor):
             description="Amount of noise to add to input image", default=0.02
         ),
         decoding_t: int = Input(
-            description="Number of frames to decode at a time", default=14
+            description="Number of frames to decode at a time. Lower values use less VRAM but are slower. Use 1 for GPUs with <24GB VRAM.", default=1
         ),
-        seed: int = Input(
+        seed: Optional[int] = Input(
             description="Random seed. Leave blank to randomize the seed", default=None
+        ),
+        num_steps: int = Input(
+            description="Number of sampling/denoising steps. Note: Due to EDM discretization, actual steps will be num_steps+1. Lower values run faster but may reduce quality.",
+            default=25,
+            ge=1,
+            le=50,
         ),
     ) -> Path:
         """Run a single prediction on the model"""
@@ -288,7 +294,7 @@ class Predictor(BasePredictor):
                         model.model, input, sigma, c, **additional_model_inputs
                     )
 
-                samples_z = model.sampler(denoiser, randn, cond=c, uc=uc)
+                samples_z = model.sampler(denoiser, randn, cond=c, uc=uc, num_steps=num_steps)
                 samples_z.to(dtype=model.first_stage_model.dtype)
                 model.en_and_decode_n_samples_a_time = decoding_t
                 model.first_stage_model.to(device)

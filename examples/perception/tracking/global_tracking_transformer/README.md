@@ -2,30 +2,34 @@
 
 Adapted from [https://github.com/xingyizhou/GTR](https://github.com/xingyizhou/GTR).
 
-Download an [example video](https://drive.google.com/file/d/18E9eRgZBaYlH_O6gB2Evrv96swa8MabU/view?usp=sharing):
+## Quick Start
+
+Build the Docker image (downloads model and example video automatically):
 
 ```bash
-# at the root of the repository
-gdown -O data/soccer1_clip1.mp4 https://drive.google.com/uc?id=18E9eRgZBaYlH_O6gB2Evrv96swa8MabU
+cvl run global_tracking_transformer build
 ```
 
-Build the docker image:
+Run prediction on the example video:
 
 ```bash
-bash examples/object_tracking/global_tracking_transformer/build.sh
+cvl run global_tracking_transformer predict
 ```
 
-Download the pretrained model:
+## Manual Setup (Alternative)
+
+If not using CVL, download the model and example video manually:
 
 ```bash
-cd examples/object_tracking/global_tracking_transformer
+# Download pretrained model
 mkdir -p models
-gdown -O models/ https://drive.google.com/uc?id=1TqkLpFZvOMY5HTTaAWz25RxtLHdzQ-CD
-```
+gdown -O models/gtr_model.pth https://drive.google.com/uc?id=1TqkLpFZvOMY5HTTaAWz25RxtLHdzQ-CD
 
-Run the docker container:
+# Download example video
+mkdir -p data
+gdown -O data/soccer1_clip1.mp4 https://drive.google.com/uc?id=18E9eRgZBaYlH_O6gB2Evrv96swa8MabU
 
-```bash
-# at the root of the repository
-bash examples/object_tracking/global_tracking_transformer/predict.sh
+# Build and run
+bash build.sh
+bash predict.sh
 ```

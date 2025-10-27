@@ -3,6 +3,8 @@ Adapted from https://github.com/pytorch/vision/blob/main/references/segmentation
 with the help of `pytorch-lightning`.
 """
 import logging
+import os
+from pathlib import Path
 
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.specs import ImageAugmentationSpec, ImageAugmentationProvider
@@ -18,6 +20,14 @@ from cvlization.torch.net.semantic_segmentation.torchvision import (
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_cache_dir() -> Path:
+    """Get the CVlization cache directory for datasets."""
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = Path(cache_home) / "cvlization" / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 class TrainingSession:
@@ -51,14 +61,21 @@ class TrainingSession:
         return model
 
     def get_num_classes_from_dataset(self):
-        dataset_builder = StanfordBackgroundDatasetBuilder(flavor=None, label_offset=1)
+        cache_dir = str(get_cache_dir())
+        dataset_builder = StanfordBackgroundDatasetBuilder(
+            flavor=None, label_offset=1, data_dir=cache_dir
+        )
         return len(dataset_builder.CLASSES)
 
     def create_dataset(self):
+        cache_dir = str(get_cache_dir())
         LOGGER.info(f"Available dataset builders: {StanfordBackgroundDatasetBuilder()}")
-        dataset_builder = StanfordBackgroundDatasetBuilder(flavor=None, label_offset=1)
+        LOGGER.info(f"Using cache directory: {cache_dir}")
+        dataset_builder = StanfordBackgroundDatasetBuilder(
+            flavor=None, label_offset=1, data_dir=cache_dir
+        )
         aug_spec = ImageAugmentationSpec(
-            provider=ImageAugmentationProvider.IMGAUG,
+            provider=ImageAugmentationProvider.ALBUMENTATIONS,
             config={
                 "deterministic": True,
                 "norm": False,

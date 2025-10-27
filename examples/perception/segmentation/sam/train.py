@@ -7,11 +7,24 @@ pip install git+https://github.com/ChaoningZhang/MobileSAM.git
 """
 import argparse
 import logging
+import os
+from pathlib import Path
 import torch
 from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.torch.training_pipeline.sam.sam_training_pipeline import (
     SamTrainingPipeline,
 )
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def get_cache_dir() -> Path:
+    """Get the CVlization cache directory for datasets."""
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = Path(cache_home) / "cvlization" / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 if __name__ == "__main__":
@@ -28,11 +41,14 @@ if __name__ == "__main__":
 
     device = torch.device(args.device)
 
+    cache_dir = str(get_cache_dir())
+    LOGGER.info(f"Using cache directory: {cache_dir}")
     dataset_builder = PennFudanPedestrianDatasetBuilder(
         flavor="torchvision",
         include_masks=True,
         label_offset=1,
         normalize_with_min_max=False,
+        data_dir=cache_dir,
     )
 
     SamTrainingPipeline(

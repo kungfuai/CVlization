@@ -1,14 +1,33 @@
 name: nanochat
 capability: generative/llm
-modalities: [text]
-datasets: [fineweb, hf-multilingual-thinking]
+modalities:
+- text
+datasets:
+- fineweb
+- hf-multilingual-thinking
 stability: stable
 resources:
   gpu: 8
   vram_gb: 80
   disk_gb: 50
-presets: [train]
-tags: [nanochat, chatgpt, pretraining, sft, rl, pytorch]
-tasks: [text_generation, chat]
-frameworks: [pytorch]
-description: Full ChatGPT implementation from scratch with pretraining, SFT, and RL (1.9B params)
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- nanochat
+- chatgpt
+- pretraining
+- sft
+- rl
+- pytorch
+tasks:
+- text_generation
+- chat
+frameworks:
+- pytorch
+description: Full ChatGPT implementation from scratch with pretraining, SFT, and RL
+  (1.9B params)

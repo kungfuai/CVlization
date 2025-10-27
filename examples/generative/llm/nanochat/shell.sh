@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$SCRIPT_DIR/data"
 mkdir -p "$SCRIPT_DIR/outputs"
 
-docker run --rm -it --gpus all \
+docker run --rm --gpus all \
     -v "$SCRIPT_DIR/data:/workspace/data" \
     -v "$SCRIPT_DIR/outputs:/workspace/outputs" \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \

@@ -1,14 +1,31 @@
 name: instance-segmentation-mmdet
+docker: mmdet_is
 capability: perception/segmentation
-modalities: [vision]
-datasets: [coco, penn-fudan-pedestrian]
+modalities:
+- vision
+datasets:
+- coco
+- penn-fudan-pedestrian
 stability: stable
 resources:
   gpu: 1
   vram_gb: 12
   disk_gb: 10
-presets: [train]
-tags: [mmdetection, instance-segmentation, mask-rcnn, pytorch]
-tasks: [instance_segmentation]
-frameworks: [pytorch, mmdetection]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- mmdetection
+- instance-segmentation
+- mask-rcnn
+- pytorch
+tasks:
+- instance_segmentation
+frameworks:
+- pytorch
+- mmdetection
 description: Instance segmentation training with MMDetection framework

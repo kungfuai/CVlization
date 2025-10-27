@@ -1,14 +1,31 @@
 name: edm2
 capability: generative/image_generation
-modalities: [vision]
-datasets: [custom]
+modalities:
+- vision
+datasets:
+- custom
 stability: beta
 resources:
   gpu: 1
   vram_gb: 16
   disk_gb: 20
-presets: [train, predict]
-tags: [edm2, diffusion, nvidia, pytorch]
-tasks: [image_generation]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- edm2
+- diffusion
+- nvidia
+- pytorch
+tasks:
+- image_generation
+frameworks:
+- pytorch
 description: EDM2 (Elucidating Diffusion Models 2) from NVIDIA
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Build successful (22.2GB image). Train script initialization and --help output verified. Requires external datasets in ImageFolder format (e.g., ImageNet). Tested on NVIDIA A10 (24GB VRAM)."

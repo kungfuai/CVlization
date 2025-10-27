@@ -6,7 +6,7 @@ from ...specs import ModelInput, ModelTarget
 
 
 class ImageAugmentationProvider(str, enum.Enum):
-    IMGAUG = "imgaug"
+    IMGAUG = "imgaug"  # DEPRECATED: imgaug has NumPy 2.x compatibility issues. Use ALBUMENTATIONS instead.
     TORCHVISION = "torchvision"
     KORNIA = "kornia"
     ALBUMENTATIONS = "albumentations"

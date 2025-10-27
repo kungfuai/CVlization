@@ -2,6 +2,7 @@
 # pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html
 
 import os
+from pathlib import Path
 from mmseg.datasets import build_dataset
 from cvlization.dataset.stanford_background import StanfordBackgroundDatasetBuilder
 from cvlization.torch.net.semantic_segmentation.mmseg import (
@@ -9,6 +10,14 @@ from cvlization.torch.net.semantic_segmentation.mmseg import (
     MMSemanticSegmentationModels,
     MMTrainer,
 )
+
+
+def get_cache_dir() -> Path:
+    """Get the CVlization cache directory for datasets."""
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = Path(cache_home) / "cvlization" / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 class TrainingSession:
@@ -42,8 +51,9 @@ class TrainingSession:
 
     def create_dataset(self, config):
         # Download dataset
-
-        dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False)
+        cache_dir = str(get_cache_dir())
+        print(f"Using cache directory: {cache_dir}")
+        dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False, data_dir=cache_dir)
         dataset_classname = MMDatasetAdaptor.adapt_and_register_detection_dataset(dsb)
         print("registered:", dataset_classname)
 

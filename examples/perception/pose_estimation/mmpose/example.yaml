@@ -1,0 +1,33 @@
+name: pose-estimation-mmpose
+docker: mmpose
+capability: perception/pose_estimation
+modalities:
+- vision
+datasets:
+- coco-pose-tiny
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- mmpose
+- pose-estimation
+- hrnet
+- pytorch
+tasks:
+- pose_estimation
+frameworks:
+- pytorch
+- mmpose
+description: 2D pose estimation training with MMPose framework
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Build successful. Lazy downloading to ~/.cache/cvlization/data/ verified. Training not fully verified due to GPU memory constraints (CUDA OOM on shared A10 GPU)."

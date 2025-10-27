@@ -1,0 +1,30 @@
+name: pose-estimation-dwpose
+docker: dwpose
+capability: perception/pose_estimation
+modalities:
+- vision
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run pose estimation inference
+tags:
+- dwpose
+- pose-estimation
+- onnx
+- inference
+tasks:
+- pose_estimation
+frameworks:
+- onnx
+description: 2D pose estimation inference using DWPose ONNX models
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Build successful. Inference with video/image inputs verified, model caching (470MB models), and JSON outputs. Runs on GPU."

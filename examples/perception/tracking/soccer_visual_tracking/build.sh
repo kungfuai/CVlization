@@ -1,1 +1,8 @@
-docker build -t soccer_game_visual_tracking examples/sports/soccer_game_visual_tracking
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t soccer_visual_tracking "$SCRIPT_DIR"

@@ -1,15 +1,7 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Build the Granite-Docling Docker image
-echo "Building Granite-Docling container..."
-docker build -t granite-docling .
-
-echo "Build complete! Image: granite-docling"
-echo ""
-echo "Usage:"
-echo "  ./predict.sh <input_image> [options]"
-echo ""
-echo "Example:"
-echo "  ./predict.sh document.png"
-echo "  ./predict.sh scan.jpg --format json"
+# Build from the script's directory, works from anywhere
+docker build -t granite-docling "$SCRIPT_DIR"

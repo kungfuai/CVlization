@@ -1,14 +1,31 @@
 name: image-classification-torch
 capability: perception/image_classification
-modalities: [vision]
-datasets: [cifar10, imagenet]
+modalities:
+- vision
+datasets:
+- cifar10
+- imagenet
 stability: stable
 resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 10
-presets: [train]
-tags: [torchvision, image-classification, resnet, vgg, pytorch]
-tasks: [image_classification]
-frameworks: [pytorch, torchvision]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- torchvision
+- image-classification
+- resnet
+- vgg
+- pytorch
+tasks:
+- image_classification
+frameworks:
+- pytorch
+- torchvision
 description: Image classification training with Torchvision models

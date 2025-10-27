@@ -1,14 +1,38 @@
 name: vace
 capability: generative/video_generation
-modalities: [vision]
+modalities:
+- vision
 datasets: []
 stability: stable
 resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 50
-presets: [predict]
-tags: [vace, video-animation, pytorch]
-tasks: [video_generation]
-frameworks: [pytorch]
+  downloads:
+    - url: "hf://Wan-AI/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors"
+      dest: "models/Wan2.1-VACE-1.3B/diffusion_pytorch_model.safetensors"
+    - url: "hf://Wan-AI/Wan2.1-VACE-1.3B/models_t5_umt5-xxl-enc-bf16.pth"
+      dest: "models/Wan2.1-VACE-1.3B/models_t5_umt5-xxl-enc-bf16.pth"
+    - url: "hf://Wan-AI/Wan2.1-VACE-1.3B/Wan2.1_VAE.pth"
+      dest: "models/Wan2.1-VACE-1.3B/Wan2.1_VAE.pth"
+    - url: "hf://Wan-AI/Wan2.1-VACE-1.3B/config.json"
+      dest: "models/Wan2.1-VACE-1.3B/config.json"
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- vace
+- video-animation
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
 description: VACE (Video Animation Control Extension) for video generation
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Build successful (30.5GB image). End-to-end inference verified with frameref task using --sample_steps 2, successfully generated video output in 2m42s. Models pre-downloaded (18GB). Script supports --base {ltx,wan}, --sample_steps, and --num_inference_steps. Tested on NVIDIA A10 (24GB VRAM)."

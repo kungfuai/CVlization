@@ -1,29 +1,23 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Default values
-IMAGE_PATH="examples/sample.jpg"
-OUTPUT_PATH="outputs/result.txt"
+# Always run from this folder
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --image)
-            IMAGE_PATH="$2"
-            shift 2
-            ;;
-        --output)
-            OUTPUT_PATH="$2"
-            shift 2
-            ;;
-        *)
-            break
-            ;;
-    esac
-done
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
-docker run --runtime nvidia \
-    -v $(pwd)/examples/doc_ai/moondream3:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
-    -e HF_TOKEN=$HF_TOKEN \
-    moondream3 \
-    python3 predict.py --image "$IMAGE_PATH" --output "$OUTPUT_PATH" "$@"
+# Image name
+IMG="${CVL_IMAGE:-moondream3}"
+
+# Mount workspace as writable (predict script writes outputs to /workspace/outputs)
+docker run --rm --gpus=all \
+  ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
+  --workdir /workspace \
+  --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+  --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
+  --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+  --env "PYTHONPATH=/cvlization_repo" \
+  --env "PYTHONUNBUFFERED=1" \
+  ${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
+  "$IMG" python3 predict.py "$@"

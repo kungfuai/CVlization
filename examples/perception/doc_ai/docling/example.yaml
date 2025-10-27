@@ -1,0 +1,33 @@
+name: docling
+capability: perception/doc_ai
+modalities:
+- vision
+- text
+datasets:
+- custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run document extraction on a PDF or image
+  serve:
+    script: serve.sh
+    description: Run serve
+tags:
+- ocr
+- document-conversion
+- docling
+- api-server
+tasks:
+- ocr
+- document_conversion
+frameworks:
+- pytorch
+description: Document conversion and OCR server using Docling

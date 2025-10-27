@@ -10,10 +10,19 @@ Simple implementation using transformers AutoModelForCausalLM with trust_remote_
 
 import argparse
 import json
+import os
 from pathlib import Path
 from PIL import Image
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# CVL dual-mode execution support
+from cvlization.paths import (
+    get_input_dir,
+    get_output_dir,
+    resolve_input_path,
+    resolve_output_path,
+)
 
 
 # Model configuration
@@ -37,8 +46,10 @@ def detect_device():
     """
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        dtype = torch.bfloat16
-        print(f"Using CUDA device: {torch.cuda.get_device_name()}")
+        # Check compute capability for bfloat16 support (requires SM 8.0+)
+        major_cc = torch.cuda.get_device_capability()[0]
+        dtype = torch.bfloat16 if major_cc >= 8 else torch.float16
+        print(f"Using CUDA device: {torch.cuda.get_device_name()} (compute {major_cc}.x, dtype: {dtype})")
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         device = torch.device("mps")
         dtype = torch.float16
@@ -71,7 +82,12 @@ def load_model(model_id: str = MODEL_ID, revision: str = REVISION, device: str =
         device = detected_device
     else:
         device = torch.device(device)
-        dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+        # Apply same dtype logic as detect_device()
+        if device.type == "cuda":
+            major_cc = torch.cuda.get_device_capability()[0]
+            dtype = torch.bfloat16 if major_cc >= 8 else torch.float16
+        else:
+            dtype = torch.float32 if device.type == "cpu" else torch.float16
         print(f"Using device: {device} with dtype: {dtype}")
 
     # Load tokenizer
@@ -182,7 +198,9 @@ def save_output(output: str, output_path: str, format: str = "txt"):
         with open(output_file, "w") as f:
             f.write(output)
 
-    print(f"Output saved to {output_file}")
+    # Show container path (CVL will translate to host path)
+    container_path = str(output_file)
+    print(f"Output saved to {container_path}")
 
 
 def main():
@@ -193,7 +211,7 @@ def main():
         "--image",
         type=str,
         default="examples/sample.jpg",
-        help="Path to input image or URL"
+        help="Path to input image or URL (default: examples/sample.jpg)"
     )
     parser.add_argument(
         "--model-id",
@@ -237,7 +255,7 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default=None,
         help="Output file path"
     )
     parser.add_argument(
@@ -257,13 +275,31 @@ def main():
 
     args = parser.parse_args()
 
+    # Resolve paths for CVL dual-mode support
+    INP = get_input_dir()
+    OUT = get_output_dir()
+
+    # Smart default for output path
+    if args.output is None:
+        # Use simple filename - resolve_output_path will add directory
+        args.output = "result.txt"
+
+    # Resolve paths using cvlization utilities
+    image_path = resolve_input_path(args.image, INP)
+    output_path = resolve_output_path(args.output, OUT)
+
     # Load model
     model, tokenizer = load_model(args.model_id, args.revision, args.device)
 
     # Load image
-    print(f"Loading image from {args.image}...")
-    image = load_image(args.image)
-    print(f"Image loaded: {image.size}")
+    print(f"\n{'='*80}")
+    print("INPUT")
+    print('='*80)
+    print(f"Image: {image_path}")
+
+    image = load_image(image_path)
+    print(f"Size:  {image.size[0]}x{image.size[1]} pixels")
+    print('='*80 + '\n')
 
     # Run task
     if args.task == "ocr":
@@ -285,7 +321,7 @@ def main():
     print("="*80 + "\n")
 
     # Save output
-    save_output(output, args.output, args.format)
+    save_output(output, output_path, args.format)
     print("Done!")
 
 

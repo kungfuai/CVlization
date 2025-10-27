@@ -1,14 +1,43 @@
 name: soccer-visual-tracking
 capability: perception/tracking
-modalities: [vision]
-datasets: [custom]
+modalities:
+- vision
+datasets:
+- custom
 stability: stable
 resources:
   gpu: 1
   vram_gb: 3
   disk_gb: 5
-presets: [predict]
-tags: [sports, soccer, tracking, bird's-eye-view, roboflow, pytorch]
-tasks: [object_tracking, sports_analytics]
-frameworks: [pytorch]
+  downloads:
+    - url: "gdrive://12TqauVZ9tLAv8kWxTTBFWtgt2hNQ4_ZF"
+      dest: "data/soccer_tracking/0bfacc_0.mp4"
+    - url: "gdrive://1isw4wx-MK9h9LMr36VvIWlJD6ppUvw7V"
+      dest: "models/soccer_tracking/football-ball-detection.pt"
+    - url: "gdrive://17PXFNlx-jI7VjVo_vQnB1sONjRyvoB-q"
+      dest: "models/soccer_tracking/football-player-detection.pt"
+    - url: "gdrive://1Ma5Kt86tgpdjCTKfum79YMgNnSjcoOyf"
+      dest: "models/soccer_tracking/football-pitch-detection.pt"
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- sports
+- soccer
+- tracking
+- bird's-eye-view
+- roboflow
+- pytorch
+tasks:
+- object_tracking
+- sports_analytics
+frameworks:
+- pytorch
 description: Track soccer players and generate bird's eye view visualization
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Build successful (cached). Inference ran twice successfully. Input: soccer1_clip1.mp4 (1.4MB), outputs: 7.5MB each. Models loaded from local data/ directory (395MB total)."

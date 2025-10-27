@@ -40,13 +40,13 @@ OUTPUT_NAME=$(basename "$OUTPUT_ABS")
 mkdir -p "$OUTPUT_DIR"
 
 # Run docker directly with proper mounts
-REPO_ROOT="$SCRIPT_DIR/../../../.."
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 cd "$SCRIPT_DIR/../../surya"
 
-docker run --runtime nvidia --rm \
+docker run --gpus=all --rm \
     -v "$(pwd):/workspace" \
     -v "$INPUT_DIR:/inputs:ro" \
     -v "$OUTPUT_DIR:/outputs" \
-    -v "$REPO_ROOT/data/container_cache:/root/.cache" \
+    -v "${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface" \
     surya \
     python3 predict.py --image "/inputs/$INPUT_NAME" --output "/outputs/$OUTPUT_NAME" "${ARGS[@]}"

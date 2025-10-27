@@ -1,9 +1,7 @@
 #!/bin/bash
-set -e
 
-IMAGE_NAME="gpt_oss_grpo"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Building Docker image: $IMAGE_NAME"
-docker build -t $IMAGE_NAME .
-
-echo "✅ Build complete! Image: $IMAGE_NAME"
+# Build from the script's directory, works from anywhere
+docker build -t gpt_oss_grpo "$SCRIPT_DIR"

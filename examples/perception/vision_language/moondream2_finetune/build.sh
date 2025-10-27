@@ -1,16 +1,8 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-IMAGE_NAME="moondream2-finetune"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Building Docker image: $IMAGE_NAME"
-docker build -t $IMAGE_NAME .
-
-echo ""
-echo "Build complete! Image: $IMAGE_NAME"
-echo ""
-echo "Usage:"
-echo "  ./train.sh --data /path/to/data.jsonl"
-echo ""
-echo "Example:"
-echo "  ./train.sh --data sample_data.jsonl --epochs 2 --batch-size 6"
+# Build from the script's directory, works from anywhere
+docker build -t moondream2-finetune "$SCRIPT_DIR"

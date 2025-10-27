@@ -64,6 +64,10 @@ class PoseNet(nn.Module):
 
         return x * self.scale
 
+    @property
+    def dtype(self):
+        return next(self.parameters()).dtype
+
     @classmethod
     def from_pretrained(cls, pretrained_model_path):
         """load pretrained pose-net weights

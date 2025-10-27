@@ -117,11 +117,12 @@ echo "  - Muon learning rate: $MUON_LR"
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Run the Docker container
-docker run -it --rm \
+# Run the Docker container with unbuffered output
+stdbuf -o0 -e0 docker run --rm \
   --gpus all \
   --ipc=host \
   -v "$SCRIPT_DIR:/workspace" \
+  -e PYTHONUNBUFFERED=1 \
   -e WANDB_MODE="$WANDB_MODE" \
   -e WANDB_PROJECT="$WANDB_PROJECT" \
   -e WANDB_API_KEY="$WANDB_API_KEY" \

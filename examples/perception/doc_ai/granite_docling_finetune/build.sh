@@ -1,14 +1,7 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Building Granite-Docling fine-tuning container..."
-docker build -t granite-docling-finetune .
-
-echo ""
-echo "Build complete! Image: granite-docling-finetune"
-echo ""
-echo "Usage:"
-echo "  ./train.sh [options]"
-echo ""
-echo "Example:"
-echo "  ./train.sh --train-data /path/to/data.jsonl --epochs 3"
+# Build from the script's directory, works from anywhere
+docker build -t granite_docling_finetune "$SCRIPT_DIR"

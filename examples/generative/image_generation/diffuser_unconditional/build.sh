@@ -1,4 +1,7 @@
-# Run this script in the root directory of CVlization.
+#!/bin/bash
 
-bin/build_torch_gpu.sh
-docker build -t cvlization-diffuser-unconditional -f examples/image_gen/diffuser_unconditional/Dockerfile .
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t cvlization-diffuser-unconditional "$SCRIPT_DIR"

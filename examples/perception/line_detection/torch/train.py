@@ -24,7 +24,10 @@ class TrainingSession:
         return TorchLineDetectionModelFactory(net=self.args.net).run()
 
     def create_dataset(self):
-        return self.dataset_builder_cls(flavor="torchvision")
+        return self.dataset_builder_cls(
+            flavor="torchvision",
+            data_dir="/root/.cache/cvlization/data/york_lines"
+        )
 
     def create_training_pipeline(self, model):
         training_pipeline = LegacyTrainingPipeline(

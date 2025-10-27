@@ -1,5 +1,7 @@
 # Adapted from https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
 import logging
+import os
+from pathlib import Path
 
 from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.specs.prediction_tasks import InstanceSegmentation
@@ -10,6 +12,14 @@ from cvlization.torch.net.instance_segmentation.torchvision import (
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_cache_dir() -> Path:
+    """Get the CVlization cache directory for datasets."""
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = Path(cache_home) / "cvlization" / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 class TrainingSession:
@@ -38,8 +48,10 @@ class TrainingSession:
 
     def create_dataset(self):
         # Use TorchvisionDatasetBuilder.list_datasets() to get a list of available datasets.
+        cache_dir = str(get_cache_dir())
+        LOGGER.info(f"Using cache directory: {cache_dir}")
         dataset_builder = PennFudanPedestrianDatasetBuilder(
-            flavor="torchvision", include_masks=True, label_offset=1
+            flavor="torchvision", include_masks=True, label_offset=1, data_dir=cache_dir
         )
         return dataset_builder
 

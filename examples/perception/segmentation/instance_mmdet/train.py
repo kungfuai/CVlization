@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 from mmdet.datasets import build_dataset
 from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.torch.net.instance_segmentation.mmdet import (
@@ -8,6 +10,14 @@ from cvlization.torch.net.instance_segmentation.mmdet import (
 
 # pip install mmdet==2.24.1 or 2.25.0
 # pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html
+
+
+def get_cache_dir() -> Path:
+    """Get the CVlization cache directory for datasets."""
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = Path(cache_home) / "cvlization" / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 class TrainingSession:
@@ -41,7 +51,9 @@ class TrainingSession:
         return model, cfg
 
     def create_dataset(self, config):
-        dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False)
+        cache_dir = str(get_cache_dir())
+        print(f"Using cache directory: {cache_dir}")
+        dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False, data_dir=cache_dir)
         MMDatasetAdaptor.set_dataset_info_in_config(
             config, dataset_builder=dsb, image_dir=dsb.image_dir
         )

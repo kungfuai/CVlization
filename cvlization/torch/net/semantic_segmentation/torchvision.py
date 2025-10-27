@@ -2,7 +2,7 @@ import logging
 from torch import nn
 import torch
 import torchvision
-from pytorch_lightning.core.lightning import LightningModule
+from pytorch_lightning import LightningModule
 from ...metrics.semantic_segmentation_confusion_matrix import (
     SemanticSegmentationConfusionMatrix,
 )
@@ -101,7 +101,7 @@ class LitSegmentor(LightningModule):
             gt_segmentation.flatten(), predicted_segmentation.argmax(1).flatten()
         )
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         print(self.confmat)
         self.log(
             "mean_iou",

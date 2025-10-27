@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import logging
 from typing import Union
 from torch import nn
-from pytorch_lightning.core.lightning import LightningModule
+from pytorch_lightning import LightningModule
 from ....specs import ModelSpec
 from ...torch_model_factory import TorchModelFactory
 from ...torch_model import TorchLitModel

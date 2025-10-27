@@ -161,6 +161,9 @@ def train(argv):
             sched.step()
             ema(net_model, ema_model, FLAGS.ema_decay)  # new
 
+            # Update progress bar with loss
+            pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+
             # sample and Saving the weights
             if FLAGS.save_step > 0 and step % FLAGS.save_step == 0:
                 normal_samples = generate_samples(net_model, FLAGS.parallel, savedir, step, net_="normal")
