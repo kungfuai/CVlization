@@ -1,14 +1,31 @@
 name: flux
 capability: generative/image_generation
-modalities: [vision, text]
+modalities:
+- vision
+- text
 datasets: []
 stability: stable
 resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 30
-presets: [predict]
-tags: [flux, text-to-image, cog, pytorch]
-tasks: [text_to_image]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- flux
+- text-to-image
+- cog
+- pytorch
+tasks:
+- text_to_image
+frameworks:
+- pytorch
 description: Flux Schnell text-to-image generation (via Replicate/Cog)
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Build successful (both ./build.sh and cvl run). Inference execution verified with both methods (./predict.sh and cvl run flux predict). Output generation: 1024x1024 PNG, 1.4MB. Model caching to HuggingFace hub (~/.cache/huggingface/). All Python packages pinned in requirements.txt. CPU offloading optimizations allow inference to run with ~14GB VRAM instead of the full 24GB requirement."

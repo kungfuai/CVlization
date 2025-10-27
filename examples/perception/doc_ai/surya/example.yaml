@@ -1,0 +1,31 @@
+name: surya
+capability: perception/doc_ai
+modalities:
+- vision
+- text
+datasets:
+- custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- ocr
+- layout-detection
+- multilingual
+- surya
+- pytorch
+tasks:
+- ocr
+- layout_analysis
+frameworks:
+- pytorch
+description: Multilingual OCR and layout detection using Surya

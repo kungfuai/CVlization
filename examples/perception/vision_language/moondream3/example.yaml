@@ -1,14 +1,36 @@
 name: moondream3
 capability: perception/vision_language
-modalities: [vision, text]
-datasets: [custom]
+modalities:
+- vision
+- text
+datasets:
+- custom
 stability: beta
 resources:
   gpu: 1
   vram_gb: 12
   disk_gb: 20
-presets: [predict]
-tags: [moondream, vlm, moe, ocr, vqa, object-detection, pytorch]
-tasks: [ocr, image_captioning, visual_question_answering, object_detection]
-frameworks: [pytorch]
-description: Advanced 9B MoE vision-language model with structured output and object detection
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- moondream
+- vlm
+- moe
+- ocr
+- vqa
+- object-detection
+- pytorch
+tasks:
+- ocr
+- image_captioning
+- visual_question_answering
+- object_detection
+frameworks:
+- pytorch
+description: Advanced 9B MoE vision-language model with structured output and object
+  detection

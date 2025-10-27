@@ -1,14 +1,30 @@
 name: cfm
 capability: generative/image_generation
-modalities: [vision]
-datasets: [custom]
+modalities:
+- vision
+datasets:
+- custom
 stability: beta
 resources:
   gpu: 1
   vram_gb: 16
   disk_gb: 10
-presets: [train]
-tags: [conditional-flow-matching, diffusion, pytorch]
-tasks: [image_generation]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- conditional-flow-matching
+- diffusion
+- pytorch
+tasks:
+- image_generation
+frameworks:
+- pytorch
 description: Conditional Flow Matching for image generation
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Build successful. Training initialization verified with CIFAR10 dataset lazy downloading (170MB), loss decreasing (1.20→1.16 over 100 steps). Model: 34.09M params, ~4 it/s. Tested on NVIDIA A10 (24GB VRAM)."

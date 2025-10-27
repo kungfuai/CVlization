@@ -1,4 +1,7 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
+
 set -e
 
 echo "=== GPT-OSS GRPO Smoke Test ==="
@@ -11,10 +14,10 @@ sed 's/max_steps: 10/max_steps: 2/' config.yaml > config_test.yaml
 
 # Run smoke test
 echo "Running 2-step GRPO training for smoke test..."
-docker run --runtime nvidia \
+docker run --gpus=all \
     --rm \
     -v $(pwd):/workspace \
-    -v $(pwd)/../../../data/container_cache:/root/.cache \
+    -v ${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     gpt_oss_grpo \
     bash -c "cp config_test.yaml config.yaml && python3 train.py && rm -rf test-output"

@@ -1,14 +1,26 @@
 name: phantom
 capability: generative/video_generation
-modalities: [vision]
+modalities:
+- vision
 datasets: []
 stability: experimental
 resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 30
-presets: [predict]
-tags: [phantom, video-generation, pytorch]
-tasks: [video_generation]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- phantom
+- video-generation
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
 description: Phantom video generation model (experimental)

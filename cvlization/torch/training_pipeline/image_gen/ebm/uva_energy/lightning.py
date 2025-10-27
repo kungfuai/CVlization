@@ -132,7 +132,7 @@ class GenerateCallback(pl.Callback):
             for i in range(imgs_per_step.shape[1]):
                 step_size = self.num_steps // self.vis_steps
                 imgs_to_plot = imgs_per_step[step_size-1::step_size,i]
-                grid = torchvision.utils.make_grid(imgs_to_plot, nrow=imgs_to_plot.shape[0], normalize=True, range=(-1,1))
+                grid = torchvision.utils.make_grid(imgs_to_plot, nrow=imgs_to_plot.shape[0], normalize=True, value_range=(-1,1))
                 trainer.logger.experiment.add_image(f"generation_{i}", grid, global_step=trainer.current_epoch)
 
     def generate_imgs(self, pl_module):

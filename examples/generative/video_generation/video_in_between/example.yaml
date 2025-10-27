@@ -1,14 +1,26 @@
 name: video-in-between
 capability: generative/video_generation
-modalities: [vision]
+modalities:
+- vision
 datasets: []
 stability: stable
 resources:
   gpu: 1
   vram_gb: 16
   disk_gb: 20
-presets: [predict]
-tags: [video-interpolation, keyframe-interpolation, pytorch]
-tasks: [video_interpolation]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- video-interpolation
+- keyframe-interpolation
+- pytorch
+tasks:
+- video_interpolation
+frameworks:
+- pytorch
 description: Video keyframe interpolation - fill in frames between two keyframes

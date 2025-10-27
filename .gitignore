@@ -33,4 +33,45 @@ doc/tmp_notes
 *.ckpt
 *.pt
 *.pth
+*.safetensors
+*.bin
+!setup.py  # Don't ignore Python package setup.py
+
+# outputs directories (including in subdirectories)
+outputs/
+**/outputs/
+
+# training artifacts
+**/checkpoint-*/
+**/final_model/
+**/lora_adapters/
+
+# training data
+**/train.bin
+**/val.bin
+**/test.bin
+
+# training/inference logs
+**/training.log
+**/inference.log
+**/training_run*.log
+**/*_training.log
+**/*_inference.log
+
+# results directories (for generated outputs)
+**/results/
+results/
+
+# common dataset directories
+**/MNIST/
+**/CIFAR*/
+**/ImageNet*/
+
 .env
+
+# Temporary reports and skill outputs
+/reports/
+/var/
+
+# Temporary result files
+/result.json

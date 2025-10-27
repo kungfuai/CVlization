@@ -1,14 +1,39 @@
 name: animate-x
 capability: generative/video_generation
-modalities: [vision]
-datasets: [custom]
+modalities:
+- vision
+datasets:
+- custom
 stability: stable
 resources:
   gpu: 1
   vram_gb: 16
   disk_gb: 20
-presets: [predict]
-tags: [animatex, pose-driven, video-animation, pytorch]
-tasks: [video_generation]
-frameworks: [pytorch]
+  downloads:
+    - url: "hf://Shuaishuai0219/Animate-X/animate-x_ckpt.pth"
+      dest: "models/animate-x/animate-x_ckpt.pth"
+    - url: "hf://Shuaishuai0219/Animate-X/v2-1_512-ema-pruned.ckpt"
+      dest: "models/animate-x/v2-1_512-ema-pruned.ckpt"
+    - url: "hf://Shuaishuai0219/Animate-X/open_clip_pytorch_model.bin"
+      dest: "models/animate-x/open_clip_pytorch_model.bin"
+    - url: "hf://Shuaishuai0219/Animate-X/dw-ll_ucoco_384.onnx"
+      dest: "models/DWPose/dw-ll_ucoco_384.onnx"
+    - url: "hf://Shuaishuai0219/Animate-X/yolox_l.onnx"
+      dest: "models/DWPose/yolox_l.onnx"
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- animatex
+- pose-driven
+- video-animation
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
 description: AnimateX pose-driven character animation from reference videos

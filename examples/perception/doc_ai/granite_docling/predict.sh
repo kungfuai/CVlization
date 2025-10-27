@@ -1,50 +1,22 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Check if input file is provided
-if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <input_image> [options]"
-    echo ""
-    echo "Options:"
-    echo "  --output <file>      Save output to file (optional)"
-    echo "  --format <format>    Output format: markdown (default) or json"
-    echo "  --device <device>    Device: cpu (default) or cuda"
-    echo ""
-    echo "Examples:"
-    echo "  $0 document.png"
-    echo "  $0 scan.jpg --format json --output result.json"
-    echo "  $0 form.png --format markdown --device cuda"
-    exit 1
-fi
+# Always run from this folder
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-INPUT_FILE="$1"
-shift  # Remove first argument, keep the rest as options
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
-# Check if input file exists
-if [ ! -f "$INPUT_FILE" ]; then
-    echo "Error: Input file '$INPUT_FILE' not found"
-    exit 1
-fi
+# Image name
+IMG="${CVL_IMAGE:-granite_docling}"
 
-# Get absolute path and filename
-INPUT_DIR=$(cd "$(dirname "$INPUT_FILE")" && pwd)
-INPUT_NAME=$(basename "$INPUT_FILE")
-
-# Create outputs directory
-mkdir -p "$(pwd)/outputs"
-
-echo "Processing: $INPUT_FILE"
-echo "Using Granite-Docling-258M VLM model..."
-echo ""
-
-# Run Docker container with GPU support
-docker run --rm \
-    --gpus all \
-    -v "$INPUT_DIR:/app/inputs:ro" \
-    -v "$(pwd)/outputs:/app/outputs" \
-    -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-    granite-docling \
-    python predict.py "/app/inputs/$INPUT_NAME" "$@"
-
-echo ""
-echo "Done!"
+# Mount workspace as writable (predict script writes outputs to /workspace)
+docker run --rm --gpus=all \
+  ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
+  --workdir /workspace \
+  --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+  --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
+  --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+  --env "PYTHONPATH=/cvlization_repo" \
+  --env "PYTHONUNBUFFERED=1" \
+  "$IMG" python3 predict.py "$@"

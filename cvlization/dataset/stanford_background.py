@@ -1,12 +1,13 @@
-"""Adapted from MMSegmentation tutorial: 
+"""Adapted from MMSegmentation tutorial:
 https://colab.research.google.com/github/open-mmlab/mmsegmentation/blob/master/demo/MMSegmentation_Tutorial.ipynb
 
 !wget http://dags.stanford.edu/data/iccv09Data.tar.gz -O stanford_background.tar.gz
 !tar xf stanford_background.tar.gz
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import os
+from pathlib import Path
 import random
 from subprocess import check_output
 from glob import glob
@@ -14,6 +15,14 @@ from PIL import Image
 from typing import Union, List
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
+from cvl.core.downloads import get_cache_dir
+
+
+def _default_data_dir() -> Path:
+    """Return the centralized cache directory for Stanford Background data."""
+    cache_dir = get_cache_dir() / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 CLASSES = ("sky", "tree", "road", "grass", "water", "bldg", "mntn", "fg obj")
@@ -43,7 +52,7 @@ class StanfordBackgroundDatasetBuilder:
     channels_first: bool = True
     to_torch_tensor: bool = False
     flavor: str = None  # one of None, "torchvision"
-    data_dir: str = "./data"
+    data_dir: str = field(default_factory=lambda: str(_default_data_dir()))
     dataset_folder: str = "stanford_background"
     dataset_original_folder: str = "iccv09Data"
     archive_ext: str = "tar.gz"

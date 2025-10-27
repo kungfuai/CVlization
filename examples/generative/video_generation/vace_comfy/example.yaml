@@ -1,14 +1,37 @@
 name: vace-comfy
 capability: generative/video_generation
-modalities: [vision]
+modalities:
+- vision
 datasets: []
 stability: experimental
 resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 50
-presets: [predict]
-tags: [vace, comfyui, video-animation, pytorch]
-tasks: [video_generation]
-frameworks: [pytorch, comfyui]
+  downloads:
+    - url: "hf://Comfy-Org/Wan_2.1_ComfyUI_repackaged/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+      dest: "models/wan/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+    - url: "hf://Comfy-Org/Wan_2.1_ComfyUI_repackaged/split_files/vae/wan_2.1_vae.safetensors"
+      dest: "models/wan/wan_2.1_vae.safetensors"
+    - url: "hf://Comfy-Org/Wan_2.1_ComfyUI_repackaged/split_files/clip_vision/clip_vision_h.safetensors"
+      dest: "models/wan/clip_vision_h.safetensors"
+    - url: "hf://QuantStack/Wan2.1-VACE-14B-GGUF/Wan2.1-VACE-14B-Q6_K.gguf"
+      dest: "models/wan/Wan2.1-VACE-14B-Q6_K.gguf"
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- vace
+- comfyui
+- video-animation
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
+- comfyui
 description: VACE with ComfyUI integration (under construction)

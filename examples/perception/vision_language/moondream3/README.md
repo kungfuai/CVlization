@@ -144,7 +144,7 @@ For more control:
 ```bash
 docker run --runtime nvidia \
     -v $(pwd)/examples/perception/vision_language/moondream3:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     moondream3 \
     python3 predict.py \
@@ -159,7 +159,7 @@ For better compatibility (slower inference):
 ```bash
 docker run --runtime nvidia \
     -v $(pwd)/examples/perception/vision_language/moondream3:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     moondream3 \
     python3 predict.py \
         --image image.jpg \
@@ -275,7 +275,7 @@ Total: $45.00
 
 ### How It Works
 
-Moondream3 automatically downloads from HuggingFace on first run (~18GB). The model is cached in `data/container_cache` and reused for subsequent runs. The model uses a Mixture-of-Experts architecture where only 2B out of 9B parameters are active for each token, providing excellent efficiency.
+Moondream3 automatically downloads from HuggingFace on first run (~18GB). The model is cached in `$HOME/.cache/huggingface` and reused for subsequent runs. The model uses a Mixture-of-Experts architecture where only 2B out of 9B parameters are active for each token, providing excellent efficiency.
 
 ### Troubleshooting
 
@@ -336,7 +336,7 @@ By default, outputs are saved to:
 ### Model Cache
 
 Model weights are cached in:
-- `data/container_cache/huggingface/`
+- `~/.cache/huggingface/`
 
 Size: ~18GB (persists across runs)
 

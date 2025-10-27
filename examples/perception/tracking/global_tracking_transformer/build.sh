@@ -1,1 +1,8 @@
-docker build -t gtr examples/object_tracking/global_tracking_transformer
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t gtr "$SCRIPT_DIR"

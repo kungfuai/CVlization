@@ -8,6 +8,6 @@ RUN pip install decord==0.6.0 einops==0.7.*
 RUN pip install matplotlib==3.8.0 opencv-python==4.9.*
 RUN pip install onnxruntime-gpu==1.18.*
 RUN pip install omegaconf==2.3.0 cog==0.13.7
-RUN pip install diffusers==0.32.2 transformers==4.48.3
+RUN pip install diffusers==0.32.2 transformers==4.48.3 accelerate==0.34.2
 
 WORKDIR /workspace

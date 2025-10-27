@@ -16,9 +16,9 @@ if [ -z "$HF_TOKEN" ]; then
     exit 1
 fi
 
-docker run --runtime nvidia \
+docker run --gpus=all \
     -v $(pwd)/examples/doc_ai/moondream3:/workspace \
-    -v $(pwd)/data/container_cache:/root/.cache \
+    -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
     moondream3 \
     python3 -c "

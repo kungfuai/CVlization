@@ -1,10 +1,8 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "Building Moondream3 Docker image..."
-docker build -t moondream3 examples/doc_ai/moondream3/
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Build complete!"
-echo ""
-echo "To run inference:"
-echo "  bash examples/doc_ai/moondream3/predict.sh --image path/to/image.jpg"
+# Build from the script's directory, works from anywhere
+docker build -t moondream3 "$SCRIPT_DIR"
