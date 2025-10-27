@@ -1,28 +1,43 @@
-# CVlization: Dockerized ML Examples
+# CVlization: Curated AI Training and Inference Recipes That Just Work
 
-Ready-to-use, reproducible examples for vision, language, and multimodal ML. Each example is self-contained with frozen dependencies.
+A curated collection of 60+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need.
+
+**Browse:** Vision (classification, detection, segmentation, OCR) • Language (LLMs, fine-tuning) • Multimodal (VLMs, document AI) • Generative (image, video)
+
+*CVlization stands on the shoulders of giants - we package and test amazing open source projects so you can use them with confidence.*
 
 ## Quick Start
 
 ```bash
-# Clone the repository
 git clone --depth 1 https://github.com/kungfuai/CVlization
 cd CVlization
+
+# Install CLI (optional - or just use bash scripts)
+pip install .
+
+# Browse examples
+cvl list --tag llm
+# or browse examples/ on GitHub
 
 # Run any example
 bash examples/perception/image_classification/torch/build.sh
 bash examples/perception/image_classification/torch/train.sh
+
+# Copy into your project
+cp -r examples/perception/image_classification/torch your-project/
 ```
 
-That's it! Each example has its own Dockerfile and bash scripts. No framework to learn.
+That's it! Each example is self-contained with its own Dockerfile and dependencies. (We battled CUDA versions and dependency conflicts so you don't have to.)
 
 ## Table of Contents
 
 - [Examples](#examples)
 - [Browse Examples](#browse-examples)
 - [Running an Example](#running-an-example)
+- [Centralized Caching](#centralized-caching)
 - [Requirements](#requirements)
-- [Project Structure](#project-structure)
+- [For Contributors](#for-contributors)
+- [CVlization Library](#cvlization-library)
 - [Documentation](#documentation)
 - [License](#licenses)
 
@@ -52,8 +67,7 @@ examples/
 | ![Pose Estimation](./doc/images/pose_estimation.jpeg) Pose Estimation | [`examples/perception/pose_estimation`](./examples/perception/pose_estimation) | dwpose, mmpose | ✅ |
 | ![Object Tracking](./doc/images/player_tracking.gif) Tracking | [`examples/perception/tracking`](./examples/perception/tracking) | global_tracking_transformer, soccer_visual_tracking | ✅ |
 | ![Line Detection](./doc/images/line_detection.png) Line Detection | [`examples/perception/line_detection`](./examples/perception/line_detection) | torch | ✅ |
-| ![Document AI](./doc/images/layoutlm.png) OCR & Layout | [`examples/perception/ocr_and_layout`](./examples/perception/ocr_and_layout) | docling_serve, dots_ocr, nanonets_ocr, surya | ✅ |
-| ![Document AI](./doc/images/layoutlm.png) Document AI (VLMs) | [`examples/perception/doc_ai`](./examples/perception/doc_ai) | donut (doc_classification, doc_parse), granite_docling (+ finetune) | ✅ |
+| ![Document AI](./doc/images/layoutlm.png) Document AI | [`examples/perception/doc_ai`](./examples/perception/doc_ai) | OCR (docling, dots_ocr, nanonets_ocr, surya), VLMs (donut, granite_docling + finetune) | ✅ |
 | ![Vision-Language](./doc/images/layoutlm.png) Vision-Language Models | [`examples/perception/vision_language`](./examples/perception/vision_language) | moondream2 (+ finetune), moondream3 | ✅ |
 | ![3D: rendering and reconstruction](./doc/images/nerf.gif) 3D Reconstruction | [`examples/perception/3d_reconstruction`](./examples/perception/3d_reconstruction) | nerf_tf | ✅ |
 
@@ -71,52 +85,30 @@ Note: These examples are regularly updated and tested to ensure compatibility wi
 
 ## Browse Examples
 
-With 60+ examples, there are a few ways to find what you need:
+**Via GitHub:** Browse [perception/](./examples/perception/) or [generative/](./examples/generative/) directories
 
-**Option 1: Browse on GitHub** (recommended)
-- [Perception examples](./examples/perception/) - Image classification, object detection, OCR, segmentation...
-- [Generative examples](./examples/generative/) - LLMs, image generation, video generation...
-
-**Option 2: Use the CLI** (optional, for convenience)
-
-The `cvl` CLI is a lightweight tool that helps you explore and run examples:
+**Via CLI:** Install with `pip install .` then:
 
 ```bash
-# From inside the CVlization directory
-pipx install .
+# Find examples by tag
+cvl list --tag llm
+cvl list --tag document-ai
 
-# Browse examples
-cvl list --stability stable --tag ocr
-cvl info perception/ocr_and_layout/surya
+# Train a small LLM on Shakespeare text
+# (from Andrej Karpathy's nanoGPT: https://github.com/karpathy/nanoGPT)
+cvl run nanogpt train --max_iters=1000 --batch_size=16
 
-# Run examples (optional alternative to bash scripts)
-cvl run svd-cog build
-cvl run svd-cog predict -i input_image=@demo.png
+# Run document AI inference
+# (IBM Granite-Docling: https://huggingface.co/ibm-granite/granite-docling-258M)
+cvl run granite-docling predict -i input_pdf=@document.pdf
 ```
 
-### Running Examples with CVL
-
-The `cvl run` command is an optional alternative to bash scripts:
-
+The `cvl` CLI is optional - you can always use bash scripts directly:
 ```bash
-# Equivalent commands:
-bash examples/path/to/example/train.sh --epochs 10
-cvl run example-name train --epochs 10
-
-# Pass CVL options before the example name:
-cvl run --no-live svd-cog predict -i num_steps=5
-
-# Or use -- separator for clarity (optional):
-cvl run --no-live svd-cog predict -- -i num_steps=5
+# These are equivalent:
+bash examples/generative/llm/nanogpt/train.sh
+cvl run nanogpt train
 ```
-
-**CVL options** (before example name):
-- `-w /path`: Set workspace directory
-- `--no-live`: Disable live output streaming
-
-**Container arguments** (after preset name): Passed directly to the script/container
-
-> **Note:** The CLI is completely optional. You can always use bash scripts directly.
 
 ## Running an Example
 
@@ -145,20 +137,30 @@ For detailed instructions and available options, see the README.md in each examp
 
 - The Dockerfile does not include the source code of the example. Instead, its main purpose is to provide a clean environment for the task at hand. The source code is mounted into the container at run time. If you need the docker image to be self-contained, please edit the Dockerfile to copy the source code into the image.
 - We try to pin the versions of the dependencies. However, some dependencies may not be pinned due to the fast pace of development in the field. If you find any issues, please submit a PR.
-- To avoid repeated downloading of datasets and model weights, we use `data/container_cache` to store the downloaded files and mount it to the container. For example, this is a typical `predict.sh`:
+
+### Centralized Caching
+
+All examples use `~/.cache/cvlization/` for models and datasets, avoiding re-downloads across examples:
+
 ```bash
-docker run --shm-size 16G --runtime nvidia -it \
+docker run --shm-size 16G --gpus=all \
 	-v $(pwd)/examples/<my example directory>:/workspace \
-	-v $(pwd)/data/container_cache:/root/.cache \  # this is where torch and huggingface cache the downloaded models and datasets
+	-v ~/.cache/cvlization:/root/.cache \  # Centralized cache for models & datasets
     -e CUDA_VISIBLE_DEVICES='0' \
 	<docker_image_name> \
 	python predict.py <my arguments>
 ```
 
+**Benefits:**
+- Automatic caching for HuggingFace Hub, PyTorch, and custom downloads
+- Managed by build scripts - no manual setup required
+- Shared across all examples to save disk space and bandwidth
+
 ## Requirements
 
 - Docker ([Install Docker](https://docs.docker.com/get-docker/))
-- NVIDIA GPU + nvidia-docker (for GPU-accelerated examples)
+- NVIDIA GPU (most examples require 16GB+ VRAM; A10 or better recommended)
+- nvidia-docker for GPU access
   ```bash
   # Ubuntu
   sudo apt-get install -y nvidia-container-toolkit
@@ -169,6 +171,20 @@ docker run --shm-size 16G --runtime nvidia -it \
 No installation needed - run examples directly in Google Colab:
 [Colab notebook: CIFAR-10 classification](https://colab.research.google.com/drive/1FkZcZnJC_z-PuFSYM91kU1-d63-LecMJ?usp=sharing)
 
+## For Contributors
+
+CVlization includes Claude Code skills for AI-assisted development and automated verification:
+
+- **`verify-training-pipeline`** - Validates training examples are properly structured, build successfully, train without errors, and log appropriate metrics
+- **`verify-inference-example`** - Validates inference examples build correctly and run inference successfully
+
+These skills enable Claude to automatically verify examples end-to-end, helping maintain code quality across the repository.
+
+**Contributing Guidelines:**
+- See [CONTRIBUTING.md](./CONTRIBUTING.md) for standardization patterns and best practices
+- All examples should follow the build/train/predict script pattern
+- Use verification metadata in `example.yaml` to track testing status
+
 ## Project Structure
 
 - `examples/`: Contains various computer vision and language processing examples
@@ -178,9 +194,19 @@ No installation needed - run examples directly in Google Colab:
 - `doc/`: Project documentation
 - `tests/`: Unit and integration tests
 
-## Library (Legacy)
+## CVlization Library
 
-The `cvlization` library in this repository was the initial focus but may not be actively maintained due to the rapidly changing landscape of dependencies. Users are encouraged to refer to the `examples/` for up-to-date, working implementations.
+The `cvlization/` directory provides optional reusable components:
+
+**Available:**
+- Training pipeline abstractions (image classification, object detection, LLMs, diffusion)
+- Dataset builders with caching (PyTorch, TensorFlow, HuggingFace)
+- Model factories (Torchvision, MMDetection, MMSegmentation)
+- Utilities (metrics, logging, download helpers)
+
+**Installation:** `pip install -e .`
+
+**Note:** Examples are self-contained and don't require the library. For production use, copying example code directly is often simpler than depending on the library package.
 
 ## Documentation
 
