@@ -21,7 +21,7 @@ End-to-end OCR using [docTR](https://github.com/mindee/doctr), combining text de
 bash examples/perception/doc_ai/doctr/build.sh
 ```
 
-2. Run inference:
+2. Run inference on a sample image:
 ```bash
 bash examples/perception/doc_ai/doctr/predict.sh --image examples/sample.jpg
 ```
@@ -29,26 +29,35 @@ bash examples/perception/doc_ai/doctr/predict.sh --image examples/sample.jpg
 ### Usage
 
 #### Basic Inference
+
+Process a document image:
 ```bash
-bash examples/perception/doc_ai/doctr/predict.sh --image document.jpg
+bash examples/perception/doc_ai/doctr/predict.sh --image path/to/document.jpg
 ```
 
-#### JSON Output
+#### JSON Output Format
+
+Get structured JSON output:
 ```bash
-bash examples/perception/doc_ai/doctr/predict.sh --image scan.jpg --format json
+bash examples/perception/doc_ai/doctr/predict.sh \
+    --image path/to/document.jpg \
+    --format json
 ```
 
 #### Custom Architectures
+
+Fast inference with lightweight models:
 ```bash
-# Fast inference with lightweight models
 bash examples/perception/doc_ai/doctr/predict.sh \
-    --image receipt.png \
+    --image path/to/receipt.png \
     --det-arch db_mobilenet_v3_large \
     --reco-arch crnn_mobilenet_v3_small
+```
 
-# High accuracy with MASTER
+High accuracy with MASTER:
+```bash
 bash examples/perception/doc_ai/doctr/predict.sh \
-    --image complex_doc.jpg \
+    --image path/to/complex_doc.jpg \
     --reco-arch master
 ```
 
@@ -80,14 +89,14 @@ All models are pretrained and optimized for production use.
 ```
 examples/perception/doc_ai/doctr/
 ├── Dockerfile           # Container definition
-├── requirements.txt     # Python dependencies
 ├── predict.py          # Main inference script
 ├── build.sh            # Build Docker image
 ├── predict.sh          # Run inference wrapper
+├── test.sh             # Smoke test
 ├── example.yaml        # CVL configuration
 ├── README.md           # This file
 ├── .gitignore          # Git ignore rules
-├── examples/           # Sample images
+├── examples/           # Sample images (add your own)
 └── outputs/            # Results saved here
 ```
 
