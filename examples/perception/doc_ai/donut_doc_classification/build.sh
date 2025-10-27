@@ -1,1 +1,7 @@
-docker build -t doc_classification examples/doc_ai/huggingface/donut/doc_classification
+#!/usr/bin/env bash
+set -euo pipefail
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build from the script's directory, works from anywhere
+docker build -t donut_doc_classification "$SCRIPT_DIR"

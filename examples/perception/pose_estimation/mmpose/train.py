@@ -3,6 +3,7 @@
 # pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html
 
 import os
+from pathlib import Path
 from mmpose.datasets.builder import build_dataset
 from cvlization.dataset.coco_pose_tiny import CocoPoseTinyDatasetBuilder
 from cvlization.torch.net.pose_estimation.mmpose import (
@@ -10,6 +11,14 @@ from cvlization.torch.net.pose_estimation.mmpose import (
     MMPoseModels,
     MMTrainer,
 )
+
+
+def get_cache_dir() -> Path:
+    """Get the CVlization cache directory for datasets."""
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = Path(cache_home) / "cvlization" / "data"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 class TrainingSession:
@@ -46,7 +55,9 @@ class TrainingSession:
         return model, cfg
 
     def create_dataset(self, config):
-        dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False)
+        cache_dir = str(get_cache_dir())
+        print(f"Using cache directory: {cache_dir}")
+        dsb = self.dataset_builder_cls(flavor=None, to_torch_tensor=False, data_dir=cache_dir)
         dataset_classname = MMDatasetAdaptor.adapt_and_register_detection_dataset(dsb)
         print("registered:", dataset_classname)
 

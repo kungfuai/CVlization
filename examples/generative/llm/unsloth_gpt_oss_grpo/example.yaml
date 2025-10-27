@@ -1,14 +1,32 @@
 name: unsloth-gpt-oss-grpo
 capability: generative/llm
-modalities: [text]
-datasets: [HuggingFaceH4/Multilingual-Thinking]
+modalities:
+- text
+datasets:
+- HuggingFaceH4/Multilingual-Thinking
 stability: stable
 resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 50
-presets: [train]
-tags: [unsloth, gpt-oss, grpo, reinforcement-learning, reasoning, pytorch]
-tasks: [text_generation, reasoning]
-frameworks: [pytorch, unsloth]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- unsloth
+- gpt-oss
+- grpo
+- reinforcement-learning
+- reasoning
+- pytorch
+tasks:
+- text_generation
+- reasoning
+frameworks:
+- pytorch
+- unsloth
 description: Train OpenAI GPT-OSS 20B with GRPO reinforcement learning using Unsloth

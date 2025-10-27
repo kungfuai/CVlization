@@ -1,14 +1,40 @@
 name: nerf-tf
 capability: perception/3d_reconstruction
-modalities: [vision]
-datasets: [custom]
+modalities:
+- vision
+datasets:
+- custom
 stability: experimental
 resources:
   gpu: 1
-  vram_gb: 8
+  vram_gb: 12
   disk_gb: 5
-presets: [train]
-tags: [nerf, 3d-reconstruction, tensorflow, broken]
-tasks: [3d_reconstruction]
-frameworks: [tensorflow]
-description: Neural Radiance Fields for 3D reconstruction (broken - TensorFlow migration issue)
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- nerf
+- 3d-reconstruction
+- tensorflow
+- legacy
+tasks:
+- 3d_reconstruction
+frameworks:
+- tensorflow
+description: |
+  ⚠️ LEGACY EDUCATIONAL EXAMPLE - Neural Radiance Fields using TensorFlow 2.16.
+
+  For production use, consider modern alternatives:
+  - Instant-NGP (100-1000x faster, real-time rendering)
+  - 3D Gaussian Splatting (real-time quality)
+  - Nerfstudio (production-ready toolkit)
+
+  This is "Tiny NeRF" - a minimal demo for learning NeRF concepts.
+  The 3D/NeRF community has standardized on PyTorch for newer methods.
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Build successful (TF 2.16.1-gpu). Training verified through 21+ epochs with loss decreasing properly (0.0606 → 0.0151). Dataset downloads to workspace (12MB tiny_nerf_data.npz). Requires dedicated GPU (~12GB VRAM)."

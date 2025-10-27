@@ -1,22 +1,24 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-if [ -z "$HF_TOKEN" ]; then
-    echo "Warning: HF_TOKEN not set. Will use cached model if available."
-    echo "If model download fails, set HF_TOKEN: export HF_TOKEN=your_huggingface_token"
-fi
+# Always run from this folder
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-IMAGE_NAME="gpt_oss_grpo"
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
-echo "=== GPT-OSS GRPO Training ==="
-echo "Running training in Docker container..."
+# Image name
+IMG="${CVL_IMAGE:-gpt_oss_grpo}"
 
-docker run --runtime nvidia \
-    --rm \
-    -v $(pwd):/workspace \
-    -v $(pwd)/../../../data/container_cache:/root/.cache \
-    -e HF_TOKEN=$HF_TOKEN \
-    $IMAGE_NAME \
-    python3 train.py
-
-echo "✅ Training complete!"
+# Mount workspace as writable (training writes outputs to /workspace)
+docker run --rm --gpus=all --shm-size 16G \
+	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
+	--workdir /workspace \
+	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+	--mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
+	--mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+	--env "PYTHONPATH=/cvlization_repo" \
+	--env "PYTHONUNBUFFERED=1" \
+	${WANDB_API_KEY:+-e WANDB_API_KEY=$WANDB_API_KEY} \
+	"$IMG" \
+	python train.py "$@"

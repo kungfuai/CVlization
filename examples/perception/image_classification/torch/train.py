@@ -13,7 +13,10 @@ class TrainingSession:
         self.args = args
 
     def run(self):
-        dataset_builder = TorchvisionDatasetBuilder(dataset_classname="CIFAR10")
+        dataset_builder = TorchvisionDatasetBuilder(
+            dataset_classname="CIFAR10",
+            data_dir="/root/.cache/cvlization/data/cifar10"
+        )
         SimpleImageClassificationPipeline(
             config=SimpleImageClassificationPipeline.Config(
                 model_name=self.args.net,

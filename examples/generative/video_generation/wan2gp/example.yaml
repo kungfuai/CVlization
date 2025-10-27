@@ -1,14 +1,26 @@
 name: wan2gp
 capability: generative/video_generation
-modalities: [vision]
+modalities:
+- vision
 datasets: []
 stability: beta
 resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 50
-presets: [predict]
-tags: [wan2gp, video-generation, pytorch]
-tasks: [video_generation]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- wan2gp
+- video-generation
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
 description: Wan2GP video generation model

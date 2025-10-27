@@ -1,14 +1,30 @@
-name: donut-doc-classification
+name: donut_doc_classification
 capability: perception/doc_ai
-modalities: [vision, text]
-datasets: [rvl-cdip]
+modalities:
+- vision
+- text
+datasets:
+- rvl-cdip
 stability: stable
 resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 5
-presets: [train]
-tags: [donut, document-classification, vit, transformers, pytorch]
-tasks: [document_classification]
-frameworks: [pytorch]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run train
+tags:
+- donut
+- document-classification
+- vit
+- transformers
+- pytorch
+tasks:
+- document_classification
+frameworks:
+- pytorch
 description: Document classification using Donut VLM (OCR-free)

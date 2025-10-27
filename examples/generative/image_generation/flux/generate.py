@@ -27,4 +27,9 @@ image = pipe(
     width=1024,
     generator=torch.Generator("cpu").manual_seed(0)
 ).images[0]
-image.save("flux-schnell.png")
+
+# Save to outputs directory
+import os
+os.makedirs("outputs", exist_ok=True)
+image.save("outputs/flux-schnell.png")
+print("Image saved to outputs/flux-schnell.png")

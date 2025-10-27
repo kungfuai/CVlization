@@ -7,8 +7,17 @@ resources:
   gpu: 1
   vram_gb: 12
   disk_gb: 20
-presets: [predict, train]
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
 tags: [stable-diffusion, text-to-image, diffusers, pytorch]
 tasks: [text_to_image]
 frameworks: [pytorch, diffusers]
-description: Stable Diffusion text-to-image generation and training
+description: Stable Diffusion v1.5 text-to-image generation
+verification:
+  last_verified: 2025-10-25
+  last_verification_note: "Build successful (both ./build.sh and cvl run). Inference execution verified with both methods (./predict.sh and cvl run stable-diffusion predict). Output generation: 512x512 PNG, 415KB. Model caching to HuggingFace hub. All Python packages pinned in requirements.txt. Uses Stable Diffusion v1.5 model with FP16 precision, generates images in ~4-10s with 50 inference steps."

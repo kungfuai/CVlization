@@ -132,7 +132,7 @@ EOF
 fi
 
 # Run the Docker container for generation
-docker run -it --rm \
+docker run --rm \
   --gpus all \
   -v "$(pwd)/checkpoints:/workspace/checkpoints" \
   -v "$(pwd)/generate.py:/workspace/generate.py" \

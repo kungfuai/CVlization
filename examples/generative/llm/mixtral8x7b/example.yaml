@@ -1,14 +1,33 @@
 name: mixtral-8x7b-inference
+docker: mixtral8x7b
 capability: generative/llm
-modalities: [text]
+modalities:
+- text
 datasets: []
 stability: stable
 resources:
   gpu: 1
   vram_gb: 20
   disk_gb: 100
-presets: [predict]
-tags: [mixtral, moe, inference, offloading, pytorch]
-tasks: [text_generation]
-frameworks: [pytorch]
-description: Mixtral 8x7B MoE model inference with layer offloading (requires HuggingFace access)
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- mixtral
+- moe
+- inference
+- offloading
+- pytorch
+tasks:
+- text_generation
+frameworks:
+- pytorch
+description: Mixtral 8x7B MoE model inference with layer offloading (requires HuggingFace
+  access)
+verification:
+  last_verified: 2025-10-26
+  last_verification_note: "Verified Mixtral 8x7B (47B params) inference with HQQ quantization (4-bit attention, 2-bit FFN) and layer offloading (4 experts per layer). Peak VRAM: 11.9GB (52% of 23GB), GPU utilization: 80-85%, inference time: 58s for 100 tokens. High-quality output verified. Tested on NVIDIA A10 GPU (24GB VRAM)."
