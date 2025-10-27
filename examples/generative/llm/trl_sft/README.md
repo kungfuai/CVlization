@@ -175,7 +175,7 @@ dataset:
 -v "/path/to/your/data:/workspace/data" \
 ```
 
-See [CUSTOM_DATASETS.md](../../CUSTOM_DATASETS.md) for detailed instructions on data preparation.
+See [CUSTOM_DATASETS.md](../CUSTOM_DATASETS.md) for detailed instructions on data preparation.
 
 ### Output
 

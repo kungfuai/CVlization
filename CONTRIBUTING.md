@@ -95,15 +95,13 @@ All shell scripts (`.sh` files) must use git-based path resolution to avoid frag
 # Get the directory containing this script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Get the repository root using git
-REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
-
-# Define cache directory
-CACHE_DIR="$REPO_ROOT/data/container_cache"
+# Define cache directory (centralized)
+CACHE_DIR="${HOME}/.cache/cvlization"
+mkdir -p "$CACHE_DIR"
 
 # Use the paths
 docker run \
-    -v "$CACHE_DIR:/cache" \
+    -v "$CACHE_DIR:/root/.cache" \
     -v "$SCRIPT_DIR:/workspace" \
     your-image-name
 ```
@@ -135,20 +133,23 @@ docker build -t "$IMAGE_NAME" .
 
 ## Cache Management
 
-Examples should respect the repository's cache directory structure:
+Examples use centralized caching to avoid re-downloading models and datasets:
 
-- **Host path**: `$REPO_ROOT/data/container_cache`
-- **Container path**: `/cache`
+- **Host path**: `~/.cache/cvlization/`
+- **Container path**: `/root/.cache` (standard cache location)
 
 Mount the cache directory in your Docker run commands:
 
 ```bash
+CACHE_DIR="${HOME}/.cache/cvlization"
+mkdir -p "$CACHE_DIR"
+
 docker run \
-    -v "$CACHE_DIR:/cache" \
-    -e HF_HOME=/cache/huggingface \
-    -e TORCH_HOME=/cache/torch \
+    -v "$CACHE_DIR:/root/.cache" \
     your-image-name
 ```
+
+The centralized cache automatically works with HuggingFace, PyTorch, and other ML frameworks.
 
 ## User Permissions
 
@@ -185,19 +186,19 @@ set -e
 
 # Get paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
-CACHE_DIR="$REPO_ROOT/data/container_cache"
+CACHE_DIR="${HOME}/.cache/cvlization"
 IMAGE_NAME="$(basename "$SCRIPT_DIR")"
+
+# Ensure cache directory exists
+mkdir -p "$CACHE_DIR"
 
 # Run training
 docker run \
-    --gpus all \
+    --gpus=all \
     --user "$(id -u):$(id -g)" \
-    -v "$CACHE_DIR:/cache" \
+    -v "$CACHE_DIR:/root/.cache" \
     -v "$SCRIPT_DIR:/workspace" \
     -w /workspace \
-    -e HF_HOME=/cache/huggingface \
-    -e TORCH_HOME=/cache/torch \
     "$IMAGE_NAME" \
     python train.py "$@"
 ```
@@ -246,6 +247,27 @@ Mark your example's stability in `example.yaml`:
 - [ ] `README.md` with usage instructions
 - [ ] Tested with `cvl run` CLI
 
+## Verification
+
+CVlization includes Claude Code skills for automated verification:
+
+- **`verify-training-pipeline`** - Validates training examples end-to-end
+- **`verify-inference-example`** - Validates inference examples
+
+Add verification metadata to your `example.yaml`:
+
+```yaml
+verification:
+  build:
+    status: verified|partial|failed
+    date: "2024-01-15"
+    notes: "Built successfully on A10 GPU"
+  train:
+    status: verified
+    duration_minutes: 15
+    notes: "Trains without errors, loss decreases"
+```
+
 ## Questions?
 
-See the [roadmap document](maintain_oct17.md) for the overall repo strategy and vision.
+Open an issue on [GitHub](https://github.com/kungfuai/CVlization/issues) or check existing examples for patterns.
