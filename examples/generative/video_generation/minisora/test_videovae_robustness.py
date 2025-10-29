@@ -1,5 +1,10 @@
-from PIL import Image
 import torch
+import pytest
+
+if not torch.cuda.is_available():
+    pytest.skip("requires a CUDA-capable GPU", allow_module_level=True)
+
+from PIL import Image
 import numpy as np
 from diffusers.models import AutoencoderKL
 from cvlization.dataset.flying_mnist import FlyingMNISTDatasetBuilder

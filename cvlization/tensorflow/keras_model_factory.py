@@ -112,13 +112,42 @@ class KerasModelFactory:
                     optimizer=self._create_optimizer(),
                     run_eagerly=self.eager,
                 )
+                model_checkpoint.model._input_aware_metric_map = getattr(
+                    self, "_input_aware_metric_map", {}
+                ).copy()
+
+            else:
+                model_checkpoint.model._input_aware_metric_map = getattr(
+                    self, "_input_aware_metric_map", {}
+                ).copy()
 
             return model_checkpoint
 
     def get_losses_and_metrics(self):
-        loss_functions = [head.loss_function for head in self._heads]
-        loss_weights = [head.loss_weight for head in self._heads]
-        metric_functions = [head.metrics for head in self._heads]
+        loss_functions = []
+        loss_weights = []
+        metric_functions = []
+        self._input_aware_metric_map = {}
+
+        for idx, head in enumerate(self._heads):
+            loss_functions.append(head.loss_function)
+            loss_weights.append(head.loss_weight)
+            metrics_for_head = []
+            for metric in head.metrics:
+                if hasattr(metric, "update_state_with_inputs_and_outputs"):
+                    metric_name = metric.name
+                    if metric_name in self._input_aware_metric_map:
+                        # ensure stable unique metric names per target
+                        unique_name = f"{metric_name}_{head.layer.name}"
+                        if hasattr(metric, "_set_name"):
+                            metric._set_name(unique_name)
+                        else:
+                            metric._name = unique_name  # fallback
+                        metric_name = unique_name
+                    self._input_aware_metric_map.setdefault(metric_name, []).append(idx)
+                metrics_for_head.append(metric)
+            metric_functions.append(metrics_for_head)
+
         return loss_functions, loss_weights, metric_functions
 
     def _extract_image_backbone(self, model: keras.Model):
@@ -214,6 +243,9 @@ class KerasModelFactory:
             optimizer=self._create_optimizer(),
             run_eagerly=self.eager,
         )
+        model._input_aware_metric_map = getattr(
+            self, "_input_aware_metric_map", {}
+        ).copy()
         LOGGER.info("model constructed in model factory")
         model.summary()
         # model.summary(expand_nested=True)
@@ -250,6 +282,13 @@ class KerasModelFactory:
                 f"Empty model checkpoint path: '{self.model_checkpoint_path}'."
             )
             return None
+        if self.model_checkpoint_path.endswith(".keras") and path.isfile(
+            self.model_checkpoint_path
+        ):
+            model = self.load_functional_model_and_convert_to_custom_model(
+                self.model_checkpoint_path
+            )
+            return KerasModelCheckpoint(model=model, epochs_done=0)
         else:
             history_csv_path = path.join(self.model_checkpoint_path, "history.csv")
             if path.isfile(history_csv_path):

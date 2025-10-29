@@ -2,9 +2,10 @@ import tensorflow as tf
 
 
 class TopMistakes(tf.keras.metrics.Metric):
-    def __init__(self, name="top_mistakes", n=10, **kwargs):
+    def __init__(self, name="top_mistakes", n=10, input_index=0, **kwargs):
         super(TopMistakes, self).__init__(name=name, **kwargs)
         self.n = n
+        self.input_index = input_index
         self._false_positives = []
         self._false_negatives = []
 
@@ -19,7 +20,7 @@ class TopMistakes(tf.keras.metrics.Metric):
 
         # Taking the first input tensor for now.
         # TODO: generalize to multiple inputs.
-        train_example = train_example[0]
+        train_example = train_example[self.input_index]
 
         y_true = y_true.numpy()
         for i, pred in enumerate(y_pred.numpy()):
@@ -63,3 +64,8 @@ class TopMistakes(tf.keras.metrics.Metric):
         # self._false_negatives = []
         # self._false_positives = []
         pass
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"n": self.n, "input_index": self.input_index})
+        return config

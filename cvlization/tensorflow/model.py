@@ -1,7 +1,7 @@
 import logging
-from tensorflow import keras
 import tensorflow as tf
-from tensorflow.python.keras.engine import data_adapter
+from tensorflow import keras
+from keras.utils import unpack_x_y_sample_weight
 
 
 LOGGER = logging.getLogger(__name__)
@@ -80,9 +80,14 @@ class Model(keras.Model):
         custom_model = cls(
             n_gradients=n_gradients, inputs=model.inputs, outputs=model.outputs
         )
-        if hasattr(model, "loss"):
+        loss = getattr(model, "loss", None)
+        optimizer = getattr(model, "optimizer", None)
+        metrics = getattr(model, "metrics", None)
+        if loss is not None:
             custom_model.compile(
-                loss=model.loss, optimizer=model.optimizer, metrics=model.metrics
+                loss=loss,
+                optimizer=optimizer or "adam",
+                metrics=metrics,
             )
         return custom_model
 
@@ -119,12 +124,12 @@ class Model(keras.Model):
         return get_grad_accumulation_variables(self)["gradient_zeros"]
 
     def train_step(self, data, **kwargs):
-        if not self._use_gradient_accumulation:
-            return super().train_step(data, **kwargs)
-        self.n_accum_step.assign_add(1)
+        if self._use_gradient_accumulation:
+            self.n_accum_step.assign_add(1)
 
-        data = data_adapter.expand_1d(data)
-        x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
+        if isinstance(data, list):
+            data = tuple(data)
+        x, y, sample_weight = unpack_x_y_sample_weight(data)
         if x is None or y is None:
             # Skip this step, but return current metrics.
             # What if this is the first training step?
@@ -133,11 +138,15 @@ class Model(keras.Model):
         # Gradient Tape
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)
-            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
+            loss = self.compute_loss(
+                x,
+                y,
+                y_pred,
+                sample_weight=sample_weight,
+            )
+        gradients = tape.gradient(loss, self.trainable_variables)
 
         if self._use_gradient_accumulation:
-            # Calculate batch gradients
-            gradients = tape.gradient(loss, self.trainable_variables)
             # tf.print(f"Gradient accumulation is active")
             # Accumulate batch gradients
             n_gradients = get_grad_accumulation_variables(self)["n_gradients"]
@@ -153,24 +162,12 @@ class Model(keras.Model):
                 lambda: None,
             )
         else:
-
-            try:
-                self.optimizer.minimize(loss, self.trainable_variables, tape=tape)
-            except TypeError:
-                LOGGER.error(f"optimizer: {self.optimizer}")
-                LOGGER.error(str(help(self.optimizer.minimize)))
-                # For older versions of tensorflow, tape is not a valid argument. In this case, use
-                # this following method instead.
+            if gradients:
                 self.optimizer.apply_gradients(
-                    zip(
-                        tape.gradient(loss, self.trainable_variables),
-                        self.trainable_variables,
-                    )
+                    zip(gradients, self.trainable_variables)
                 )
 
-        # update metrics
-        self.compiled_metrics.update_state(y, y_pred)
-        return {m.name: m.result() for m in self.metrics}
+        return self._finalize_train_step(x, y, y_pred, sample_weight)
 
     def apply_accu_gradients(self):
         # apply accumulated gradients
@@ -184,3 +181,46 @@ class Model(keras.Model):
         self.n_accum_step.assign(0)
         for i in range(len(self.gradient_accumulation)):
             self.gradient_accumulation[i].assign(self.gradient_zeros[i])
+
+    def _finalize_train_step(self, x, y, y_pred, sample_weight):
+        self.compute_metrics(x, y, y_pred, sample_weight=sample_weight)
+        self._apply_input_aware_metrics(x, y, y_pred, sample_weight)
+        return self._collect_metric_results()
+
+    def _apply_input_aware_metrics(self, x, y, y_pred, sample_weight):
+        metric_map = getattr(self, "_input_aware_metric_map", None)
+        if not metric_map:
+            return
+
+        y_list = list(y) if isinstance(y, (list, tuple)) else [y]
+        y_pred_list = list(y_pred) if isinstance(y_pred, (list, tuple)) else [y_pred]
+
+        for metric in self.metrics:
+            if not hasattr(metric, "update_state_with_inputs_and_outputs"):
+                continue
+            indices = metric_map.get(metric.name)
+            if not indices:
+                continue
+            for idx in indices:
+                target_y = y_list[idx] if idx < len(y_list) else y_list[-1]
+                target_pred = (
+                    y_pred_list[idx] if idx < len(y_pred_list) else y_pred_list[-1]
+                )
+                metric.update_state_with_inputs_and_outputs(
+                    target_y,
+                    target_pred,
+                    train_example=x,
+                    sample_weight=sample_weight,
+                )
+
+    def _collect_metric_results(self):
+        results = {}
+        for metric in self.metrics:
+            if not hasattr(metric, "result"):
+                continue
+            value = metric.result()
+            if isinstance(value, dict):
+                results.update(value)
+            else:
+                results[metric.name] = value
+        return results

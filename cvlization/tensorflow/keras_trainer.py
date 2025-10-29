@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from typing import Optional, List, Any, Union
 import logging
+import math
 import os
 import mlflow
 from multiprocessing import cpu_count
@@ -64,7 +65,11 @@ class KerasTrainer(BaseTrainer):
 
     def _training_loop(self):
         if isinstance(self.train_dataset, MLDataset):
-            train_data = sequence.from_ml_dataset(self.train_dataset)
+            train_data = sequence.from_ml_dataset(self.train_dataset, repeat=True)
+            if self.train_steps_per_epoch is None:
+                self.train_steps_per_epoch = math.ceil(
+                    len(self.train_dataset) / self.train_dataset.batch_size
+                )
         elif isinstance(self.train_dataset, tf.data.Dataset):
             train_data = self.train_dataset
         else:
@@ -74,6 +79,10 @@ class KerasTrainer(BaseTrainer):
             )
         if isinstance(self.val_dataset, MLDataset):
             val_data = sequence.from_ml_dataset(self.val_dataset)
+            if self.val_steps_per_epoch is None:
+                self.val_steps_per_epoch = math.ceil(
+                    len(self.val_dataset) / self.val_dataset.batch_size
+                )
         elif isinstance(self.val_dataset, tf.data.Dataset):
             val_data = self.val_dataset
         else:

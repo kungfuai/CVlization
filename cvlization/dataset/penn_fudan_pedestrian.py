@@ -325,7 +325,7 @@ class PennFudanPedestrianDataset:
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.penn_fudan_pedestrian
+    python -m cvlization.dataset.penn_fudan_pedestrian
     """
     dsb = PennFudanPedestrianDatasetBuilder(
         flavor=None, preload=True, normalize_with_min_max=False
