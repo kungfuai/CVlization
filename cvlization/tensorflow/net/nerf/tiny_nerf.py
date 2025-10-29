@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.framework.ops import EagerTensor
-from tensorflow.python.keras.engine import data_adapter
+from keras.utils import unpack_x_y_sample_weight
 
 
 LOGGER = logging.getLogger(__name__)
@@ -48,8 +48,9 @@ class TinyNerfModel(tf.keras.Model):
         assert tf.executing_eagerly(), "Eager execution expected."
         # Unpack the data. Its structure depends on your model and
         # on what you pass to `fit()`.
-        data = data_adapter.expand_1d(data)
-        inputs, targets, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
+        if isinstance(data, list):
+            data = tuple(data)
+        inputs, targets, sample_weight = unpack_x_y_sample_weight(data)
         # print("inputs", inputs)
 
         with tf.GradientTape() as tape:
@@ -74,8 +75,9 @@ class TinyNerfModel(tf.keras.Model):
         assert tf.executing_eagerly(), "Eager execution expected."
         # Unpack the data. Its structure depends on your model and
         # on what you pass to `fit()`.
-        data = data_adapter.expand_1d(data)
-        inputs, targets, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
+        if isinstance(data, list):
+            data = tuple(data)
+        inputs, targets, sample_weight = unpack_x_y_sample_weight(data)
         # print("inputs", inputs)
         images = targets[0]
         H = images.shape[1]
