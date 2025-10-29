@@ -1,0 +1,36 @@
+name: cifar10-speedrun
+capability: perception/image_classification
+modalities:
+- vision
+datasets:
+- cifar10
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 15
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train-hlb:
+    script: train.sh
+    description: Run HyperLightBench CIFAR10 speed-run
+    env:
+      PIPELINE: hlb
+  train-davidnet:
+    script: train.sh
+    description: Run DavidNet CIFAR10 speed-run
+    env:
+      PIPELINE: davidnet
+tags:
+- cifar10
+- speed-run
+- davidnet
+- hlb
+- pytorch
+tasks:
+- image_classification
+frameworks:
+- pytorch
+description: CIFAR10 speed-run benchmarks that dispatch to HyperLightBench or DavidNet recipes.

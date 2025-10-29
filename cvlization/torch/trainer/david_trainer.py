@@ -1,7 +1,10 @@
 # TODO: move this to training_pipeline/image_classification
+from typing import Optional, Union
+
 import torch
 from torch import nn
 from ...base_trainer import BaseTrainer
+from ..net.image_classification.davidnet import torch_backend as david_backend
 from ..net.image_classification.davidnet.core import (
     PiecewiseLinear,
     Const,
@@ -39,6 +42,7 @@ class DavidTrainer(BaseTrainer):
         epochs: int = 10,
         train_batch_size: int = 512,
         use_cached_cifar10: bool = True,
+        device: Optional[Union[str, torch.device]] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -46,13 +50,36 @@ class DavidTrainer(BaseTrainer):
         self.epochs = epochs
         self.batch_size = train_batch_size
         self.use_cached_cifar10 = use_cached_cifar10
+        self.device = self._resolve_device(device)
+
+    def _resolve_device(
+        self, device: Optional[Union[str, torch.device]]
+    ) -> torch.device:
+        if device is not None:
+            return torch.device(device)
+        if torch.cuda.is_available():
+            return torch.device("cuda:0")
+        mps_backend = getattr(torch.backends, "mps", None)
+        if mps_backend is not None and mps_backend.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
 
     def _training_loop(self):
         from functools import partial
         import numpy as np
 
         batch_size = self.batch_size
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device = self.device
+
+        if device.type == "cuda":
+            sync_fn = torch.cuda.synchronize
+        elif device.type == "mps" and hasattr(torch, "mps"):
+            sync_fn = torch.mps.synchronize
+        else:
+            sync_fn = lambda: None
+
+        supports_fp16 = device.type == "cuda"
+        david_backend.set_device(device)
 
         class WrappedDataLoader:
             def __init__(self, dataloader):
@@ -60,7 +87,11 @@ class DavidTrainer(BaseTrainer):
 
             def __iter__(self):
                 for x, y in self.dataloader:
-                    yield {"input": x.to(device).half(), "target": y.to(device).long()}
+                    inputs = x.to(device)
+                    if supports_fp16:
+                        inputs = inputs.half()
+                    targets = y.to(device).long()
+                    yield {"input": inputs, "target": targets}
 
             def __len__(self):
                 return len(self.dataloader)
@@ -98,13 +129,18 @@ class DavidTrainer(BaseTrainer):
             train_batches = WrappedDataLoader(self.train_dataset)
             val_batches = WrappedDataLoader(self.val_dataset)
 
-        model = self.model
+        model = self.model.to(device)
+        if supports_fp16:
+            model = model.half()
+        else:
+            model = model.float()
+        self.model = model
 
         loss = x_ent_loss
         epochs = self.epochs
         lr_schedule = PiecewiseLinear([0, 5, epochs], [0, 0.4, 0])
         n_train_batches = int(50000 / batch_size)
-        timer = Timer(synch=torch.cuda.synchronize)
+        timer = Timer(synch=sync_fn)
         opts = [
             SGD(
                 # trainable_params(model).values(),
