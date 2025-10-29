@@ -210,7 +210,7 @@ class MLDataset(MapLike, SelfCheckable, CheckedWithModelSpec):
             return None, None, None
         inputs_batch = [np.stack(arrays) for arrays in inputs_batch]
         targets_batch = [np.stack(arrays) for arrays in targets_batch]
-        sample_weight_batch = np.array(sample_weight_batch).reshape((-1, 1))
+        sample_weight_batch = np.array(sample_weight_batch, dtype=np.float32)
         return inputs_batch, targets_batch, sample_weight_batch
 
     def fit(self):

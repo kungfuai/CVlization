@@ -219,7 +219,7 @@ class KittiTinyDataset:
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.kitti_tiny
+    python -m cvlization.dataset.kitti_tiny
     """
     kitti = KittiTinyDataset()
     print(len(kitti), "examples in the dataset")
