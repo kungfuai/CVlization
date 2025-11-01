@@ -36,6 +36,8 @@ class KorniaTransform:
         return self.transform(*args, **kwargs)
 
     def transform(self, image, target=None):
+        if isinstance(image, np.ndarray):
+            raise TypeError("Expected input of torch.Tensor, got numpy.ndarray.")
         if target is None:
             return self.aug(image)
         return self.aug(image), target

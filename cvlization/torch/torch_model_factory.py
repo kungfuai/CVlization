@@ -97,6 +97,7 @@ class TorchModelFactory:
         # https://torchmetrics.readthedocs.io/en/stable/pages/overview.html
         metrics = []
         for model_target in self.model_targets:
+            metrics_for_this_target = []
             # TODO: create metrics based on model_target.metric!
             if model_target.column_type == DataColumnType.BOOLEAN:
                 metrics_for_this_target = [
@@ -127,7 +128,10 @@ class TorchModelFactory:
                     #     ),
                     # ),
                 ]
-            else:
+            elif model_target.column_type not in [
+                DataColumnType.BOOLEAN,
+                DataColumnType.CATEGORICAL,
+            ]:
                 LOGGER.warning(
                     f"Metrics not implemented yet for {model_target.key} of type {model_target.column_type}."
                 )
