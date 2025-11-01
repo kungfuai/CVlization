@@ -1,162 +1,114 @@
 ---
 name: remote-run-ssh
-description: Coordinate remote CVlization workflows on the shared `ssh l1` host—syncing workspaces, bootstrapping environments, running training or evaluation scripts, and collecting logs/artifacts without touching the user’s main checkout.
+description: Run CVlization examples on the `ssh l1` GPU host by copying only the needed example directory plus the shared `cvlization/` package into `/tmp`, then launching the example’s Docker scripts.
 ---
 
 # Remote Run over SSH
 
-Operate CVlization tasks on the remote GPU machine reachable via `ssh l1`. This playbook covers syncing source code to `/tmp`, standing up an isolated Python environment, executing arbitrary scripts (training, evaluation, benchmarks), and retrieving artifacts—all while leaving the user’s long-lived checkout untouched.
+Operate CVlization examples on the remote GPU reachable as `ssh l1`. This playbook keeps the remote copy minimal—just the target example folder (e.g., `examples/perception/multimodal_multitask/torch`) and the `cvlization/` library—then relies on the example’s own `build.sh` / `train.sh` Docker helpers. The user’s long-lived checkout on the remote stays untouched.
 
 ## When to Use
-- Running heavy trainings or evaluations (e.g., CIFAR10 speed runs, torch pipelines) that need CUDA hardware.
-- Measuring regressions (perf, accuracy) on remote GPUs after local code changes.
-- Generating reproducible logs/artifacts for discussions or CI baselines.
+- Heavy trainings or evaluations that require CUDA (CIFAR10 speed runs, multimodal pipelines, etc.).
+- Performance or regression measurements on the remote GPU after local code changes.
+- Producing reproducible logs / artifacts for discussions or CI baselines without pushing a branch first.
 
 ## Prerequisites
 - Local repo state ready to sync (uncommitted changes acceptable).
 - SSH config already maps the GPU machine to `l1`.
-- Remote host provides CUDA-capable GPU (currently NVIDIA A10) and outbound internet.
-- Sufficient remote `/tmp` space (~20 GB) for repo clone, virtualenv, and any runtime caches.
+- Remote host provides NVIDIA GPU (currently A10) and Docker with GPU runtime enabled.
+- At least ~15 GB free under `/tmp` for the slim workspace, Docker context, and caches.
+- Hugging Face tokens or other creds available locally if the example pulls hub assets.
 
 ## Quick Reference
-1. `rsync` workspace to `/tmp/cvlization_remote` on `l1` (exclude `.git`, `.venv`, heavy caches).
-2. Create `/tmp/cvlization_remote/.venv`, upgrade `pip`, install required deps (e.g., torch, tensorflow).
-3. Drop helper scripts in `scripts/` (see templates) with `sys.path` bootstrap and any compatibility shims.
-4. Execute desired commands with `CUDA_VISIBLE_DEVICES=0` (or other env), redirect stdout to `run_*.log`.
-5. Pull logs/artifacts back (or summarize remotely) and update `var/skills/remote-run-ssh/runs/<timestamp>/log.md`.
+1. Choose the example to run.
+2. `rsync` only the example folder, `cvlization/`, and any required helper dirs to `/tmp/cvlization_remote` on `l1`.
+3. On `l1`, run `./build.sh` inside the example folder to build the Docker image.
+4. Run `./train.sh` (or the example’s equivalent) to launch the job with GPU access.
+5. Collect logs / metrics and record the run in `var/skills/remote-run-ssh/runs/<timestamp>/log.md`.
 
 ## Detailed Procedure
 
-### 1. Sync workspace to remote `/tmp`
+### 1. Identify the example and supporting files
+- Note the example path relative to repo root (e.g., `examples/perception/multimodal_multitask/torch`).
+- List any extra assets the run needs (custom configs under `examples`, top-level scripts, environment files, etc.).
+- Confirm `cvlization/` includes all library modules the example imports.
+
+### 2. Sync minimal workspace to `/tmp`
 ```bash
+REMOTE_ROOT=/tmp/cvlization_remote
 rsync -az --delete \
-  --exclude='.git' --exclude='var' --exclude='.venv' --exclude='__pycache__' \
-  ./ l1:/tmp/cvlization_remote/
+  --include='cvlization/***' \
+  --include='examples/***' \
+  --include='scripts/***' \
+  --include='pyproject.toml' \
+  --include='setup.cfg' \
+  --include='README.md' \
+  --exclude='*' \
+  ./ l1:${REMOTE_ROOT}/
 ```
-Keep the canonical remote path `/tmp/cvlization_remote` to ease script reuse. Avoid touching any existing `$HOME/CVlization` checkout owned by the user.
+Tips:
+- Adjust the include list if the example needs additional files (e.g., `docker-compose.yml`, `requirements.txt`). The blanket `--exclude='*'` prevents unrelated directories from syncing.
+- Keep the remote path structure (`${REMOTE_ROOT}/examples/...`) aligned with the local repo so relative paths like `../../../..` used inside scripts still resolve to the repo root.
+- Avoid syncing `.git`, local datasets, `.venv`, or heavy cache directories.
 
-### 2. Bootstrap Python environment
+### 3. Build the example image
 ```bash
-ssh l1 'python3 -m venv /tmp/cvlization_remote/.venv'
-ssh l1 'source /tmp/cvlization_remote/.venv/bin/activate && pip install --upgrade pip'
-ssh l1 'source /tmp/cvlization_remote/.venv/bin/activate && \
-  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121'
+ssh l1 'cd /tmp/cvlization_remote/examples/perception/multimodal_multitask/torch && ./build.sh'
 ```
-Install extra dependencies as tasks require (e.g., tensorflow, datasets). When numpy ≥ 2.0 is present, patch legacy aliases (see template).
+- The Docker build context is limited to the example folder, keeping builds quick.
+- Edit `build.sh` locally if you need custom base images or dependency tweaks before re-syncing.
 
-### 3. Verify GPU availability
+### 4. Confirm GPU availability
 ```bash
 ssh l1 'nvidia-smi'
 ```
-Ensure no conflicting jobs are consuming the GPU. Abide by shared-environment etiquette.
+Ensure no conflicting jobs are consuming the GPU before starting a long run.
 
-### 4. Materialize runner scripts (example templates)
-Create `scripts/run_david_trainer.py` for CIFAR10 training:
-```python
-import sys
-import time
-import numpy as np
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-if not hasattr(np, "float"):
-    np.float = float  # backwards compat for davidnet backend
-
-import torch
-from cvlization.torch.net.image_classification.davidnet.dawn_utils import net, Network
-from cvlization.torch.trainer.david_trainer import DavidTrainer
-
-
-def run(epochs: int = 12, batch_size: int = 512):
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = Network(net()).to(device).half()
-    trainer = DavidTrainer(
-        model=model,
-        epochs=epochs,
-        train_batch_size=batch_size,
-        use_cached_cifar10=True,
-        train_dataset=None,
-        val_dataset=None,
-    )
-    start = time.time()
-    trainer.train()
-    elapsed = time.time() - start
-    print(f"RESULT_DAVID elapsed_seconds={elapsed:.2f} epochs={epochs} batch_size={batch_size}")
-
-
-if __name__ == "__main__":
-    run()
-```
-
-Create `scripts/run_hlb.py`:
-```python
-import sys
-import time
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from cvlization.torch.training_pipeline.image_classification import hlb
-
-
-def run(train_epochs: float = 11.5):
-    hlb.hyp["misc"]["train_epochs"] = train_epochs
-    start = time.time()
-    ema_val_acc = hlb.main()
-    elapsed = time.time() - start
-    print(f"RESULT_HLB elapsed_seconds={elapsed:.2f} train_epochs={train_epochs} ema_val_acc={ema_val_acc}")
-
-
-if __name__ == "__main__":
-    run()
-```
-Create additional scripts for other tasks (evaluation, benchmarks, dataset prep) by following the same `sys.path` and logging patterns.
-
-### 5. Execute runs with logging
+### 5. Run the training script (Docker)
 ```bash
-ssh l1 'cd /tmp/cvlization_remote && source .venv/bin/activate && \
-  CUDA_VISIBLE_DEVICES=0 python scripts/run_david_trainer.py > run_david.log'
-
-ssh l1 'cd /tmp/cvlization_remote && source .venv/bin/activate && \
-  CUDA_VISIBLE_DEVICES=0 python scripts/run_hlb.py > run_hlb.log'
+ssh l1 'cd /tmp/cvlization_remote/examples/perception/multimodal_multitask/torch && ./train.sh > run.log 2>&1'
 ```
-Tail logs to monitor progress:
+- Tail logs while the job runs:
 ```bash
-ssh l1 'cd /tmp/cvlization_remote && tail -f run_david.log'
+ssh l1 'tail -f /tmp/cvlization_remote/examples/perception/multimodal_multitask/torch/run.log'
 ```
-Adapt commands to your script names and environment variables (e.g., huggingface caches, wandb keys). Expect datasets to populate under `/tmp/cvlization_remote/data/` unless overridden.
+- `train.sh` already mounts the example directory at `/workspace`, mounts the synced repo root read-only at `/cvlization_repo`, and sets `PYTHONPATH=/cvlization_repo`.
+- Customize environment variables or extra mounts by editing `train.sh` locally (e.g., injecting dataset paths, WANDB keys) then re-syncing.
+- If an example lacks Docker scripts, fall back to running its entrypoint directly (`python train.py`) inside the container or a temporary venv—but document the deviation in the run log.
 
 ### 6. Capture metrics
-Logs should emit per-epoch tables and a final `RESULT_*` summary. Record:
-- Wall-clock elapsed seconds / throughput
-- Accuracy, loss, or other task-specific metrics
-- Notable warnings (e.g., numpy alias, `torch.load` FutureWarning)
+Log files should include per-epoch summaries and final metrics. Record:
+- Wall-clock time / throughput.
+- Accuracy, loss, or other task metrics.
+- Warnings or notable log lines (e.g., retry downloads, CUDA warnings).
 
 ### 7. Retrieve artifacts (optional)
 ```bash
-rsync -az l1:/tmp/cvlization_remote/run_david.log ./remote_runs/$(date +%Y%m%dT%H%M%S)_david.log
-rsync -az l1:/tmp/cvlization_remote/run_hlb.log ./remote_runs/$(date +%Y%m%dT%H%M%S)_hlb.log
+rsync -az l1:/tmp/cvlization_remote/examples/perception/multimodal_multitask/torch/run.log \
+  ./remote_runs/$(date +%Y%m%dT%H%M%S)_multimodal.log
 ```
-Export checkpoints, TensorBoard logs, or evaluation outputs as needed.
+Copy checkpoints, TensorBoard logs, or generated samples in the same manner if needed.
 
 ### 8. Document the run
-Create `var/skills/remote-run-ssh/runs/<timestamp>/log.md` summarizing inputs, commands, log locations, and outcomes. Mirror the format used by other skills (headers, bullet summaries).
+- Create `var/skills/remote-run-ssh/runs/<timestamp>/log.md` summarizing:
+  - Example path, git commit or diff basis.
+  - Commands executed (`build.sh`, `train.sh` args).
+  - Key metrics / observations.
+  - Location of logs or artifacts (local paths or remote references).
 
-### 9. Optional cleanup
-- Remove `/tmp/cvlization_remote` when done if disk pressure exists (`rm -rf` as appropriate).
-- Clear cached datasets (`rm -rf /tmp/cifar10`, etc.) only if future runs should start fresh.
+### 9. Cleanup (optional)
+- Delete `/tmp/cvlization_remote` when finished if the disk budget is tight (`ssh l1 'rm -rf /tmp/cvlization_remote'`).
+- Clear cached datasets (`rm -rf /root/.cache/...` inside Docker) only if future runs should start fresh.
 
 ## Troubleshooting
-- **`ModuleNotFoundError: cvlization`** – ensure scripts prepend repo root to `sys.path`.
-- **`AttributeError: np.float`** – confirm the numpy shim is present when using legacy numpy-dependent code.
-- **CUDA OOM** – reduce batch size, precision, or run one pipeline at a time.
-- **No GPU detected** – verify `CUDA_VISIBLE_DEVICES` assignment and `nvidia-smi` availability.
-- **Permission errors** – ensure `/tmp/cvlization_remote` and cache dirs are writable.
+- **Missing module inside container**: Ensure `train.sh` mounts the repo root and sets `PYTHONPATH`. Re-run `rsync` if files were added after the initial sync.
+- **Docker build fails**: Inspect the output of `./build.sh`. Some examples assume base images with CUDA toolkits—update the Dockerfile accordingly.
+- **CUDA OOM**: Reduce batch sizes or precision, or run one job at a time on `l1`.
+- **No GPU detected**: Confirm `--gpus=all` is present in `train.sh` and check `nvidia-smi` on the host.
+- **Long sync times**: Tighten the rsync include rules to the specific example and library folders required.
 
 ## Outputs
-Populate the run-log directory and note remote artifact paths. If logs remain on the server, include retrieval instructions in the summary so future users can fetch them.
+Every run should leave:
+- Remote workspace at `/tmp/cvlization_remote` containing the synced example + library.
+- Local or remote logs with the captured metrics.
+- A run log under `var/skills/remote-run-ssh/runs/<timestamp>/log.md` documenting the session.
