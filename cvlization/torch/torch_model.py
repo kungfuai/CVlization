@@ -187,7 +187,7 @@ class TorchLitModel(LightningModule):
             if model_target.column_type == DataColumnType.BOOLEAN:
                 self._heads.append(self._create_binary_classifier())
             elif model_target.column_type == DataColumnType.NUMERICAL:
-                self._heads(self._create_regressor())
+                self._heads.append(self._create_regressor())
             elif model_target.column_type == DataColumnType.CATEGORICAL:
                 classifier = self._create_multiclass_classifier(
                     n_classes=model_target.n_categories
