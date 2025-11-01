@@ -4,7 +4,7 @@ from torch import nn
 import torch.nn.functional as F
 from typing import Tuple
 from einops import rearrange, pack
-from cvlization.torch.training_pipeline.image_gen.vae_resnet.vector_quantizers import (
+from cvlization.torch.net.vae.vector_quantizers import (
     BaseVectorQuantizer,
 )
 
