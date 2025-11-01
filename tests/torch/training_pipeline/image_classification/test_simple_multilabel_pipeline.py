@@ -1,4 +1,4 @@
-from cvlization.data.mock_dataset import RandomImageClassificationDatasetBuilder
+from tests.fixtures.mock_dataset import RandomImageClassificationDatasetBuilder
 from cvlization.torch.training_pipeline.image_classification.simple_multilabel_pipeline import SimpleMultiLabelImageClassificationPipeline
 
 # Use pytest -s tests/torch/training_pipeline/image_classification/test_simple_multilabel_pipeline.py
