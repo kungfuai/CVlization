@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import torch
 from torch import nn
@@ -5,9 +6,41 @@ from collections import namedtuple
 from itertools import count
 from .core import *
 
-torch.backends.cudnn.benchmark = True
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+def _resolve_default_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda:0")
+    mps_backend = getattr(torch.backends, "mps", None)
+    if mps_backend is not None and mps_backend.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+device = _resolve_default_device()
 cpu = torch.device("cpu")
+
+if device.type == "cuda":
+    torch.backends.cudnn.benchmark = True
+
+
+def set_device(new_device):
+    """Override the backend device for data movement."""
+    global device
+    device = torch.device(new_device)
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
+
+
+def device_supports_fp16():
+    return device.type == "cuda"
+
+
+def synchronize_device():
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+    elif device.type == "mps":
+        if hasattr(torch, "mps"):
+            torch.mps.synchronize()
 
 
 @cat.register(torch.Tensor)
@@ -116,10 +149,12 @@ class DataLoader:
     def __iter__(self):
         if self.set_random_choices:
             self.dataset.set_random_choices()
-        return (
-            {"input": x.to(device).half(), "target": y.to(device).long()}
-            for (x, y) in self.dataloader
-        )
+        for (x, y) in self.dataloader:
+            inputs = x.to(device, non_blocking=device.type == "cuda")
+            if device_supports_fp16():
+                inputs = inputs.half()
+            targets = y.to(device, non_blocking=device.type == "cuda").long()
+            yield {"input": inputs, "target": targets}
 
     def __len__(self):
         return len(self.dataloader)
@@ -617,7 +652,7 @@ def warmup_cudnn(model, loss, batch):
     # run forward and backward pass of the model
     # to allow benchmarking of cudnn kernels
     reduce([batch], {MODEL: model, LOSS: loss}, [forward(True), backward()])
-    torch.cuda.synchronize()
+    synchronize_device()
 
 
 #####################

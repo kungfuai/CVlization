@@ -406,7 +406,7 @@ class CocoPanopticTinyDataset:
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.coco_panoptic_tiny
+    python -m cvlization.dataset.coco_panoptic_tiny
     """
     from mmdet.datasets.coco_panoptic import CocoPanopticDataset
 

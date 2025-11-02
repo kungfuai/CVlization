@@ -6,11 +6,16 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 import logging
 import os
-from pytorch_lightning.core.datamodule import LightningDataModule
-from pytorch_lightning import Trainer, LightningModule
-from pytorch_lightning.callbacks import (
-    EarlyStopping,
+try:
+    from lightning.pytorch.core.datamodule import LightningDataModule  # type: ignore
+except ImportError:  # pragma: no cover
+    from pytorch_lightning.core.datamodule import LightningDataModule  # type: ignore
+
+from .lightning_utils import (
+    Trainer,
+    LightningModule,
     LearningRateMonitor,
+    WandbLogger,
 )
 
 from ..data.dataset_builder import MapStyleDataset, Iterable, Dataset
@@ -150,8 +155,6 @@ class TorchTrainer(BaseTrainer):
 
     def _set_up_experiment_tracker(self):
         if self.experiment_tracker == "wandb":
-            from pytorch_lightning.loggers import WandbLogger
-
             # TODO: for wandb, customize the summary method.
             # define a metric we are interested in the maximum of
             # e.g. wandb.define_metric("acc", summary="max")

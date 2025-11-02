@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import logging
 from typing import Union
 from torch import nn
-from pytorch_lightning import LightningModule
+from ...lightning_utils import LightningModule
 from ....specs import ModelSpec
 from ...torch_model_factory import TorchModelFactory
 from ...torch_model import TorchLitModel
@@ -151,11 +151,13 @@ class ModelUtils:
             permute_image=self.model_spec.permute_image,
             customize_conv1=self.model_spec.customize_conv1,
             dense_layer_sizes=self.model_spec.dense_layer_sizes,
+            finetune_backbone=(not self.model_spec.freeze_image_encoder),
         )
         ckpt = TorchModelFactory(
             model_inputs=model_inputs,
             model_targets=model_targets,
             image_encoder=image_encoder,
+            text_encoder=getattr(self.model_spec, 'text_encoder', None),
             optimizer_name=self.optimizer_name,
             optimizer_kwargs=self.optimizer_kwargs,
             n_gradients=self.n_gradients,

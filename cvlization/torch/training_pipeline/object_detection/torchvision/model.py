@@ -4,7 +4,7 @@ import torch
 import torchvision
 from torchvision.models import detection
 from torchvision.models.detection.rpn import AnchorGenerator
-from pytorch_lightning import LightningModule
+from ...lightning_utils import LightningModule
 try:
     from torchmetrics.detection.map import MeanAveragePrecision
 except ImportError:

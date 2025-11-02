@@ -134,15 +134,20 @@ class BaseTrainer:
         assert isinstance(self.train_dataset, MLDataset)
         train_seq = sequence.from_ml_dataset(self.train_dataset)
         for j, (inputs, targets, sample_weight) in enumerate(train_seq):
-            LOGGER.info(f"batch {j}: {len(inputs[0])} examples")
+            first_input = inputs[0].numpy() if hasattr(inputs[0], "numpy") else inputs[0]
+            LOGGER.info(f"batch {j}: {len(first_input)} examples")
             for i, input_array in enumerate(inputs):
+                array = input_array.numpy() if hasattr(input_array, "numpy") else input_array
                 LOGGER.info(
-                    f"{self.train_dataset.model_inputs[i].key}: mean={input_array.mean()}, shape={input_array.shape}"
+                    f"{self.train_dataset.model_inputs[i].key}: mean={array.mean()}, shape={array.shape}"
                 )
             for i, target_array in enumerate(targets):
+                array = target_array.numpy() if hasattr(target_array, "numpy") else target_array
                 LOGGER.info(
-                    f"{self.train_dataset.model_targets[i].key}: mean={target_array.mean()}, shape={input_array.shape}"
+                    f"{self.train_dataset.model_targets[i].key}: mean={array.mean()}, shape={array.shape}"
                 )
-            LOGGER.info(f"sample weights: avg = {sample_weight.mean()}")
+            if sample_weight is not None:
+                sw = sample_weight.numpy() if hasattr(sample_weight, "numpy") else sample_weight
+                LOGGER.info(f"sample weights: avg = {sw.mean()}")
             if j >= 1:
                 break

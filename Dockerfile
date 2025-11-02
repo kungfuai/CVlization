@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.2
-FROM python:3.8-slim
+FROM python:3.11-slim
 # Use the following base image if you need gpu.
 # FROM nvidia/cuda:10.2-cudnn7-runtime-ubuntu18.04
 
@@ -7,13 +7,15 @@ WORKDIR /workspace
 
 # Allows python to stream logs rather than buffer them for output.
 ENV PYTHONUNBUFFERED=1
+ENV PIP_INDEX_URL=https://download.pytorch.org/whl/cpu
+ENV PIP_EXTRA_INDEX_URL=https://pypi.org/simple
 
 # The official Debian/Ubuntu Docker Image automatically removes the cache by default!
 # Removing the docker-clean file manages that issue.
 RUN rm -rf /etc/apt/apt.conf.d/docker-clean
 
 RUN --mount=type=cache,mode=0777,target=/var/cache/apt apt-get update \
-    && apt-get install -y libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 # for imgaug \ 
+    && apt-get install -y libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pip packages
@@ -25,6 +27,3 @@ RUN --mount=type=cache,mode=0777,target=/root/.cache pip install --upgrade pip \
 # Switch to non-root user
 # RUN useradd -m appuser && chown -R appuser /workspace
 # USER appuser
-
-# Copy project files
-COPY . .

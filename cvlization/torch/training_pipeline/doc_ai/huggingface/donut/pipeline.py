@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import logging
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
+from .....lightning_utils import pl
 from transformers import VisionEncoderDecoderConfig, VisionEncoderDecoderModel, DonutProcessor
 from .model import DonutPLModule, ProcessedDataset, DonutPredictionTask
 

@@ -7,7 +7,7 @@ from diffusers import ModelMixin, ConfigMixin
 from torch import nn
 import os
 import json
-import pytorch_lightning as pl
+from ...lightning_utils import pl
 from diffusers.configuration_utils import ConfigMixin
 from diffusers.models.modeling_utils import ModelMixin
 from typing import Optional, Union

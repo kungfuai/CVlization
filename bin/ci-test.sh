@@ -20,4 +20,20 @@
 #                   (P)passed with output
 #                   (a)all except (p) and (P)
 
-docker compose run --rm ci python -m pytest -p no:warnings tests/  # tests/torch/test_torch_trainer.py
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+IMAGE_NAME="${CVL_DOCKER_IMAGE:-cvlization-test}"
+
+# Build the CI image only if it doesn't already exist (e.g., prebuilt in CI)
+if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
+    docker build -t "${IMAGE_NAME}" -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
+fi
+
+# Execute pytest suite inside the container
+docker run --rm \
+    -v "${REPO_ROOT}:/workspace" \
+    -w /workspace \
+    "${IMAGE_NAME}" \
+    python -m pytest -p no:warnings tests/ "$@"

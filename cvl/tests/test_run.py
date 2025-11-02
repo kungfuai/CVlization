@@ -2,6 +2,7 @@
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch, Mock
 from cvl.commands.run import (
     get_preset_info,
@@ -110,15 +111,19 @@ class TestGetExamplePath(unittest.TestCase):
             },
         ]
 
-    def test_get_path_with_full_prefix(self):
+    @patch("cvl.core.discovery.find_repo_root")
+    def test_get_path_with_full_prefix(self, mock_find_repo_root):
         """Test getting path with 'examples/' prefix."""
+        mock_find_repo_root.return_value = Path("/repo")
         result = get_example_path(self.examples, "examples/generative/minisora")
-        self.assertEqual(result, "examples/generative/minisora")
+        self.assertEqual(result, "/repo/examples/generative/minisora")
 
-    def test_get_path_without_prefix(self):
+    @patch("cvl.core.discovery.find_repo_root")
+    def test_get_path_without_prefix(self, mock_find_repo_root):
         """Test getting path without 'examples/' prefix."""
+        mock_find_repo_root.return_value = Path("/repo")
         result = get_example_path(self.examples, "generative/minisora")
-        self.assertEqual(result, "examples/generative/minisora")
+        self.assertEqual(result, "/repo/examples/generative/minisora")
 
     def test_get_path_not_found(self):
         """Test getting path for non-existent example."""
@@ -159,7 +164,7 @@ class TestRunScript(unittest.TestCase):
             # Mock successful execution
             mock_run.return_value = Mock(returncode=0)
 
-            exit_code, error_msg = run_script(script_path, [])
+            exit_code, error_msg = run_script(script_path, [], no_live=True)
             self.assertEqual(exit_code, 0)
             self.assertEqual(error_msg, "")
             mock_run.assert_called_once()
@@ -176,7 +181,7 @@ class TestRunScript(unittest.TestCase):
             # Mock successful execution
             mock_run.return_value = Mock(returncode=0)
 
-            exit_code, error_msg = run_script(script_path, ["--arg1", "value1"])
+            exit_code, error_msg = run_script(script_path, ["--arg1", "value1"], no_live=True)
             self.assertEqual(exit_code, 0)
             self.assertEqual(error_msg, "")
 
@@ -206,7 +211,8 @@ class TestRunExample(unittest.TestCase):
             },
         ]
 
-    def test_example_not_found(self):
+    @patch("cvl.commands.run.check_docker_running", return_value=(True, ""))
+    def test_example_not_found(self, _mock_docker):
         """Test running non-existent example."""
         exit_code, error_msg = run_example(
             self.examples, "nonexistent/example", "train"
@@ -214,7 +220,8 @@ class TestRunExample(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("not found", error_msg)
 
-    def test_preset_not_found(self):
+    @patch("cvl.commands.run.check_docker_running", return_value=(True, ""))
+    def test_preset_not_found(self, _mock_docker):
         """Test running with non-existent preset."""
         exit_code, error_msg = run_example(
             self.examples, "generative/test_example", "nonexistent"
@@ -223,8 +230,9 @@ class TestRunExample(unittest.TestCase):
         self.assertIn("Preset 'nonexistent' not found", error_msg)
         self.assertIn("Available: train", error_msg)
 
+    @patch("cvl.commands.run.check_docker_running", return_value=(True, ""))
     @patch("cvl.commands.run.find_script")
-    def test_script_not_found(self, mock_find_script):
+    def test_script_not_found(self, mock_find_script, _mock_docker):
         """Test when script file doesn't exist."""
         mock_find_script.return_value = None
 
@@ -234,9 +242,11 @@ class TestRunExample(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("Script not found", error_msg)
 
+    @patch("cvl.commands.run.check_docker_image_exists", return_value=True)
+    @patch("cvl.commands.run.check_docker_running", return_value=(True, ""))
     @patch("cvl.commands.run.run_script")
     @patch("cvl.commands.run.find_script")
-    def test_successful_run(self, mock_find_script, mock_run_script):
+    def test_successful_run(self, mock_find_script, mock_run_script, _mock_docker, _mock_image):
         """Test successful example run."""
         mock_find_script.return_value = "/path/to/train.sh"
         mock_run_script.return_value = (0, "")
@@ -247,11 +257,20 @@ class TestRunExample(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(error_msg, "")
 
-        mock_run_script.assert_called_once_with("/path/to/train.sh", [])
+        mock_run_script.assert_called_once()
+        args, kwargs = mock_run_script.call_args
+        self.assertEqual(args[0], "/path/to/train.sh")
+        self.assertEqual(args[1], [])
+        self.assertFalse(kwargs.get("no_live"))
+        self.assertEqual(kwargs.get("job_name"), "test_example train")
+        self.assertEqual(kwargs.get("image_name"), "test_example")
+        self.assertIsNone(kwargs.get("work_dir"))
 
+    @patch("cvl.commands.run.check_docker_image_exists", return_value=True)
+    @patch("cvl.commands.run.check_docker_running", return_value=(True, ""))
     @patch("cvl.commands.run.run_script")
     @patch("cvl.commands.run.find_script")
-    def test_run_with_extra_args(self, mock_find_script, mock_run_script):
+    def test_run_with_extra_args(self, mock_find_script, mock_run_script, _mock_docker, _mock_image):
         """Test running example with extra arguments."""
         mock_find_script.return_value = "/path/to/train.sh"
         mock_run_script.return_value = (0, "")
@@ -265,9 +284,11 @@ class TestRunExample(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(error_msg, "")
 
-        mock_run_script.assert_called_once_with(
-            "/path/to/train.sh", ["--epochs", "10"]
-        )
+        mock_run_script.assert_called_once()
+        args, kwargs = mock_run_script.call_args
+        self.assertEqual(args[0], "/path/to/train.sh")
+        self.assertEqual(args[1], ["--epochs", "10"])
+        self.assertFalse(kwargs.get("no_live"))
 
 
 if __name__ == "__main__":

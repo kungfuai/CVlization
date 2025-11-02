@@ -21,7 +21,7 @@ def test_kornia_transform_creation_and_image_transform():
     img = np.zeros((100, 200, 3))
     with pytest.raises(TypeError) as excinfo:
         kornia_transform(img)
-    assert "Expected input of [torch" in str(excinfo.value)
+    assert "Expected input of torch.Tensor" in str(excinfo.value)
     img = torch.tensor(np.zeros((100, 200, 3)))
     img_aug = kornia_transform(img)
     assert img_aug.shape == (1,) + img.shape

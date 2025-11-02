@@ -54,6 +54,7 @@ class TorchModelFactory:
     image_encoder: TorchImageEncoder = None
     share_image_encoder: bool = True
     mlp_encoder: TorchMlpEncoder = None
+    text_encoder: Optional[nn.Module] = None
 
     # ## Aggregators
     aggregator: TorchAggregator = None
@@ -75,6 +76,7 @@ class TorchModelFactory:
                 image_encoder=self.image_encoder,
                 aggregator=self.aggregator,
                 mlp_encoder=self.mlp_encoder,
+                text_encoder=self.text_encoder,
                 share_image_encoder=self.share_image_encoder,
                 loss_function=self.create_loss_function(),
                 metrics=self.create_metrics(),
@@ -97,6 +99,7 @@ class TorchModelFactory:
         # https://torchmetrics.readthedocs.io/en/stable/pages/overview.html
         metrics = []
         for model_target in self.model_targets:
+            metrics_for_this_target = []
             # TODO: create metrics based on model_target.metric!
             if model_target.column_type == DataColumnType.BOOLEAN:
                 metrics_for_this_target = [
@@ -126,6 +129,12 @@ class TorchModelFactory:
                     #         num_classes=model_target.n_categories,
                     #     ),
                     # ),
+                ]
+            elif model_target.column_type == DataColumnType.NUMERICAL:
+                metrics_for_this_target = [
+                    (torchmetrics.MeanSquaredError, {"squared": True}),
+                    (torchmetrics.MeanAbsoluteError, {}),
+                    (torchmetrics.R2Score, {"multioutput": "uniform_average"}),
                 ]
             else:
                 LOGGER.warning(

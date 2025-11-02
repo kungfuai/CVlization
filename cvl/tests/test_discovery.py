@@ -17,11 +17,12 @@ class TestFindRepoRoot(unittest.TestCase):
         self.assertTrue((root / ".git").exists())
         self.assertTrue((root / "examples").exists())
 
-    def test_raises_when_not_in_repo(self):
-        """Should raise RuntimeError when not in a git repo."""
+    def test_returns_configured_root_when_outside_repo(self):
+        """When called from outside the repo, should fall back to cached root."""
+        root = find_repo_root()
         with TemporaryDirectory() as tmpdir:
-            with self.assertRaises(RuntimeError):
-                find_repo_root(Path(tmpdir))
+            resolved = find_repo_root(Path(tmpdir))
+            self.assertEqual(resolved, root)
 
 
 class TestLoadExampleYaml(unittest.TestCase):

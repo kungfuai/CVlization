@@ -60,7 +60,7 @@ class TorchvisionDatasetBuilder(BaseDatasetBuilder):
     def get_default_training_transform(self):
         if self.dataset_classname.lower().startswith("voc"):
             return ImageAugmentationSpec(
-                provider=ImageAugmentationProvider.IMGAUG,
+                provider=ImageAugmentationProvider.ALBUMENTATIONS,
                 config={
                     "deterministic": True,
                     "norm": False,

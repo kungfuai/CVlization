@@ -3,7 +3,7 @@ import logging
 from typing import Union, Callable, Optional
 import torch
 from torch import nn
-from pytorch_lightning import LightningModule
+from .lightning_utils import LightningModule
 from ..specs import ModelSpec, MLFramework
 from .training_pipeline.utils.dataloader_utils import DataLoaderUtils
 from .training_pipeline.utils.model_utils import ModelUtils
@@ -88,6 +88,7 @@ class TorchTrainingPipeline:
 
     ## Debugging
     data_only: bool = False  # No training, only run through data.
+    validate_nan: bool = False  # Enable NaN validation in data loading (debug mode)
 
     def __post_init__(self):
         # add more input args: model config, optimizer config, training_loop_config, validation_config, etc.
@@ -153,6 +154,7 @@ class TorchTrainingPipeline:
             train_batch_size=self.train_batch_size,
             val_batch_size=self.val_batch_size,
             model_spec=self.model_spec,
+            validate_nan=self.validate_nan,
         )
         self._model_utils = ModelUtils(
             model=self.model,
@@ -235,4 +237,3 @@ class TorchTrainingPipeline:
     def _adjust_batch_size_if_doing_data_only_debugging(self):
         if self.data_only:
             self.train_batch_size = 1
-
