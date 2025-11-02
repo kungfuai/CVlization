@@ -6,6 +6,7 @@ from ..net.simple_conv import SimpleConv
 
 
 LOGGER = logging.getLogger(__name__)
+BUILTIN_MODELS = ["simple_conv", "davidnet"]
 
 
 def load_dino_model(name):
@@ -66,13 +67,15 @@ def image_backbone_names():
     LOGGER.info(
         f"Listing models in CVlization and timm. Additional models available. Please check https://pytorch.org/hub/ for additional models."
     )
-    model_names = ["simple_conv", "davidnet"]
+    model_names = list(BUILTIN_MODELS)
+    model_names_set = set(model_names)
 
     try:
         import timm
 
-        model_names += timm.list_models()
-        model_names_set = set(model_names)
+        timm_models = timm.list_models()
+        model_names += timm_models
+        model_names_set.update(timm_models)
     except Exception as e:
         LOGGER.warning(f"Failed to list timm models: {e}")
 

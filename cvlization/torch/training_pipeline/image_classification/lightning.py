@@ -1,5 +1,4 @@
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks import Callback
+from ...lightning_utils import pl, Callback
 import torch
 from torch import nn
 from torch.nn import functional as F

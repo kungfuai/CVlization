@@ -1,5 +1,5 @@
 import numpy as np
-from cvlization.data.mock_dataset import RandomImageClassificationDataset
+from tests.fixtures.mock_dataset import RandomImageClassificationDataset
 
 
 def test_random_image_classification_dataset():

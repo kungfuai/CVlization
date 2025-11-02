@@ -1,1 +1,0 @@
-Based on [CoopFlow](https://openreview.net/forum?id=31d5RLCUuXC&referrer=%5BAuthor%20Console%5D(%2Fgroup%3Fid%3DICLR.cc%2F2022%2FConference%2FAuthors%23your-submissions)) and [repo](https://github.com/AlvinZhuyx/CoopFlow).

@@ -20,5 +20,20 @@
 #                   (P)passed with output
 #                   (a)all except (p) and (P)
 
-docker-compose run --rm app python -m pytest -p no:warnings -vv \
-    --ignore=data/ --ignore=tmp/ --ignore checkpoints --ignore wandb $@
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+IMAGE_NAME="${CVL_DOCKER_IMAGE:-cvlization-test}"
+
+# Build (or update) the test image
+docker build -t "${IMAGE_NAME}" -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
+
+# Run pytest inside the container, mounting the repo
+docker run --rm \
+    -v "${REPO_ROOT}:/workspace" \
+    -w /workspace \
+    "${IMAGE_NAME}" \
+    python -m pytest -p no:warnings -vv \
+        --ignore=data/ --ignore=tmp/ --ignore=checkpoints --ignore=wandb \
+        "$@"

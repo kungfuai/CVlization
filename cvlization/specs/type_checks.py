@@ -39,6 +39,10 @@ class CheckedWithModelSpec(Protocol):
 
 
 def ensure_array_shape_and_type(array, data_column: DataColumn):
+    # Skip validation for TEXT inputs - they are raw strings that will be encoded by the text encoder
+    if data_column.column_type == DataColumnType.TEXT:
+        return
+
     array = np.array(array)
     if data_column.column_type == DataColumnType.BOOLEAN:
         if not data_column.sequence:

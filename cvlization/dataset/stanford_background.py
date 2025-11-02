@@ -348,7 +348,7 @@ class StanfordBackgroundDataset:
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.stanford_background
+    python -m cvlization.dataset.stanford_background
     """
 
     ds = StanfordBackgroundDataset()

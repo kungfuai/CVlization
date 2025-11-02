@@ -298,7 +298,7 @@ def make_coco_transforms(is_train: bool = False):
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.york_lines
+    python -m cvlization.dataset.york_lines
     """
 
     ds = YorkLinesDataset(
