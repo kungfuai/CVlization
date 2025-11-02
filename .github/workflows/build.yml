@@ -25,6 +25,7 @@ jobs:
           context: .
           file: Dockerfile
           push: false
+          load: true
           tags: cvlization-test:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
