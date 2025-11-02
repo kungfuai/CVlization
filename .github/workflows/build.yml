@@ -14,15 +14,17 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - uses: KengoTODA/actions-setup-docker-compose@v1
-        name: Setup docker-compose
+      - name: Build test image
+        uses: docker/build-push-action@v6
         with:
-          version: '2.14.2'
-      - name: build docker images
-        run: |
-          ./bin/ci-build.sh
+          context: .
+          file: Dockerfile
+          push: false
+          tags: cvlization-test:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Unit test
         run: |
           ./bin/ci-test.sh -vv
+        env:
+          CVL_DOCKER_IMAGE: cvlization-test:${{ github.sha }}
