@@ -13,6 +13,6 @@ RUN pip install --no-cache-dir \
     lightgbm==4.3.0 \
     pyarrow==17.0.0 \
     requests==2.32.3 \
-    git+https://github.com/zzsi/gbt@main
+    gbt==0.3
 
 CMD ["bash"]
