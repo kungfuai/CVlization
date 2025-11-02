@@ -7,6 +7,8 @@ WORKDIR /workspace
 
 # Allows python to stream logs rather than buffer them for output.
 ENV PYTHONUNBUFFERED=1
+ENV PIP_INDEX_URL=https://download.pytorch.org/whl/cpu
+ENV PIP_EXTRA_INDEX_URL=https://pypi.org/simple
 
 # The official Debian/Ubuntu Docker Image automatically removes the cache by default!
 # Removing the docker-clean file manages that issue.
