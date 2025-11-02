@@ -1,0 +1,36 @@
+name: analytical-tabular-risk-scoring-gbt-credit-default
+capability: analytical/tabular/risk_scoring
+modalities:
+  - tabular
+datasets:
+  - german_credit
+stability: beta
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train the credit default risk model
+  predict:
+    script: predict.sh
+    description: Score borrower records
+tags:
+  - lightgbm
+  - gbt
+  - credit-default
+  - risk-scoring
+  - tabular
+tasks:
+  - binary_classification
+  - credit_default_risk
+frameworks:
+  - lightgbm
+  - gbt
+  - scikit-learn
+description: Credit default risk scoring on the German Credit dataset using the gbt (LightGBM) pipeline.
+last_verification_note: "2025-11-02: Build/train/predict verified on Apple M4 Pro (CPU). Validation accuracy 0.76, ROC-AUC 0.78 on German Credit dataset. Feature importances exported to artifacts/feature_importance.csv."
