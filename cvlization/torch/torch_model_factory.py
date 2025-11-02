@@ -54,6 +54,7 @@ class TorchModelFactory:
     image_encoder: TorchImageEncoder = None
     share_image_encoder: bool = True
     mlp_encoder: TorchMlpEncoder = None
+    text_encoder: Optional[nn.Module] = None
 
     # ## Aggregators
     aggregator: TorchAggregator = None
@@ -75,6 +76,7 @@ class TorchModelFactory:
                 image_encoder=self.image_encoder,
                 aggregator=self.aggregator,
                 mlp_encoder=self.mlp_encoder,
+                text_encoder=self.text_encoder,
                 share_image_encoder=self.share_image_encoder,
                 loss_function=self.create_loss_function(),
                 metrics=self.create_metrics(),
@@ -128,10 +130,13 @@ class TorchModelFactory:
                     #     ),
                     # ),
                 ]
-            elif model_target.column_type not in [
-                DataColumnType.BOOLEAN,
-                DataColumnType.CATEGORICAL,
-            ]:
+            elif model_target.column_type == DataColumnType.NUMERICAL:
+                metrics_for_this_target = [
+                    (torchmetrics.MeanSquaredError, {"squared": True}),
+                    (torchmetrics.MeanAbsoluteError, {}),
+                    (torchmetrics.R2Score, {"multioutput": "uniform_average"}),
+                ]
+            else:
                 LOGGER.warning(
                     f"Metrics not implemented yet for {model_target.key} of type {model_target.column_type}."
                 )

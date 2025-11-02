@@ -30,7 +30,25 @@ class TorchImageEncoder(nn.Module):
         use_batch_norm: bool = True,
         permute_image: bool = True,
         customize_conv1: bool = False,
+        finetune_backbone: bool = False,
     ):
+        """Initialize image encoder.
+
+        Args:
+            name: Encoder name for identification
+            backbone: Image backbone model (e.g., from create_image_backbone)
+            pool_name: Pooling method - "avg", "max", or "flatten"
+            activation: Activation function name (e.g., "ReLU", "GELU")
+            image_channels: Number of input image channels
+            dropout: Dropout probability
+            dense_layer_sizes: Optional list of dense layer output sizes
+            conv_layer_sizes: Optional list of conv layer output sizes
+            conv_kernel_size: Kernel size for conv layers
+            use_batch_norm: Whether to use batch normalization
+            permute_image: Whether to permute image from HWC to CHW format
+            customize_conv1: Whether to customize first conv layer
+            finetune_backbone: Whether to unfreeze backbone for fine-tuning (default: False = frozen)
+        """
         super().__init__()
         self.name = name
         self.backbone = backbone
@@ -44,10 +62,22 @@ class TorchImageEncoder(nn.Module):
         self.use_batch_norm = use_batch_norm
         self.permute_image = permute_image
         self.customize_conv1 = customize_conv1
+        self.finetune_backbone = finetune_backbone
         self.__post_init__()
 
     def __post_init__(self):
         assert self.backbone is not None, "Need an image backbone model."
+
+        # Freeze or unfreeze backbone based on finetune_backbone flag
+        if not self.finetune_backbone:
+            # Freeze backbone for feature extraction only
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+        else:
+            # Unfreeze backbone for fine-tuning
+            for param in self.backbone.parameters():
+                param.requires_grad = True
+
         self._prepare_dropout_layers()
         self._prepare_dense_layers()
         self._prepare_conv_layers()

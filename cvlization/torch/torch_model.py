@@ -4,7 +4,7 @@ from typing import List, Optional, Any
 import torch
 from torch import nn, optim
 # from pytorch_lightning import LightningModule
-from pytorch_lightning import LightningModule
+from .lightning_utils import LightningModule
 from torchmetrics import Metric
 
 from ..specs import DataColumnType, ModelInput, ModelTarget
@@ -31,6 +31,7 @@ class TorchLitModel(LightningModule):
         share_image_encoder: bool = True
         mlp_encoder: TorchMlpEncoder = None
         aggregator: TorchAggregator = None
+        text_encoder: Optional[nn.Module] = None  # Text encoder instance (e.g., TorchTextEncoder)
         model: nn.Module = None  # If specified, the above model specs will be ignored.
 
         # ## Losses and metrics.
@@ -73,6 +74,7 @@ class TorchLitModel(LightningModule):
     def __init__(self, config: TorchModelConfig):
         super().__init__()
         self.config = config
+        self._target_keys = [target.key for target in self.config.model_targets]
 
         self._metrics = {}
         for dataset_prefix in ["train_", "val_", "test_"]:
@@ -111,13 +113,23 @@ class TorchLitModel(LightningModule):
             inputs = [inputs]
         tensors_encoded = []
         tensors_not_encoded = []
-        for input_layer, encoder_model in zip(inputs, self._encoder_models):
-            assert isinstance(input_layer, torch.Tensor), f"Input layer {input_layer} is not a tensor."
-            if encoder_model is not None:
-                encoded = encoder_model(input_layer.float())
-                tensors_encoded.append(encoded)
+        for input_layer, encoder_model, model_input in zip(inputs, self._encoder_models, self.config.model_inputs):
+            # TEXT inputs are strings/tuples of strings, not tensors - they'll be encoded by the text encoder
+            if model_input.column_type == DataColumnType.TEXT:
+                if encoder_model is not None:
+                    # Text encoder handles string input directly
+                    encoded = encoder_model(input_layer)
+                    tensors_encoded.append(encoded)
+                else:
+                    raise ValueError(f"TEXT input '{model_input.key}' requires a text encoder")
             else:
-                tensors_not_encoded.append(input_layer)
+                # Non-text inputs should be tensors
+                assert isinstance(input_layer, torch.Tensor), f"Input layer {input_layer} is not a tensor."
+                if encoder_model is not None:
+                    encoded = encoder_model(input_layer.float())
+                    tensors_encoded.append(encoded)
+                else:
+                    tensors_not_encoded.append(input_layer)
 
         if len(tensors_not_encoded) > 1:
             mlp_input_tensor = torch.cat(tensors_not_encoded, dim=-1)
@@ -166,6 +178,19 @@ class TorchLitModel(LightningModule):
                     _encoder_models.append(self._shared_image_encoder)
                 else:
                     raise NotImplementedError("Need to pass in different encoders.")
+            elif model_input.column_type == DataColumnType.TEXT:
+                # Text encoders must be provided in config, similar to image encoders
+                if hasattr(self.config, 'text_encoder') and self.config.text_encoder is not None:
+                    _encoder_models.append(self.config.text_encoder)
+                else:
+                    raise ValueError(
+                        f"Text input '{model_input.key}' requires a text_encoder in config. "
+                        "Create one with: "
+                        "from cvlization.torch.encoder.torch_text_backbone import create_text_backbone\n"
+                        "from cvlization.torch.encoder.torch_text_encoder import TorchTextEncoder\n"
+                        "backbone, tokenizer = create_text_backbone('distilbert-base-uncased')\n"
+                        "text_encoder = TorchTextEncoder(backbone=backbone, tokenizer=tokenizer)"
+                    )
             elif model_input.column_type in [
                 DataColumnType.NUMERICAL,
                 DataColumnType.CATEGORICAL,
@@ -299,16 +324,24 @@ class TorchLitModel(LightningModule):
         for i_target, metrics_for_one_target in enumerate(
             self._metrics[dataset_prefix]
         ):
+            preds = outputs[i_target]
+            target = targets[i_target]
             for m in metrics_for_one_target:
-                m.update(outputs[i_target], targets[i_target])
+                m.update(preds, target)
 
     def _compute_and_log_metrics(self, dataset_prefix: str, reset=True):
         all_metric_values = {}
-        for metrics_for_one_target in self._metrics[dataset_prefix]:
+        for target_idx, metrics_for_one_target in enumerate(self._metrics[dataset_prefix]):
+            target_key = self._target_keys[target_idx]
             for m in metrics_for_one_target:
                 metric_value = m.compute()
-                metric_name = dataset_prefix + type(m).__name__
-                self.log(metric_name, metric_value, prog_bar=False, on_epoch=True)
+                metric_name = f"{dataset_prefix}{target_key}_{type(m).__name__}"
+                self.log(
+                    metric_name,
+                    metric_value,
+                    prog_bar=(dataset_prefix == "val_"),
+                    on_epoch=True,
+                )
                 if hasattr(metric_value, "cpu"):
                     metric_value = metric_value.cpu()
                 metric_value = metric_value.detach().numpy()

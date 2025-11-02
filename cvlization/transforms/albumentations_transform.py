@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Union
 import numpy as np
 import albumentations as A
@@ -18,18 +19,28 @@ class AlbumentationsTransform:
         **kwargs,
     ):
         if config_file_or_dict:
-            self.aug = self.build_transform_from_config(config_file_or_dict)
+            self.aug = self.build_transform_from_config(
+                config_file_or_dict, override_cv_task=cv_task
+            )
         else:
-            # Default augmentation
+            # Default augmentation pipeline
+            self.config = {
+                "cv_task": cv_task or "classification",
+                "steps": [
+                    {"type": "flip_lr", "probability": 0.5, "kwargs": {}},
+                ],
+            }
             self.aug = A.Compose(
                 [
                     A.HorizontalFlip(p=0.5),
-                    A.RandomCrop(width=256, height=256, p=1.0),
                 ]
             )
 
         if cv_task is None:
             cv_task = self.config.get("cv_task")
+        else:
+            # Allow explicit cv_task argument to override config file.
+            self.config["cv_task"] = cv_task
         assert isinstance(cv_task, str), f"cv_task must be a str, got {cv_task}"
         assert cv_task.lower() in [
             "classification",
@@ -40,10 +51,11 @@ class AlbumentationsTransform:
         self.channels_first = channels_first
 
     def build_transform_from_config(
-        self, transform_config_json: Union[str, dict]
+        self, transform_config_json: Union[str, dict], override_cv_task: str | None = None
     ) -> A.Compose:
-        if isinstance(transform_config_json, str):
-            with open(transform_config_json, "r") as f:
+        if isinstance(transform_config_json, (str, os.PathLike)):
+            config_path = os.fspath(transform_config_json)
+            with open(config_path, "r") as f:
                 config = json.load(f)
         elif isinstance(transform_config_json, dict):
             config = transform_config_json
@@ -52,22 +64,33 @@ class AlbumentationsTransform:
                 f"transform_config_json must be a str or dict, not {type(transform_config_json)}"
             )
 
+        if override_cv_task:
+            config = dict(config)
+            config["cv_task"] = override_cv_task
+
         self.config = config
         t_list = []
 
         # Map from config transform names to albumentations transforms
+        def _extract_size(kwargs):
+            size = kwargs.get("size", {})
+            height = kwargs.get("height", size.get("height"))
+            width = kwargs.get("width", size.get("width"))
+            if height is None or width is None:
+                raise ValueError("Resize transform requires height and width.")
+            return int(height), int(width)
+
         transform_map = {
-            "resize": lambda kwargs: A.Resize(
-                height=kwargs["size"]["height"],
-                width=kwargs["size"]["width"]
-            ),
+            "resize": lambda kwargs: A.Resize(*_extract_size(kwargs)),
             "flip_lr": lambda kwargs: A.HorizontalFlip(),
             "flip_ud": lambda kwargs: A.VerticalFlip(),
             "rotate": lambda kwargs: A.Rotate(**kwargs),
+            "rotate90": lambda kwargs: A.RandomRotate90(),
             "crop": lambda kwargs: A.Crop(**kwargs),
             "blur": lambda kwargs: A.Blur(**kwargs),
             "gaussian_blur": lambda kwargs: A.GaussianBlur(**kwargs),
             "brightness_contrast": lambda kwargs: A.RandomBrightnessContrast(**kwargs),
+            "color_jitter": lambda kwargs: A.ColorJitter(**kwargs),
             "hue_saturation": lambda kwargs: A.HueSaturationValue(**kwargs),
             "normalize": lambda kwargs: A.Normalize(**kwargs),
         }
@@ -75,7 +98,7 @@ class AlbumentationsTransform:
         for step in config["steps"]:
             prob = step["probability"]
             transform_type = step["type"]
-            kwargs = step.get("kwargs", {})
+            kwargs = step.get("kwargs", {}) or {}
 
             if transform_type in transform_map:
                 transform = transform_map[transform_type](kwargs)

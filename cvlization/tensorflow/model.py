@@ -1,7 +1,27 @@
 import logging
 import tensorflow as tf
 from tensorflow import keras
-from keras.utils import unpack_x_y_sample_weight
+
+try:
+    from keras.utils import unpack_x_y_sample_weight  # type: ignore
+except ImportError:  # pragma: no cover - fallback for Keras packaging changes
+    def unpack_x_y_sample_weight(data):
+        """Minimal fallback compatible with Keras' dataset outputs."""
+        if isinstance(data, (list, tuple)):
+            if len(data) == 3:
+                return data[0], data[1], data[2]
+            if len(data) == 2:
+                return data[0], data[1], None
+            if len(data) == 1:
+                return data[0], None, None
+            raise ValueError(f"Unable to unpack data with length {len(data)}")
+        if isinstance(data, dict):
+            x = data.get("x") or data.get("inputs")
+            y = data.get("y") or data.get("targets")
+            sample_weight = data.get("sample_weight")
+            return x, y, sample_weight
+        # Treat everything else as features only
+        return data, None, None
 
 
 LOGGER = logging.getLogger(__name__)

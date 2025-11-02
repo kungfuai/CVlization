@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import torch
-from pytorch_lightning import LightningModule
+from ...lightning_utils import LightningModule
 from typing import Union
 import logging
 from cvlization.specs.prediction_tasks import ObjectDetection

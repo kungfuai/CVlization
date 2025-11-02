@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
-from pytorch_lightning import LightningModule
+from ...lightning_utils import LightningModule
 
 # TODO: specs are useful for multi-task model, consider not importing them
 from cvlization.specs.ml_framework import MLFramework
@@ -121,5 +121,4 @@ class SpecBasedImageClassification(TorchTrainingPipeline):
             )
         assert isinstance(model, LightningModule)
         return model
-
 

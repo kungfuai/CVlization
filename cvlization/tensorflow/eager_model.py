@@ -1,9 +1,8 @@
 import logging
 import tensorflow as tf
 from tensorflow.python.framework.ops import EagerTensor
-from keras.utils import unpack_x_y_sample_weight
 
-from .model import Model
+from .model import Model, unpack_x_y_sample_weight
 
 
 LOGGER = logging.getLogger(__name__)

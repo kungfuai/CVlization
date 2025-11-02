@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import logging
 import torch
+from torch.utils.data import default_collate
 from typing import Union, Callable, Optional
 from ....data.dataset_builder import DatasetBuilder, DatasetProvider
 from ....specs.data_column import DataColumnType
@@ -18,18 +19,71 @@ class DataLoaderUtils:
     val_batch_size: int = 32
     num_workers: int = 0
     model_spec: ModelSpec = None
+    validate_nan: bool = False  # Enable NaN validation in data loading (debug mode)
     
     def create_collate_fn(self) -> Optional[Callable]:
         if self.collate_method == "zip":
 
             def collate_fn(batch):
-                return tuple(zip(*batch))
+                result = tuple(zip(*batch))
+
+                # Validate for NaN if debug flag is enabled
+                if self.validate_nan:
+                    self._validate_batch_for_nan(result)
+
+                return result
 
             return collate_fn
         elif callable(self.collate_method):
-            return self.collate_method
+            # Wrap user-provided collate function with NaN validation if enabled
+            if self.validate_nan:
+                original_collate = self.collate_method
+                def collate_fn(batch):
+                    result = original_collate(batch)
+                    self._validate_batch_for_nan(result)
+                    return result
+                return collate_fn
+            else:
+                return self.collate_method
         else:
-            return None
+            # collate_method is None - use PyTorch's default_collate
+            if self.validate_nan:
+                # Wrap default_collate with NaN validation
+                def collate_fn(batch):
+                    result = default_collate(batch)
+                    self._validate_batch_for_nan(result)
+                    return result
+                return collate_fn
+            else:
+                # Return None to let PyTorch use default_collate
+                return None
+
+    def _validate_batch_for_nan(self, batch):
+        """Validate batch for NaN values in inputs and targets.
+
+        Args:
+            batch: Tuple of (inputs, targets) where inputs and targets can be
+                   tensors, lists of tensors, or tuples of tensors.
+
+        Raises:
+            ValueError: If NaN values are detected in any input or target tensor.
+        """
+        if not isinstance(batch, (tuple, list)) or len(batch) < 2:
+            return  # Cannot validate if batch structure is unexpected
+
+        inputs, targets = batch[0], batch[1]
+
+        # Validate inputs
+        inputs_list = inputs if isinstance(inputs, (list, tuple)) else [inputs]
+        for i, inp in enumerate(inputs_list):
+            if isinstance(inp, torch.Tensor) and torch.isnan(inp).any():
+                raise ValueError(f"NaN detected in input[{i}] during data loading")
+
+        # Validate targets
+        targets_list = targets if isinstance(targets, (list, tuple)) else [targets]
+        for i, target in enumerate(targets_list):
+            if isinstance(target, torch.Tensor) and torch.isnan(target).any():
+                raise ValueError(f"NaN detected in target[{i}] during data loading")
 
     def check_data_type_and_shape(self, dataloader, dataset_builder):
 
@@ -158,7 +212,6 @@ class DataLoaderUtils:
         raise NotImplementedError
 
     def convert_tf_dataset_to_iterable_dataset(self, tf_dataset):
-        # TODO: allow using imgaug as a default
         # TODO: transforms should be in a separate class
         # https://github.com/kungfuai/mtrx_2/blob/1b5ff963f4b732883e95e1f86dfbecbb95a7a9ff/src/data/transforms.py#L31
 
@@ -189,4 +242,3 @@ class DataLoaderUtils:
     def get_model_targets(self):
         if self.model_spec:
             return self.model_spec.get_model_targets()
-

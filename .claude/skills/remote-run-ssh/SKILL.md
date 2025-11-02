@@ -5,7 +5,7 @@ description: Run CVlization examples on the `ssh l1` GPU host by copying only th
 
 # Remote Run over SSH
 
-Operate CVlization examples on the remote GPU reachable as `ssh l1`. This playbook keeps the remote copy minimal—just the target example folder (e.g., `examples/perception/multimodal_multitask/torch`) and the `cvlization/` library—then relies on the example’s own `build.sh` / `train.sh` Docker helpers. The user’s long-lived checkout on the remote stays untouched.
+Operate CVlization examples on the remote GPU reachable as `ssh l1`. This playbook keeps the remote copy minimal—just the target example folder (e.g., `examples/perception/multimodal_multitask/recipe_analysis_torch`) and the `cvlization/` library—then relies on the example’s own `build.sh` / `train.sh` Docker helpers. The user’s long-lived checkout on the remote stays untouched.
 
 ## When to Use
 - Heavy trainings or evaluations that require CUDA (CIFAR10 speed runs, multimodal pipelines, etc.).
@@ -29,7 +29,7 @@ Operate CVlization examples on the remote GPU reachable as `ssh l1`. This playbo
 ## Detailed Procedure
 
 ### 1. Identify the example and supporting files
-- Note the example path relative to repo root (e.g., `examples/perception/multimodal_multitask/torch`).
+- Note the example path relative to repo root (e.g., `examples/perception/multimodal_multitask/recipe_analysis_torch`).
 - List any extra assets the run needs (custom configs under `examples`, top-level scripts, environment files, etc.).
 - Confirm `cvlization/` includes all library modules the example imports.
 
@@ -53,7 +53,7 @@ Tips:
 
 ### 3. Build the example image
 ```bash
-ssh l1 'cd /tmp/cvlization_remote/examples/perception/multimodal_multitask/torch && ./build.sh'
+ssh l1 'cd /tmp/cvlization_remote/examples/perception/multimodal_multitask/recipe_analysis_torch && ./build.sh'
 ```
 - The Docker build context is limited to the example folder, keeping builds quick.
 - Edit `build.sh` locally if you need custom base images or dependency tweaks before re-syncing.
@@ -66,11 +66,11 @@ Ensure no conflicting jobs are consuming the GPU before starting a long run.
 
 ### 5. Run the training script (Docker)
 ```bash
-ssh l1 'cd /tmp/cvlization_remote/examples/perception/multimodal_multitask/torch && ./train.sh > run.log 2>&1'
+ssh l1 'cd /tmp/cvlization_remote/examples/perception/multimodal_multitask/recipe_analysis_torch && ./train.sh > run.log 2>&1'
 ```
 - Tail logs while the job runs:
 ```bash
-ssh l1 'tail -f /tmp/cvlization_remote/examples/perception/multimodal_multitask/torch/run.log'
+ssh l1 'tail -f /tmp/cvlization_remote/examples/perception/multimodal_multitask/recipe_analysis_torch/run.log'
 ```
 - `train.sh` already mounts the example directory at `/workspace`, mounts the synced repo root read-only at `/cvlization_repo`, and sets `PYTHONPATH=/cvlization_repo`.
 - Customize environment variables or extra mounts by editing `train.sh` locally (e.g., injecting dataset paths, WANDB keys) then re-syncing.
@@ -84,7 +84,7 @@ Log files should include per-epoch summaries and final metrics. Record:
 
 ### 7. Retrieve artifacts (optional)
 ```bash
-rsync -az l1:/tmp/cvlization_remote/examples/perception/multimodal_multitask/torch/run.log \
+rsync -az l1:/tmp/cvlization_remote/examples/perception/multimodal_multitask/recipe_analysis_torch/run.log \
   ./remote_runs/$(date +%Y%m%dT%H%M%S)_multimodal.log
 ```
 Copy checkpoints, TensorBoard logs, or generated samples in the same manner if needed.
