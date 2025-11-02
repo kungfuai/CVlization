@@ -157,7 +157,7 @@ class TinyNerfDataset:
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.tiny_nerf
+    python -m cvlization.dataset.tiny_nerf
     """
 
     ds = TinyNerfDataset()

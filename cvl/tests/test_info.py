@@ -1,6 +1,7 @@
 """Tests for the info command."""
 import unittest
-from cvl.commands.info import find_matching_examples, format_info, get_example_info
+from cvl.core.matching import find_matching_examples
+from cvl.commands.info import format_info, get_example_info
 
 
 class TestFindMatchingExamples(unittest.TestCase):
@@ -23,32 +24,37 @@ class TestFindMatchingExamples(unittest.TestCase):
 
     def test_find_example_with_full_path(self):
         """Test finding example with 'examples/' prefix."""
-        results = find_matching_examples(self.examples, "examples/generative/minisora")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["name"], "minisora")
+        matches, suggestions = find_matching_examples(self.examples, "examples/generative/minisora")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["name"], "minisora")
+        self.assertEqual(suggestions, [])
 
     def test_find_example_with_short_path(self):
         """Test finding example without 'examples/' prefix."""
-        results = find_matching_examples(self.examples, "generative/minisora")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["name"], "minisora")
+        matches, suggestions = find_matching_examples(self.examples, "generative/minisora")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["name"], "minisora")
+        self.assertEqual(suggestions, [])
 
     def test_find_example_with_short_name(self):
         """Test finding example with just the short name."""
-        results = find_matching_examples(self.examples, "minisora")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["name"], "minisora")
+        matches, suggestions = find_matching_examples(self.examples, "minisora")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["name"], "minisora")
+        self.assertEqual(suggestions, [])
 
     def test_find_example_with_partial_path(self):
         """Test finding example with partial path."""
-        results = find_matching_examples(self.examples, "doc_ai/granite_docling")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["name"], "granite_docling")
+        matches, suggestions = find_matching_examples(self.examples, "doc_ai/granite_docling")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["name"], "granite_docling")
+        self.assertEqual(suggestions, [])
 
     def test_find_example_not_found(self):
         """Test finding non-existent example."""
-        results = find_matching_examples(self.examples, "nonexistent/example")
-        self.assertEqual(len(results), 0)
+        matches, suggestions = find_matching_examples(self.examples, "nonexistent/example")
+        self.assertEqual(matches, [])
+        self.assertIsInstance(suggestions, list)
 
 
 class TestFormatInfo(unittest.TestCase):
@@ -170,7 +176,7 @@ class TestGetExampleInfo(unittest.TestCase):
         """Test getting info for non-existent example."""
         result = get_example_info(self.examples, "nonexistent/example")
         self.assertIsNotNone(result)
-        self.assertIn("✗ No example found", result)
+        self.assertIn("✗ Example 'nonexistent/example' not found", result)
 
     def test_get_example_info_ambiguous(self):
         """Test getting info with ambiguous identifier."""

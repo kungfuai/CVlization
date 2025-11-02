@@ -8,7 +8,7 @@ import random
 import re
 from typing import Any, List
 import torch
-import pytorch_lightning as pl
+from .....lightning_utils import pl
 from nltk import edit_distance
 
 

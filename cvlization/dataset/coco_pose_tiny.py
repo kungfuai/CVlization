@@ -305,7 +305,7 @@ class CocoPoseTinyDataset:
 
 if __name__ == "__main__":
     """
-    python -m cvlization.lab.coco_pose_tiny
+    python -m cvlization.dataset.coco_pose_tiny
     """
 
     ds = CocoPoseTinyDataset()

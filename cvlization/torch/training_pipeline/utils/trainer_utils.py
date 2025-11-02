@@ -3,9 +3,14 @@ import logging
 from typing import Union, Callable, Optional
 import torch
 from torch import nn
-from pytorch_lightning.core import LightningModule
-from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning import callbacks as cb
+from ...lightning_utils import (
+    LightningModule,
+    Trainer,
+    seed_everything,
+    callbacks as pl_callbacks,
+    WandbLogger,
+    LearningRateMonitor,
+)
 from ....specs import ModelSpec
 
 LOGGER = logging.getLogger(__name__)
@@ -95,7 +100,7 @@ class TrainerUtils:
     
     def create_callbacks(self):
         callbacks = [
-            # cb.EarlyStopping(
+            # pl_callbacks.EarlyStopping(
             #     patience=self.early_stopping_patience,
             #     monitor="val_loss",
             #     mode="min",
@@ -103,7 +108,7 @@ class TrainerUtils:
         ]
         if self.experiment_tracker is not None:
             callbacks.append(
-                cb.LearningRateMonitor(
+                LearningRateMonitor(
                     logging_interval="epoch",
                     log_momentum=True,
                 )
@@ -112,8 +117,6 @@ class TrainerUtils:
     
     def create_experiment_tracker(self):
         if self.experiment_tracker == "wandb":
-            from pytorch_lightning.loggers import WandbLogger
-
             # TODO: for wandb, customize the summary method.
             # define a metric we are interested in the maximum of
             # e.g. wandb.define_metric("acc", summary="max")

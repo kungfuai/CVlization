@@ -2,9 +2,8 @@
 ENV=prod python3 -m pytest src/tests/test_resumable_training.py
 """
 import logging
-import tensorflow as tf
 import numpy as np
-from unittest.mock import patch
+import tensorflow as tf
 
 from cvlization.tensorflow.keras_model_factory import KerasModelFactory
 from cvlization.tensorflow.keras_trainer import KerasTrainer
@@ -21,7 +20,7 @@ def create_model(model_inputs, model_targets, checkpoint_path=None) -> tf.keras.
     factory = KerasModelFactory(
         model_inputs=model_inputs,
         model_targets=model_targets,
-        eager=False,
+        eager=True,
         image_encoder=KerasImageEncoder(
             backbone=SimpleConvNet((28, 28, 1)),
             pool_name="avg",
@@ -36,13 +35,13 @@ def create_model(model_inputs, model_targets, checkpoint_path=None) -> tf.keras.
 
 def test_training_can_resume(tmpdir):
     train_data, val_data = prepare_ml_datasets()
-    keras_seq = sequence.from_ml_dataset(train_data)
-    first_batch = keras_seq[0]
+    keras_ds = sequence.from_ml_dataset(train_data)
+    first_batch = next(iter(keras_ds))
     x, y, _ = first_batch
     assert x is not None
     assert y is not None
     model_to_save = create_model(train_data.model_inputs, train_data.model_targets)
-    model_checkpoint_path = tmpdir.join("checkpoint").join("model.h5")
+    model_checkpoint_path = tmpdir.join("checkpoint").join("model.keras")
     callbacks = [
         tf.keras.callbacks.ModelCheckpoint(
             str(model_checkpoint_path), save_best_only=True

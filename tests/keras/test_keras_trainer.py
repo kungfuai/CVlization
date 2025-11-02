@@ -11,7 +11,6 @@ from ..ml_dataset_utils import prepare_ml_datasets
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 
-
 def create_model(model_inputs, model_targets):
     factory = KerasModelFactory(
         model_inputs=model_inputs,
@@ -30,8 +29,8 @@ def create_model(model_inputs, model_targets):
 
 def test_mnist_multiclass():
     train_data, val_data = prepare_ml_datasets()
-    keras_seq = sequence.from_ml_dataset(train_data)
-    first_batch = keras_seq[0]
+    keras_ds = sequence.from_ml_dataset(train_data)
+    first_batch = next(iter(keras_ds))
     x, y, _ = first_batch
     assert x is not None
     model = create_model(train_data.model_inputs, train_data.model_targets)

@@ -1,0 +1,31 @@
+{
+    "cv_task": "detection",
+    "steps": [
+        {
+            "type": "resize",
+            "probability": 1.0,
+            "kwargs": {
+                "size": {"height": 256, "width": 256}
+            }
+        },
+        {
+            "type": "flip_lr",
+            "probability": 0.5,
+            "kwargs": {}
+        },
+        {
+            "type": "color_jitter",
+            "probability": 1.0,
+            "kwargs": {
+                "brightness": [0.8, 1.2],
+                "contrast": [0.8, 1.2],
+                "saturation": [0.8, 1.2]
+            }
+        },
+        {
+            "type": "rotate90",
+            "probability": 0.5,
+            "kwargs": {}
+        }
+    ]
+}
