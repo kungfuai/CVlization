@@ -2,7 +2,7 @@ import logging
 from torch import nn
 import torch
 import torchvision
-from pytorch_lightning import LightningModule
+from ...lightning_utils import LightningModule
 from ...metrics.semantic_segmentation_confusion_matrix import (
     SemanticSegmentationConfusionMatrix,
 )

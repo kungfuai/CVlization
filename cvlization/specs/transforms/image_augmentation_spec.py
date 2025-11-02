@@ -6,7 +6,6 @@ from ...specs import ModelInput, ModelTarget
 
 
 class ImageAugmentationProvider(str, enum.Enum):
-    IMGAUG = "imgaug"  # DEPRECATED: imgaug has NumPy 2.x compatibility issues. Use ALBUMENTATIONS instead.
     TORCHVISION = "torchvision"
     KORNIA = "kornia"
     ALBUMENTATIONS = "albumentations"
@@ -15,7 +14,7 @@ class ImageAugmentationProvider(str, enum.Enum):
 
 @dataclass
 class ImageAugmentationSpec:
-    provider: ImageAugmentationProvider = ImageAugmentationProvider.IMGAUG
+    provider: ImageAugmentationProvider = ImageAugmentationProvider.ALBUMENTATIONS
     # Using weak typing here for flexibility. Different providers can use
     # very different sets of configs. However, if we can find regular patterns
     # of how augmentations are specified across providers, we can use a stronger

@@ -9,29 +9,19 @@ class ImageAugmentationBuilder:
         self.spec = spec
 
     def run(self):
-        if self.spec.provider == ImageAugmentationProvider.IMGAUG:
-            import warnings
-            warnings.warn(
-                "IMGAUG provider is deprecated due to NumPy 2.x compatibility issues. "
-                "Please use ALBUMENTATIONS provider instead for better compatibility with modern dependencies.",
-                DeprecationWarning,
-                stacklevel=2
-            )
-            from ..transforms.img_aug_transforms import ImgAugTransform
+        provider = self.spec.provider
 
-            img_aug_object = ImgAugTransform(config_file_or_dict=self.spec.config)
-            return img_aug_object
-        elif self.spec.provider == ImageAugmentationProvider.ALBUMENTATIONS:
+        if provider == ImageAugmentationProvider.ALBUMENTATIONS:
             from ..transforms.albumentations_transform import AlbumentationsTransform
 
             albumentations_object = AlbumentationsTransform(config_file_or_dict=self.spec.config)
             return albumentations_object
-        elif self.spec.provider == ImageAugmentationProvider.TORCHVISION:
+        elif provider == ImageAugmentationProvider.TORCHVISION:
             from ..torch.transforms.torchvision_transform import TorchvisionTransform
 
             torchvision_object = TorchvisionTransform(self.spec.config)
             return torchvision_object
-        elif self.spec.provider == ImageAugmentationProvider.KORNIA:
+        elif provider == ImageAugmentationProvider.KORNIA:
             from ..torch.transforms.kornia_transform import KorniaTransform
 
             kornia_object = KorniaTransform(self.spec.config)

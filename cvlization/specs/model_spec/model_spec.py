@@ -55,6 +55,13 @@ class ModelSpec:
     permute_image: bool = False
     customize_conv1: bool = False
 
+    # Encoder freezing configuration
+    freeze_image_encoder: bool = True
+    freeze_text_encoder: bool = True
+
+    # Text encoder instance (if using text inputs)
+    text_encoder: Optional[object] = None
+
     def get_model_inputs(self) -> List[ModelInput]:
         return self.model_inputs
 

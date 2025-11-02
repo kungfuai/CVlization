@@ -2,7 +2,7 @@ import logging
 from itertools import combinations
 import torch
 import numpy as np
-from pytorch_lightning import LightningModule
+from ...lightning_utils import LightningModule
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from scipy.ndimage import zoom
 from skimage.draw import line_aa
