@@ -1,23 +1,22 @@
-# TODO: Make denpendencies optional as much as possible.
+# TODO: Make dependencies optional as much as possible.
 # pytorch-lightning==1.5.9
-pytorch-lightning==1.9.5
+lightning==2.5.5
+pytorch-lightning==2.5.5
 # torchmetrics==0.7.0
-torchmetrics==1.4.1
-torch==1.12.0
-torchvision==0.13.0  # <0.15.0
-timm==0.5.4
-tensorflow==2.11.1 # tensorflow 2.12 makes a unit test hang (https://github.com/kungfuai/CVlization/actions/runs/4495905507/jobs/7910034342)
-segment_anything==1.0
+torchmetrics==1.8.2
+torch==2.5.1
+torchvision==0.20.1
+timm==1.0.12
+numpy>=2.3,<3
+tensorflow==2.20.0
+albumentations>=1.4.0
 coloredlogs>=15
 scikit-image>=0.16.2
-imgaug==0.4.0
 pandas
 mlflow
-tensorflow-addons
 tensorflow_datasets
-wandb # seems to be required by torch-lightning
+wandb # seems to be required by lightning
 kornia
 transformers>=4.22.0
 datasets>=2.5.1
-sentencepiece>=0.1.97
 nltk

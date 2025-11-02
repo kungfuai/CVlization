@@ -367,7 +367,6 @@ class LegacyTrainingPipeline:
             raise ValueError("Unknown dataset provider: {}".format(dataset_provider))
 
     def convert_tf_dataset_to_iterable_dataset(self, tf_dataset):
-        # TODO: allow using imgaug as a default
         # TODO: transforms should be in a separate class
         # https://github.com/kungfuai/mtrx_2/blob/1b5ff963f4b732883e95e1f86dfbecbb95a7a9ff/src/data/transforms.py#L31
         import torch

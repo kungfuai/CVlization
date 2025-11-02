@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from multiprocessing import cpu_count
-from pytorch_lightning.loggers import MLFlowLogger
-from pytorch_lightning import Trainer
+from ...lightning_utils import MLFlowLogger, Trainer
 from torch import nn
 from torch.utils.data import DataLoader
 import torchvision

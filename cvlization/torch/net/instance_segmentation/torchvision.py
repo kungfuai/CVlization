@@ -2,7 +2,7 @@ import logging
 import torch
 import torchvision
 from typing import Union
-from pytorch_lightning import LightningModule
+from ...lightning_utils import LightningModule
 
 try:
     from torchmetrics.detection.map import MeanAveragePrecision

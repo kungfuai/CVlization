@@ -2,8 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from typing import List
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks import Callback
+from ...lightning_utils import pl, Callback
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -298,6 +297,5 @@ class ImageClassifierCallback(Callback):
         pred_file_path = os.path.join(trainer.logger.log_dir, self.pred_csv_filename)
         preds = pd.DataFrame(np.concatenate(self.predict_rows), columns=self.class_labels)
         pd.DataFrame(preds).to_csv(pred_file_path, index=False)
-
 
 
