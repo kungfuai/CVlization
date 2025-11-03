@@ -1,0 +1,36 @@
+name: analytical-tabular-marketing-gbt-upsell-propensity
+capability: analytical/tabular/marketing
+modalities:
+  - tabular
+datasets:
+  - bank_marketing
+stability: beta
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train the upsell propensity model
+  predict:
+    script: predict.sh
+    description: Score customer records
+tags:
+  - lightgbm
+  - gbt
+  - marketing
+  - propensity
+  - tabular
+tasks:
+  - binary_classification
+  - upsell_propensity
+frameworks:
+  - lightgbm
+  - gbt
+  - scikit-learn
+description: Upsell propensity modeling on the UCI Bank Marketing dataset using the gbt (LightGBM) pipeline.
+last_verification_note: "2025-11-02: Build/train/predict verified on Apple M4 Pro (CPU). Validation accuracy 0.89, ROC-AUC 0.95 on UCI Bank Marketing dataset. Feature importances exported to artifacts/feature_importance.csv."
