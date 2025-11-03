@@ -12,7 +12,7 @@ from cvlization.data.dataset_builder import TransformedMapStyleDataset
 from cvlization.transforms.image_augmentation_builder import ImageAugmentationBuilder
 from cvlization.transforms.example_transform import ExampleTransform
 from cvlization.specs.prediction_tasks.semantic_segmentation import SemanticSegmentation
-from cvlization.legacy_training_pipeline import LegacyTrainingPipeline
+from cvlization import CrossFrameworkTrainingPipeline
 from cvlization.dataset.stanford_background import StanfordBackgroundDatasetBuilder
 from cvlization.torch.net.semantic_segmentation.torchvision import (
     TorchvisionSemanticSegmentationModelFactory,
@@ -124,7 +124,7 @@ class TrainingSession:
         return DatasetBuilderWithTransform(dataset_builder)
 
     def create_training_pipeline(self, model):
-        training_pipeline = LegacyTrainingPipeline(
+        training_pipeline = CrossFrameworkTrainingPipeline(
             # Annotating the ml framework helps the training pipeline to use
             #   appropriate adapters for the dataset.
             ml_framework=MLFramework.PYTORCH,
