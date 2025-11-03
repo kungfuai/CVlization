@@ -75,3 +75,4 @@ results/
 
 # Temporary result files
 /result.json
+unused_modules.md

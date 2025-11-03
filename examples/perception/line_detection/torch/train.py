@@ -2,7 +2,7 @@ from cvlization.dataset.york_lines import YorkLinesDatasetBuilder
 from cvlization.torch.net.line_detection.model_factory import (
     TorchLineDetectionModelFactory,
 )
-from cvlization.legacy_training_pipeline import LegacyTrainingPipeline
+from cvlization import CrossFrameworkTrainingPipeline
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.torch.net.line_detection.letr.util import collate_fn
 
@@ -30,7 +30,7 @@ class TrainingSession:
         )
 
     def create_training_pipeline(self, model):
-        training_pipeline = LegacyTrainingPipeline(
+        training_pipeline = CrossFrameworkTrainingPipeline(
             # Annotating the ml framework helps the training pipeline to use
             #   appropriate adapters for the dataset.
             ml_framework=MLFramework.PYTORCH,

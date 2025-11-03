@@ -2,7 +2,7 @@ import logging
 
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.dataset.kitti_tiny import KittiTinyDatasetBuilder
-from cvlization.legacy_training_pipeline import LegacyTrainingPipeline as TrainingPipeline
+from cvlization import CrossFrameworkTrainingPipeline as TrainingPipeline
 from cvlization.torch.training_pipeline.object_detection.torchvision.model import (
     TorchvisionDetectionModelFactory,
 )
