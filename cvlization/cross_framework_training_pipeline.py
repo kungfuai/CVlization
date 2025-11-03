@@ -19,12 +19,12 @@ LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class LegacyTrainingPipeline:
-    """
-    Please checkout cvlization.torch.torch_training_pipeline for the most up-to-date
-    implementation.
+class CrossFrameworkTrainingPipeline:
+    """Framework-agnostic training pipeline used by shared Torch/TF examples.
 
-    TODO: remove most of implementation in this class and make it mainly an interface.
+    Newer torch-first pipelines live under ``cvlization.torch.training_pipeline``.
+    This class stays around for multi-framework compatibility while we modernize
+    the API surface.
     """
 
     ml_framework: MLFramework = MLFramework.PYTORCH
