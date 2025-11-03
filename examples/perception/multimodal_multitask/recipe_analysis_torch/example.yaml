@@ -1,0 +1,38 @@
+name: recipe-analysis-torch
+capability: perception/multimodal
+modalities:
+- vision
+- tabular
+- text
+datasets:
+- zzsi/recipes_10k
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 15
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image for the recipe multimodal example
+  train:
+    script: train.sh
+    description: Train the tri-modal recipe model on a subset of the dataset
+tags:
+- multimodal
+- tri-modal
+- recipe
+- calorie-prediction
+- pytorch
+- transformers
+tasks:
+- regression
+- multi-task-learning
+frameworks:
+- pytorch
+- transformers
+description: >
+  Tri-modal multi-task learning example that fuses recipe photos, structured features (nutrition, servings, etc.),
+  and text (ingredients list) to predict calories and total cooking time. Demonstrates CVlization's ability to
+  combine vision (ResNet), tabular (MLP), and language (DistilBERT) encoders in a unified spec-based pipeline.
+  Text features can be disabled with --no-text flag for bi-modal training (image + tabular only).
