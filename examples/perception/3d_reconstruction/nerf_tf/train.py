@@ -5,7 +5,7 @@ from tensorflow import keras
 from cvlization.tensorflow.net.nerf.tiny_nerf import TinyNerfModel
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.specs.prediction_tasks.nerf import Nerf
-from cvlization.legacy_training_pipeline import LegacyTrainingPipeline
+from cvlization import CrossFrameworkTrainingPipeline
 from cvlization.dataset.tiny_nerf import TinyNerfDatasetBuilder
 
 
@@ -24,7 +24,7 @@ class TrainingSession:
 
         model = self.create_model()
 
-        training_pipeline = LegacyTrainingPipeline(
+        training_pipeline = CrossFrameworkTrainingPipeline(
             ml_framework=MLFramework.TENSORFLOW,
             prediction_task=prediction_task,
             model=model,
