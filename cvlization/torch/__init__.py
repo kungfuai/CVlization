@@ -1,3 +1,4 @@
 """PyTorch-specific implementations."""
 
-from .encoder.torch_image_backbone import create_image_backbone, image_backbone_names
+# Avoid eager imports at package level to prevent conflicts with `import torch`
+# Users should use explicit imports: `from cvlization.torch.encoder.torch_image_backbone import ...`
