@@ -7,7 +7,9 @@
 - analytical/tabular/customer_analytics/gbt_telco_churn: Churn prediction use case built on the gbt (LightGBM) wrapper with Telco Customer dataset.
 - analytical/tabular/risk_scoring/gbt_credit_default: Credit default modeling using gbt with imbalance handling and explainability.
 - analytical/tabular/marketing/gbt_upsell_propensity: Campaign response propensity modeling with uplift-aware metrics using gbt.
-- analytical/tabular/few_shot_tabpfn: Few-shot classification/regression on tabular benchmarks using TabPFN for instant inference without traditional training loops.
+- analytical/tabular/uncertainty/quantile_lightgbm: Pinball-loss LightGBM quantile regression delivering calibrated prediction intervals (e.g., California Housing).
+- analytical/tabular/uncertainty/catboost_quantile: CatBoost quantile boosting pipeline for asymmetric interval estimates on medium-sized tabular datasets.
+- analytical/tabular/uncertainty/mapie_conformal: Model-agnostic conformal prediction intervals powered by MAPIE wrapping any base regressor/classifier.
 - analytical/tabular/regression/gbt_housing_prices: Structured regression workflow predicting housing prices with gbt, featuring feature importance, calibration, and scenario analysis.
 - analytical/tabular/anomaly_detection/pyod_fraud_detection: Transaction fraud detection pipeline using PyOD ensembles with Dockerized ingestion of public fraud datasets.
 - analytical/tabular/survival/pycox_retention: Customer survival / churn-time modeling using PyCox (DeepSurv-style) with evaluation of retention and lifetime metrics.
