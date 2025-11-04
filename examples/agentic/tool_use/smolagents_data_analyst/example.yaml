@@ -1,0 +1,36 @@
+name: agentic-smolagents-data-analyst
+capability: agentic/tool_use
+modalities:
+- language
+- tabular
+datasets:
+- marketing_kpi_sample
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 2
+presets:
+  build:
+    script: build.sh
+    description: Build the smolagents data analyst Docker image
+  predict:
+    script: predict.sh
+    description: Ask a business question against the marketing KPI dataset
+  evaluate:
+    script: evaluate.sh
+    description: Run heuristic checks for common analytics questions
+tags:
+- smolagents
+- tool-use
+- duckdb
+- pandas
+- analytics
+tasks:
+- business_intelligence
+- analytics
+frameworks:
+- smolagents
+- duckdb
+- pandas
+description: Smolagents-driven analytics example that combines DuckDB SQL and Python tools to answer marketing KPI questions.
