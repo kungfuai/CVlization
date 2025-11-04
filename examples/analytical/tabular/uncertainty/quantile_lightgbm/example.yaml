@@ -1,0 +1,35 @@
+name: analytical-tabular-uncertainty-quantile-lightgbm
+capability: analytical/tabular/uncertainty
+modalities:
+  - tabular
+datasets:
+  - california_housing
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train LightGBM quantile models for prediction intervals
+  predict:
+    script: predict.sh
+    description: Generate predictions and prediction intervals on new data
+tags:
+  - lightgbm
+  - quantile
+  - prediction-interval
+  - tabular
+  - regression
+tasks:
+  - regression
+  - prediction_intervals
+frameworks:
+  - lightgbm
+  - scikit-learn
+description: Quantile LightGBM regression on California Housing to produce calibrated prediction intervals.
+last_verification_note: "2025-11-04: Build/train/predict verified on Apple M4 Pro (CPU). MAE 0.27; coverage ~0.68 for 10-90 quantile band on California Housing."
