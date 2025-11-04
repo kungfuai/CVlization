@@ -1,0 +1,35 @@
+name: analytical-tabular-anomaly-detection-pyod-fraud-detection
+capability: analytical/tabular/anomaly_detection
+modalities:
+  - tabular
+datasets:
+  - credit_card_fraud
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train PyOD isolation-forest fraud detector
+  predict:
+    script: predict.sh
+    description: Score transactions with anomaly probabilities
+tags:
+  - pyod
+  - anomaly-detection
+  - fraud
+  - tabular
+  - isolation-forest
+tasks:
+  - anomaly_detection
+  - fraud_detection
+frameworks:
+  - pyod
+  - scikit-learn
+description: Isolation-Forest anomaly detection on credit card transactions using PyOD with calibrated metrics and investigation artifacts.
+last_verification_note: "2025-11-04: Build/train/predict verified with CVL CLI on Apple M4 Pro (CPU-only). ROC-AUC 0.94, PR-AUC 0.47, F1 0.46 on creditcard.csv (TensorFlow mirror) with MAX_NORMAL_SAMPLES=80k."
