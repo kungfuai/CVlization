@@ -8,7 +8,6 @@
 - analytical/tabular/risk_scoring/gbt_credit_default: Credit default modeling using gbt with imbalance handling and explainability.
 - analytical/tabular/marketing/gbt_upsell_propensity: Campaign response propensity modeling with uplift-aware metrics using gbt.
 - analytical/tabular/uncertainty/quantile_lightgbm: Pinball-loss LightGBM quantile regression delivering calibrated prediction intervals (e.g., California Housing).
-- analytical/tabular/uncertainty/catboost_quantile: CatBoost quantile boosting pipeline for asymmetric interval estimates on medium-sized tabular datasets.
 - analytical/tabular/uncertainty/mapie_conformal: Model-agnostic conformal prediction intervals powered by MAPIE wrapping any base regressor/classifier.
 - analytical/tabular/regression/gbt_housing_prices: Structured regression workflow predicting housing prices with gbt, featuring feature importance, calibration, and scenario analysis.
 - analytical/tabular/anomaly_detection/pyod_fraud_detection: Transaction fraud detection pipeline using PyOD ensembles with Dockerized ingestion of public fraud datasets.
