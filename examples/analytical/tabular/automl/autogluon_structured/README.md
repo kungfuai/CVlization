@@ -1,6 +1,6 @@
 # AutoGluon Structured AutoML (Telco Churn)
 
-This example demonstrates an AutoML workflow with [AutoGluon](https://auto.gluon.ai/) on the Telco Customer Churn dataset. AutoGluon automatically explores ensembles, bagging, and multi-layer stacking to deliver strong tabular baselines with minimal code.
+This example demonstrates an AutoML workflow with [AutoGluon](https://auto.gluon.ai/) for binary churn classification (predicting whether a customer will leave). By default it uses the Telco Customer Churn dataset, but you can swap in any dataset with a churn label column. AutoGluon automatically explores ensembles, bagging, and multi-layer stacking to deliver strong tabular baselines with minimal code.
 
 ## Dataset
 
@@ -9,14 +9,14 @@ This example demonstrates an AutoML workflow with [AutoGluon](https://auto.gluon
 ## Quickstart
 
 ```bash
-# Build container (uses official AutoGluon CPU image)
-cvl run autogluon-structured build
+# Build container (uses slim Python + AutoGluon tabular)
+cvl run churn-autogluon build
 
 # Train AutoML models with 10-minute budget
-cvl run autogluon-structured train
+cvl run churn-autogluon train
 
 # Score new customer records
-cvl run autogluon-structured predict
+cvl run churn-autogluon predict
 ```
 
 Training pipeline steps:

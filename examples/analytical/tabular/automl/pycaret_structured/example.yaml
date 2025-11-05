@@ -1,0 +1,33 @@
+name: churn-pycaret
+capability: analytical/tabular/automl
+modalities:
+  - tabular
+datasets:
+  - telco_customer_churn
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 8
+presets:
+  build:
+    script: build.sh
+    description: Build the PyCaret CPU image
+  train:
+    script: train.sh
+    description: Run PyCaret AutoML on Telco churn dataset
+  predict:
+    script: predict.sh
+    description: Score Telco records using the best PyCaret model
+tags:
+  - pycaret
+  - automl
+  - churn
+  - tabular
+tasks:
+  - binary_classification
+  - churn_prediction
+frameworks:
+  - pycaret
+description: PyCaret AutoML baseline on the Telco Customer Churn dataset, exporting leaderboards, metrics, and saved model.
+last_verification_note: "2025-11-04: Build/train/predict verified with CVL CLI on Apple M4 Pro (CPU-only). ROC-AUC 0.84, accuracy 0.76 from best logistic regression model."

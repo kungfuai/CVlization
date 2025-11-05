@@ -1,4 +1,4 @@
-name: housing-gbt
+name: houseprice-gbt
 capability: analytical/tabular/regression
 modalities:
   - tabular
