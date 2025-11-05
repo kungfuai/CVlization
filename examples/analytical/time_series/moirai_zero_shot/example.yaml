@@ -32,4 +32,4 @@ frameworks:
   - gluonts
   - pytorch
 description: Zero-shot forecasting workflow using Salesforce Moirai foundation models via Uni2TS on the M4 hourly benchmark.
-last_verification_note: "2025-11-05: Build/forecast verified with CVL on Apple M4 Pro (CPU-only). mean_wQuantileLoss≈0.094 and sMAPE≈0.096 on M4 hourly (2 series, 1 window)."
+last_verification_note: "2025-11-05: Build/forecast verified with CVL on Apple M4 Pro (CPU-only). Moirai-1.1 small: mean_wQuantileLoss≈0.094, sMAPE≈0.096 (M4 hourly, 2 series × 1 window). Moirai-2.0 small option also exercised (1 series × 1 window) with mean_wQuantileLoss≈0.026, sMAPE≈0.033."
