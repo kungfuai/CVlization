@@ -1,0 +1,43 @@
+name: dowhy-berkeley-bias
+capability: analytical/tabular/causal
+modalities:
+  - tabular
+datasets:
+  - uc_berkeley_admissions_1973
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 2
+  disk_gb: 2
+presets:
+  run:
+    script: train.sh
+    description: Execute the full DoWhy pipeline (discovery → identify → estimate → refute)
+  discovery:
+    script: train.sh -- --stage discovery
+    description: Generate descriptive admission statistics without causal adjustment
+  identify:
+    script: train.sh -- --stage identify
+    description: Build the causal graph and report identified estimands
+  estimate:
+    script: train.sh -- --stage estimate
+    description: Estimate causal effect after identification (no refutation)
+  refute:
+    script: train.sh -- --stage refute
+    description: Run estimation with a random common-cause refutation
+  report:
+    script: predict.sh -- --input artifacts/sample_input.csv --output outputs/per_department.csv --summary outputs/summary.json
+    description: Recompute per-department admission gaps and summary metrics for the sample dataset
+tags:
+  - dowhy
+  - causal
+  - fairness
+  - simpsons-paradox
+tasks:
+  - treatment_effects
+  - fairness_audit
+frameworks:
+  - dowhy
+  - scikit-learn
+description: DoWhy causal analysis of the UC Berkeley graduate admissions case, highlighting Simpson’s paradox and adjusted gender effects.
+last_verification_note: "2025-11-05: Verified build/train/predict via CVL on Apple M4 Pro (CPU). Naïve gap -0.142; adjusted causal effect -0.142 with random common-cause refutation supporting robustness."
