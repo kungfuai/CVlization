@@ -5,9 +5,28 @@ import json
 from pathlib import Path
 
 from pipeline import run_query
+from dotenv import load_dotenv
 
 OUTPUT_DIR = Path("outputs")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _load_env() -> None:
+    candidates = []
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidates.append(parent / ".env")
+    candidates.append(Path("/cvlization_repo/.env"))
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
+_load_env()
 
 
 def parse_args() -> argparse.Namespace:

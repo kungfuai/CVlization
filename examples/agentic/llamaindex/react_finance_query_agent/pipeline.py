@@ -14,6 +14,25 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.huggingface import HuggingFaceLLM
 from llama_index.llms.openai import OpenAI
 from llama_index.core.settings import Settings
+from dotenv import load_dotenv
+
+
+def _load_env() -> None:
+    candidates = []
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidates.append(parent / ".env")
+    candidates.append(Path("/cvlization_repo/.env"))
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
+_load_env()
 
 STORAGE_DIR = Path(__file__).resolve().parent / "storage"
 HF_CACHE = Path(os.getenv("HF_HOME", "/workspace/.cache/huggingface"))

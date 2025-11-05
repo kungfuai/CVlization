@@ -13,6 +13,25 @@ from typing import Dict, Iterable, List, Optional, Tuple
 import numpy as np
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from dotenv import load_dotenv
+
+
+def _load_env() -> None:
+    candidates = []
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidates.append(parent / ".env")
+    candidates.append(Path("/cvlization_repo/.env"))
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
+_load_env()
 
 try:
     import litellm  # type: ignore

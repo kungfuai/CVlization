@@ -27,3 +27,7 @@ frameworks:
 - llamaindex
 - sqlite
 description: Structured JSON analytics via LlamaIndex JSONalyze workflow with optional mock heuristics.
+verification:
+  last_verified: 2025-11-05
+  last_verification_note: |
+    Verified build and OpenAI gpt-5-nano structured queries (default + science/engineering questions) after workflow fixes.

@@ -6,12 +6,31 @@ from pathlib import Path
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
 from llama_index.core.settings import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from dotenv import load_dotenv
 
 from scripts.download_10k import FILES, download_file
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data" / "raw"
 STORAGE_DIR = BASE_DIR / "storage"
+
+
+def _load_env() -> None:
+    candidates = []
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidates.append(parent / ".env")
+    candidates.append(Path("/cvlization_repo/.env"))
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
+_load_env()
 
 DEFAULT_EMBED_MODEL = os.getenv(
     "LLAMA_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
