@@ -1,4 +1,4 @@
-name: autogluon-structured
+name: churn-autogluon
 capability: analytical/tabular/automl
 modalities:
   - tabular
