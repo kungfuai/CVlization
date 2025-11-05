@@ -15,13 +15,13 @@ per-horizon retention probabilities for analytics teams.
 
 ```bash
 # Build the container image
-cvl run analytical-tabular-survival-pycox-retention build
+cvl run pycox-retention build
 
 # Train DeepSurv-style CoxPH model with PyCox
-cvl run analytical-tabular-survival-pycox-retention train
+cvl run pycox-retention train
 
 # Score new cohorts (defaults to saved sample inputs)
-cvl run analytical-tabular-survival-pycox-retention predict
+cvl run pycox-retention predict
 ```
 
 Training loads the SUPPORT dataset, one-hot encodes categorical covariates,

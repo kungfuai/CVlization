@@ -1,4 +1,4 @@
-name: analytical-tabular-marketing-gbt-upsell-propensity
+name: gbt-upsell-propensity
 capability: analytical/tabular/marketing
 modalities:
   - tabular

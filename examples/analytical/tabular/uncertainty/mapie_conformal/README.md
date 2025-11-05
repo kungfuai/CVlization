@@ -15,13 +15,13 @@ median house values.
 
 ```bash
 # Build container
-cvl run analytical-tabular-uncertainty-mapie-conformal build
+cvl run mapie-conformal build
 
 # Train and calibrate
-cvl run analytical-tabular-uncertainty-mapie-conformal train
+cvl run mapie-conformal train
 
 # Run inference on saved sample inputs
-cvl run analytical-tabular-uncertainty-mapie-conformal predict
+cvl run mapie-conformal predict
 ```
 
 The training script downloads the dataset via scikit-learn, fits the base
