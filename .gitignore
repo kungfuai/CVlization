@@ -75,3 +75,7 @@ results/
 
 # Temporary result files
 /result.json
+
+# Agentic prompt agent artifacts
+examples/agentic/optimization/mcts_prompt_agent/var/
+examples/agentic/optimization/mcts_prompt_agent/data/raw/
