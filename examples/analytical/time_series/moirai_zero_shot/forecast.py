@@ -14,6 +14,7 @@ from gluonts.dataset.repository import datasets
 from gluonts.dataset.split import split
 from gluonts.evaluation import Evaluator
 from uni2ts.model.moirai import MoiraiForecast, MoiraiModule
+from uni2ts.model.moirai2 import Moirai2Forecast, Moirai2Module
 
 ARTIFACTS_DIR = Path("artifacts")
 METRICS_PATH = ARTIFACTS_DIR / "metrics.json"
@@ -120,6 +121,12 @@ def save_sample_forecast(target_series: List[pd.Series], forecasts: List, path_c
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run zero-shot forecasting with Salesforce Moirai")
     parser.add_argument("--dataset", default="m4_hourly", help="GluonTS dataset name (default: m4_hourly)")
+    parser.add_argument(
+        "--model-family",
+        default="moirai",
+        choices=["moirai", "moirai2"],
+        help="Pretrained model family to use (moirai 1.1-R or moirai 2.0-R)",
+    )
     parser.add_argument("--model-size", default="small", choices=["small", "base", "large"], help="Moirai model size")
     parser.add_argument("--prediction-length", type=int, default=None, help="Forecast horizon. Defaults to dataset metadata")
     parser.add_argument("--context-length", type=int, default=512, help="Context window length passed to Moirai")
@@ -152,17 +159,30 @@ def main() -> None:
     if isinstance(patch_size, str) and patch_size != "auto":
         patch_size = int(patch_size)
 
-    module = MoiraiModule.from_pretrained(f"Salesforce/moirai-1.1-R-{args.model_size}")
-    model = MoiraiForecast(
-        module=module,
-        prediction_length=prediction_length,
-        context_length=effective_context,
-        patch_size=patch_size,
-        num_samples=args.num_samples,
-        target_dim=1,
-        feat_dynamic_real_dim=0,
-        past_feat_dynamic_real_dim=0,
-    )
+    if args.model_family == "moirai2":
+        if args.model_size != "small":
+            raise ValueError("Moirai 2.0 currently provides only the 'small' checkpoint.")
+        module = Moirai2Module.from_pretrained("Salesforce/moirai-2.0-R-small")
+        model = Moirai2Forecast(
+            module=module,
+            prediction_length=prediction_length,
+            context_length=effective_context,
+            target_dim=1,
+            feat_dynamic_real_dim=0,
+            past_feat_dynamic_real_dim=0,
+        )
+    else:
+        module = MoiraiModule.from_pretrained(f"Salesforce/moirai-1.1-R-{args.model_size}")
+        model = MoiraiForecast(
+            module=module,
+            prediction_length=prediction_length,
+            context_length=effective_context,
+            patch_size=patch_size,
+            num_samples=args.num_samples,
+            target_dim=1,
+            feat_dynamic_real_dim=0,
+            past_feat_dynamic_real_dim=0,
+        )
 
     predictor = model.create_predictor(batch_size=args.batch_size, device=args.device)
     forecasts = list(predictor.predict(test_data.input))
@@ -178,7 +198,13 @@ def main() -> None:
 
     summary = {
         "dataset": args.dataset,
-        "model": f"Salesforce/moirai-1.1-R-{args.model_size}",
+        "model_family": args.model_family,
+        "model_size": args.model_size,
+        "model": (
+            "Salesforce/moirai-2.0-R-small"
+            if args.model_family == "moirai2"
+            else f"Salesforce/moirai-1.1-R-{args.model_size}"
+        ),
         "prediction_length": prediction_length,
         "context_length": effective_context,
         "windows": args.windows,

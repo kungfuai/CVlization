@@ -14,12 +14,14 @@ Zero-shot time series forecasting with Salesforce's Moirai foundation model usin
 # From repository root
 cvl run moirai-zero-shot build
 cvl run moirai-zero-shot forecast -- --dataset m4_hourly --model-size small --windows 2
+# Use the Moirai 2.0 release (currently only the small checkpoint is published)
+cvl run moirai-zero-shot forecast -- --model-family moirai2 --model-size small
 ```
 
 - `build.sh` constructs the CPU image with Uni2TS, GluonTS, and PyTorch.
 - `forecast.sh` runs `forecast.py`, which:
   - Selects a few hourly series, performs a rolling evaluation, and
-  - Loads the requested Moirai checkpoint via `MoiraiModule.from_pretrained`.
+  - Loads the requested Moirai checkpoint (either `moirai-1.1-R-*` or `moirai-2.0-R-small`).
   - Writes `artifacts/metrics.json`, `artifacts/sample_forecast.csv`, and a preview plot.
 
 To reuse the downloaded weights between runs, Hugging Face caches are mounted at `${HOME}/.cache/huggingface` by the wrapper script.
@@ -28,5 +30,5 @@ To reuse the downloaded weights between runs, Hugging Face caches are mounted at
 
 - Salesforce Research, *Moirai: Unified Foundation Models for Time Series Forecasting* ([arXiv:2402.02592](https://arxiv.org/abs/2402.02592))
 - Uni2TS library: <https://github.com/SalesforceAIResearch/uni2ts>
-- Hugging Face model card: <https://huggingface.co/Salesforce/moirai-1.1-R-small>
+- Hugging Face model cards: <https://huggingface.co/Salesforce/moirai-1.1-R-small>, <https://huggingface.co/Salesforce/moirai-2.0-R-small>
 - M4 competition data: <https://www.m4.unic.ac.cy/>
