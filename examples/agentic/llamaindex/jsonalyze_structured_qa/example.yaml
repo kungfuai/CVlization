@@ -1,0 +1,29 @@
+name: agentic-llamaindex-jsonalyze
+capability: agentic/workflow
+modalities:
+- tabular
+- language
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 1
+presets:
+  build:
+    script: build.sh
+    description: Build the LlamaIndex JSONalyze workflow image
+  query:
+    script: query.sh
+    description: Run a structured query against the JSON dataset
+  evaluate:
+    script: evaluate.sh
+    description: Execute mock-mode smoke tests
+tags:
+- llamaindex
+- jsonalyze
+- workflow
+- sql
+frameworks:
+- llamaindex
+- sqlite
+description: Structured JSON analytics via LlamaIndex JSONalyze workflow with optional mock heuristics.
