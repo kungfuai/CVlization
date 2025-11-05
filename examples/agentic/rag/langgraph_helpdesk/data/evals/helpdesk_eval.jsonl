@@ -1,0 +1,3 @@
+{"question": "How do I share model downloads across multiple CVlization examples?", "answer": "Mount the shared ~/.cache/cvlization directory into each container so model downloads are reused."}
+{"question": "What should I check if the container cannot access my GPU?", "answer": "Verify the NVIDIA Container Toolkit is installed, confirm nvidia-smi works on the host, and launch Docker with --gpus=all."}
+{"question": "How can I list the available CVlization recipes?", "answer": "Use the cvl CLI by running cvl list or inspect the examples directory."}

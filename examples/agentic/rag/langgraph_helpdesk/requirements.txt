@@ -1,0 +1,13 @@
+langchain==1.0.3
+langchain-community==0.3.31
+langchain-openai==1.0.2
+langchain-groq==1.0.0
+langchain-ollama==1.0.0
+langgraph==1.0.2
+langchain-text-splitters==1.0.0
+chromadb==0.5.23
+sentence-transformers==3.2.1
+datasets==2.19.1
+duckduckgo-search==6.2.5
+python-dotenv==1.0.1
+uvloop==0.20.0
