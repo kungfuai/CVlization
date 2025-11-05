@@ -65,14 +65,14 @@ This plan tracks the three agentic example directories we intend to add under `e
 ## 6. Local LLaMA.cpp Agent (Fully Offline)
 - **Path:** `examples/agentic/local/llamacpp_assistant`
 - **Goal:** Deliver a self-contained agent workflow that runs entirely on-device using llama.cpp for both embedding and generation, enabling offline Q&A or tool-use demos without external APIs.
-- **Key Pieces:**
-  - Docker image with llama.cpp build, gguf model download helper, and uvicorn/fastapi (optional) for serving.
-  - Scripts: `build.sh`, `ingest.sh` (convert source docs to embeddings using llama.cpp), `query.sh` for CLI inference, `evaluate.sh` for basic regression checks.
-  - Assets: example gguf model list (e.g., `Phi-3-mini.gguf`), sample documents, caching guidance.
-- **Next Steps:**
-  1. Decide on default gguf model(s) and provide download automation with checksum verification.
-  2. Implement llama.cpp bindings (cffi or `llama-cpp-python`) inside Docker image with CPU-friendly defaults.
-  3. Document performance tips (threading, context length) and optional GPU build flags in README.
+- **Key Pieces (implemented):**
+  - Docker image with llama.cpp build + scripted GGUF downloads (Phi-2 + Nomic embeddings).
+  - Scripts: `build.sh`, `ingest.sh`, `query.sh`, `evaluate.sh` plus shared `pipeline.py`.
+  - Assets: Lyft/Uber finance excerpts, local vector cache, README guidance.
+- **Follow-ups:**
+  1. Measure CPU latency across thread counts and document recommended settings.
+  2. Add optional GPU build flag instructions (Metal/CUDA) for accelerated inference.
+  3. Extend evaluation set or integrate simple accuracy checks beyond keyword validation.
 
 ## Cross-Cutting Tasks
 - Align folder scaffolding with existing examples (YAML metadata, cache usage, `.dockerignore`).
