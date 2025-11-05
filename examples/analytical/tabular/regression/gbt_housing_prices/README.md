@@ -16,13 +16,13 @@ additional living space) translate into adjusted valuations.
 
 ```bash
 # Build the container image
-cvl run housing-gbt build
+cvl run houseprice-gbt build
 
 # Train the calibrated LightGBM regression model
-cvl run housing-gbt train
+cvl run houseprice-gbt train
 
 # Score new listings (defaults to saved sample inputs)
-cvl run housing-gbt predict
+cvl run houseprice-gbt predict
 ```
 
 The training script will download the dataset, split train/calibration/test

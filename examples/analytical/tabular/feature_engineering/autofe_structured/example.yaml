@@ -1,4 +1,4 @@
-name: telco-autofe
+name: churn-autofe
 capability: analytical/tabular/feature_engineering
 modalities:
   - tabular

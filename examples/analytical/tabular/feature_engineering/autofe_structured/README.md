@@ -14,13 +14,13 @@ transformation pipeline.
 
 ```bash
 # Build the container
-cvl run telco-autofe build
+cvl run churn-autofe build
 
 # Run feature generation + training
-cvl run telco-autofe train
+cvl run churn-autofe train
 
 # Score new records (defaults to sample_input.csv)
-cvl run telco-autofe predict
+cvl run churn-autofe predict
 ```
 
 Artifacts produced:
