@@ -1,0 +1,15 @@
+{
+  "dataset": "uc_berkeley_grad_admissions_1973",
+  "source_notes": "Aggregated counts from UC Berkeley admission data (Bickel, Hammel, O'Connell, 1975).",
+  "records": 4526,
+  "departments": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
+  "graph": "digraph {\n    gender_binary -> department;\n    gender_binary -> admitted;\n    department -> admitted;\n}",
+  "stage": "refute"
+}

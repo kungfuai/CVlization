@@ -1,0 +1,14 @@
+{
+  "naive_rates": {
+    "female_rate": 0.30354223433242505,
+    "male_rate": 0.4451876625789669,
+    "female_minus_male": -0.14164542824654186
+  },
+  "causal": {
+    "identified_estimand": "Estimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n       d                     \n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500(E[admitted])\nd[gender_binary]             \nEstimand assumption 1, Unconfoundedness: If U\u2192{gender_binary} and U\u2192admitted then P(admitted|gender_binary,,U) = P(admitted|gender_binary,)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!\n\n### Estimand : 4\nEstimand name: general_adjustment\nEstimand expression:\n       d                     \n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500(E[admitted])\nd[gender_binary]             \nEstimand assumption 1, Unconfoundedness: If U\u2192{gender_binary} and U\u2192admitted then P(admitted|gender_binary,,U) = P(admitted|gender_binary,)\n",
+    "adjusted_effect": -0.14164542824653858,
+    "refute_new_effect": -0.1416594509219259,
+    "refute_effect_strength_on_t": NaN
+  },
+  "simpsons_paradox_gap": -0.14164542824654186
+}
