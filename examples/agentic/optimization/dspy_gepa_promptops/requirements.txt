@@ -1,0 +1,3 @@
+dspy-ai==2.5.2
+gepa==0.0.19
+python-dotenv==1.0.1
