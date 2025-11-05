@@ -1,0 +1,32 @@
+name: agentic-promptagent-mcts
+capability: agentic/optimization
+modalities:
+- language
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 2
+presets:
+  build:
+    script: build.sh
+    description: Build the PromptAgent-style MCTS Docker image
+  optimize:
+    script: optimize.sh
+    description: Run the MCTS prompt optimization search
+  evaluate:
+    script: evaluate.sh
+    description: Verify the optimized prompt meets or exceeds baseline accuracy
+tags:
+- promptagent
+- mcts
+- prompt-optimization
+- bigbench
+- rag
+frameworks:
+- transformers
+- litellm
+description: Monte Carlo Tree Search prompt optimization on BIG-bench penguins_in_a_table with a PromptAgent-inspired workflow.
+verification:
+  last_verified: 2025-11-05
+  last_verification_note: "Verified build, optimize.sh, evaluate.sh in mock mode (Flan-T5) with iterations=6, depth=2; accuracy improved 0.257→0.314."
