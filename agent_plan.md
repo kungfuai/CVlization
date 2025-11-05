@@ -62,6 +62,18 @@ This plan tracks the three agentic example directories we intend to add under `e
   2. Implement logging of search tree statistics (reward curves, best prompts) under `var/`.
   3. Provide guidance on reproducibility knobs (tree depth, expansion count, temperature) and API cost estimates.
 
+## 6. Local LLaMA.cpp Agent (Fully Offline)
+- **Path:** `examples/agentic/local/llamacpp_assistant`
+- **Goal:** Deliver a self-contained agent workflow that runs entirely on-device using llama.cpp for both embedding and generation, enabling offline Q&A or tool-use demos without external APIs.
+- **Key Pieces:**
+  - Docker image with llama.cpp build, gguf model download helper, and uvicorn/fastapi (optional) for serving.
+  - Scripts: `build.sh`, `ingest.sh` (convert source docs to embeddings using llama.cpp), `query.sh` for CLI inference, `evaluate.sh` for basic regression checks.
+  - Assets: example gguf model list (e.g., `Phi-3-mini.gguf`), sample documents, caching guidance.
+- **Next Steps:**
+  1. Decide on default gguf model(s) and provide download automation with checksum verification.
+  2. Implement llama.cpp bindings (cffi or `llama-cpp-python`) inside Docker image with CPU-friendly defaults.
+  3. Document performance tips (threading, context length) and optional GPU build flags in README.
+
 ## Cross-Cutting Tasks
 - Align folder scaffolding with existing examples (YAML metadata, cache usage, `.dockerignore`).
 - Update root `README.md` to introduce the Agentic section once at least one example lands.

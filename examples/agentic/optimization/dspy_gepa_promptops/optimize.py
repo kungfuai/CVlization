@@ -12,6 +12,25 @@ from dspy import Example
 
 from gepa import api as gepa_api
 from gepa.adapters.default_adapter.default_adapter import DefaultAdapter
+from dotenv import load_dotenv
+
+
+def _load_env() -> None:
+    candidates = []
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidates.append(parent / ".env")
+    candidates.append(Path("/cvlization_repo/.env"))
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
+_load_env()
 
 DATA_DIR = Path("data")
 DEFAULT_PROMPT = (

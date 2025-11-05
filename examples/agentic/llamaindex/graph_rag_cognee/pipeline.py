@@ -8,6 +8,25 @@ from typing import Any, Dict, List
 import networkx as nx
 from llama_index.llms.huggingface import HuggingFaceLLM
 from llama_index.llms.openai import OpenAI
+from dotenv import load_dotenv
+
+
+def _load_env() -> None:
+    candidates = []
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidates.append(parent / ".env")
+    candidates.append(Path("/cvlization_repo/.env"))
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
+_load_env()
 
 HF_CACHE = Path(os.getenv("HF_HOME", "/workspace/.cache/huggingface"))
 DEFAULT_PROVIDER = os.getenv("LLAMA_GRAPHRAG_PROVIDER", "mock").lower()
@@ -81,7 +100,8 @@ def _generate_answer_with_llm(llm, question: str, graph: nx.Graph) -> str:
         "about professionals and their skills. Answer the question using only this information.\n\n"
         f"Graph facts:\n{context}\n\nQuestion: {question}\nAnswer:"
     )
-    return llm.predict(prompt).strip()
+    completion = llm.complete(prompt)
+    return str(completion).strip()
 
 
 def _mock_answer(question: str) -> str:

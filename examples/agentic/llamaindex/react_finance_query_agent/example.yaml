@@ -28,3 +28,7 @@ tags:
 frameworks:
 - llamaindex
 description: Financial analyst agent using LlamaIndex ReAct workflow over Lyft/Uber 2021 10-Ks.
+verification:
+  last_verified: 2025-11-05
+  last_verification_note: |
+    Verified build, ingest, and OpenAI gpt-5-nano queries (default and comparison prompts).

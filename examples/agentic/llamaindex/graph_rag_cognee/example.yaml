@@ -25,3 +25,7 @@ tags:
 frameworks:
 - llamaindex
 description: Small Cognee GraphRAG demo that highlights graph search, RAG search, and related-node inspection with a mock fallback.
+verification:
+  last_verified: 2025-11-05
+  last_verification_note: |
+    Verified build and OpenAI gpt-5-nano query pipeline for default prompt after LLM completion adjustment.
