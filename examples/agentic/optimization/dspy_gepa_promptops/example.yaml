@@ -26,3 +26,6 @@ frameworks:
 - dspy
 - gepa
 description: Optimize a helpdesk prompt using DSPy GEPA with a mock fallback for offline runs.
+verification:
+  last_verified: 2025-11-05
+  last_verification_note: "Verified build, optimize.sh (+0.6→1.0 mock score lift), evaluate.sh in mock mode (Flan-T5 fallback) on macOS CPU."
