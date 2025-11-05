@@ -1,0 +1,37 @@
+name: analytical-tabular-causal-dowhy-policy-uplift
+capability: analytical/tabular/causal
+modalities:
+  - tabular
+datasets:
+  - lalonde_job_training
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train DoWhy/EconML uplift model and compute policy metrics
+  predict:
+    script: predict.sh
+    description: Score cohorts and recommend treatment rollout
+tags:
+  - dowhy
+  - econml
+  - uplift
+  - causal-inference
+  - marketing
+  - tabular
+tasks:
+  - causal_uplift
+  - policy_optimization
+frameworks:
+  - dowhy
+  - econml
+  - scikit-learn
+description: DoWhy-driven policy uplift modelling on the Lalonde job-training study with DR-Learner uplift scores and treatment recommendations.
+last_verification_note: "2025-11-04: Build/train/predict verified with CVL CLI on Apple M4 Pro (CPU-only). DR-Learner ATE -191, empirical uplift -92; top-20% policy gain +649."
