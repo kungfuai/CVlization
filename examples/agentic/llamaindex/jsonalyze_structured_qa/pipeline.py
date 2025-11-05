@@ -4,7 +4,6 @@ import asyncio
 import json
 import os
 import sqlite3
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -19,6 +18,25 @@ from llama_index.core.workflow.events import Event
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.huggingface import HuggingFaceLLM
 from llama_index.llms.openai import OpenAI
+from dotenv import load_dotenv
+
+
+def _load_env() -> None:
+    candidates = []
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidates.append(parent / ".env")
+    candidates.append(Path("/cvlization_repo/.env"))
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
+_load_env()
 
 try:
     import sqlite_utils
@@ -37,12 +55,6 @@ DEFAULT_EMBED_MODEL = os.getenv(
     "LLAMA_JSONALYZE_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
 )
 
-
-@dataclass
-class JsonAnalyzerEvent(Event):
-    sql_query: str
-    table_schema: Dict[str, Any]
-    results: List[Dict[str, Any]]
 
 
 DEFAULT_RESPONSE_SYNTHESIS_PROMPT_TMPL = (
@@ -64,7 +76,7 @@ DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
 
 class JSONAnalyzeQueryEngineWorkflow(Workflow):
     @step
-    async def jsonalyzer(self, ctx: Context, ev: StartEvent) -> JsonAnalyzerEvent:
+    async def jsonalyzer(self, ctx: Context, ev: StartEvent) -> Event:
         if sqlite_utils is None:
             raise ImportError(
                 "sqlite-utils is required. Rebuild the Docker image or install sqlite-utils."
@@ -96,16 +108,17 @@ class JSONAnalyzeQueryEngineWorkflow(Workflow):
         sql_query = sql_parser.parse_response_to_sql(response_str, ev.query)
 
         try:
-            results = list(db.query(sql_query))
+            raw_results = list(db.query(sql_query))
+            results = [dict(row) for row in raw_results]
         except sqlite_utils.utils.sqlite3.OperationalError as exc:
             raise ValueError(f"Invalid query generated: {sql_query}") from exc
 
-        return JsonAnalyzerEvent(
+        return Event(
             sql_query=sql_query, table_schema=table_schema, results=results
         )
 
     @step
-    async def synthesize(self, ctx: Context, ev: JsonAnalyzerEvent) -> StopEvent:
+    async def synthesize(self, ctx: Context, ev: Event) -> StopEvent:
         llm = await ctx.store.get("llm")
         query = await ctx.store.get("query")
         response_str = llm.predict(
@@ -118,6 +131,7 @@ class JSONAnalyzeQueryEngineWorkflow(Workflow):
         response_metadata = {
             "sql_query": ev.sql_query,
             "table_schema": str(ev.table_schema),
+            "results": ev.results,
         }
         response = Response(response=response_str, metadata=response_metadata)
         return StopEvent(result=response)
@@ -158,13 +172,16 @@ def _configure_llm(provider: str):
     raise ValueError(f"Unsupported provider '{provider}'.")
 
 
-def _run_workflow(llm, question: str, data: List[Dict[str, Any]], table_name: str):
+async def _arun_workflow(llm, question: str, data: List[Dict[str, Any]], table_name: str):
     workflow = JSONAnalyzeQueryEngineWorkflow()
-    return asyncio.run(
-        workflow.run(
-            query=question, list_of_dict=data, llm=llm, table_name=table_name
-        )
+    handler = workflow.run(
+        query=question, list_of_dict=data, llm=llm, table_name=table_name
     )
+    return await handler
+
+
+def _run_workflow(llm, question: str, data: List[Dict[str, Any]], table_name: str):
+    return asyncio.run(_arun_workflow(llm, question, data, table_name))
 
 
 MOCK_SQL_PATTERNS = [
@@ -261,11 +278,9 @@ def run_query(question: str, provider: str | None = None) -> Dict[str, Any]:
     llm = _configure_llm(provider)
     result = _run_workflow(llm, question, data, table_name)
     if isinstance(result, Response):
-        sql_query = result.metadata.get("sql_query") if result.metadata else None
-        rows: List[Dict[str, Any]] = []
-        if sql_query:
-            # regenerate results using sqlite-utils for determinism
-            rows = _run_mock(sql_query, data, table_name).get("results", [])
+        metadata = result.metadata or {}
+        sql_query = metadata.get("sql_query")
+        rows = metadata.get("results") or []
         return {
             "mode": provider,
             "answer": str(result).strip(),
@@ -277,10 +292,11 @@ def run_query(question: str, provider: str | None = None) -> Dict[str, Any]:
     if isinstance(result, StopEvent):
         payload = result.result  # type: ignore[attr-defined]
         if isinstance(payload, Response):
+            metadata = payload.metadata or {}
             return {
                 "mode": provider,
                 "answer": str(payload).strip(),
-                "sql_query": payload.metadata.get("sql_query") if payload.metadata else None,
-                "results": [],
+                "sql_query": metadata.get("sql_query"),
+                "results": metadata.get("results") or [],
             }
     raise RuntimeError("Unexpected workflow result")
