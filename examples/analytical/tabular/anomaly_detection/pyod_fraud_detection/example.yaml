@@ -1,4 +1,4 @@
-name: analytical-tabular-anomaly-detection-pyod-fraud-detection
+name: pyod-fraud
 capability: analytical/tabular/anomaly_detection
 modalities:
   - tabular

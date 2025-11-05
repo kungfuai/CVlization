@@ -17,13 +17,13 @@ investigation dashboards.
 
 ```bash
 # Build the container image
-cvl run analytical-tabular-anomaly-detection-pyod-fraud-detection build
+cvl run pyod-fraud build
 
 # Train the PyOD Isolation Forest detector + scaler
-cvl run analytical-tabular-anomaly-detection-pyod-fraud-detection train
+cvl run pyod-fraud train
 
 # Score new records (defaults to saved sample inputs)
-cvl run analytical-tabular-anomaly-detection-pyod-fraud-detection predict
+cvl run pyod-fraud predict
 ```
 
 The training script downloads the dataset, downsamples the majority class to a

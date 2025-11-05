@@ -13,13 +13,13 @@ estimate the incremental impact of the treatment program.
 
 ```bash
 # Build container
-cvl run analytical-tabular-causal-dowhy-policy-uplift build
+cvl run dowhy-uplift build
 
 # Train uplift model and estimate treatment effect
-cvl run analytical-tabular-causal-dowhy-policy-uplift train
+cvl run dowhy-uplift train
 
 # Score new cohorts for program rollout
-cvl run analytical-tabular-causal-dowhy-policy-uplift predict
+cvl run dowhy-uplift predict
 ```
 
 Training flow:

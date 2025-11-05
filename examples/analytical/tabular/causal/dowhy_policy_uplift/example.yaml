@@ -1,4 +1,4 @@
-name: analytical-tabular-causal-dowhy-policy-uplift
+name: dowhy-uplift
 capability: analytical/tabular/causal
 modalities:
   - tabular
