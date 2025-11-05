@@ -13,8 +13,8 @@ presets:
   build:
     script: build.sh
     description: Build the Merlion dashboard Docker image
-  train:
-    script: train.sh
+  smoke-test:
+    script: smoke.sh
     description: Smoke-test the dashboard server via Flask test client
   serve:
     script: serve.sh
@@ -37,4 +37,4 @@ frameworks:
   - dash
   - flask
 description: Dashboard-first workflow for Merlion anomaly and forecasting models with gunicorn-powered serving.
-last_verification_note: "2025-11-05: Build/train smoke-tested with CVL on Apple M4 Pro (CPU-only). Flask client hits / and dash layout endpoints successfully."
+last_verification_note: "2025-11-05: Build/smoke-test verified with CVL on Apple M4 Pro (CPU-only). Flask client hits / and dash layout endpoints successfully."

@@ -14,11 +14,11 @@ The dashboard loads datasets from the container filesystem. Two easy starting po
 ```bash
 # From repository root
 cvl run merlion-anomaly-dashboard build
-cvl run merlion-anomaly-dashboard train         # smoke-test the dashboard server
+cvl run merlion-anomaly-dashboard smoke-test  # smoke-test the dashboard server
 cvl run merlion-anomaly-dashboard serve      # launch the UI (Ctrl+C to stop)
 ```
 
-- `train.sh` runs `verify.py`, which hits the underlying Flask test client endpoints to ensure the dashboard boots correctly.
+- `smoke.sh` runs `verify.py`, which hits the underlying Flask test client endpoints to ensure the dashboard boots correctly.
 - `serve.sh` starts gunicorn on port 8050. Use `MERLION_DASHBOARD_PORT=9000` to publish a different host port, and mount data via `--mount type=bind,src=/path/to/data,dst=/workspace/data`.
 
 ## References
