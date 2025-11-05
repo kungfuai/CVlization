@@ -1,0 +1,29 @@
+name: agentic-llamacpp-offline
+capability: agentic/tool_use
+modalities:
+- language
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 6
+presets:
+  build:
+    script: build.sh
+    description: Build the llama.cpp offline assistant image
+  ingest:
+    script: ingest.sh
+    description: Download models (if needed) and create local embeddings
+  query:
+    script: query.sh
+    description: Ask a finance question using the offline llama.cpp RAG stack
+  evaluate:
+    script: evaluate.sh
+    description: Run smoke-test queries to validate offline responses
+tags:
+- llama.cpp
+- offline
+- rag
+frameworks:
+- llama.cpp
+description: Offline retrieval-augmented finance assistant using llama.cpp with Phi-2 and Nomic embedding GGUF models.

@@ -1,0 +1,2 @@
+{"question": "Which directory should be shared to prevent repeat model downloads?", "answer": "~/.cache/cvlization"}
+{"question": "How do I troubleshoot a container that cannot see the GPU?", "answer": "Check the NVIDIA Container Toolkit, confirm nvidia-smi, run Docker with --gpus=all."}

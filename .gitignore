@@ -75,3 +75,13 @@ results/
 
 # Temporary result files
 /result.json
+
+# Agentic prompt agent artifacts
+examples/agentic/optimization/mcts_prompt_agent/var/
+examples/agentic/optimization/mcts_prompt_agent/data/raw/
+examples/agentic/llamaindex/react_finance_query_agent/data/raw/
+examples/agentic/llamaindex/react_finance_query_agent/storage/
+examples/agentic/llamaindex/react_finance_query_agent/outputs/
+examples/agentic/llamaindex/jsonalyze_structured_qa/outputs/
+examples/agentic/llamaindex/graph_rag_cognee/outputs/
+examples/agentic/llamaindex/graph_rag_cognee/.cache/

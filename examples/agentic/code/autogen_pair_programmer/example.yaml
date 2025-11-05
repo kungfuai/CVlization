@@ -1,0 +1,32 @@
+name: agentic-autogen-pair-programmer
+capability: agentic/code
+modalities:
+- language
+- code
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 2
+presets:
+  build:
+    script: build.sh
+    description: Build the AutoGen pair programmer Docker image
+  run:
+    script: run.sh
+    description: Run a pair programming session to implement sum_of_squares
+  evaluate:
+    script: evaluate.sh
+    description: Verify the example in mock mode via pytest
+tags:
+- autogen
+- pair-programming
+- pytest
+- lite-llm
+tasks:
+- pair_programming
+- code_generation
+frameworks:
+- autogen
+- pytest
+description: AutoGen-driven coder/reviewer workflow that patches a small Python task, with a deterministic fallback when no LLM is available.

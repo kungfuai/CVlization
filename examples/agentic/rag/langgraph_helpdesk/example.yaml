@@ -1,0 +1,47 @@
+name: agentic-rag-langgraph-helpdesk
+capability: agentic/rag
+modalities:
+- language
+datasets:
+- cvlization-helpdesk
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 3
+presets:
+  build:
+    script: build.sh
+    description: Build the LangGraph helpdesk Docker image
+  ingest:
+    script: ingest.sh
+    description: Ingest support docs into Chroma vector store
+  query:
+    script: query.sh
+    description: Convenience alias for predict.sh
+  predict:
+    script: predict.sh
+    description: Answer a helpdesk question with LangGraph agent
+  evaluate:
+    script: evaluate.sh
+    description: Run heuristic evaluation on bundled QA set
+tags:
+- langgraph
+- langchain
+- rag
+- chromadb
+- helpdesk
+tasks:
+- retrieval_augmented_generation
+frameworks:
+- langgraph
+- langchain
+description: LangGraph-based helpdesk RAG agent with Chroma vector store, mock/remote LLM support, and heuristic evaluation.
+verification:
+  last_verified: 2025-11-04
+  commands:
+  - cvl run agentic-rag-langgraph-helpdesk build
+  - cvl run agentic-rag-langgraph-helpdesk ingest
+  - cvl run agentic-rag-langgraph-helpdesk predict -- --question "How can I list the available CVlization recipes?"
+  - cvl run agentic-rag-langgraph-helpdesk evaluate
+  notes: Verified with mock LLM using bundled synthetic docs; evaluation uses heuristic hit/coverage metrics.

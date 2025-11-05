@@ -1,0 +1,31 @@
+name: agentic-dspy-gepa-promptops
+capability: agentic/optimization
+modalities:
+- language
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 1
+presets:
+  build:
+    script: build.sh
+    description: Build the DSPy GEPA optimization Docker image
+  optimize:
+    script: optimize.sh
+    description: Run prompt optimization using DSPy + GEPA
+  evaluate:
+    script: evaluate.sh
+    description: Validate that the optimized prompt is not worse than baseline
+tags:
+- dspy
+- gepa
+- prompt-optimization
+- rag
+frameworks:
+- dspy
+- gepa
+description: Optimize a helpdesk prompt using DSPy GEPA with a mock fallback for offline runs.
+verification:
+  last_verified: 2025-11-05
+  last_verification_note: "Verified build, optimize.sh (+0.6→1.0 mock score lift), evaluate.sh in mock mode (Flan-T5 fallback) on macOS CPU."

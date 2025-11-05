@@ -1,0 +1,4 @@
+pyautogen==0.2.29
+litellm==1.9.0
+pytest==8.3.3
+python-dotenv==1.0.1

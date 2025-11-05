@@ -1,0 +1,11 @@
+customer_id,segment,region,visits,past_purchases,revenue
+C001,SMB,North,12,3,12400
+C002,Enterprise,West,8,7,45700
+C003,MidMarket,South,15,5,18950
+C004,SMB,East,9,2,8800
+C005,Enterprise,South,6,9,51200
+C006,MidMarket,West,17,4,21500
+C007,SMB,North,11,1,7600
+C008,Enterprise,East,7,6,39800
+C009,MidMarket,North,14,5,20340
+C010,SMB,West,10,2,9200

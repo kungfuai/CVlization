@@ -1,0 +1,3 @@
+{"question": "How do I share model downloads across CVlization examples?", "answer": "Mount the shared ~/.cache/cvlization directory into each container."}
+{"question": "What should I check if the container cannot access my GPU?", "answer": "Verify the NVIDIA Container Toolkit is installed, ensure nvidia-smi works, and run Docker with --gpus=all."}
+{"question": "How can teams avoid re-downloading large models?", "answer": "Reuse the ~/.cache/cvlization folder across runs."}

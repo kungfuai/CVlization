@@ -1,0 +1,8 @@
+accelerate==1.11.0
+litellm==1.79.1
+numpy==1.26.4
+python-dotenv==1.0.1
+sentencepiece==0.2.1
+torch==2.9.0
+transformers==4.57.1
+tqdm==4.66.5
