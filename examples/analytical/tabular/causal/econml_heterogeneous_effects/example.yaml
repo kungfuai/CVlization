@@ -1,0 +1,35 @@
+name: econml-heterogeneous-effects
+capability: analytical/tabular/causal
+modalities:
+  - tabular
+datasets:
+  - synthetic_heterogeneous_treatment
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 8
+presets:
+  build:
+    script: build.sh
+    description: Build the EconML heterogeneous effects Docker image
+  train:
+    script: train.sh
+    description: Generate synthetic uplift data and fit the EconML doubly-robust learner
+  predict:
+    script: predict.sh
+    description: Produce CATE predictions and policy recommendations for new feature tables
+tags:
+  - econml
+  - heterogeneous-effects
+  - uplift
+  - causal
+  - tabular
+tasks:
+  - treatment_effects
+  - uplift_modeling
+frameworks:
+  - econml
+  - scikit-learn
+description: EconML LinearDRLearner example that estimates heterogeneous treatment effects on a synthetic dataset with known counterfactuals.
+last_verification_note: "2025-11-05: Verified build/train/predict via CVL on Apple M4 Pro (CPU). CATE RMSE 0.285, ATE error -0.029, policy value 0.987 vs random 0.502."
