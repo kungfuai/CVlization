@@ -1,0 +1,36 @@
+name: analytical-tabular-customer-analytics-gbt-telco-churn
+capability: analytical/tabular/customer_analytics
+modalities:
+  - tabular
+datasets:
+  - telco_customer_churn
+stability: beta
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train the churn predictor
+  predict:
+    script: predict.sh
+    description: Run inference on sample inputs
+tags:
+  - lightgbm
+  - gbt
+  - churn
+  - customer-analytics
+  - tabular
+tasks:
+  - binary_classification
+  - churn_prediction
+frameworks:
+  - lightgbm
+  - gbt
+  - scikit-learn
+description: Churn prediction on the Telco Customer Churn dataset using the gbt (LightGBM) pipeline.
+last_verification_note: "2025-11-02: Build/train/predict verified on Apple M4 Pro (CPU). Train accuracy 0.92, validation accuracy 0.78, ROC-AUC 0.82 using LightGBM (gbt). Predict script produces churn probabilities for sample batch."
