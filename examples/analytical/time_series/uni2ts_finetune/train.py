@@ -35,13 +35,14 @@ UNI2TS_REPO_REF = os.environ.get("UNI2TS_REPO_REF", "1.2.0")
 DATA_CONFIG_TEMPLATE = """_target_: uni2ts.data.builder.simple.SimpleDatasetBuilder\ndataset: {dataset_name}\nweight: 1\n"""
 VAL_CONFIG_TEMPLATE = """_target_: uni2ts.data.builder.simple.SimpleEvalDatasetBuilder\ndataset: {eval_dataset}\noffset: {offset}\nwindows: {windows}\ndistance: {distance}\nprediction_length: {prediction_length}\ncontext_length: {context_length}\npatch_size: {patch_size}\n"""
 DEFAULT_TRAIN_OVERRIDES = [
-    "trainer.max_epochs=1",
-    "train_dataloader.num_batches_per_epoch=10",
+    "trainer.max_epochs=5",
+    "train_dataloader.num_batches_per_epoch=20",
     "train_dataloader.batch_size=32",
-    "train_dataloader.num_workers=1",
-    "train_dataloader.prefetch_factor=1",
-    "val_dataloader.num_workers=1",
-    "val_dataloader.prefetch_factor=1",
+    "train_dataloader.num_workers=2",
+    "train_dataloader.prefetch_factor=2",
+    "val_dataloader.batch_size=32",
+    "val_dataloader.num_workers=2",
+    "val_dataloader.prefetch_factor=2",
     "+trainer.num_sanity_val_steps=0",
 ]
 
@@ -67,8 +68,9 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
     parser.add_argument(
         "--context-steps",
         type=int,
-        default=384,
-        help="Number of most recent timesteps to keep per series (<=0 disables truncation).",
+        default=0,
+        help="Number of most recent timesteps to keep per series (<=0 uses full history). "
+             "Use 0 for datasets with reasonable length. Set to positive value to truncate very long series.",
     )
     parser.add_argument(
         "--val-patch-size",
@@ -178,7 +180,11 @@ def build_validation_dataset(
 
     max_context = max(patch_size + 1, series_length - prediction_length - 1)
     context_length = max(patch_size, min(context_length, max_context))
-    offset = context_length
+    # offset is where the first forecast starts - must leave room for context before and prediction after
+    # For a series of length T, with context C and prediction P:
+    # We need: offset >= C (to have enough history)
+    # We need: offset + P <= T (to have enough future)
+    offset = max(0, series_length - prediction_length)
     builder = SimpleEvalDatasetBuilder(
         dataset=eval_dataset,
         offset=offset,
