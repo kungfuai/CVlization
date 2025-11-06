@@ -1,0 +1,6 @@
+torch==2.4.0
+gluonts==0.14.3
+pandas==2.3.3
+matplotlib==3.10.7
+python-dotenv==1.0.0
+git+https://github.com/SalesforceAIResearch/uni2ts.git@1.2.0
