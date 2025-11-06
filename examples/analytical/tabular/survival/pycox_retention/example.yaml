@@ -1,0 +1,35 @@
+name: pycox-retention
+capability: analytical/tabular/survival
+modalities:
+  - tabular
+datasets:
+  - support_survival
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train PyCox DeepSurv-style retention model
+  predict:
+    script: predict.sh
+    description: Predict survival probabilities for cohorts
+tags:
+  - pycox
+  - survival
+  - retention
+  - tabular
+  - coxph
+tasks:
+  - survival_analysis
+  - retention_modeling
+frameworks:
+  - pycox
+  - pytorch
+description: PyCox DeepSurv CoxPH model on the SUPPORT dataset with survival curves and retention probability exports.
+last_verification_note: "2025-11-04: Build/train/predict verified with CVL CLI on Apple M4 Pro (CPU-only). Concordance 0.62, IBS 0.19, survival horizons saved for 180/365/730-day retention forecasts."
