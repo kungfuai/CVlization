@@ -19,10 +19,10 @@ RUN --mount=type=cache,mode=0777,target=/var/cache/apt apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pip packages
-COPY requirements_dev.txt .
 COPY requirements.txt .
 RUN --mount=type=cache,mode=0777,target=/root/.cache pip install --upgrade pip \
-    && pip install -r requirements_dev.txt && pip install -r requirements.txt
+    && pip install -r requirements.txt \
+    && pip install pytest black pylint
 
 # Switch to non-root user
 # RUN useradd -m appuser && chown -R appuser /workspace
