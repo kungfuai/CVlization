@@ -56,7 +56,7 @@ if [[ -n "$CONTAINER_NAME" ]]; then
   DOCKER_ARGS+=("--name" "$CONTAINER_NAME")
 fi
 
-if [[ "${CVL_ENABLE_GPU:-0}" == "1" ]]; then
+if [[ "${CVL_ENABLE_GPU:-1}" == "1" ]]; then
   DOCKER_ARGS+=("--gpus" "all")
 fi
 

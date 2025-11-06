@@ -1,14 +1,9 @@
-FROM python:3.11-slim
-
-ENV DEBIAN_FRONTEND=noninteractive \
-    PIP_DISABLE_PIP_VERSION_CHECK=on \
-    PIP_NO_CACHE_DIR=on \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+FROM pytorch/pytorch:2.4.0-cuda11.8-cudnn9-runtime
 
 WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update \
+RUN --mount=type=cache,mode=0777,target=/var/cache/apt apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         git \
@@ -18,8 +13,9 @@ RUN apt-get update \
 
 COPY requirements.txt .
 
-RUN python -m pip install --upgrade pip \
-    && pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install gluonts==0.14.3 pandas==2.3.3 matplotlib==3.10.7 python-dotenv==1.0.0 \
+    && pip install git+https://github.com/SalesforceAIResearch/uni2ts.git@1.2.0
 
 COPY . .
 
