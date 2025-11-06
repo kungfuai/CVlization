@@ -1,4 +1,4 @@
-name: analytical-tabular-marketing-gbt-upsell-propensity
+name: gbt-upsell-propensity
 capability: analytical/tabular/marketing
 modalities:
   - tabular
@@ -33,4 +33,4 @@ frameworks:
   - gbt
   - scikit-learn
 description: Upsell propensity modeling on the UCI Bank Marketing dataset using the gbt (LightGBM) pipeline.
-last_verification_note: "2025-11-02: Build/train/predict verified on Apple M4 Pro (CPU). Validation accuracy 0.89, ROC-AUC 0.95 on UCI Bank Marketing dataset. Feature importances exported to artifacts/feature_importance.csv."
+last_verification_note: "2025-11-04: Build/train verified with CVL CLI on Apple M4 Pro (CPU-only). Test accuracy 0.886, ROC-AUC 0.946 on UCI Bank Marketing dataset. Artifacts saved under artifacts/."

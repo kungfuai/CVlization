@@ -1,0 +1,36 @@
+name: houseprice-gbt
+capability: analytical/tabular/regression
+modalities:
+  - tabular
+datasets:
+  - ames_housing
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train calibrated gbt regression model for housing prices
+  predict:
+    script: predict.sh
+    description: Score housing listings with calibrated predictions
+tags:
+  - lightgbm
+  - gbt
+  - regression
+  - housing
+  - calibration
+tasks:
+  - regression
+  - price_estimation
+frameworks:
+  - lightgbm
+  - scikit-learn
+  - gbt
+description: LightGBM/gbt regression on Ames Housing with isotonic calibration and scenario analysis artifacts.
+last_verification_note: "2025-11-04: Build/train/predict verified with CVL CLI on Apple M4 Pro (CPU-only). Test RMSE 21.6K (MAE 15.6K, R^2 0.89) on Ames Housing with isotonic calibration and scenario exports."

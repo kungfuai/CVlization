@@ -1,0 +1,31 @@
+name: uni2ts-finetune
+capability: analytical/time_series/forecasting
+modalities:
+  - time_series
+datasets:
+  - m4_hourly
+stability: experimental
+resources:
+  gpu: 1
+  cpu_cores: 4
+  disk_gb: 16
+presets:
+  build:
+    script: build.sh
+    description: Build the Uni2TS fine-tuning container image
+  train:
+    script: train.sh
+    description: Fine-tune Uni2TS on the bundled M4 hourly slice
+tags:
+  - uni2ts
+  - time-series
+  - forecasting
+  - finetuning
+tasks:
+  - forecasting
+  - fine_tuning
+frameworks:
+  - pytorch
+  - gluonts
+  - uni2ts
+description: Fine-tune Salesforce Uni2TS on a GluonTS benchmark dataset with reproducible data preparation and Hydra-based training.

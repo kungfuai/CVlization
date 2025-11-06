@@ -1,0 +1,35 @@
+name: mapie-conformal
+capability: analytical/tabular/uncertainty
+modalities:
+  - tabular
+datasets:
+  - california_housing
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train base regressor and calibrate MAPIE conformal intervals
+  predict:
+    script: predict.sh
+    description: Generate predictions with conformal intervals
+tags:
+  - mapie
+  - conformal
+  - prediction-interval
+  - tabular
+  - regression
+tasks:
+  - regression
+  - prediction_intervals
+frameworks:
+  - mapie
+  - scikit-learn
+description: MAPIE-based conformal prediction intervals on the California Housing dataset using a HistGradientBoostingRegressor baseline.
+last_verification_note: "2025-11-04: Build/train/predict verified with CVL CLI on Apple M4 Pro (CPU-only). MAE 0.308, R^2 0.845, coverage 0.91 with 90% intervals on California Housing."

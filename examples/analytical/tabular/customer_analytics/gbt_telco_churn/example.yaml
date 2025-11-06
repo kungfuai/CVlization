@@ -1,4 +1,4 @@
-name: analytical-tabular-customer-analytics-gbt-telco-churn
+name: churn-gbt
 capability: analytical/tabular/customer_analytics
 modalities:
   - tabular

@@ -1,0 +1,20 @@
+{
+  "dataset": "synthetic_heterogeneous_treatment",
+  "n_samples": 8000,
+  "n_features": 12,
+  "feature_columns": [
+    "feature_0",
+    "feature_1",
+    "feature_2",
+    "feature_3",
+    "feature_4",
+    "feature_5",
+    "feature_6",
+    "feature_7",
+    "feature_8",
+    "feature_9",
+    "feature_10",
+    "feature_11"
+  ],
+  "random_seed": 42
+}

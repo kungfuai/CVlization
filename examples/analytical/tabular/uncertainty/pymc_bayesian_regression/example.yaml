@@ -1,0 +1,35 @@
+name: pymc-bayesian-regression
+capability: analytical/tabular/uncertainty
+modalities:
+  - tabular
+datasets:
+  - california_housing
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 6
+presets:
+  build:
+    script: build.sh
+    description: Build the PyMC Bayesian regression Docker image
+  train:
+    script: train.sh
+    description: Fit PyMC Bayesian regression and save posterior samples
+  predict:
+    script: predict.sh
+    description: Generate posterior predictive summaries for new tabular data
+tags:
+  - pymc
+  - bayesian
+  - regression
+  - uncertainty
+  - prediction-interval
+tasks:
+  - regression
+  - prediction_intervals
+frameworks:
+  - pymc
+  - arviz
+description: Bayesian linear regression with PyMC on California Housing, producing posterior predictive intervals and calibrated uncertainty estimates.
+last_verification_note: "2025-11-05: Verified build/train/predict via CVL on Apple M4 Pro (CPU). Posterior draws saved to artifacts/models/posterior_samples.npz. RMSE 0.75, R² 0.58, 90% interval coverage ≈0.92."

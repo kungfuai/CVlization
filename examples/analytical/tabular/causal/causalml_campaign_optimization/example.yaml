@@ -1,0 +1,40 @@
+name: causalml-campaign-optimization
+capability: analytical/tabular/causal
+modalities:
+  - tabular
+datasets:
+  - synthetic_multi_treatment_uplift
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 8
+presets:
+  build:
+    script: build.sh
+    description: Build the CausalML campaign optimization Docker image
+  train:
+    script: train.sh
+    description: Simulate multi-treatment marketing data and fit uplift models
+  predict:
+    script: predict.sh
+    description: Score new customers with per-treatment uplift and recommendations
+  report:
+    script: predict.sh -- --input artifacts/sample_input.csv --output outputs/uplift_predictions.csv --include-features
+    description: Generate uplift predictions for the bundled sample customers
+tags:
+  - causalml
+  - uplift
+  - policy-optimization
+  - marketing
+  - lightgbm
+  - tabular
+tasks:
+  - causal_uplift
+  - policy_optimization
+frameworks:
+  - causalml
+  - lightgbm
+  - scikit-learn
+description: CausalML one-vs-control uplift modelling on synthetic multi-channel marketing data with policy value evaluation.
+last_verification_note: "2025-11-05: Build/train/predict verified with CVL CLI on Apple M4 Pro (CPU). RMSE≈0.21–0.29 per arm; policy gain 0.26 vs. random 0.00."
