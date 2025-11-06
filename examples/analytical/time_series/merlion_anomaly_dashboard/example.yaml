@@ -1,0 +1,40 @@
+name: merlion-anomaly-dashboard
+capability: analytical/time_series/anomaly_dashboard
+modalities:
+  - time_series
+datasets:
+  - numenta_anomaly_benchmark
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 6
+presets:
+  build:
+    script: build.sh
+    description: Build the Merlion dashboard Docker image
+  smoke-test:
+    script: smoke.sh
+    description: Smoke-test the dashboard server via Flask test client
+  serve:
+    script: serve.sh
+    description: Launch gunicorn exposing the Merlion dashboard on port 8050
+  demo:
+    script: MERLION_DASHBOARD_PORT=8050 serve.sh
+    description: Convenience preset to bind the dashboard to localhost:8050
+tags:
+  - merlion
+  - anomaly-detection
+  - dashboard
+  - timeseries
+  - dash
+tasks:
+  - anomaly_detection
+  - dashboard
+  - exploration
+frameworks:
+  - salesforce-merlion
+  - dash
+  - flask
+description: Dashboard-first workflow for Merlion anomaly and forecasting models with gunicorn-powered serving.
+last_verification_note: "2025-11-05: Build/smoke-test verified with CVL on Apple M4 Pro (CPU-only). Flask client hits / and dash layout endpoints successfully."

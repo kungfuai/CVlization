@@ -1,0 +1,36 @@
+name: conformal-lightgbm
+capability: analytical/tabular/uncertainty
+modalities:
+  - tabular
+datasets:
+  - openml_credit_g
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the LightGBM conformal calibration image
+  train:
+    script: train.sh
+    description: Train LightGBM, fit calibrators, and compute conformal sets
+  predict:
+    script: predict.sh
+    description: Generate calibrated probabilities and conformal sets for new data
+tags:
+  - lightgbm
+  - conformal
+  - calibration
+  - uncertainty
+  - tabular
+tasks:
+  - classification
+  - prediction_sets
+  - calibration
+frameworks:
+  - lightgbm
+  - scikit-learn
+description: LightGBM classification pipeline with Platt/isotonic calibration and conformal prediction sets on the German Credit dataset.
+last_verification_note: "2025-11-05: Verified build/train/predict via CVL on Apple M4 Pro (CPU). Cached OpenML data under ~/.cache/cvlization/data. Achieved accuracy 0.74, ROC-AUC 0.75, and 90% conformal coverage ~0.91."

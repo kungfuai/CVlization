@@ -1,0 +1,35 @@
+name: churn-autogluon
+capability: analytical/tabular/automl
+modalities:
+  - tabular
+datasets:
+  - telco_customer_churn
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 8
+presets:
+  build:
+    script: build.sh
+    description: Build the AutoGluon CPU image
+  train:
+    script: train.sh
+    description: Run AutoGluon AutoML on Telco churn dataset
+  predict:
+    script: predict.sh
+    description: Score new Telco records using the best AutoGluon model
+tags:
+  - autogluon
+  - automl
+  - churn
+  - tabular
+  - ensemble
+tasks:
+  - binary_classification
+  - churn_prediction
+frameworks:
+  - autogluon
+  - scikit-learn
+description: AutoGluon AutoML pipeline on the Telco Customer Churn dataset with leaderboard exports and reusable predictor.
+last_verification_note: "2025-11-04: Build/train/predict verified with CVL CLI on Apple M4 Pro (CPU-only). ROC-AUC 0.85, accuracy 0.81 from AutoGluon best ensemble."

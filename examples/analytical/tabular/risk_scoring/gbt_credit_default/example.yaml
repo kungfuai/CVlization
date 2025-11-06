@@ -1,4 +1,4 @@
-name: analytical-tabular-risk-scoring-gbt-credit-default
+name: gbt-credit-default
 capability: analytical/tabular/risk_scoring
 modalities:
   - tabular
@@ -33,4 +33,4 @@ frameworks:
   - gbt
   - scikit-learn
 description: Credit default risk scoring on the German Credit dataset using the gbt (LightGBM) pipeline.
-last_verification_note: "2025-11-02: Build/train/predict verified on Apple M4 Pro (CPU). Validation accuracy 0.76, ROC-AUC 0.78 on German Credit dataset. Feature importances exported to artifacts/feature_importance.csv."
+last_verification_note: "2025-11-04: Build/train verified with CVL CLI on Apple M4 Pro (CPU-only). Accuracy 0.755, ROC-AUC 0.778 on German Credit dataset. Outputs saved under artifacts/."

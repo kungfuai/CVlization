@@ -1,0 +1,35 @@
+name: ranking-lightgbm
+capability: analytical/tabular/recommendation
+modalities:
+  - tabular
+datasets:
+  - lightgbm-lambdarank-demo
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the LightGBM ranking image
+  train:
+    script: train.sh
+    description: Train a LambdaMART ranking model on the LightGBM LETOR demo
+  predict:
+    script: predict.sh
+    description: Rank candidate items for each query with the trained booster
+tags:
+  - lightgbm
+  - ranking
+  - lambdarank
+  - recommendation
+  - learning-to-rank
+tasks:
+  - ranking
+  - recommendation
+frameworks:
+  - lightgbm
+  - scikit-learn
+description: LightGBM LambdaRank example that trains and evaluates NDCG/MAP on the public LETOR-style demo dataset.
+last_verification_note: "2025-11-04: Verified build/train/predict via CVL on Apple M4 Pro (CPU). Cached dataset under ~/.cache/cvlization/data/lightgbm_lambdarank_demo. Best iteration 14 with NDCG@10=0.74 and MAP@10=0.58."

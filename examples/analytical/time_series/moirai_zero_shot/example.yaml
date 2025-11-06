@@ -1,0 +1,35 @@
+name: moirai-zero-shot
+capability: analytical/time_series/forecasting
+modalities:
+  - time_series
+datasets:
+  - m4_hourly
+stability: alpha
+resources:
+  gpu: 1
+  cpu_cores: 2
+  disk_gb: 8
+presets:
+  build:
+    script: build.sh
+    description: Build the container with Salesforce Moirai CLI
+  forecast:
+    script: forecast.sh
+    description: Run zero-shot Moirai forecasting on the bundled dataset
+  report:
+    script: forecast.sh -- --prediction-length 48
+    description: Generate artifacts for the default 48-step horizon
+tags:
+  - moirai
+  - time-series
+  - zero-shot
+  - foundation-model
+tasks:
+  - forecasting
+  - zero_shot
+frameworks:
+  - uni2ts
+  - gluonts
+  - pytorch
+description: Zero-shot forecasting workflow using Salesforce Moirai foundation models via Uni2TS on the M4 hourly benchmark.
+last_verification_note: "2025-11-06: Build/forecast verified with CVL on GPU. Moirai-1.1 small: mean_wQuantileLoss≈0.097, sMAPE≈0.104 (M4 hourly, 2 series × 1 window, GPU-accelerated)."
