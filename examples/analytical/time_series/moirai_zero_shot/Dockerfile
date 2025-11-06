@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM pytorch/pytorch:2.4.0-cuda11.8-cudnn9-runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -6,20 +6,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /workspace
 
-RUN apt-get update \
+RUN --mount=type=cache,mode=0777,target=/var/cache/apt apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         git \
         curl \
-        libopenblas-dev \
-        liblapack-dev \
-        libgfortran5 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade --no-cache-dir pip setuptools wheel
-
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
-        "torch==2.4.1"
 
 RUN pip install --no-cache-dir \
         "uni2ts==2.0.0" \

@@ -19,6 +19,10 @@ if [[ -n "$CONTAINER_NAME" ]]; then
   DOCKER_ARGS+=("--name" "$CONTAINER_NAME")
 fi
 
+if [[ "${CVL_ENABLE_GPU:-1}" == "1" ]]; then
+  DOCKER_ARGS+=("--gpus" "all")
+fi
+
 DOCKER_ARGS+=("--env" "PYTHONPATH=/cvlization_repo" "$IMG" "python" "forecast.py" "$@")
 
 # shellcheck disable=SC2068
