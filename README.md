@@ -1,8 +1,8 @@
 # CVlization: Curated AI Training and Inference Recipes That Just Work
 
-A curated collection of 60+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need.
+A curated collection of 90+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need.
 
-**Browse:** Vision (classification, detection, segmentation, OCR) • Language (LLMs, fine-tuning) • Multimodal (VLMs, document AI) • Generative (image, video)
+**Browse:** Vision (classification, detection, segmentation, OCR) • Language (LLMs, fine-tuning) • Multimodal (VLMs, document AI) • Generative (image, video) • Analytical (time series, tabular ML) • Agentic (RAG, tool use, optimization)
 
 *CVlization stands on the shoulders of giants - we package and test amazing open source projects so you can use them with confidence.*
 
@@ -49,10 +49,10 @@ Our `examples/` directory is organized by capability (what the model does) rathe
 
 ```
 examples/
-  analytical/          # Prediction on structured/unstructured data (future)
+  analytical/          # Prediction & forecasting (time series, tabular ML)
   perception/          # Understand signals (vision, speech, multimodal)
   generative/          # Create content (text, images, video, audio)
-  agentic/             # Planning, tools, RAG, workflows (future)
+  agentic/             # AI agents (RAG, tool use, optimization, workflows)
 ```
 
 ### Catalog of Examples
@@ -79,24 +79,50 @@ examples/
 | ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, mdt, pixart, stable_diffusion, uva_energy, vqgan | ✅ |
 | ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_diff_cog, animate_x, cogvideox, deforum, framepack, kandinsky, mimic_motion, minisora, phantom, skyreals, svd_cog, svd_comfy, vace, vace_comfy, video_in_between, wan_comfy, wan2gp | ✅ |
 
+#### 📊 Analytical (Prediction & Forecasting)
+
+| Capability | Example Directory | Implementations | Status |
+|------------|-------------------|-----------------|--------|
+| **Time Series Forecasting** | [`examples/analytical/time_series`](./examples/analytical/time_series) | Foundation models (uni2ts_finetune, moirai_zero_shot), Anomaly detection (merlion_anomaly_dashboard) | ✅ |
+| **Tabular ML - AutoML** | [`examples/analytical/tabular/automl`](./examples/analytical/tabular/automl) | autogluon_structured, pycaret_structured | ✅ |
+| **Tabular ML - Causal Inference** | [`examples/analytical/tabular/causal`](./examples/analytical/tabular/causal) | causalml_campaign_optimization, dowhy_berkeley_bias, dowhy_policy_uplift, econml_heterogeneous_effects | ✅ |
+| **Tabular ML - Uncertainty Quantification** | [`examples/analytical/tabular/uncertainty`](./examples/analytical/tabular/uncertainty) | Conformal (conformal_lightgbm, mapie_conformal), Quantile (catboost_quantile, quantile_lightgbm), Bayesian (pymc_bayesian_regression) | ✅ |
+| **Tabular ML - Business Use Cases** | [`examples/analytical/tabular`](./examples/analytical/tabular) | Customer analytics (gbt_telco_churn), Marketing (gbt_upsell_propensity), Risk scoring (gbt_credit_default), Regression (gbt_housing_prices), Recommendation (ranking_lightgbm), Survival (pycox_retention), Anomaly detection (pyod_fraud_detection), Feature engineering (autofe_structured) | ✅ |
+
+#### 🤖 Agentic (AI Agents & Workflows)
+
+| Capability | Example Directory | Implementations | Status |
+|------------|-------------------|-----------------|--------|
+| **RAG & Knowledge** | [`examples/agentic/rag`](./examples/agentic/rag) | langgraph_helpdesk | ✅ |
+| **LlamaIndex Agents** | [`examples/agentic/llamaindex`](./examples/agentic/llamaindex) | graph_rag_cognee, jsonalyze_structured_qa, react_finance_query_agent | ✅ |
+| **Prompt Optimization** | [`examples/agentic/optimization`](./examples/agentic/optimization) | dspy_gepa_promptops, mcts_prompt_agent | ✅ |
+| **Tool Use & Coding** | [`examples/agentic`](./examples/agentic) | Code (autogen_pair_programmer), Data analysis (smolagents_data_analyst), Local AI (llamacpp_assistant) | ✅ |
+
 ✅ = Tested and maintained
 
 Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. Each example may contain one or more implementations using different frameworks or models. To start with, we recommend starting with the Image Classification example.
 
 ## Browse Examples
 
-**Via GitHub:** Browse [perception/](./examples/perception/) or [generative/](./examples/generative/) directories
+**Via GitHub:** Browse [perception/](./examples/perception/), [generative/](./examples/generative/), [analytical/](./examples/analytical/), or [agentic/](./examples/agentic/) directories
 
 **Via CLI:** Install with `pip install .` then:
 
 ```bash
 # Find examples by tag
 cvl list --tag llm
-cvl list --tag document-ai
+cvl list --tag time-series
+cvl list --tag causal-inference
 
 # Train a small LLM on Shakespeare text
 # (from Andrej Karpathy's nanoGPT: https://github.com/karpathy/nanoGPT)
 cvl run nanogpt train --max_iters=1000 --batch_size=16
+
+# Fine-tune Salesforce Moirai foundation model on your time series data
+cvl run analytical/time_series/uni2ts_finetune train
+
+# Run zero-shot forecasting with Moirai (GPU-accelerated)
+cvl run analytical/time_series/moirai_zero_shot forecast
 
 # Run document AI inference
 # (IBM Granite-Docling: https://huggingface.co/ibm-granite/granite-docling-258M)
