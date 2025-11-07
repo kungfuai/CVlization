@@ -25,7 +25,9 @@ cd examples/agentic/data/physio_signal_prep
 ./ingest.sh --records SC4001E0-PSG.edf SC4002E0-PSG.edf
 # Fill out specs/data_spec.sample.md (YAML front matter + notes)
 ./preprocess.sh specs/data_spec.sample.md
+# LLM-assisted summary (requires OPENAI_API_KEY)
+./preprocess.sh specs/data_spec.sample.md --llm-provider openai --llm-model gpt-5-nano
 ```
 
 This pulls a small subset of Sleep-EDF Expanded data into the centralized cache (`~/.cache/cvlization/data/sleep-edf`) and writes `outputs/sleep_edf_manifest.json` with the train/val split.
-`preprocess.sh` parses the YAML front matter in the provided spec, loads cached signals via the `SleepEDFBuilder`, computes basic stats/clip fractions, and writes `outputs/preprocess_summary.json`.
+`preprocess.sh` parses the YAML front matter in the provided spec, loads cached signals via the `SleepEDFBuilder`, computes basic stats/clip fractions, and writes `outputs/preprocess_summary.json`. When `--llm-provider` is supplied, the script prints which provider/model is used and adds an LLM-generated narrative summary to the output (falls back to spec-only processing when omitted).

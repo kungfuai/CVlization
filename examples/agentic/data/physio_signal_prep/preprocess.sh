@@ -4,7 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 IMAGE_NAME="${CVL_IMAGE:-physio_signal_prep}"
-SPEC_PATH="${1:-specs/data_spec.sample.md}"
+
+SPEC_PATH="specs/data_spec.sample.md"
+if [[ $# -gt 0 && "$1" != --* ]]; then
+  SPEC_PATH="$1"
+  shift
+fi
 
 mkdir -p "${HOME}/.cache/cvlization"
 
@@ -17,4 +22,4 @@ docker run --rm \
   --mount "type=bind,src=${HOME}/.cache/cvlization,dst=/root/.cache/cvlization" \
   --env "PYTHONPATH=/cvlization_repo:/workspace" \
   "${IMAGE_NAME}" \
-  python scripts/preprocess_from_spec.py --spec "${SPEC_PATH}"
+  python scripts/preprocess_from_spec.py --spec "${SPEC_PATH}" "$@"
