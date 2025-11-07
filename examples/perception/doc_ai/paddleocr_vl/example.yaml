@@ -1,0 +1,40 @@
+name: paddleocr_vl
+capability: perception/doc_ai
+modalities:
+  - vision
+  - text
+datasets:
+  - custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run OCR on a document image (supports 109 languages)
+tags:
+  - ocr
+  - document-ai
+  - multilingual
+  - paddlepaddle
+  - vision-language
+  - ultra-efficient
+  - edge-deployment
+  - 109-languages
+tasks:
+  - ocr
+  - document_understanding
+  - multilingual_ocr
+frameworks:
+  - paddlepaddle
+  - pytorch
+description: PaddleOCR-VL - Ultra-efficient 0.9B OCR model with 109 language support
+
+verification:
+  last_verified: "2025-11-07"
+  last_verification_note: "Working successfully with PaddlePaddle 3.2.0 and custom safetensors library. Resolved previous API compatibility issues by using PaddlePaddle 3.x (required for PaddleOCR 3.x) and installing PaddlePaddle's custom safetensors wheel that supports the 'paddle' framework."
