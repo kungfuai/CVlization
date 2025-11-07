@@ -1,0 +1,39 @@
+name: statsforecast-baselines
+capability: analytical/time_series/forecasting
+modalities:
+  - time_series
+datasets:
+  - m4_hourly
+  - m4_daily
+  - ett_h1
+  - electricity
+stability: alpha
+resources:
+  gpu: 0
+  cpu_cores: 4
+  disk_gb: 2
+presets:
+  build:
+    script: build.sh
+    description: Build the container with StatsForecast
+  benchmark:
+    script: benchmark.sh
+    description: Run baseline benchmark on M4 Hourly dataset
+  compare:
+    script: benchmark.sh -- --datasets m4_hourly --n-series 50
+    description: Compare all models on 50 series from M4 Hourly
+tags:
+  - statistical-forecasting
+  - time-series
+  - baselines
+  - arima
+  - ets
+  - theta
+tasks:
+  - forecasting
+  - benchmarking
+frameworks:
+  - statsforecast
+  - datasetsforecast
+description: Comprehensive benchmark of classical statistical forecasting baselines (AutoARIMA, AutoETS, Theta, SeasonalNaive) across multiple datasets for model comparison.
+last_verification_note: "2025-11-07: Verified with CVL (10 series, M4 Hourly, 48-hour forecast). AutoARIMA best RMSE (873.19), Theta best sMAPE (12.88%, beats 15% threshold). All 4 models successfully benchmarked with proper metric evaluation (RMSE, MAE, sMAPE, MASE). M4 integer index handling verified."

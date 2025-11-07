@@ -1,0 +1,42 @@
+name: chronos-zero-shot
+capability: analytical/time_series/forecasting
+modalities:
+  - time_series
+datasets:
+  - m4
+  - monash
+stability: alpha
+resources:
+  gpu: 1
+  cpu_cores: 4
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the Chronos container
+  forecast:
+    script: forecast.sh
+    description: Forecast with Chronos-Bolt on M4 Hourly (10 series, default)
+  forecast_bolt_large:
+    script: forecast.sh -- --model amazon/chronos-bolt-base --max-series 50
+    description: Forecast with larger Chronos-Bolt model on 50 series
+  forecast_chronos2:
+    script: forecast.sh -- --model amazon/chronos-2 --max-series 20
+    description: Forecast with latest Chronos-2 (multivariate support)
+  compare_models:
+    script: forecast.sh -- --model amazon/chronos-t5-small --max-series 20
+    description: Forecast with original Chronos-T5 for comparison
+tags:
+  - forecasting
+  - zero-shot
+  - foundation-model
+  - time-series
+  - chronos
+  - amazon
+tasks:
+  - forecasting
+  - zero_shot_learning
+frameworks:
+  - chronos
+  - pytorch
+description: Zero-shot time series forecasting with Amazon Chronos foundation models (Chronos-Bolt/Chronos-2/Chronos-T5). Fast and accurate probabilistic forecasting without training.
