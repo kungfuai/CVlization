@@ -1,0 +1,45 @@
+name: patchtst-supervised
+capability: analytical/time_series/forecasting
+modalities:
+  - time_series
+datasets:
+  - ETT
+  - electricity
+  - weather
+  - traffic
+stability: alpha
+resources:
+  gpu: 1
+  cpu_cores: 4
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the PatchTST container
+  train_quick:
+    script: train.sh -- --dataset ETTh1 --epochs 5 --context-length 96 --prediction-length 24
+    description: Quick training on ETTh1 (5 epochs, short sequences)
+  train_etth1:
+    script: train.sh -- --dataset ETTh1 --epochs 100 --context-length 512 --prediction-length 96
+    description: Full training on ETTh1 dataset (standard LTSF benchmark)
+  train_weather:
+    script: train.sh -- --dataset weather --epochs 50 --context-length 512 --prediction-length 96
+    description: Train on Weather dataset (21 features)
+  train_long_horizon:
+    script: train.sh -- --dataset ETTh1 --epochs 50 --context-length 512 --prediction-length 336
+    description: Train for longer forecasting horizon (336 steps)
+tags:
+  - forecasting
+  - supervised-learning
+  - transformer
+  - time-series
+  - patchtst
+  - LTSF
+tasks:
+  - forecasting
+  - supervised_learning
+frameworks:
+  - pytorch
+  - transformers
+  - patchtst
+description: Supervised time series forecasting with PatchTST Transformer. State-of-the-art on LTSF benchmarks, achieves 20%+ improvement over other Transformer models using patching and channel-independence.
