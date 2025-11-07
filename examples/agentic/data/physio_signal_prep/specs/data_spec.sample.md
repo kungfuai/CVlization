@@ -23,7 +23,7 @@ qc:
   interruption_rate_threshold: 0.1
 export:
   format: chronos
-  output_dir: outputs/processed
+  output_dir: processed
 ---
 
 # Physio Signal Prep Spec (Sample)
