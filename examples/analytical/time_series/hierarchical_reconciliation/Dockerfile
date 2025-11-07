@@ -18,6 +18,6 @@ RUN --mount=type=cache,mode=0777,target=/root/.cache/pip \
     pip install -r requirements.txt
 
 # Copy source code
-COPY forecast.py .
+COPY reconcile.py .
 
-CMD ["python", "forecast.py", "--help"]
+CMD ["python", "reconcile.py", "--help"]

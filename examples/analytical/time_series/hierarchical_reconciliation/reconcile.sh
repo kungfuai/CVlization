@@ -23,7 +23,7 @@ if [[ "${CVL_ENABLE_GPU:-0}" == "1" ]]; then
   DOCKER_ARGS+=("--gpus" "all")
 fi
 
-DOCKER_ARGS+=("--env" "PYTHONPATH=/cvlization_repo" "$IMG" "python" "forecast.py" "$@")
+DOCKER_ARGS+=("--env" "PYTHONPATH=/cvlization_repo" "$IMG" "python" "reconcile.py" "$@")
 
 # shellcheck disable=SC2068
 docker run "${DOCKER_ARGS[@]}"
