@@ -38,7 +38,8 @@ bash examples/perception/doc_ai/deepseek_ocr/build.sh
 
 2. Run OCR on an image:
 ```bash
-bash examples/perception/doc_ai/deepseek_ocr/predict.sh --image examples/sample.jpg
+bash examples/perception/doc_ai/deepseek_ocr/predict.sh # Uses shared test image by default
+bash examples/perception/doc_ai/deepseek_ocr/predict.sh
 ```
 
 ### Usage
@@ -137,7 +138,8 @@ docker run --rm --gpus=all \
     --shm-size=8g \
     deepseek-ocr \
     python3 predict.py \
-        --image examples/sample.jpg \
+        # Uses shared test image by default
+bash examples/perception/doc_ai/deepseek_ocr/predict.sh \
         --task markdown \
         --backend vllm
 ```
@@ -146,7 +148,7 @@ docker run --rm --gpus=all \
 
 The `predict.py` script supports:
 
-- `--image` - Path to input image or URL (default: `examples/sample.jpg`)
+- `--image` - Path to input image or URL (default: shared test image from `/cvlization_repo/examples/perception/doc_ai/leaderboard/test_data/sample.jpg`)
 - `--task` - Task type: `markdown`, `free_ocr`, `describe`, or `grounding` (default: `markdown`)
 - `--output` - Output file path (default: `outputs/result.md`)
 - `--format` - Output format: `txt`, `json`, or `md` (default: `md`)
@@ -265,9 +267,11 @@ examples/perception/doc_ai/deepseek_ocr/
 ├── predict.sh          # Run inference wrapper
 ├── README.md           # This file
 ├── .gitignore          # Git ignore rules
-├── examples/           # Sample images
-│   └── sample.jpg     # Test image
 └── outputs/            # Results saved here (git-ignored)
+
+# Note: Default test image is shared from:
+# ../leaderboard/test_data/sample.jpg
+# (mounted as /cvlization_repo/... in Docker)
 ```
 
 ### Output Location
