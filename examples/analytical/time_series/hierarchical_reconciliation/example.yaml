@@ -14,11 +14,11 @@ presets:
   build:
     script: build.sh
     description: Build the container with HierarchicalForecast
-  forecast:
-    script: forecast.sh
+  reconcile:
+    script: reconcile.sh
     description: Run hierarchical forecasting with reconciliation on Tourism dataset
   report:
-    script: forecast.sh -- --horizon 12 --reconcilers BottomUp MinTrace_ols MinTrace_shrink
+    script: reconcile.sh -- --horizon 12 --reconcilers BottomUp MinTrace_ols MinTrace_shrink
     description: Generate full comparison of reconciliation methods
 tags:
   - hierarchical-forecasting

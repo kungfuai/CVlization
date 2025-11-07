@@ -50,10 +50,10 @@ Total Tourism
 cvl run analytical/time_series/hierarchical_reconciliation build
 
 # Run with default settings (12-month horizon, TourismSmall)
-cvl run analytical/time_series/hierarchical_reconciliation forecast
+cvl run analytical/time_series/hierarchical_reconciliation reconcile
 
 # Custom configuration
-cvl run analytical/time_series/hierarchical_reconciliation forecast -- \
+cvl run analytical/time_series/hierarchical_reconciliation reconcile -- \
   --dataset TourismLarge \
   --horizon 24 \
   --reconcilers BottomUp MinTrace_ols MinTrace_shrink
@@ -65,8 +65,8 @@ cvl run analytical/time_series/hierarchical_reconciliation forecast -- \
 # Build
 ./build.sh
 
-# Forecast
-./forecast.sh --horizon 12 --dataset TourismSmall
+# Reconcile
+./reconcile.sh --horizon 12 --dataset TourismSmall
 ```
 
 ## Command-Line Options
