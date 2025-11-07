@@ -1,0 +1,5 @@
+hierarchicalforecast>=0.7.0
+statsforecast>=1.7.0
+datasetsforecast>=0.0.8
+pandas>=2.0.0
+numpy>=1.24.0
