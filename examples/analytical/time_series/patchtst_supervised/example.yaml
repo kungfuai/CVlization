@@ -16,17 +16,24 @@ presets:
   build:
     script: build.sh
     description: Build the PatchTST container
+  train:
+    script: train.sh
+    description: Train PatchTST model (customize with -- --dataset ETTh1 --epochs 10, etc.)
   train_quick:
-    script: train.sh -- --dataset ETTh1 --epochs 5 --context-length 96 --prediction-length 24
+    script: train.sh
+    args: --dataset ETTh1 --epochs 5 --context-length 96 --prediction-length 24
     description: Quick training on ETTh1 (5 epochs, short sequences)
   train_etth1:
-    script: train.sh -- --dataset ETTh1 --epochs 100 --context-length 512 --prediction-length 96
+    script: train.sh
+    args: --dataset ETTh1 --epochs 100 --context-length 512 --prediction-length 96
     description: Full training on ETTh1 dataset (standard LTSF benchmark)
   train_weather:
-    script: train.sh -- --dataset weather --epochs 50 --context-length 512 --prediction-length 96
+    script: train.sh
+    args: --dataset weather --epochs 50 --context-length 512 --prediction-length 96
     description: Train on Weather dataset (21 features)
   train_long_horizon:
-    script: train.sh -- --dataset ETTh1 --epochs 50 --context-length 512 --prediction-length 336
+    script: train.sh
+    args: --dataset ETTh1 --epochs 50 --context-length 512 --prediction-length 336
     description: Train for longer forecasting horizon (336 steps)
 tags:
   - forecasting
