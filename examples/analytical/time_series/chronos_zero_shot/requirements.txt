@@ -1,0 +1,7 @@
+chronos-forecasting==1.5.3
+torch==2.4.0
+numpy==1.26.4
+pandas==2.2.3
+datasetsforecast==0.0.8
+tqdm==4.66.5
+matplotlib==3.9.2
