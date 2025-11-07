@@ -1,0 +1,19 @@
+name: deepseek_ocr
+description: DeepSeek-OCR for document OCR with 7-20x context compression
+category: perception
+subcategory: doc_ai
+tags:
+  - ocr
+  - document-ai
+  - context-compression
+  - deepseek
+  - transformers
+  - vision-language
+gpu_required: true
+min_vram_gb: 12
+docker_image: deepseek-ocr
+entry_point: predict.py
+
+verification:
+  last_verified: 2025-11-07
+  last_verification_note: "Verified build, inference with transformers backend, model caching (6.3GB models), OCR output capture via stdout, and file saving on NVIDIA A10 (23GB VRAM). Successfully extracts text from invoices with tables. Model uses custom .infer() API that prints to stdout."
