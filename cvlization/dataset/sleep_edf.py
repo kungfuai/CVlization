@@ -67,14 +67,26 @@ class SleepEDFRecordDataset(MapStyleDataset):
 
         raw = mne.io.read_raw_edf(record.psg_path, preload=True, verbose=False)
         if self.channels:
-            raw.pick(self.channels)
+            resolved: List[str] = []
+            for ch in self.channels:
+                if ch in raw.ch_names:
+                    resolved.append(ch)
+                else:
+                    eeg_alias = f"EEG {ch}" if not ch.startswith("EEG ") else ch
+                    if eeg_alias in raw.ch_names:
+                        resolved.append(eeg_alias)
+                    else:
+                        raise ValueError(
+                            f"Channel '{ch}' not found in record {record.record_id}; available: {raw.ch_names}"
+                        )
+            raw.pick(resolved)
         signals = raw.get_data()
         example["signals"] = signals.astype(np.float32)
         example["sampling_rate"] = float(raw.info["sfreq"])
         example["channel_names"] = list(raw.ch_names)
 
         if record.hypnogram_path and record.hypnogram_path.exists():
-            annotations = mne.read_annotations(record.hypnogram_path, verbose=False)
+            annotations = mne.read_annotations(record.hypnogram_path)
             example["annotations"] = annotations.to_data_frame()
         return example
 
