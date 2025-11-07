@@ -1,0 +1,39 @@
+name: anomaly-transformer
+capability: analytical/time_series/anomaly_detection
+modalities:
+  - time_series
+datasets:
+  - smap
+  - msl
+  - smd
+  - psm
+stability: alpha
+resources:
+  gpu: 1
+  cpu_cores: 4
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the Anomaly Transformer container
+  train:
+    script: train.sh
+    description: Train Anomaly Transformer on SMAP dataset (default)
+  evaluate:
+    script: evaluate.sh
+    description: Evaluate trained model on SMAP test set
+  train_msl:
+    script: train.sh -- --dataset MSL
+    description: Train Anomaly Transformer on MSL dataset
+tags:
+  - anomaly-detection
+  - transformer
+  - time-series
+  - unsupervised
+  - nasa
+tasks:
+  - anomaly_detection
+  - predictive_maintenance
+frameworks:
+  - pytorch
+description: Anomaly Transformer for multivariate time series anomaly detection using Association Discrepancy. Implements ICLR 2022 paper for spacecraft telemetry anomaly detection on SMAP/MSL datasets.
