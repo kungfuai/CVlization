@@ -1,0 +1,7 @@
+artifacts/
+data/
+__pycache__/
+*.pyc
+*.pth
+*.npz
+.ipynb_checkpoints/
