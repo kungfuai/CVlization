@@ -23,8 +23,9 @@ examples/agentic/data/physio_signal_prep/
 cd examples/agentic/data/physio_signal_prep
 ./build.sh
 ./ingest.sh --records SC4001E0-PSG.edf SC4002E0-PSG.edf
+# Fill out specs/data_spec.sample.md (YAML front matter + notes)
+./preprocess.sh specs/data_spec.sample.md
 ```
 
 This pulls a small subset of Sleep-EDF Expanded data into the centralized cache (`~/.cache/cvlization/data/sleep-edf`) and writes `outputs/sleep_edf_manifest.json` with the train/val split.
-
-Preprocessing/export scripts are placeholders for now; they will consume the lineage spec in `specs/` once implemented.
+`preprocess.sh` parses the YAML front matter in the provided spec, loads cached signals via the `SleepEDFBuilder`, computes basic stats/clip fractions, and writes `outputs/preprocess_summary.json`.
