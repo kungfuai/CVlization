@@ -1,4 +1,3 @@
-hierarchicalforecast==0.7.1
 statsforecast==1.7.8
 datasetsforecast==0.0.8
 pandas==2.2.3
