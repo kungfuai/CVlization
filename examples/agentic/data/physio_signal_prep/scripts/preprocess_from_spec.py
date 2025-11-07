@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 import yaml
 from dotenv import load_dotenv
+from scipy.signal import resample
 
 from cvlization.dataset.sleep_edf import SleepEDFBuilder
 
@@ -40,6 +42,97 @@ def compute_stats(signals: np.ndarray, clip_threshold: float | None) -> Dict[str
         over_limit = np.abs(signals) > clip_threshold
         stats["clip_fraction"] = float(over_limit.sum() / over_limit.size)
     return stats
+
+
+def resample_signals(signals: np.ndarray, orig_hz: float, target_hz: Optional[float]) -> Tuple[np.ndarray, float]:
+    if not target_hz or np.isclose(target_hz, orig_hz):
+        return signals, orig_hz
+    new_n = int(round(signals.shape[1] * target_hz / orig_hz))
+    if new_n <= 0:
+        raise ValueError("Resample target produced zero samples; check target_hz")
+    resampled = resample(signals, new_n, axis=1)
+    return resampled, target_hz
+
+
+def normalize_signals(signals: np.ndarray, mode: Optional[str]) -> np.ndarray:
+    if not mode:
+        return signals
+    mode = mode.lower()
+    if mode == "zscore_per_channel":
+        mean = signals.mean(axis=1, keepdims=True)
+        std = signals.std(axis=1, keepdims=True)
+        std = np.where(std < 1e-6, 1.0, std)
+        return (signals - mean) / std
+    if mode == "minmax_per_channel":
+        min_v = signals.min(axis=1, keepdims=True)
+        max_v = signals.max(axis=1, keepdims=True)
+        denom = np.where(np.abs(max_v - min_v) < 1e-6, 1.0, max_v - min_v)
+        return (signals - min_v) / denom
+    return signals
+
+
+def window_signals(
+    signals: np.ndarray,
+    sampling_hz: float,
+    length_seconds: Optional[float],
+    overlap_seconds: Optional[float],
+) -> List[Dict[str, Any]]:
+    windows: List[Dict[str, Any]] = []
+    if not length_seconds or length_seconds <= 0:
+        return windows
+    win_samples = int(round(length_seconds * sampling_hz))
+    if win_samples <= 0 or win_samples > signals.shape[1]:
+        return windows
+    overlap = overlap_seconds or 0.0
+    step = max(1, win_samples - int(round(overlap * sampling_hz)))
+    for start in range(0, signals.shape[1] - win_samples + 1, step):
+        end = start + win_samples
+        windows.append(
+            {
+                "window_index": len(windows),
+                "start_sample": start,
+                "end_sample": end,
+                "start_time_sec": start / sampling_hz,
+                "end_time_sec": end / sampling_hz,
+            }
+        )
+    return windows
+
+
+def _resolve_export_dir(base_output_dir: Path, export_cfg: Dict[str, Any]) -> Path:
+    subdir_value = export_cfg.get("output_dir") or "processed"
+    subdir_path = Path(subdir_value)
+    export_dir = subdir_path if subdir_path.is_absolute() else base_output_dir / subdir_path
+    export_dir.mkdir(parents=True, exist_ok=True)
+    return export_dir
+
+
+def export_timeseries(
+    signals: np.ndarray,
+    sampling_hz: float,
+    channel_names: List[str],
+    output_dir: Path,
+    export_cfg: Dict[str, Any],
+) -> Tuple[Path, Path]:
+    n_samples = signals.shape[1]
+    base_ts = pd.Timestamp("2000-01-01T00:00:00Z")
+    times = base_ts + pd.to_timedelta(np.arange(n_samples) / sampling_hz, unit="s")
+    records = []
+    for idx, ch in enumerate(channel_names):
+        df = pd.DataFrame(
+            {
+                "unique_id": ch,
+                "timestamp": times,
+                "target": signals[idx],
+            }
+        )
+        records.append(df)
+    timeseries_df = pd.concat(records, ignore_index=True)
+    export_dir = _resolve_export_dir(output_dir, export_cfg)
+    timeseries_df["timestamp"] = pd.to_datetime(timeseries_df["timestamp"])
+    export_path = export_dir / "timeseries.csv"
+    timeseries_df.to_csv(export_path, index=False)
+    return export_path, export_dir
 
 
 def _maybe_load_env() -> None:
@@ -117,22 +210,68 @@ def preprocess_from_spec(args: argparse.Namespace) -> None:
     train_ds = builder.training_dataset()
 
     processed: List[Dict[str, Any]] = []
+    window_manifest: List[Dict[str, Any]] = []
+    last_export_dir: Optional[Path] = None
+    export_cfg = metadata.get("export", {})
+    window_cfg = metadata.get("windowing", {})
+    normalization_mode = metadata.get("normalization")
+
+    outputs_dir = Path("outputs")
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+
     for idx in range(len(train_ds)):
         example = train_ds[idx]
         signals = example.get("signals")
         if signals is None:
             continue
-        stats = compute_stats(signals, clip_threshold)
-        if target_hz:
-            stats["target_hz"] = target_hz
-        processed.append({
-            "record_id": example["record_id"],
-            "sampling_rate": example.get("sampling_rate"),
-            "stats": stats,
-        })
+        sampling_rate = example.get("sampling_rate") or sampling.get("original_hz")
+        if sampling_rate is None:
+            raise ValueError("Sampling rate missing; include sampling.original_hz in the spec.")
 
-    outputs_dir = Path("outputs")
-    outputs_dir.mkdir(parents=True, exist_ok=True)
+        resampled, effective_hz = resample_signals(signals, sampling_rate, target_hz)
+        normalized = normalize_signals(resampled, normalization_mode)
+        stats = compute_stats(normalized, clip_threshold)
+        stats["effective_hz"] = effective_hz
+
+        channel_names = example.get("channel_names") or [f"ch_{i}" for i in range(normalized.shape[0])]
+        export_path, export_dir = export_timeseries(
+            normalized,
+            effective_hz,
+            channel_names,
+            outputs_dir,
+            export_cfg,
+        )
+        last_export_dir = export_dir
+        windows = window_signals(
+            normalized,
+            effective_hz,
+            window_cfg.get("length_seconds"),
+            window_cfg.get("overlap_seconds"),
+        )
+        window_manifest.append(
+            {
+                "record_id": example["record_id"],
+                "windows": windows,
+            }
+        )
+
+        processed.append(
+            {
+                "record_id": example["record_id"],
+                "sampling_rate": sampling_rate,
+                "stats": stats,
+                "timeseries_path": str(export_path),
+                "window_count": len(windows),
+                "channel_names": channel_names,
+            }
+        )
+
+    if window_manifest:
+        manifest_dir = last_export_dir or _resolve_export_dir(outputs_dir, export_cfg)
+        window_manifest_path = manifest_dir / "window_manifest.json"
+        window_manifest_path.write_text(json.dumps(window_manifest, indent=2))
+        print(f"Stored window metadata at {window_manifest_path}")
+
     summary = {
         "spec": metadata,
         "notes": body.strip(),
