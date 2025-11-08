@@ -1,0 +1,42 @@
+name: olmocr_2
+capability: perception/doc_ai
+modalities:
+  - vision
+  - text
+datasets:
+  - custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 15
+  disk_gb: 30
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run OCR on document images or PDFs
+tags:
+  - ocr
+  - document-ai
+  - olmocr
+  - allenai
+  - qwen-vl
+  - vision-language
+  - production
+  - math-equations
+  - tables
+  - large-scale
+tasks:
+  - ocr
+  - document_understanding
+  - layout_analysis
+frameworks:
+  - pytorch
+  - transformers
+description: olmOCR-2 from AllenAI - Production-ready 7B parameter OCR model with GRPO RL training, specialized for math equations and tables (82.4 olmOCR-Bench score)
+
+verification:
+  last_verified: "2025-11-07"
+  last_verification_note: "Initial setup complete. Requires testing with sample images."
