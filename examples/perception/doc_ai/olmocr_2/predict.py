@@ -17,11 +17,11 @@ import argparse
 import json
 import os
 import sys
-import subprocess
-import tempfile
-import shutil
 from pathlib import Path
 from PIL import Image
+import torch
+from transformers import AutoModelForVision2Seq, AutoProcessor
+from qwen_vl_utils import process_vision_info
 
 # CVL dual-mode execution support - make optional for branches without cvlization
 try:
@@ -59,9 +59,41 @@ except ImportError:
         return os.path.join(base_dir, path)
 
 
+# Global model and processor (loaded once)
+_model = None
+_processor = None
+
+
+def load_model():
+    """Load the olmOCR-2 model and processor."""
+    global _model, _processor
+
+    if _model is not None:
+        return _model, _processor
+
+    print("Loading olmOCR-2-7B-1025-FP8 model...")
+    print("This may take a few minutes on first run (downloading model weights)...")
+
+    model_name = "allenai/olmOCR-2-7B-1025-FP8"
+
+    # Load model using AutoModel to handle qwen2.5-vl architecture
+    _model = AutoModelForVision2Seq.from_pretrained(
+        model_name,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+        trust_remote_code=True
+    )
+
+    # Load processor
+    _processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+
+    print("Model loaded successfully!")
+    return _model, _processor
+
+
 def run_ocr(input_path: str):
     """
-    Run OCR using olmOCR-2 pipeline.
+    Run OCR using olmOCR-2 model directly via transformers.
 
     Args:
         input_path: Path to the image or PDF file
@@ -69,86 +101,80 @@ def run_ocr(input_path: str):
     Returns:
         dict: OCR output with markdown content and metadata
     """
-    print(f"Initializing olmOCR-2 pipeline...")
-    print("Model: allenai/olmOCR-2-7B-1025-FP8")
-    print("This may take a few minutes on first run (downloading model weights)...")
+    print(f"Processing: {input_path}")
 
-    # Create a temporary workspace directory
-    with tempfile.TemporaryDirectory() as temp_workspace:
-        print(f"Processing: {input_path}")
-        print(f"Temporary workspace: {temp_workspace}")
+    # Load model
+    model, processor = load_model()
 
-        # Determine file type
-        input_path_obj = Path(input_path)
-        is_pdf = input_path_obj.suffix.lower() == '.pdf'
+    # Open image
+    image = Image.open(input_path).convert("RGB")
 
-        # Build olmOCR command
-        # python -m olmocr.pipeline ./workspace --markdown --pdfs/--pngs input_file
-        cmd = [
-            sys.executable, "-m", "olmocr.pipeline",
-            temp_workspace,
-            "--markdown"
-        ]
+    # Prepare messages for Qwen2.5-VL format
+    # olmOCR-2 uses a specific prompt for OCR
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "image": input_path,
+                },
+                {
+                    "type": "text",
+                    "text": "Convert the content of this document image to markdown format. Preserve all text, structure, tables, and mathematical equations."
+                },
+            ],
+        }
+    ]
 
-        if is_pdf:
-            cmd.extend(["--pdfs", str(input_path)])
-        else:
-            # For images (PNG, JPG, JPEG), use --pngs
-            cmd.extend(["--pngs", str(input_path)])
+    # Prepare inputs
+    text = processor.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
 
-        print(f"Running command: {' '.join(cmd)}")
+    image_inputs, video_inputs = process_vision_info(messages)
 
-        # Run olmOCR pipeline
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True
+    inputs = processor(
+        text=[text],
+        images=image_inputs,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pt",
+    )
+    inputs = inputs.to(model.device)
+
+    # Generate output
+    print("Running inference...")
+    with torch.no_grad():
+        generated_ids = model.generate(
+            **inputs,
+            max_new_tokens=4096,
+            do_sample=False,  # Greedy decoding for deterministic OCR
         )
 
-        if result.returncode != 0:
-            print("ERROR: olmOCR pipeline failed")
-            print(f"STDOUT: {result.stdout}")
-            print(f"STDERR: {result.stderr}")
-            raise RuntimeError(f"olmOCR pipeline failed with return code {result.returncode}")
+    # Trim input tokens from output
+    generated_ids_trimmed = [
+        out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+    ]
 
-        print("Pipeline completed successfully")
-        print(f"STDOUT: {result.stdout}")
+    # Decode output
+    output_text = processor.batch_decode(
+        generated_ids_trimmed,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False
+    )[0]
 
-        # Read the markdown output
-        # olmOCR creates output in workspace/markdown/ directory
-        markdown_dir = Path(temp_workspace) / "markdown"
-
-        if not markdown_dir.exists():
-            print(f"WARNING: Expected markdown directory not found: {markdown_dir}")
-            print(f"Workspace contents: {list(Path(temp_workspace).iterdir())}")
-            # Try to find markdown files anywhere in the workspace
-            markdown_files = list(Path(temp_workspace).rglob("*.md"))
-            if not markdown_files:
-                raise FileNotFoundError(f"No markdown output found in {temp_workspace}")
-            markdown_file = markdown_files[0]
-        else:
-            # Get the first markdown file (should match input filename)
-            markdown_files = list(markdown_dir.glob("*.md"))
-            if not markdown_files:
-                raise FileNotFoundError(f"No markdown files found in {markdown_dir}")
-            markdown_file = markdown_files[0]
-
-        print(f"Reading output from: {markdown_file}")
-
-        with open(markdown_file, 'r', encoding='utf-8') as f:
-            markdown_content = f.read()
-
-        return {
-            "markdown": markdown_content,
-            "metadata": {
-                "model": "olmOCR-2-7B-1025-FP8",
-                "source": "AllenAI",
-                "model_size": "7B parameters",
-                "base_model": "Qwen2.5-VL-7B-Instruct",
-                "training": "GRPO RL for math, tables, complex OCR",
-                "benchmark_score": "82.4±1.1 on olmOCR-Bench"
-            }
+    return {
+        "markdown": output_text,
+        "metadata": {
+            "model": "olmOCR-2-7B-1025-FP8",
+            "source": "AllenAI",
+            "model_size": "7B parameters",
+            "base_model": "Qwen2.5-VL-7B-Instruct",
+            "training": "GRPO RL for math, tables, complex OCR",
+            "benchmark_score": "82.4±1.1 on olmOCR-Bench"
         }
+    }
 
 
 def save_output(output: dict, output_path: str, format: str = "md"):
