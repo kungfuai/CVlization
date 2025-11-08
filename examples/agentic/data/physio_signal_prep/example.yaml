@@ -1,0 +1,31 @@
+name: agentic-physio-signal-prep
+capability: agentic/data_preparation
+modalities:
+- timeseries
+- language
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 5
+presets:
+  build:
+    script: build.sh
+    description: Build the physio signal prep Docker image
+  ingest:
+    script: ingest.sh
+    description: Download Sleep-EDF records and cache lineage metadata
+  preprocess:
+    script: preprocess.sh
+    description: Apply spec-driven cleaning pipeline (TBD)
+  export:
+    script: export.sh
+    description: Produce Chronos/Moirai-ready parquet/CSV artifacts (TBD)
+tags:
+- physiology
+- timeseries
+- preprocessing
+frameworks:
+- pandas
+- mne
+description: Clean messy EKG/PPG/EEG signals using a natural-language lineage spec and export forecasting-ready datasets.
