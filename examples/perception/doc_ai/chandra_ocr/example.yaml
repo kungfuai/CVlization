@@ -1,0 +1,40 @@
+name: chandra_ocr
+capability: perception/doc_ai
+modalities:
+  - vision
+  - text
+datasets:
+  - custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 20
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run OCR on a document image with layout preservation
+tags:
+  - ocr
+  - document-ai
+  - layout-preservation
+  - chandra
+  - transformers
+  - vision-language
+  - handwriting
+  - forms
+tasks:
+  - ocr
+  - document_understanding
+  - layout_analysis
+frameworks:
+  - pytorch
+  - transformers
+description: Chandra OCR for high-accuracy document OCR with layout preservation (83.1 OmniDocBench score)
+
+verification:
+  last_verified: "2025-11-07"
+  last_verification_note: "Tested successfully with invoice sample image. OCR output correctly recognized tables and layout preservation."
