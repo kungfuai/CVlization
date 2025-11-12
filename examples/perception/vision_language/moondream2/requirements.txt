@@ -1,0 +1,10 @@
+torch>=2.0.0
+transformers>=4.36.0,<4.50
+pillow>=10.0.0
+einops>=0.7.0
+timm>=0.9.0
+safetensors>=0.4.0
+tokenizers>=0.15.0
+huggingface_hub>=0.20.0
+requests>=2.31.0
+accelerate>=0.20.0

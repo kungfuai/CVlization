@@ -2,6 +2,7 @@
 outputs/
 *.json
 *.txt
+!requirements.txt
 results/
 
 # Python
