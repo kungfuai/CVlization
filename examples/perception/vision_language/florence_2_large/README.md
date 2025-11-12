@@ -1,6 +1,6 @@
-# Florence-2-Large - Microsoft's Unified Vision Foundation Model
+# Florence-2-Large
 
-Florence-2-Large is a compact vision language model from Microsoft Research with 0.77B parameters. It provides a unified, prompt-based interface for multiple vision tasks including captioning, OCR, object detection, and segmentation.
+Florence-2-Large is a vision language model from Microsoft Research with 0.77B parameters, providing a unified prompt-based interface for multiple vision tasks including captioning, OCR, object detection, and segmentation.
 
 ## Model Information
 
@@ -35,7 +35,7 @@ Florence-2 supports multiple vision tasks through simple text prompts:
 bash build.sh
 ```
 
-This creates a ~10GB Docker image with all dependencies.
+This creates a Docker image with PyTorch 2.5.1 and required dependencies.
 
 ### 2. Run Inference
 
@@ -138,10 +138,11 @@ This example uses shared test images from `../test_images/` to avoid duplicating
 
 ## Performance
 
-- **VRAM Usage**: ~2GB
-- **Model Size**: 8.3GB on disk
-- **Speed**: Fast inference on GPU (<1s per image)
-- **Accuracy**: Strong zero-shot performance across vision tasks
+Tested on NVIDIA A10 GPU with invoice test image (800x600):
+
+- **VRAM Usage**: ~2GB with float16
+- **Model Download Size**: ~1.5GB
+- **Tasks Verified**: Caption and OCR tasks tested successfully
 
 ## Architecture
 
@@ -153,11 +154,12 @@ Florence-2 uses a unified sequence-to-sequence architecture with:
 
 ## Notes
 
-- The model uses `trust_remote_code=True` for loading
-- GPU recommended for fast inference (works on CPU but slower)
-- Use float16 on CUDA for memory efficiency
-- Some tasks return structured data (bounding boxes, labels)
-- OCR and object detection work best with clear, high-quality images
+- The model uses `trust_remote_code=True` for loading custom code
+- Task prompts like `<OCR>` and `<CAPTION>` are required - the model was trained with these special tokens
+- GPU recommended (works on CPU but slower)
+- Uses float16 on CUDA, float32 on CPU
+- Object detection and OCR with regions return structured JSON with bounding box coordinates
+- Model caches to `~/.cache/huggingface` and persists across runs
 
 ## Citation
 

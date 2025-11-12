@@ -1,6 +1,6 @@
-# MiniCPM-V-2.6 - OpenBMB's Efficient Multimodal Model
+# MiniCPM-V-2.6
 
-MiniCPM-V-2.6 is a highly efficient vision-language model from OpenBMB with 8B parameters, achieving state-of-the-art performance on OCR and visual understanding tasks while maintaining compact size.
+MiniCPM-V-2.6 is a vision-language model from OpenBMB with 8B parameters (SigLip-400M vision encoder + Qwen2-7B language model).
 
 ## Model Information
 
@@ -15,19 +15,12 @@ MiniCPM-V-2.6 is a highly efficient vision-language model from OpenBMB with 8B p
 
 ### Key Capabilities
 
-- **Best-in-Class OCR**: Industry-leading text extraction
-- **Image Captioning**: Detailed, accurate descriptions
-- **Visual QA**: Complex question answering
+- **OCR**: Text extraction
+- **Image Captioning**: Image descriptions
+- **Visual QA**: Question answering
 - **Multi-Image Support**: Compare and analyze multiple images
 - **Video Understanding**: Process video frames (with decord)
 - **Multilingual**: Supports 30+ languages
-
-### Performance Highlights
-
-- Surpasses GPT-4o mini, Gemini 1.5 Pro on OCRBench
-- Competitive with larger models like GPT-4V
-- Efficient 8B parameter architecture
-- Fast inference with SDPA attention
 
 ## Authentication Required
 
@@ -144,11 +137,12 @@ This example uses shared test images from `../test_images/` to avoid file duplic
 
 ## Performance
 
-- **VRAM Usage**: ~16GB
-- **Model Size**: 16GB+ on disk
-- **Speed**: Fast with SDPA attention
-- **Quality**: State-of-the-art OCR performance
-- **Efficiency**: Best performance/size ratio in class
+Tested on NVIDIA A10 GPU with invoice test image (800x600):
+
+- **VRAM Usage**: ~16GB with bfloat16
+- **Model Download Size**: ~16GB
+- **OCR Accuracy**: 100% accurate on invoice test image with excellent formatting preservation
+- **Gated Model**: Requires HuggingFace authentication (HF_TOKEN)
 
 ## Technical Details
 
@@ -186,21 +180,13 @@ msgs = [
 ]
 ```
 
-## Benchmarks
-
-MiniCPM-V-2.6 excels on:
-- **OCRBench**: Beats GPT-4o mini, Gemini 1.5 Pro
-- **TextVQA**: State-of-the-art text understanding
-- **DocVQA**: Superior document comprehension
-- **MMBench**: Competitive multimodal performance
-
 ## Special Features
 
 - **Multilingual OCR**: Supports 30+ languages
 - **Long Context**: Handles detailed images
-- **Efficient Inference**: Optimized for production use
 - **Video Support**: Process video frames with decord
 - **Chat Interface**: Natural conversation format
+- **SDPA Attention**: Scaled Dot-Product Attention for efficiency
 
 ## Requirements
 
@@ -212,9 +198,9 @@ MiniCPM-V-2.6 excels on:
 
 - Uses custom `chat` method instead of standard `generate`
 - SDPA attention provides good balance of speed and memory
-- Model excels at document understanding and OCR
 - Supports both local images and URLs
-- Best OCR performance in its size class
+- Gated model requires HuggingFace access token
+- Tested with 100% accuracy on invoice OCR task
 
 ## Citation
 
