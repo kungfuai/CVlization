@@ -1,16 +1,14 @@
-## MolmoE-1B - Ultra-Efficient Vision Language Model
+## MolmoE-1B
 
-This example demonstrates multimodal understanding using **MolmoE-1B** from Allen Institute (AI2), a Mixture-of-Experts model with only 1.2B active parameters that **nearly matches GPT-4V performance**.
+This example demonstrates multimodal understanding using **MolmoE-1B** from Allen Institute (AI2), a Mixture-of-Experts vision-language model with 1.2B active parameters.
 
 ### Key Features
 
-- **Exceptional Performance**: Nearly matches GPT-4V despite 1.2B active parameters
-- **Ultra-Efficient**: 6.9B total with 64 experts, only 1.2B (8 experts) active per token
+- **Efficient Architecture**: 6.9B total with 64 experts, only 1.2B (8 experts) active per token
 - **Compact Size**: ~3GB VRAM for inference
-- **SOTA Small Model**: Best performance among <2B models
 - **Fully Open**: Apache 2.0 license with open weights, data, and training code
-- **No Distillation**: Trained from scratch on high-quality PixMo dataset
-- **Fast Inference**: MoE architecture for efficient processing
+- **No Distillation**: Trained from scratch on PixMo dataset
+- **MoE Architecture**: Mixture-of-Experts for efficient processing
 - **Self-contained**: Fully dockerized with all dependencies
 
 ### Prerequisites
@@ -116,15 +114,13 @@ The `predict.py` script supports:
 
 ### Performance
 
-**Benchmarks:**
-- **Nearly matches GPT-4V** on both academic and human evaluations
-- **SOTA among <2B models** - best performance for similarly-sized open models
-- Strong on DocVQA, TextVQA, VQA v2.0, AI2D
-- Exceptional value: frontier-level performance at 1.2B active parameters
+Tested on NVIDIA A10 GPU with invoice test image (800x600):
 
-**Requirements:**
-- **Memory**: ~3GB VRAM for inference (FP16)
-- **Efficiency**: 70% less memory than comparable dense models
+**Resources:**
+- **VRAM Usage**: ~3GB with float16
+- **Model Download Size**: ~3GB
+
+**Quality Note**: Verification testing revealed accuracy issues - the model generated hallucinated content (described non-existent subjects and text for the test invoice image). This implementation may require debugging or prompt tuning for production use.
 
 ### Capabilities
 
@@ -154,12 +150,12 @@ This implementation uses the Hugging Face Transformers library with `trust_remot
 - Simple, clean ~300 line implementation
 - Trained on PixMo dataset with 200+ word detailed captions
 
-### What Makes MolmoE-1B Special?
+### What Makes MolmoE-1B Different?
 
 1. **No Distillation**: Unlike most small VLMs, MolmoE-1B was trained from scratch without distilling from larger models
-2. **PixMo Dataset**: Trained on high-quality data with speech-based annotations (200+ words per image)
+2. **PixMo Dataset**: Trained on data with speech-based annotations (200+ words per image)
 3. **Fully Open**: Weights + training data + training code all publicly available
-4. **Exceptional Efficiency**: MoE architecture provides frontier performance at 1.2B active parameters
+4. **MoE Architecture**: Mixture-of-Experts design with 1.2B active parameters
 5. **Research-Friendly**: Complete transparency for reproducibility and research
 
 ### Troubleshooting
@@ -227,21 +223,17 @@ Size: ~3GB (persists across runs)
 
 ### Comparison with Other Models
 
-| Model | Active Params | Performance | VRAM | License |
-|-------|--------------|-------------|------|---------|
-| **MolmoE-1B** | **1.2B** | **~GPT-4V** | **3GB** | **Apache 2.0** |
-| Moondream2 | 1.93B | Good | 6GB | Apache 2.0 |
-| Moondream3 | 2B (MoE) | Very Good | 12GB | BSL 1.1 |
-| Florence-2-Large | 0.77B | Good | 2GB | MIT |
-| Phi-3.5-vision | 4.2B | Excellent | 8GB | MIT |
+| Model | Active Params | VRAM | License |
+|-------|--------------|------|---------|
+| **MolmoE-1B** | **1.2B** | **3GB** | **Apache 2.0** |
+| Florence-2-Large | 0.77B | 2GB | MIT |
+| Phi-3.5-vision | 4.2B | 8GB | MIT |
+| Qwen3-VL-2B | 2B | 4GB | Apache 2.0 |
 
-MolmoE-1B offers the best performance-to-size ratio among small VLMs.
+### Architecture Benefits
 
-### Advantages Over Larger Models
-
-- **10x more efficient**: Comparable performance to much larger models
+- **Efficient**: MoE architecture with only 1.2B active parameters per token
 - **Edge deployment**: Small enough for resource-constrained environments
-- **Fast inference**: MoE architecture enables quick responses
 - **Fully open**: No restrictions on use, modification, or research
 - **Cost-effective**: Lower inference costs than larger models
 
