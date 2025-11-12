@@ -1,6 +1,6 @@
 #!/bin/bash
-# Adapter for Florence-2-Base on CheckboxQA
-# Usage: ./florence_2_base.sh <pdf_path> <question> --output <output_file>
+# Adapter for Qwen3-VL-2B on CheckboxQA
+# Usage: ./qwen3_vl_2b.sh <pdf_path> <question> --output <output_file>
 
 set -e
 
@@ -44,26 +44,24 @@ pdftoppm -png -f 1 -l 1 -singlefile "$PDF_ABS" "${TMP_IMG%.png}"
 IMG_DIR=$(dirname "$TMP_IMG")
 IMG_NAME=$(basename "$TMP_IMG")
 
-# Run Florence-2-Base with detailed caption + question
-# Florence-2 uses special task prompts like <MORE_DETAILED_CAPTION>
-# We'll use MORE_DETAILED_CAPTION to get detailed understanding
-# and append the question
-FLORENCE_DIR="$REPO_ROOT/examples/perception/vision_language/florence_2_base"
+# Run Qwen3-VL-2B with question as custom prompt
+# Follow CVlization pattern: mount repo for cvlization package
+QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl_2b"
 
 docker run --runtime nvidia --rm \
-    -v "$FLORENCE_DIR:/workspace" \
+    -v "$QWEN_DIR:/workspace" \
     -v "$IMG_DIR:/inputs:ro" \
     -v "$OUTPUT_DIR:/outputs" \
     -v "$REPO_ROOT:/cvlization_repo:ro" \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
     -e PYTHONPATH=/cvlization_repo \
     -e HF_TOKEN=$HF_TOKEN \
-    florence-2-base \
+    qwen3-vl-2b \
     python3 predict.py \
         --image "/inputs/$IMG_NAME" \
         --output "/outputs/$OUTPUT_NAME" \
-        --task more_detailed_caption \
-        --text-input "$QUESTION"
+        --task vqa \
+        --prompt "$QUESTION"
 
 # Cleanup temp image
 rm -f "$TMP_IMG"
