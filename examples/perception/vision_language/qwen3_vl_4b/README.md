@@ -1,35 +1,26 @@
-# Qwen3-VL-8B-Instruct - Alibaba Cloud's Advanced Vision Language Model
+# Qwen3-VL-4B-Instruct
 
-Qwen3-VL-8B-Instruct is the latest and most powerful vision-language model from Alibaba's Qwen team, offering state-of-the-art visual perception and reasoning with 8B parameters.
+Qwen3-VL-4B-Instruct is a mid-size vision-language model from Alibaba Cloud with 4B parameters, providing a good balance between efficiency and capability.
 
 ## Model Information
 
-- **Model**: `Qwen/Qwen3-VL-8B-Instruct`
-- **Size**: 8B parameters
-- **VRAM**: ~16GB
+- **Model**: `Qwen/Qwen3-VL-4B-Instruct`
+- **Size**: 4B parameters
+- **VRAM**: ~8GB
 - **License**: Apache 2.0
-- **Released**: October 15, 2025
+- **Released**: October 2025
 - **Paper**: [Qwen3-VL Technical Report](https://qwenlm.github.io/blog/qwen3-vl/)
 
 ## Features
 
 ### Key Capabilities
 
-- **Advanced OCR**: Superior text recognition and extraction
-- **Visual Reasoning**: Deep understanding and logical analysis
-- **Image Captioning**: Detailed, accurate descriptions
+- **OCR**: Text recognition and extraction
+- **Visual Reasoning**: Understanding and logical analysis
+- **Image Captioning**: Image descriptions
 - **Video Understanding**: Process video frames and sequences
 - **Multi-image Support**: Analyze multiple images together
 - **Extended Context**: Long context understanding
-
-### What's New in Qwen3-VL
-
-- Enhanced visual perception and reasoning
-- Improved text understanding and generation
-- Better spatial comprehension
-- Stronger agent interaction capabilities
-- Extended context length support
-- Superior performance on vision-language benchmarks
 
 ## Quick Start
 
@@ -39,9 +30,9 @@ Qwen3-VL-8B-Instruct is the latest and most powerful vision-language model from 
 bash build.sh
 ```
 
-This creates a ~20GB Docker image with the latest transformers from source.
+This creates a Docker image with the latest transformers from source.
 
-**Note**: Build may take longer as it installs transformers from GitHub for latest Qwen3-VL support.
+**Note**: Build may take longer as it installs transformers from GitHub for Qwen3-VL support.
 
 ### 2. Run Inference
 
@@ -140,11 +131,12 @@ This example uses shared test images from `../test_images/` to avoid file duplic
 
 ## Performance
 
-- **VRAM Usage**: ~16GB
-- **Model Size**: 16GB+ on disk
-- **Speed**: Fast inference with optimized kernels
-- **Quality**: State-of-the-art on vision-language benchmarks
-- **Context**: Supports extended context for complex tasks
+Tested on NVIDIA A10 GPU with invoice test image (800x600):
+
+- **VRAM Usage**: ~8GB
+- **Model Download Size**: ~8GB
+- **OCR Accuracy**: Excellent quality with formatting preservation - accurately extracted all text from test invoice including table structure
+- **Balance**: Good compromise between efficiency (half the size of 8B) and capability
 
 ## Technical Details
 
@@ -185,15 +177,6 @@ messages = [
 
 Qwen3-VL can process video frames for temporal understanding.
 
-## Benchmarks
-
-Qwen3-VL achieves state-of-the-art performance on:
-- DocVQA (document understanding)
-- TextVQA (text in images)
-- OCRBench (OCR capabilities)
-- MMBench (multimodal understanding)
-- And many other vision-language benchmarks
-
 ## Requirements
 
 - Requires latest transformers (installed from GitHub source)
@@ -204,11 +187,11 @@ Qwen3-VL achieves state-of-the-art performance on:
 ## Notes
 
 - Uses latest transformers from source for Qwen3-VL support
-- Model excels at complex reasoning and detailed analysis
+- Mid-size model in Qwen3-VL family (between 2B and 8B)
 - Supports both images and videos
 - Works with URLs and local files
-- Best-in-class OCR performance
-- Strong multi-turn conversation support
+- Good balance between efficiency and capability
+- Supports multi-turn conversation
 
 ## Citation
 

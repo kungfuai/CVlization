@@ -1,6 +1,6 @@
-# Phi-3.5-vision-instruct - Microsoft's Multimodal LLM
+# Phi-3.5-vision-instruct
 
-Phi-3.5-vision-instruct is a powerful multimodal model from Microsoft with 4.2B parameters, offering strong reasoning capabilities and 128K context length for vision-language tasks.
+Phi-3.5-vision-instruct is a multimodal model from Microsoft with 4.2B parameters and 128K context length for vision-language tasks.
 
 ## Model Information
 
@@ -16,18 +16,16 @@ Phi-3.5-vision-instruct is a powerful multimodal model from Microsoft with 4.2B 
 
 ### Capabilities
 
-- **Image Captioning**: Detailed image descriptions
+- **Image Captioning**: Image descriptions
 - **OCR**: Text extraction from images
 - **Visual Question Answering**: Answer questions about images
-- **Visual Reasoning**: Complex reasoning about visual content
+- **Visual Reasoning**: Reasoning about visual content
 - **Multi-image Support**: Process multiple images in conversation
 
-### Key Strengths
+### Key Features
 
-- Strong reasoning abilities
-- High-quality responses
 - 128K token context (supports long conversations)
-- Fast inference with Flash Attention
+- Flash Attention 2 support for faster inference
 - Multi-turn conversations with images
 
 ## Quick Start
@@ -38,7 +36,7 @@ Phi-3.5-vision-instruct is a powerful multimodal model from Microsoft with 4.2B 
 bash build.sh
 ```
 
-This creates a ~15GB Docker image with Flash Attention support.
+This creates a Docker image with Flash Attention 2 support.
 
 ### 2. Run Inference
 
@@ -136,11 +134,12 @@ This example uses shared test images from `../test_images/` to avoid duplicating
 
 ## Performance
 
+Tested on NVIDIA A10 GPU with invoice test image (800x600):
+
 - **VRAM Usage**: ~8GB
-- **Model Size**: 8.3GB on disk
-- **Speed**: Fast with Flash Attention 2
-- **Context**: Supports up to 128K tokens
-- **Quality**: Strong reasoning and detailed responses
+- **Model Download Size**: ~8GB
+- **Context Length**: Supports up to 128K tokens
+- **Flash Attention**: Uses Flash Attention 2 for optimized inference
 
 ## Technical Details
 
@@ -175,12 +174,12 @@ Image indices start from 1.
 
 ## Notes
 
-- The model uses `trust_remote_code=True` for loading
+- The model uses `trust_remote_code=True` for loading custom code
 - Flash Attention 2 is recommended for optimal performance
 - Use `num_crops=16` for single images (default)
 - Use `num_crops=4` for multi-frame/video scenarios
-- Model excels at reasoning and detailed analysis
-- Works well for document understanding and complex VQA
+- Supports document understanding and visual question answering
+- Model caches to `~/.cache/huggingface` and persists across runs
 
 ## Citation
 
