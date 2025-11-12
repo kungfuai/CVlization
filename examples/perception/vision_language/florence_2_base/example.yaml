@@ -1,0 +1,16 @@
+name: florence-2-base
+capability: perception/vision_language
+modalities: [vision, text]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 1
+  disk_gb: 5
+image: florence-2-base
+tags: [florence, vlm, microsoft, ocr, vqa, captioning, object-detection, segmentation, pytorch, unified-vision, efficient]
+tasks: [ocr, image_captioning, visual_question_answering, object_detection, image_segmentation, document_understanding, region_captioning]
+
+verification:
+  last_verified: 2025-11-12
+  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). 0.23B parameter model, smaller/faster version of Florence-2-Large. Excellent OCR quality - accurately extracted all text from invoice. VRAM usage ~1GB with float16."
+  status: VERIFIED

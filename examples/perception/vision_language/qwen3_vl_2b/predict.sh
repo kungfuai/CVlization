@@ -8,17 +8,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Image name
-IMG="${CVL_IMAGE:-minicpm-v-2-6}"
+IMG="${CVL_IMAGE:-qwen3-vl-2b}"
 
 # Mount workspace as writable (predict script writes outputs to /workspace/outputs)
 # Also mount test_images directory for shared test images
 # Mount HuggingFace cache for model caching across runs
-# Load HF_TOKEN from .env file (for gated model access)
-ENV_FILE="${REPO_ROOT}/../CVlization/.env"
-if [ -f "$ENV_FILE" ]; then
-  source "$ENV_FILE"
-fi
-
 docker run --rm --gpus=all \
   ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
   --workdir /workspace \
@@ -28,5 +22,4 @@ docker run --rm --gpus=all \
   --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
   --env "PYTHONPATH=/cvlization_repo" \
   --env "PYTHONUNBUFFERED=1" \
-  ${HF_TOKEN:+--env "HUGGING_FACE_HUB_TOKEN=$HF_TOKEN"} \
   "$IMG" python3 predict.py "$@"

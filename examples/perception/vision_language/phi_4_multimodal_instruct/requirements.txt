@@ -1,0 +1,10 @@
+transformers==4.48.2
+torch==2.6.0
+pillow==11.1.0
+requests==2.32.3
+accelerate==1.2.1
+flash-attn==2.7.4.post1
+scipy==1.15.1
+peft==0.14.0
+backoff==2.2.1
+soundfile==0.13.1
