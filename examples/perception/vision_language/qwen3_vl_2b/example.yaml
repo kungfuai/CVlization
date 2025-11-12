@@ -1,0 +1,16 @@
+name: qwen3-vl-2b
+capability: perception/vision_language
+modalities: [vision, text]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 4
+  disk_gb: 6
+image: qwen3-vl-2b
+tags: [qwen, vlm, alibaba, ocr, vqa, captioning, reasoning, pytorch, video-understanding, latest-2025, efficient, ultra-compact]
+tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding, video_understanding]
+
+verification:
+  last_verified: 2025-11-12
+  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). 2B parameter model, smallest/most efficient in Qwen3-VL family. Excellent OCR quality with perfect accuracy and formatting preservation. VRAM usage ~4GB. Released September 2025."
+  status: VERIFIED

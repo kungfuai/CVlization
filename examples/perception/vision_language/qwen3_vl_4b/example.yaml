@@ -1,0 +1,16 @@
+name: qwen3-vl-4b
+capability: perception/vision_language
+modalities: [vision, text]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 10
+image: qwen3-vl-4b
+tags: [qwen, vlm, alibaba, ocr, vqa, captioning, reasoning, pytorch, video-understanding, latest-2025, efficient]
+tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding, video_understanding]
+
+verification:
+  last_verified: 2025-11-12
+  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). 4B parameter model, smaller/faster version of Qwen3-VL-8B. Excellent OCR quality with formatting preservation - accurately extracted all text with table structure. VRAM usage ~8GB. Released October 2025."
+  status: VERIFIED
