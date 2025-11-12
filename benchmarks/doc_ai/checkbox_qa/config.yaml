@@ -3,7 +3,7 @@
 dataset:
   name: "mturski/CheckboxQA"
   split: "test"
-  use_hf: true  # Load from HuggingFace (set false to use local data/)
+  use_hf: false  # Load from local data/ (HF requires newer datasets library)
   data_dir: "data"
 
 evaluation:
@@ -22,6 +22,10 @@ models:
   phi_4_multimodal:
     adapter: "adapters/phi_4_multimodal.sh"
     description: "Phi-4-Multimodal (5.6B params, ~10GB VRAM)"
+
+  moondream2:
+    adapter: "adapters/moondream2.sh"
+    description: "Moondream2 (1.9B params, ~4GB VRAM)"
 
   # Add more models here
   # model_name:

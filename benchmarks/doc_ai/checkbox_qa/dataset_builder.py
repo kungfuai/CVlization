@@ -43,7 +43,7 @@ class CheckboxQADataset:
     def __init__(
         self,
         data_dir: Union[str, Path] = "data",
-        use_hf: bool = True,
+        use_hf: bool = False,
         split: str = "test"
     ):
         """
@@ -51,7 +51,8 @@ class CheckboxQADataset:
 
         Args:
             data_dir: Directory containing local data files
-            use_hf: If True, load from HuggingFace; else load from local files
+            use_hf: If True, load from HuggingFace; else load from local files (default: False)
+                   Note: HuggingFace version requires newer datasets library with Pdf feature support
             split: Dataset split ('test' only for CheckboxQA)
         """
         self.data_dir = Path(data_dir)
@@ -182,9 +183,9 @@ if __name__ == "__main__":
     print("CheckboxQA Dataset Builder")
     print("=" * 60)
 
-    # Try loading from HuggingFace
+    # Try loading from local files (default)
     try:
-        dataset = CheckboxQADataset(use_hf=True)
+        dataset = CheckboxQADataset(use_hf=False)
         print(f"\nDataset loaded successfully!")
         print(f"Total documents: {len(dataset)}")
         print(f"Total questions: {dataset.total_questions()}")
