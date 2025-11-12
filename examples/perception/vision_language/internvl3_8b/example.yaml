@@ -1,0 +1,16 @@
+name: internvl3-8b
+capability: perception/vision_language
+modalities: [vision, text]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 18
+image: internvl3-8b
+tags: [internvl, vlm, opengvlab, ocr, vqa, captioning, reasoning, pytorch, multimodal-reasoning]
+tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding]
+
+verification:
+  last_verified: 2025-11-12
+  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). 8B parameter model with strong multimodal reasoning. Very good OCR quality with excellent formatting preservation - minor digit recognition error on invoice test. VRAM usage ~16GB with bfloat16. Better than InternVL2.5."
+  status: VERIFIED
