@@ -1,0 +1,15 @@
+name: phi-3-5-vision-instruct
+capability: perception/vision_language
+modalities: [vision, text]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 15
+image: phi-3-5-vision-instruct
+tags: [phi, vlm, microsoft, ocr, vqa, captioning, reasoning, pytorch, multi-image, 128k-context]
+tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding, multi_image]
+
+verification:
+  last_verified: 2025-11-11
+  last_verification_note: "Verified build with Flash Attention 2, inference with caption task, model caching, and text outputs on NVIDIA A10 (23GB VRAM). Uses ~8GB VRAM."

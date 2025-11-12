@@ -1,0 +1,4 @@
+# Keep all images in this directory (exception to parent .gitignore)
+!*.jpg
+!*.jpeg
+!*.png

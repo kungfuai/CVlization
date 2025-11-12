@@ -1,0 +1,31 @@
+name: molmoe-1b
+capability: perception/vision_language
+modalities: [vision, text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 3
+  disk_gb: 4
+
+# Docker image name for this example
+image: molmoe-1b
+
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    command: python3 predict.py
+    description: Run multimodal inference on an image
+
+tags: [molmo, vlm, moe, ocr, vqa, captioning, allen-institute, pytorch, efficient]
+tasks: [ocr, image_captioning, visual_question_answering, document_understanding]
+frameworks: [pytorch]
+description: Ultra-efficient 1.2B MoE vision-language model from Allen Institute that nearly matches GPT-4V
+
+verification:
+  last_verified: 2025-11-11
+  last_verification_note: "Build successful, but model FAILS quality verification - consistently hallucinates incorrect content (described non-existent 'woman' and 'Lorem Ipsum' text for invoice image). Needs debugging. Uses ~3GB VRAM."
+  status: FAILED

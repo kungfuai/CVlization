@@ -1,0 +1,15 @@
+name: qwen3-vl-8b
+capability: perception/vision_language
+modalities: [vision, text]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 18
+image: qwen3-vl-8b
+tags: [qwen, vlm, alibaba, ocr, vqa, captioning, reasoning, pytorch, video-understanding, latest-2025]
+tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding, video_understanding]
+
+verification:
+  last_verified: 2025-11-11
+  last_verification_note: "Verified build with latest transformers from source, inference with caption task, model caching, and text outputs on NVIDIA A10 (23GB VRAM). Uses ~16GB VRAM. Released October 2025."
