@@ -17,37 +17,46 @@ CheckboxQA is a specialized dataset that tests how well LLMs can interpret check
 - **Document Types**: Employment forms, tax forms, police reports, facility inspection forms
 - **Answer Types**: Yes/No, categorical selections, lists of checked items
 
+**Pre-created Subsets:**
+- `subset_dev.jsonl` - 5 docs, 40 questions (for quick development/testing)
+- `subset_test.jsonl` - 20 random docs, 138 questions (for evaluation)
+- `gold.jsonl` - Full 88 docs, 579 questions (complete benchmark)
+
 ## Quick Start
 
-### 1. Download Dataset
+### 1. Dataset is Pre-downloaded
 
-```bash
-# Download PDFs from DocumentCloud
-cd data
-python download_documents.py
-
-# Or use the HuggingFace dataset
-# The dataset will be downloaded automatically during evaluation
-```
+The PDFs and gold annotations are already in `data/`:
+- `data/documents/` - 88 PDF documents
+- `data/gold.jsonl` - Full test set annotations (579 questions)
+- `data/subset_dev.jsonl` - Dev set (5 docs, 40 questions)
+- `data/subset_test.jsonl` - Test set (20 docs, 138 questions)
 
 ### 2. Run Evaluation
 
 ```bash
-# Evaluate a single model
-./run_benchmark.sh florence_2_base
+# Quick test with dev subset (5 docs, ~4 minutes with moondream2)
+./run_benchmark.sh moondream2 --subset data/subset_dev.jsonl
 
-# Evaluate multiple models
-./run_benchmark.sh florence_2_base qwen3_vl_2b phi_4_multimodal
+# Full evaluation on test subset (20 docs)
+./run_benchmark.sh moondream2 --subset data/subset_test.jsonl
 
-# Evaluate all configured models
-./run_benchmark.sh
+# Evaluate on full dataset (88 docs, ~10 hours)
+./run_benchmark.sh moondream2
+
+# Multiple models
+./run_benchmark.sh florence_2_base qwen3_vl_2b --subset data/subset_dev.jsonl
 ```
 
 ### 3. View Results
 
 ```bash
-# View latest results
-cat results/latest/leaderboard.md
+# Results are timestamped and saved to results/YYYYMMDD_HHMMSS/
+# View evaluation metrics
+cat results/20251112_182416/moondream2/eval_results.json
+
+# View leaderboard
+cat results/20251112_182416/leaderboard.json
 
 # View detailed results
 cat results/20251112_143022/scores.csv
