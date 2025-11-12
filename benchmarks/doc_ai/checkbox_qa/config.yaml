@@ -1,0 +1,34 @@
+# CheckboxQA Benchmark Configuration
+
+dataset:
+  name: "mturski/CheckboxQA"
+  split: "test"
+  use_hf: true  # Load from HuggingFace (set false to use local data/)
+  data_dir: "data"
+
+evaluation:
+  metric: "anls_star"
+  threshold: 0.5  # ANLS threshold
+
+models:
+  florence_2_base:
+    adapter: "adapters/florence_2_base.sh"
+    description: "Florence-2-Base (0.23B params, ~1GB VRAM)"
+
+  qwen3_vl_2b:
+    adapter: "adapters/qwen3_vl_2b.sh"
+    description: "Qwen3-VL-2B (2B params, ~4GB VRAM)"
+
+  phi_4_multimodal:
+    adapter: "adapters/phi_4_multimodal.sh"
+    description: "Phi-4-Multimodal (5.6B params, ~10GB VRAM)"
+
+  # Add more models here
+  # model_name:
+  #   adapter: "adapters/model_name.sh"
+  #   description: "Model description"
+
+output:
+  results_dir: "results"
+  save_predictions: true
+  save_leaderboard: true
