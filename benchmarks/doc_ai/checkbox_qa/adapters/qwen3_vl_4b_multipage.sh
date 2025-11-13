@@ -1,5 +1,5 @@
 #!/bin/bash
-# Multi-page adapter for Qwen3-VL-2B with full PDF support
+# Multi-page adapter for Qwen3-VL-4B with full PDF support
 
 set -e
 
@@ -70,8 +70,8 @@ done
 
 echo "Passing ${#PAGE_FILES[@]} images to VLM"
 
-# Run Qwen3-VL-2B with multi-image support
-QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl_2b"
+# Run Qwen3-VL-4B with multi-image support
+QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl_4b"
 
 docker run --runtime nvidia --rm \
     -v "$QWEN_DIR:/workspace" \
@@ -82,7 +82,7 @@ docker run --runtime nvidia --rm \
     -e PYTHONPATH=/cvlization_repo \
     -e HF_TOKEN=$HF_TOKEN \
     -e PROMPT="$ENHANCED_PROMPT" \
-    qwen3-vl-2b \
+    qwen3-vl-4b \
     bash -c "python3 predict.py --images $IMAGES_ARG --output /outputs/$OUTPUT_NAME --task vqa --prompt \"\$PROMPT\""
 
 # Cleanup temporary files
