@@ -126,14 +126,14 @@ def load_image(image_path: str):
     return image.convert("RGB")
 
 
-def run_inference(model, processor, image, prompt: str):
+def run_inference(model, processor, images, prompt: str):
     """
-    Run inference on an image using Phi-3.5-vision-instruct.
+    Run inference on one or more images using Phi-3.5-vision-instruct.
 
     Args:
         model: Loaded Phi-3.5-vision model
         processor: Model processor
-        image: PIL Image
+        images: Single PIL Image or list of PIL Images
         prompt: Text prompt/question
 
     Returns:
@@ -141,9 +141,19 @@ def run_inference(model, processor, image, prompt: str):
     """
     print(f"Running inference with prompt: '{prompt[:50]}...'")
 
+    # Ensure images is a list
+    if not isinstance(images, list):
+        images = [images]
+
+    print(f"Processing {len(images)} image(s)")
+
+    # Build prompt with image placeholders
+    image_placeholders = "\n".join([f"<|image_{i+1}|>" for i in range(len(images))])
+    user_content = f"{image_placeholders}\n{prompt}"
+
     # Construct chat messages with image placeholder
     messages = [
-        {"role": "user", "content": f"<|image_1|>\n{prompt}"},
+        {"role": "user", "content": user_content},
     ]
 
     # Apply chat template
@@ -154,7 +164,7 @@ def run_inference(model, processor, image, prompt: str):
     )
 
     # Process inputs
-    inputs = processor(prompt_text, [image], return_tensors="pt")
+    inputs = processor(prompt_text, images, return_tensors="pt")
 
     # Move to device
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
@@ -239,8 +249,15 @@ Examples:
     parser.add_argument(
         "--image",
         type=str,
-        default="test_images/sample.jpg",
-        help="Path to input image or URL"
+        default=None,
+        help="Path to single input image or URL"
+    )
+    parser.add_argument(
+        "--images",
+        type=str,
+        nargs='+',
+        default=None,
+        help="Paths to multiple input images (for multi-image tasks)"
     )
     parser.add_argument(
         "--model-id",
@@ -288,13 +305,26 @@ Examples:
     if args.task == "vqa" and args.prompt is None:
         parser.error("--prompt is required for VQA task")
 
+    # Validate image arguments
+    if args.image and args.images:
+        parser.error("Cannot specify both --image and --images")
+    if not args.image and not args.images:
+        # Default to single test image for backward compatibility
+        args.image = "test_images/sample.jpg"
+
     # Resolve paths for CVL compatibility
     try:
-        image_path = resolve_input_path(args.image)
+        if args.image:
+            image_paths = [resolve_input_path(args.image)]
+        else:
+            image_paths = [resolve_input_path(img) for img in args.images]
         output_path = resolve_output_path(args.output)
     except:
         # Fallback to direct paths if CVL not available
-        image_path = args.image
+        if args.image:
+            image_paths = [args.image]
+        else:
+            image_paths = args.images
         output_path = args.output
 
     # Determine prompt
