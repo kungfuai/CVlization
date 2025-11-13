@@ -112,17 +112,26 @@ def check_docker_image_exists(image_name: str) -> bool:
         return False
 
 
-def get_docker_image_name(example_path: str) -> Optional[str]:
+def get_docker_image_name(
+    example_path: str,
+    example_data: Optional[Dict] = None,
+) -> Optional[str]:
     """Extract Docker image name from example directory.
 
-    Uses the directory name as the image name (following build.sh convention).
+    Prefers the `image` field from example.yaml when available, otherwise falls
+    back to the directory name.
 
     Args:
         example_path: Absolute path to example directory
+        example_data: Parsed example metadata (optional)
 
     Returns:
         Image name, or None if cannot determine
     """
+    if example_data:
+        image_name = example_data.get("image")
+        if image_name:
+            return image_name
     return Path(example_path).name
 
 
@@ -792,7 +801,7 @@ def run_example(
 
     # Check if Docker image exists (except for build preset)
     if preset_name != "build":
-        image_name = get_docker_image_name(example_path)
+        image_name = get_docker_image_name(example_path, example)
         if image_name and not check_docker_image_exists(image_name):
             # Check if build preset exists
             build_preset = get_preset_info(example, "build")
@@ -824,7 +833,7 @@ def run_example(
     # Show what we're running
     example_name = example.get("name", Path(example_path).name)
     example_full_path = example.get("_path", "").removeprefix("examples/")
-    image_name = get_docker_image_name(example_path)
+    image_name = get_docker_image_name(example_path, example)
 
     # CVL startup header with delimiter
     print("=" * 80)
