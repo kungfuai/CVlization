@@ -1,6 +1,6 @@
 #!/bin/bash
-# Adapter for Florence-2-Base on CheckboxQA
-# Usage: ./florence_2_base.sh <pdf_path> <question> --output <output_file>
+# Adapter for Florence-2 (Base variant) on CheckboxQA
+# Usage: ./florence_2.sh <pdf_path> <question> --output <output_file>
 
 set -e
 
@@ -44,11 +44,11 @@ pdftoppm -png -f 1 -l 1 -singlefile "$PDF_ABS" "${TMP_IMG%.png}"
 IMG_DIR=$(dirname "$TMP_IMG")
 IMG_NAME=$(basename "$TMP_IMG")
 
-# Run Florence-2-Base with detailed caption + question
+# Run Florence-2 (base) with detailed caption + question
 # Florence-2 uses special task prompts like <MORE_DETAILED_CAPTION>
 # We'll use MORE_DETAILED_CAPTION to get detailed understanding
 # and append the question
-FLORENCE_DIR="$REPO_ROOT/examples/perception/vision_language/florence_2_base"
+FLORENCE_DIR="$REPO_ROOT/examples/perception/vision_language/florence_2"
 
 docker run --runtime nvidia --rm \
     -v "$FLORENCE_DIR:/workspace" \
@@ -58,8 +58,9 @@ docker run --runtime nvidia --rm \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
     -e PYTHONPATH=/cvlization_repo \
     -e HF_TOKEN=$HF_TOKEN \
-    florence-2-base \
+    florence-2 \
     python3 predict.py \
+        --variant base \
         --image "/inputs/$IMG_NAME" \
         --output "/outputs/$OUTPUT_NAME" \
         --task more_detailed_caption \

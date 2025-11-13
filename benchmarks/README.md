@@ -33,7 +33,7 @@ benchmarks/
 
 ```bash
 cd benchmarks/doc_ai/checkbox_qa
-./run_benchmark.sh florence_2_base qwen3_vl_2b
+./run_benchmark.sh florence_2 qwen3_vl_2b
 cat results/latest/leaderboard.md
 ```
 
