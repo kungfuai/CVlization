@@ -1,0 +1,23 @@
+name: internvl3
+capability: perception/vision_language
+modalities: [vision, text]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 18
+image: internvl3
+presets:
+  build:
+    script: build.sh
+    description: Build the InternVL3 Docker image
+  predict:
+    script: predict.sh
+    description: Run inference (pass options through to predict.py)
+tags: [internvl, vlm, opengvlab, ocr, vqa, captioning, reasoning, pytorch, multimodal-reasoning]
+tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding]
+
+verification:
+  last_verified: 2025-11-13
+  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). Build + caption/OCR inference succeed for InternVL3-8B (bfloat16, ~16GB VRAM)."
+  status: VERIFIED

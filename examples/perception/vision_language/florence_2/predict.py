@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Florence-2-Base Vision Language Model - Microsoft's Unified Vision Foundation Model
+Florence-2 Vision Language Model - Microsoft's Unified Vision Foundation Model
 
-This script demonstrates multimodal understanding using Florence-2-Base from Microsoft,
-a compact 0.23B parameter model supporting captioning, OCR, object detection, and more.
+This script demonstrates multimodal understanding using Florence-2 (Base & Large) from Microsoft,
+covering captioning, OCR, object detection, and more via task prompts.
 
-Model: microsoft/Florence-2-base
 Features: Captioning, OCR, object detection, segmentation, grounding
 License: MIT
 """
@@ -28,7 +27,18 @@ from cvlization.paths import (
 
 
 # Model configuration
-MODEL_ID = "microsoft/Florence-2-base"
+VARIANTS = {
+    "base": {
+        "model_id": "microsoft/Florence-2-base",
+        "description": "0.23B params (~1GB VRAM)",
+    },
+    "large": {
+        "model_id": "microsoft/Florence-2-large",
+        "description": "0.77B params (~2GB VRAM)",
+    },
+}
+DEFAULT_VARIANT = "base"
+DEFAULT_MODEL_ID = VARIANTS[DEFAULT_VARIANT]["model_id"]
 
 # Task prompts
 TASK_PROMPTS = {
@@ -64,9 +74,9 @@ def detect_device():
     return device
 
 
-def load_model(model_id: str = MODEL_ID, device: str = None):
+def load_model(model_id: str = DEFAULT_MODEL_ID, device: str = None):
     """
-    Load the Florence-2-Base model and processor.
+    Load the Florence-2 model and processor.
 
     Args:
         model_id: HuggingFace model ID
@@ -127,7 +137,7 @@ def load_image(image_path: str):
 
 def run_inference(model, processor, image, task_prompt: str, text_input: str = None):
     """
-    Run inference on an image using Florence-2-Base.
+    Run inference on an image using Florence-2.
 
     Args:
         model: Loaded Florence-2 model
@@ -216,7 +226,7 @@ def format_output(result: dict, task: str) -> str:
         return str(output)
 
 
-def save_output(output: str, output_path: str, format: str = "txt", model_id: str = MODEL_ID):
+def save_output(output: str, output_path: str, format: str = "txt", model_id: str = DEFAULT_MODEL_ID):
     """
     Save the output to a file.
 
@@ -250,7 +260,7 @@ def main():
     Main execution function.
     """
     parser = argparse.ArgumentParser(
-        description="Florence-2-Base Vision Language Model",
+        description="Florence-2 Vision Language Model (Base & Large)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -266,6 +276,9 @@ Examples:
   # Object detection
   python predict.py --image scene.jpg --task object_detection
 
+  # Large variant
+  python predict.py --variant large --image photo.jpg --task caption
+
   # Save as JSON
   python predict.py --image doc.jpg --task ocr --output result.json --format json
         """
@@ -278,10 +291,17 @@ Examples:
         help="Path to input image or URL"
     )
     parser.add_argument(
+        "--variant",
+        type=str,
+        choices=sorted(VARIANTS.keys()),
+        default=DEFAULT_VARIANT,
+        help="Florence-2 checkpoint to load (default: base)"
+    )
+    parser.add_argument(
         "--model-id",
         type=str,
-        default=MODEL_ID,
-        help="HuggingFace model ID"
+        default=None,
+        help="Override HuggingFace model ID (defaults to --variant mapping)"
     )
     parser.add_argument(
         "--task",
@@ -331,14 +351,18 @@ Examples:
     # Get task prompt
     task_prompt = TASK_PROMPTS[args.task]
 
+    variant_cfg = VARIANTS[args.variant]
+    model_id = args.model_id or variant_cfg["model_id"]
+
     print("=" * 60)
-    print(f"Florence-2-Base - Microsoft Research")
-    print(f"Model: {args.model_id}")
+    print("Florence-2 - Microsoft Research")
+    print(f"Variant: {args.variant} ({variant_cfg['description']})")
+    print(f"Model: {model_id}")
     print(f"Task: {args.task} ({task_prompt})")
     print("=" * 60)
 
     # Load model
-    model, processor, device = load_model(args.model_id, args.device)
+    model, processor, device = load_model(model_id, args.device)
 
     # Load image
     print(f"\nLoading image: {image_path}")
@@ -361,7 +385,7 @@ Examples:
 
     # Save output
     print()
-    save_output(formatted_result, output_path, args.format, args.model_id)
+    save_output(formatted_result, output_path, args.format, model_id)
 
     print("\nDone!")
 

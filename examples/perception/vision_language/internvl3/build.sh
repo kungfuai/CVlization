@@ -5,4 +5,4 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Build the Docker image
-docker build -t florence-2-large "$SCRIPT_DIR"
+docker build -t internvl3 "$SCRIPT_DIR"
