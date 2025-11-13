@@ -342,14 +342,18 @@ Examples:
     # Load model
     model, processor, device = load_model(args.model_id, args.device)
 
-    # Load image
-    print(f"\nLoading image: {image_path}")
-    image = load_image(image_path)
-    print(f"Image size: {image.size}")
+    # Load images (supports single or multi-image prompts)
+    loaded_images = []
+    print("\nLoading image(s):")
+    for idx, image_path in enumerate(image_paths, start=1):
+        print(f"  [{idx}] {image_path}")
+        image = load_image(image_path)
+        print(f"    Size: {image.size}")
+        loaded_images.append(image)
 
     # Run inference
     print()
-    result = run_inference(model, processor, image, prompt)
+    result = run_inference(model, processor, loaded_images, prompt)
 
     # Display result
     print("\n" + "=" * 60)
