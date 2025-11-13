@@ -1,12 +1,12 @@
-# Florence-2-Base
+# Florence-2 (Base & Large)
 
-Florence-2-Base is a compact vision language model from Microsoft Research with 0.23B parameters. It uses task-specific prompt tokens for different vision tasks including captioning, OCR, object detection, and segmentation.
+This unified example exposes both Florence-2 checkpoints from Microsoft Research. Use it for captioning, OCR, detection, and grounding tasks while switching between the compact Base (0.23B, ~1GB VRAM) and the beefier Large (0.77B, ~2GB VRAM) models via a single `--variant` flag.
 
 ## Model Information
 
-- **Model**: `microsoft/Florence-2-base`
-- **Size**: 0.23B parameters (230M)
-- **VRAM**: ~1GB (float16)
+- **Model Variants**:
+  - `--variant base` → `microsoft/Florence-2-base` (~0.23B params, ~1GB VRAM)
+  - `--variant large` → `microsoft/Florence-2-large` (~0.77B params, ~2GB VRAM)
 - **License**: MIT
 - **Paper**: [Florence-2: Advancing a Unified Representation for a Variety of Vision Tasks](https://arxiv.org/abs/2311.06242)
 
@@ -39,34 +39,36 @@ This creates a Docker image with PyTorch 2.5.1 and required dependencies.
 
 ### 2. Run Inference
 
+The commands below default to the Base checkpoint. Append `--variant large` to use the larger model.
+
 #### Image Captioning
 
 ```bash
-bash predict.sh --image test_images/sample.jpg --task caption
+bash predict.sh --variant base --image test_images/sample.jpg --task caption
 ```
 
 #### Detailed Captioning
 
 ```bash
-bash predict.sh --image photo.jpg --task detailed_caption
+bash predict.sh --variant base --image photo.jpg --task detailed_caption
 ```
 
 #### OCR (Text Extraction)
 
 ```bash
-bash predict.sh --image document.jpg --task ocr
+bash predict.sh --variant base --image document.jpg --task ocr
 ```
 
 #### Object Detection
 
 ```bash
-bash predict.sh --image scene.jpg --task object_detection
+bash predict.sh --variant base --image scene.jpg --task object_detection
 ```
 
 #### OCR with Bounding Boxes
 
 ```bash
-bash predict.sh --image receipt.jpg --task ocr_with_region --format json
+bash predict.sh --variant base --image receipt.jpg --task ocr_with_region --format json
 ```
 
 ### 3. Run Tests
@@ -80,13 +82,14 @@ bash test.sh
 ### Basic Usage
 
 ```bash
-bash predict.sh --image <path> --task <task_name>
+bash predict.sh --variant <base|large> --image <path> --task <task_name>
 ```
 
 ### All Options
 
 ```bash
 bash predict.sh \
+  --variant <base|large> \
   --image <path_or_url> \
   --task <task_name> \
   --output <output_path> \
@@ -140,9 +143,9 @@ This example uses shared test images from `../test_images/` to avoid duplicating
 
 Tested on NVIDIA A10 GPU with invoice image (800x600):
 
-- **VRAM Usage**: ~1GB with float16
-- **Model Download Size**: ~475MB
-- **OCR Accuracy**: Successfully extracted all text from test invoice including table structure
+- **VRAM Usage**: Base ~1GB, Large ~2GB (float16)
+- **Model Download Size**: Base ~0.5GB, Large ~1.5GB
+- **Tasks Verified**: Caption + OCR success on both variants (Large provides slightly richer descriptions)
 - **Output Format**: Returns text or structured JSON with bounding boxes depending on task
 
 ## Architecture

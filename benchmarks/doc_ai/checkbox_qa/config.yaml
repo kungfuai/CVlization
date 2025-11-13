@@ -11,9 +11,9 @@ evaluation:
   threshold: 0.5  # ANLS threshold
 
 models:
-  florence_2_base:
-    adapter: "adapters/florence_2_base.sh"
-    description: "Florence-2-Base (0.23B params, ~1GB VRAM)"
+  florence_2:
+    adapter: "adapters/florence_2.sh"
+    description: "Florence-2 (Base variant default, ~1GB VRAM)"
 
   qwen3_vl_2b:
     adapter: "adapters/qwen3_vl_2b.sh"
