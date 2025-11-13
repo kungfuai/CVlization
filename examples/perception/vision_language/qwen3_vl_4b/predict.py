@@ -107,14 +107,14 @@ def load_image(image_path: str):
         return Image.open(image_path).convert("RGB")
 
 
-def run_inference(model, processor, image, prompt: str):
+def run_inference(model, processor, images, prompt: str):
     """
-    Run inference on an image using Qwen3-VL-4B-Instruct.
+    Run inference on one or more images using Qwen3-VL-4B-Instruct.
 
     Args:
         model: Loaded Qwen3-VL model
         processor: Model processor
-        image: PIL Image or URL string
+        images: Single PIL Image/URL string, or list of PIL Images/URL strings
         prompt: Text prompt/question
 
     Returns:
@@ -122,14 +122,23 @@ def run_inference(model, processor, image, prompt: str):
     """
     print(f"Running inference with prompt: '{prompt[:50]}...'")
 
+    # Ensure images is a list
+    if not isinstance(images, list):
+        images = [images]
+
+    print(f"Processing {len(images)} image(s)")
+
     # Construct messages with Qwen3-VL format
+    # Build content array with all images followed by the prompt
+    content = []
+    for img in images:
+        content.append({"type": "image", "image": img})
+    content.append({"type": "text", "text": prompt})
+
     messages = [
         {
             "role": "user",
-            "content": [
-                {"type": "image", "image": image},
-                {"type": "text", "text": prompt},
-            ],
+            "content": content,
         }
     ]
 
@@ -222,8 +231,15 @@ Examples:
     parser.add_argument(
         "--image",
         type=str,
-        default="test_images/sample.jpg",
-        help="Path to input image or URL"
+        default=None,
+        help="Path to single input image or URL"
+    )
+    parser.add_argument(
+        "--images",
+        type=str,
+        nargs='+',
+        default=None,
+        help="Paths to multiple input images (for multi-image tasks)"
     )
     parser.add_argument(
         "--model-id",
@@ -271,13 +287,26 @@ Examples:
     if args.task == "vqa" and args.prompt is None:
         parser.error("--prompt is required for VQA task")
 
+    # Validate image arguments
+    if args.image and args.images:
+        parser.error("Cannot specify both --image and --images")
+    if not args.image and not args.images:
+        # Default to single test image for backward compatibility
+        args.image = "test_images/sample.jpg"
+
     # Resolve paths for CVL compatibility
     try:
-        image_path = resolve_input_path(args.image)
+        if args.image:
+            image_paths = [resolve_input_path(args.image)]
+        else:
+            image_paths = [resolve_input_path(img) for img in args.images]
         output_path = resolve_output_path(args.output)
     except:
         # Fallback to direct paths if CVL not available
-        image_path = args.image
+        if args.image:
+            image_paths = [args.image]
+        else:
+            image_paths = args.images
         output_path = args.output
 
     # Determine prompt
@@ -295,15 +324,19 @@ Examples:
     # Load model
     model, processor, device = load_model(args.model_id, args.device)
 
-    # Load image
-    print(f"\nLoading image: {image_path}")
-    image = load_image(image_path)
-    if not isinstance(image, str):
-        print(f"Image size: {image.size}")
+    # Load image(s)
+    print(f"\nLoading {len(image_paths)} image(s)...")
+    images = []
+    for img_path in image_paths:
+        print(f"  - {img_path}")
+        img = load_image(img_path)
+        images.append(img)
+        if not isinstance(img, str):
+            print(f"    Size: {img.size}")
 
     # Run inference
     print()
-    result = run_inference(model, processor, image, prompt)
+    result = run_inference(model, processor, images, prompt)
 
     # Display result
     print("\n" + "=" * 60)
