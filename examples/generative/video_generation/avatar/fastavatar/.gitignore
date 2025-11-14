@@ -7,7 +7,6 @@ results/
 pretrained_weights/
 *.pth
 *.pt
-data/container_cache/
 
 # Data
 data/*.png
