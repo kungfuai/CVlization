@@ -6,11 +6,14 @@ Runs models on CheckboxQA dataset and evaluates results.
 """
 
 import argparse
+import ast
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
+
 from tqdm import tqdm
 
 from dataset_builder import CheckboxQADataset
@@ -66,12 +69,104 @@ def run_model_on_document(
         return ""
 
 
+BENCHMARK_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BENCHMARK_DIR.parents[2]
+CHECKBOX_QA_IMAGE = os.environ.get("CHECKBOX_QA_IMAGE", "checkbox_qa")
+
+
+def ensure_page_cache(pdf_path: Path, doc_id: str, cache_root: Path) -> Path:
+    """
+    Ensure PNG page cache exists for the given document.
+
+    Returns directory containing cached PNGs.
+    """
+    cache_dir = cache_root / doc_id
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    if any(cache_dir.glob("page-*.png")):
+        return cache_dir
+
+    if pdf_path is None or not pdf_path.exists():
+        return cache_dir
+
+    render_pages_in_docker(pdf_path, doc_id, cache_root)
+    return cache_dir
+
+
+def normalize_answer(answer: str) -> List[str]:
+    """
+    Convert adapter output into a list of plain strings.
+    Handles Python list literals such as ["Yes", "No"].
+    """
+    stripped = answer.strip()
+
+    if stripped.startswith("[") and stripped.endswith("]"):
+        try:
+            parsed = ast.literal_eval(stripped)
+            values: List[str] = []
+
+            def flatten(obj):
+                if obj is None:
+                    return
+                if isinstance(obj, (list, tuple)):
+                    for item in obj:
+                        flatten(item)
+                else:
+                    text = str(obj).strip()
+                    if text:
+                        values.append(text)
+
+            if isinstance(parsed, (list, tuple)):
+                flatten(parsed)
+                if values:
+                    return values
+        except (ValueError, SyntaxError):
+            pass
+
+    cleaned = stripped.strip().strip('"').strip("'")
+    return [cleaned] if cleaned else [answer]
+
+
+def render_pages_in_docker(pdf_path: Path, doc_id: str, cache_root: Path) -> None:
+    """
+    Render all PDF pages to PNGs inside the checkbox_qa Docker image.
+    """
+    pdf_dir = pdf_path.parent.resolve()
+    cache_root = cache_root.resolve()
+
+    cache_root.mkdir(parents=True, exist_ok=True)
+
+    python_cmd = (
+        "from page_cache import render_pdf_to_images; "
+        "from pathlib import Path; "
+        f"render_pdf_to_images(Path('/pdfs/{pdf_path.name}'), "
+        f"Path('/page_cache/{doc_id}'), overwrite=False)"
+    )
+
+    cmd = [
+        "docker", "run", "--rm",
+        "-v", f"{BENCHMARK_DIR}:/workspace",
+        "-v", f"{pdf_dir}:/pdfs:ro",
+        "-v", f"{cache_root}:/page_cache",
+        "-w", "/workspace",
+        CHECKBOX_QA_IMAGE,
+        "python", "-c", python_cmd
+    ]
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as exc:
+        print(f"Error rendering pages for {pdf_path}: {exc}", file=sys.stderr)
+        raise
+
+
 def run_benchmark(
     model_name: str,
     adapter_path: Path,
     dataset: CheckboxQADataset,
     output_dir: Path,
-    max_docs: int = None
+    max_docs: int = None,
+    page_cache_dir: Optional[Path] = None,
 ) -> Path:
     """
     Run benchmark for a single model.
@@ -101,6 +196,9 @@ def run_benchmark(
                     pbar.update(len(doc.questions))
                     continue
 
+                if page_cache_dir:
+                    ensure_page_cache(doc.pdf_path, doc.document_id, page_cache_dir)
+
                 # Collect answers for this document
                 annotations = []
                 for q in doc.questions:
@@ -113,10 +211,11 @@ def run_benchmark(
                         output_file
                     )
 
+                    normalized = normalize_answer(answer)
                     annotations.append({
                         "id": q.id,
                         "key": q.question,
-                        "values": [{"value": answer}]
+                        "values": [{"value": val} for val in normalized]
                     })
 
                     pbar.update(1)
@@ -146,6 +245,9 @@ def main():
                         help='[Deprecated] Use --subset instead. Maximum number of documents to process')
     parser.add_argument('--gold', type=Path, default=Path('data/gold.jsonl'),
                         help='Path to gold standard file (used for loading dataset and evaluation)')
+    parser.add_argument('--page-cache-dir', type=Path,
+                        default=Path(os.environ.get('CHECKBOX_QA_PAGE_CACHE', 'data/page_images')),
+                        help='Directory for cached PNG page images (default: data/page_images)')
 
     args = parser.parse_args()
 
@@ -231,7 +333,8 @@ def main():
                 adapter_path,
                 dataset,
                 results_dir,
-                max_docs=args.max_docs
+                max_docs=args.max_docs,
+                page_cache_dir=args.page_cache_dir
             )
 
             # Evaluate

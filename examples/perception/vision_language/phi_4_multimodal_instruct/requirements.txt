@@ -8,3 +8,4 @@ scipy==1.15.1
 peft==0.14.0
 backoff==2.2.1
 soundfile==0.13.1
+vllm==0.10.2
