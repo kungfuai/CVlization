@@ -36,17 +36,34 @@ OUTPUT_NAME=$(basename "$OUTPUT_ABS")
 
 mkdir -p "$OUTPUT_DIR"
 
-# Convert PDF first page to image
-TMP_IMG="/tmp/checkbox_qa_$(basename "$PDF_PATH" .pdf).png"
-pdftoppm -png -f 1 -l 1 -singlefile "$PDF_ABS" "${TMP_IMG%.png}"
+DOC_NAME=$(basename "$PDF_PATH" .pdf)
+PAGE_CACHE_ROOT="${CHECKBOX_QA_PAGE_CACHE:-$REPO_ROOT/benchmarks/doc_ai/checkbox_qa/data/page_images}"
+DOC_CACHE="$PAGE_CACHE_ROOT/$DOC_NAME"
+FIRST_PAGE="$DOC_CACHE/page-001.png"
 
-# Get image paths
-IMG_DIR=$(dirname "$TMP_IMG")
-IMG_NAME=$(basename "$TMP_IMG")
+if [ ! -f "$FIRST_PAGE" ]; then
+    echo "No cached first page for $DOC_NAME; run run_checkbox_qa.py to generate cache." >&2
+    exit 1
+fi
 
-# Run Qwen3-VL-2B with question as custom prompt
-# Follow CVlization pattern: mount repo for cvlization package
-QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl_2b"
+IMG_DIR=$(dirname "$FIRST_PAGE")
+IMG_NAME=$(basename "$FIRST_PAGE")
+
+CLIENT_SCRIPT="$SCRIPT_DIR/../openai_vlm_request.py"
+
+if [ -n "${QWEN3_VL_API_BASE:-}" ]; then
+    MODEL_NAME="${QWEN3_VL_SERVE_MODEL:-qwen3-vl-2b}"
+    python3 "$CLIENT_SCRIPT" \
+        --api-base "$QWEN3_VL_API_BASE" \
+        --model "$MODEL_NAME" \
+        --prompt "$QUESTION" \
+        --images "$FIRST_PAGE" \
+        --output "$OUTPUT_ABS"
+    exit 0
+fi
+
+# Run Qwen3-VL with question as custom prompt
+QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl"
 
 docker run --runtime nvidia --rm \
     -v "$QWEN_DIR:/workspace" \
@@ -56,12 +73,12 @@ docker run --runtime nvidia --rm \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
     -e PYTHONPATH=/cvlization_repo \
     -e HF_TOKEN=$HF_TOKEN \
-    qwen3-vl-2b \
+    -e QWEN3_VL_VARIANT=2b \
+    qwen3-vl \
     python3 predict.py \
         --image "/inputs/$IMG_NAME" \
         --output "/outputs/$OUTPUT_NAME" \
         --task vqa \
         --prompt "$QUESTION"
 
-# Cleanup temp image
-rm -f "$TMP_IMG"
+# No cleanup needed; cache persists for future runs

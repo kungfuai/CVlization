@@ -8,7 +8,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Image name
-IMG="${CVL_IMAGE:-qwen3-vl-4b}"
+IMG="${CVL_IMAGE:-qwen3-vl}"
+
+EXTRA_ARGS=()
+if [[ -n "${QWEN3_VL_VARIANT:-}" ]]; then
+  EXTRA_ARGS+=("--variant" "$QWEN3_VL_VARIANT")
+fi
 
 # Mount workspace as writable (predict script writes outputs to /workspace/outputs)
 # Also mount test_images directory for shared test images
@@ -22,4 +27,4 @@ docker run --rm --gpus=all \
   --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
   --env "PYTHONPATH=/cvlization_repo" \
   --env "PYTHONUNBUFFERED=1" \
-  "$IMG" python3 predict.py "$@"
+  "$IMG" python3 predict.py "${EXTRA_ARGS[@]}" "$@"

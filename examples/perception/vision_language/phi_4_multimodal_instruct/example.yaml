@@ -15,6 +15,9 @@ presets:
   predict:
     script: predict.sh
     description: Run multimodal inference (image, text, and speech)
+  serve:
+    script: serve.sh
+    description: Launch vLLM OpenAI-compatible server for Phi-4-Multimodal
 tags: [phi, vlm, microsoft, ocr, vqa, captioning, reasoning, pytorch, multi-image, multimodal, speech-recognition, 128k-context, latest-2025]
 tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding, multi_image, speech_recognition, speech_translation]
 

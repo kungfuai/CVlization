@@ -18,7 +18,7 @@ PROMPT_PAPER='Answer the question. Do not write a full sentence. Provide a value
 PROMPT_CHECKBOX="This is a form with checkboxes. For the question below, find which checkbox is marked (✓) or checked and answer accordingly. "
 
 # Active prompt - CHANGE THIS LINE to switch prompts globally
-ACTIVE_PROMPT="$PROMPT_PAPER"
+ACTIVE_PROMPT="$PROMPT_GENERAL"
 
 # Export for use in adapters
 export ACTIVE_PROMPT

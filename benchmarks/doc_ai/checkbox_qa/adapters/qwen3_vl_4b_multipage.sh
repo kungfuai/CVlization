@@ -42,22 +42,27 @@ OUTPUT_NAME=$(basename "$OUTPUT_ABS")
 
 mkdir -p "$OUTPUT_DIR"
 
-# Get document name and create temp directory
+# Get document name and page cache directory
 DOC_NAME=$(basename "$PDF_PATH" .pdf)
-TMP_DIR="/tmp/checkbox_qa_multipage_${DOC_NAME}_$$"
-mkdir -p "$TMP_DIR"
+PAGE_CACHE_ROOT="${CHECKBOX_QA_PAGE_CACHE:-$REPO_ROOT/benchmarks/doc_ai/checkbox_qa/data/page_images}"
+DOC_CACHE="$PAGE_CACHE_ROOT/$DOC_NAME"
+mkdir -p "$DOC_CACHE"
 
-echo "Processing PDF: $DOC_NAME"
+PAGE_FILES=($(ls -1v "$DOC_CACHE"/page-*.png 2>/dev/null))
+if [ ${#PAGE_FILES[@]} -eq 0 ]; then
+    echo "No cached page images for $DOC_NAME; run run_checkbox_qa.py to generate cache." >&2
+    exit 1
+fi
+echo "Found ${#PAGE_FILES[@]} cached pages for $DOC_NAME"
 
-# Get page count
-PAGE_COUNT=$(pdfinfo "$PDF_ABS" | grep Pages | awk '{print $2}')
-echo "Document has $PAGE_COUNT pages"
+if command -v identify >/dev/null 2>&1; then
+    identify "${PAGE_FILES[0]}" 2>/dev/null || true
+fi
 
-# Convert all pages to separate PNG files
-pdftoppm -png "$PDF_ABS" "$TMP_DIR/page"
-
-# Get list of generated page files (sorted)
-PAGE_FILES=($(ls -1v "$TMP_DIR"/page-*.png))
+if [ -n "${QWEN3_VL_MAX_PAGES:-}" ] && [ "${#PAGE_FILES[@]}" -gt "$QWEN3_VL_MAX_PAGES" ]; then
+    echo "Limiting to first $QWEN3_VL_MAX_PAGES pages for $DOC_NAME"
+    PAGE_FILES=("${PAGE_FILES[@]:0:$QWEN3_VL_MAX_PAGES}")
+fi
 
 echo "Converted ${#PAGE_FILES[@]} pages to images"
 
@@ -70,22 +75,32 @@ done
 
 echo "Passing ${#PAGE_FILES[@]} images to VLM"
 
+CLIENT_SCRIPT="$SCRIPT_DIR/../openai_vlm_request.py"
+if [ -n "${QWEN3_VL_API_BASE:-}" ]; then
+    MODEL_NAME="${QWEN3_VL_SERVE_MODEL:-qwen3-vl-4b}"
+    python3 "$CLIENT_SCRIPT" \
+        --api-base "$QWEN3_VL_API_BASE" \
+        --model "$MODEL_NAME" \
+        --prompt "$ENHANCED_PROMPT" \
+        --images "${PAGE_FILES[@]}" \
+        --output "$OUTPUT_ABS"
+    exit 0
+fi
+
 # Run Qwen3-VL-4B with multi-image support
-QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl_4b"
+QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl"
 
 docker run --runtime nvidia --rm \
     -v "$QWEN_DIR:/workspace" \
-    -v "$TMP_DIR:/inputs:ro" \
+    -v "$DOC_CACHE:/inputs:ro" \
     -v "$OUTPUT_DIR:/outputs" \
     -v "$REPO_ROOT:/cvlization_repo:ro" \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
     -e PYTHONPATH=/cvlization_repo \
     -e HF_TOKEN=$HF_TOKEN \
     -e PROMPT="$ENHANCED_PROMPT" \
-    qwen3-vl-4b \
+    -e QWEN3_VL_VARIANT=4b \
+    qwen3-vl \
     bash -c "python3 predict.py --images $IMAGES_ARG --output /outputs/$OUTPUT_NAME --task vqa --prompt \"\$PROMPT\""
-
-# Cleanup temporary files
-rm -rf "$TMP_DIR"
 
 echo "Multi-page processing complete"
