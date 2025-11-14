@@ -10,6 +10,7 @@ Usage examples:
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -66,11 +67,19 @@ def load_model(model_id: str, device: Optional[str]) -> tuple:
 
     print(f"Loading {model_id} on {device} ...")
     processor = AutoProcessor.from_pretrained(model_id)
-    model = Qwen3VLForConditionalGeneration.from_pretrained(
-        model_id,
-        torch_dtype="auto",
-        device_map="auto",
-    )
+
+    if device == "cuda":
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
+            model_id,
+            torch_dtype="auto",
+            device_map="auto",
+        )
+    else:
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
+            model_id,
+            torch_dtype="auto",
+        ).to(device)
+
     return model, processor
 
 
@@ -156,7 +165,11 @@ Examples:
                         help="Override max tokens when generating.")
     parser.add_argument("--output", default="outputs/result.txt", help="Output path.")
     parser.add_argument("--format", choices=["txt", "json"], default="txt")
-    parser.add_argument("--device", choices=["cuda", "mps", "cpu"], default=None)
+    parser.add_argument(
+        "--device",
+        choices=["cuda", "mps", "cpu"],
+        default=os.environ.get("QWEN3_VL_DEVICE"),
+    )
     return parser.parse_args()
 
 

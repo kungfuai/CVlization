@@ -3,12 +3,9 @@ import json
 import os
 import subprocess
 from pathlib import Path
-
 THIS_DIR = Path(__file__).resolve().parent
-ROOT = THIS_DIR.parents[2]
-BENCHMARK_DIR = ROOT / "benchmarks" / "doc_ai" / "checkbox_qa"
-
-FIXTURE = BENCHMARK_DIR / "tests" / "fixtures" / "dev_subset_single.jsonl"
+BENCHMARK_DIR = THIS_DIR.parent
+FIXTURE = BENCHMARK_DIR / "data" / "dev_subset_single.jsonl"
 
 def run_command(cmd, env=None):
     result = subprocess.run(cmd, cwd=BENCHMARK_DIR, env=env, capture_output=True, text=True)
@@ -28,10 +25,15 @@ def test_prevailing_wage_pipeline():
     assert FIXTURE.exists(), "Fixture missing."
 
     env = os.environ.copy()
-    env["QWEN3_VL_MAX_PAGES"] = "1"
+    env["MAX_PAGES"] = "1"
 
-    # Run benchmark for the single-doc subset
-    run_command(["./run_with_vllm.sh", "qwen3_vl_2b", "--subset", str(FIXTURE)], env=env)
+    run_command([
+        "python3",
+        "run_checkbox_qa.py",
+        "qwen3_vl_2b",
+        "--subset", str(FIXTURE),
+        "--gold", "data/gold.jsonl",
+    ], env=env)
 
     latest = sorted((BENCHMARK_DIR / "results").iterdir())[-1]
     pred_path = latest / "qwen3_vl_2b" / "predictions.jsonl"
