@@ -81,6 +81,20 @@ docker build -t checkbox_qa .
 
 All benchmark scripts (e.g., `run_checkbox_qa.py`, `evaluate.py`) can be invoked the same way from the mounted `/workspace`.
 
+### 5. Optional: reuse VLM servers (vLLM)
+
+If you start a persistent vLLM server for a model, the adapters will call it instead of launching a container per question. A helper script automates the workflow:
+
+```bash
+# Qwen3-VL multipage run with ephemeral vLLM server
+./run_with_vllm.sh qwen3 qwen3_vl_2b_multipage --subset data/subset_dev.jsonl
+
+# Phi-4 multipage run
+./run_with_vllm.sh phi4 phi_4_multimodal_multipage --subset data/subset_dev.jsonl
+```
+
+Those commands spin up the serve container, run `run_checkbox_qa.py`, then shut the server down automatically. To run servers manually, use the example `serve` presets (`cvl run qwen3_vl serve`, `cvl run phi-4-multimodal-instruct serve`) and export `QWEN3_VL_API_BASE` / `PHI4_API_BASE` before running the benchmark.
+
 ## Evaluation Metric
 
 **ANLS* (Average Normalized Levenshtein Similarity)**

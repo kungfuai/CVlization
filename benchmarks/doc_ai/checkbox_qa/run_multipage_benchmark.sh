@@ -30,7 +30,7 @@ if ! grep -q "qwen3_vl_4b_multipage" config.yaml; then
 fi
 
 echo "Running qwen3_vl_2b_multipage and qwen3_vl_4b_multipage..."
-./run_checkpoint_qa.py \
+./run_checkbox_qa.py \
     qwen3_vl_2b_multipage \
     qwen3_vl_4b_multipage \
     --subset "$SUBSET_FILE" \

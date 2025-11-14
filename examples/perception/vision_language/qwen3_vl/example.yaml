@@ -1,0 +1,43 @@
+name: qwen3-vl
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 15
+image: qwen3-vl
+presets:
+  build:
+    script: build.sh
+    description: Build the unified Qwen3-VL Docker image
+  predict:
+    script: predict.sh
+    description: Run inference (pass --variant 2b|4b|8b)
+  test:
+    script: test.sh
+    description: "Smoke-test (arg: variant, defaults to 2b)"
+  serve:
+    script: serve.sh
+    description: "Launch vLLM OpenAI-compatible server (honors QWEN3_VL_VARIANT, PORT, etc.)"
+tags:
+  - qwen
+  - vlm
+  - alibaba
+  - ocr
+  - vqa
+  - captioning
+  - reasoning
+  - pytorch
+  - video-understanding
+tasks:
+  - ocr
+  - image_captioning
+  - visual_question_answering
+  - visual_reasoning
+  - document_understanding
+frameworks:
+  - pytorch
+description: Unified Dockerized runner for Qwen3-VL 2B/4B/8B Instruct checkpoints.

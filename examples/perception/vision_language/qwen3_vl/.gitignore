@@ -1,0 +1,39 @@
+# Outputs
+outputs/
+*.json
+*.txt
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Images (keep shared examples but ignore large dumps)
+*.jpg
+*.jpeg
+*.png
+*.pdf
+!examples/*.jpg
+!examples/*.jpeg
+!examples/*.png
