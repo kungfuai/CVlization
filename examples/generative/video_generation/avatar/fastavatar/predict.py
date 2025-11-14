@@ -173,6 +173,7 @@ def main():
         encoder_path=args.encoder_checkpoint,
         decoder_path=args.decoder_checkpoint,
         dino_path=args.dino_checkpoint,
+        cache_dir=str(cache_dir),
         device=args.device
     )
 

@@ -42,25 +42,28 @@ class FeedforwardInferenceEngine:
         encoder_path: str,
         decoder_path: str,
         dino_path: str,
+        cache_dir: str = None,
         device: str = 'cuda'
     ):
         """
         Initialize the inference engine.
-        
+
         Args:
             encoder_path: Path to trained encoder checkpoint
             decoder_path: Path to trained decoder checkpoint
             dino_path: Path to trained DINO model checkpoint
+            cache_dir: Path to cache directory containing averaged_model.ply
             device: Device to run inference on
         """
         self.device = torch.device(device)
-        
+        self.cache_dir = cache_dir
+
         # Load models
         print("Loading models...")
         self._load_encoder(encoder_path)
         self._load_decoder(decoder_path)
         self._load_dino_model(dino_path)
-        
+
         print(f"All models loaded on {self.device}")
     
     def _load_encoder(self, encoder_path: str):
@@ -78,16 +81,23 @@ class FeedforwardInferenceEngine:
     def _load_decoder(self, decoder_path: str):
         """Load the trained decoder model."""
         print(f"Loading decoder from {decoder_path}")
-        
-        # Initialize decoder with placeholder PLY path
+
+        # Determine PLY path
+        if self.cache_dir:
+            from pathlib import Path
+            ply_path = str(Path(self.cache_dir) / "pretrained_weights" / "averaged_model.ply")
+        else:
+            ply_path = "pretrained_weights/averaged_model.ply"
+
+        # Initialize decoder with PLY path
         self.decoder = CondGaussianSplatting(
-            ply_path="pretrained_weights/averaged_model.ply"  # Will be overridden
+            ply_path=ply_path
         ).to(self.device)
-        
+
         checkpoint = torch.load(decoder_path, map_location=self.device)
         self.decoder.load_state_dict(checkpoint["model_dict"])
         self.decoder.eval()
-        
+
         print("Decoder loaded successfully")
     
     def _load_dino_model(self, dino_path: str):
