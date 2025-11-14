@@ -51,6 +51,7 @@ if command -v identify >/dev/null 2>&1; then
     identify "${PAGE_FILES[0]}" 2>/dev/null || true
 fi
 
+MAX_PAGES="${MAX_PAGES:-20}"
 if [ -n "${MAX_PAGES:-}" ] && [ "${#PAGE_FILES[@]}" -gt "$MAX_PAGES" ]; then
     echo "Limiting to first $MAX_PAGES pages for $DOC_NAME"
     PAGE_FILES=("${PAGE_FILES[@]:0:$MAX_PAGES}")
