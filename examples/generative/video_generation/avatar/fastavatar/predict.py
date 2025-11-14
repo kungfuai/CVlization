@@ -25,8 +25,8 @@ from scripts.inference_feedforward_no_guidance import FeedforwardInferenceEngine
 # Google Drive file ID for pretrained weights
 PRETRAINED_WEIGHTS_URL = "https://drive.google.com/uc?id=1_XPTo_1rgzxvGQcRI7Toa3iGagytPTjK"
 
-# Cache directory (CVlization standard: use data/container_cache)
-CACHE_DIR = Path(os.getenv("CACHE_DIR", Path(__file__).parent / "data" / "container_cache" / "fastavatar"))
+# Cache directory (CVlization standard: use $HOME/.cache on host, mounted to /root/.cache in container)
+CACHE_DIR = Path(os.getenv("CACHE_DIR", Path.home() / ".cache" / "fastavatar"))
 
 
 def download_pretrained_weights(cache_dir: Path) -> Path:
