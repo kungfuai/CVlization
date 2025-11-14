@@ -1,0 +1,50 @@
+ModelHiddenParams = dict(
+    kplanes_config = {
+     'grid_dimensions': 2,
+     'input_coordinate_dim': 4,
+     'output_coordinate_dim': 128,  # 128 * len(multires=4) = 512 = d_model
+     'resolution': [64, 64, 64, 25]
+    },
+    multires = [1, 2, 4, 8],
+    defor_depth = 1,
+    net_width = 64,
+    plane_tv_weight = 0.0001,
+    time_smoothness_weight = 0.01,
+    l1_time_planes =  0.0001,
+    no_do=True,
+    no_dshs=True,
+    no_ds=False,
+    empty_voxel=False,
+    render_process=False,
+    static_mlp=False,
+    only_infer=False,
+    d_model=512,
+    n_head=8,
+    agent_num=64,
+    drop_prob=0.1,
+    ffn_hidden=2048,
+    n_layer=1,
+    train_tri_plane=False, 
+)
+OptimizationParams = dict(
+    dataloader=True,
+    densify_from_iter = 500,
+    densification_interval = 100,
+    iterations = 30000,
+    batch_size = 4,  # Testing batch size effect
+    coarse_iterations = 3000,
+    densify_until_iter = 15000,
+    percent_dense = 0.01,
+    opacity_threshold_coarse = 0.005,
+    opacity_threshold_fine_init = 0.005,
+    opacity_threshold_fine_after = 0.005,
+    densify_grad_threshold_coarse = 0.0002,
+    densify_grad_threshold_fine_init = 0.0002,
+    densify_grad_threshold_after = 0.0002,
+    lip_fine_tuning = False,
+    depth_fine_tuning = False,
+    deformation_lr_final = 0.000016,
+    deformation_lr_init = 0.00016,
+    split_gs_in_fine_stage=False,
+    canonical_tri_plane_factor_list=["scales","rotations","opacity","shs"]
+)
