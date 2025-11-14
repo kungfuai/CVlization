@@ -51,9 +51,9 @@ if command -v identify >/dev/null 2>&1; then
     identify "${PAGE_FILES[0]}" 2>/dev/null || true
 fi
 
-if [ -n "${PHI4_MAX_PAGES:-}" ] && [ "${#PAGE_FILES[@]}" -gt "$PHI4_MAX_PAGES" ]; then
-    echo "Limiting to first $PHI4_MAX_PAGES pages for $DOC_NAME"
-    PAGE_FILES=("${PAGE_FILES[@]:0:$PHI4_MAX_PAGES}")
+if [ -n "${MAX_PAGES:-}" ] && [ "${#PAGE_FILES[@]}" -gt "$MAX_PAGES" ]; then
+    echo "Limiting to first $MAX_PAGES pages for $DOC_NAME"
+    PAGE_FILES=("${PAGE_FILES[@]:0:$MAX_PAGES}")
 fi
 
 TMP_DIR="/tmp/checkbox_qa_phi_${DOC_NAME}_$$"

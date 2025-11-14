@@ -9,6 +9,10 @@ PDF_PATH="$1"
 QUESTION="$2"
 shift 2
 
+# Load prompt template
+source "$SCRIPT_DIR/../prompts.sh"
+PROMPT="${ACTIVE_PROMPT}${QUESTION}"
+
 # Parse output flag
 OUTPUT_FILE=""
 while [[ $# -gt 0 ]]; do
@@ -56,7 +60,7 @@ if [ -n "${QWEN3_VL_API_BASE:-}" ]; then
     python3 "$CLIENT_SCRIPT" \
         --api-base "$QWEN3_VL_API_BASE" \
         --model "$MODEL_NAME" \
-        --prompt "$QUESTION" \
+        --prompt "$PROMPT" \
         --images "$FIRST_PAGE" \
         --output "$OUTPUT_ABS"
     exit 0
@@ -64,6 +68,10 @@ fi
 
 # Run Qwen3-VL with question as custom prompt
 QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl"
+DOCKER_ENVS=()
+if [ -n "${QWEN3_VL_DEVICE:-}" ]; then
+    DOCKER_ENVS+=(-e "QWEN3_VL_DEVICE=$QWEN3_VL_DEVICE")
+fi
 
 docker run --runtime nvidia --rm \
     -v "$QWEN_DIR:/workspace" \
@@ -73,12 +81,13 @@ docker run --runtime nvidia --rm \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
     -e PYTHONPATH=/cvlization_repo \
     -e HF_TOKEN=$HF_TOKEN \
+    "${DOCKER_ENVS[@]}" \
     -e QWEN3_VL_VARIANT=2b \
     qwen3-vl \
     python3 predict.py \
         --image "/inputs/$IMG_NAME" \
         --output "/outputs/$OUTPUT_NAME" \
         --task vqa \
-        --prompt "$QUESTION"
+        --prompt "$PROMPT"
 
 # No cleanup needed; cache persists for future runs

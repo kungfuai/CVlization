@@ -59,9 +59,9 @@ if command -v identify >/dev/null 2>&1; then
     identify "${PAGE_FILES[0]}" 2>/dev/null || true
 fi
 
-if [ -n "${QWEN3_VL_MAX_PAGES:-}" ] && [ "${#PAGE_FILES[@]}" -gt "$QWEN3_VL_MAX_PAGES" ]; then
-    echo "Limiting to first $QWEN3_VL_MAX_PAGES pages for $DOC_NAME"
-    PAGE_FILES=("${PAGE_FILES[@]:0:$QWEN3_VL_MAX_PAGES}")
+if [ -n "${MAX_PAGES:-}" ] && [ "${#PAGE_FILES[@]}" -gt "$MAX_PAGES" ]; then
+    echo "Limiting to first $MAX_PAGES pages for $DOC_NAME"
+    PAGE_FILES=("${PAGE_FILES[@]:0:$MAX_PAGES}")
 fi
 
 echo "Converted ${#PAGE_FILES[@]} pages to images"
@@ -89,6 +89,10 @@ fi
 
 # Run Qwen3-VL-2B with multi-image support
 QWEN_DIR="$REPO_ROOT/examples/perception/vision_language/qwen3_vl"
+DOCKER_ENVS=()
+if [ -n "${QWEN3_VL_DEVICE:-}" ]; then
+    DOCKER_ENVS+=(-e "QWEN3_VL_DEVICE=$QWEN3_VL_DEVICE")
+fi
 
 docker run --runtime nvidia --rm \
     -v "$QWEN_DIR:/workspace" \
@@ -98,6 +102,7 @@ docker run --runtime nvidia --rm \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
     -e PYTHONPATH=/cvlization_repo \
     -e HF_TOKEN=$HF_TOKEN \
+    "${DOCKER_ENVS[@]}" \
     -e PROMPT="$ENHANCED_PROMPT" \
     -e QWEN3_VL_VARIANT=2b \
     qwen3-vl \
