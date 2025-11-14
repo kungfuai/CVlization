@@ -2,14 +2,13 @@
 import json
 import os
 import subprocess
-import tempfile
 from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
 ROOT = THIS_DIR.parents[2]
 BENCHMARK_DIR = ROOT / "benchmarks" / "doc_ai" / "checkbox_qa"
 
-SINGLE_DOC_JSON = BENCHMARK_DIR / "data" / "temp_single.jsonl"
+FIXTURE = BENCHMARK_DIR / "tests" / "fixtures" / "dev_subset_single.jsonl"
 
 def run_command(cmd, env=None):
     result = subprocess.run(cmd, cwd=BENCHMARK_DIR, env=env, capture_output=True, text=True)
@@ -26,13 +25,13 @@ def test_prevailing_wage_pipeline():
       3. Run benchmark with the prevailing wage question.
       4. Assert predicted value matches expected ("OES").
     """
-    assert SINGLE_DOC_JSON.exists(), "temp_single.jsonl not found; create it first."
+    assert FIXTURE.exists(), "Fixture missing."
 
     env = os.environ.copy()
     env["QWEN3_VL_MAX_PAGES"] = "1"
 
     # Run benchmark for the single-doc subset
-    run_command(["./run_with_vllm.sh", "qwen3_vl_2b", "--subset", str(SINGLE_DOC_JSON)], env=env)
+    run_command(["./run_with_vllm.sh", "qwen3_vl_2b", "--subset", str(FIXTURE)], env=env)
 
     latest = sorted((BENCHMARK_DIR / "results").iterdir())[-1]
     pred_path = latest / "qwen3_vl_2b" / "predictions.jsonl"
