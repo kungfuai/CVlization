@@ -1,0 +1,35 @@
+name: egstalker
+capability: generative/video_generation
+modalities:
+- vision
+- audio
+datasets:
+- custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 30
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run inference with audio and reference
+  example:
+    script: example_predict.sh
+    description: Example inference script (modify paths as needed)
+tags:
+- egstalker
+- 3dgs
+- talking-head
+- audio-driven
+- real-time
+- pytorch
+- gaussian-splatting
+tasks:
+- video_generation
+frameworks:
+- pytorch
+description: EGSTalker - Real-time audio-driven talking head generation using 3D Gaussian Splatting with Efficient Spatial-Audio Attention (ESAA)
