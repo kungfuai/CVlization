@@ -40,8 +40,8 @@ def create_camera_pose(elevation_deg, azimuth_deg, distance=2.5):
     # Look at origin
     forward = -camera_pos / np.linalg.norm(camera_pos)
 
-    # Up vector
-    world_up = np.array([0.0, 1.0, 0.0])
+    # Up vector (flipped Y to match Gaussian splat coordinate system)
+    world_up = np.array([0.0, -1.0, 0.0])
     right = np.cross(world_up, forward)
     right = right / np.linalg.norm(right)
     up = np.cross(forward, right)
