@@ -1,0 +1,29 @@
+name: fastavatar
+capability: generative/face_reconstruction
+modalities:
+- vision
+datasets: []
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run instant 3D face reconstruction
+tags:
+- fastavatar
+- 3d-reconstruction
+- gaussian-splatting
+- face
+- pytorch
+tasks:
+- 3d_reconstruction
+- face_reconstruction
+frameworks:
+- pytorch
+description: FastAvatar instant 3D face reconstruction from single image using Gaussian Splatting

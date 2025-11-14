@@ -1,0 +1,40 @@
+# Outputs
+results/
+*.ply
+*.npy
+
+# Models and cache
+pretrained_weights/
+*.pth
+*.pt
+data/container_cache/
+
+# Data
+data/*.png
+data/*.jpg
+data/*.jpeg
+!data/example.png
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
