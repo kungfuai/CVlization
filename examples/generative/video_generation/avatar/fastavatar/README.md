@@ -13,8 +13,11 @@ FastAvatar achieves real-time 3D face reconstruction from a single image using a
 **Key Features:**
 - Instant reconstruction (feed-forward, no optimization)
 - Pose-invariant (works from any viewing angle)
-- High-quality 3D Gaussians suitable for novel view synthesis
-- Real-time performance
+- Real-time performance (~1 second per image)
+- Good 3D geometry reconstruction
+
+**Important Note:**
+This implementation uses **feedforward-only mode** for speed. Novel view quality (especially side views) is limited. For high-quality novel view synthesis, the original FastAvatar paper uses test-time optimization with multi-view data. See **Limitations** section for details.
 
 ## Quick Start
 
@@ -121,6 +124,45 @@ Cache location: `~/.cache/fastavatar/pretrained_weights/`
 - **Inference time**: ~0.5-1 second per image (GPU)
 - **GPU memory**: ~4-6GB
 - **Output Gaussians**: Typically 10,000-15,000 points
+
+## Limitations
+
+### Novel View Quality (Important)
+
+This implementation uses **feedforward-only mode** (`no_guidance`), which has inherent quality limitations for novel view synthesis:
+
+**What works well:**
+- 3D geometry reconstruction (point positions, scales, rotations)
+- Frontal/near-frontal view rendering
+- Fast preview generation
+- Basic 3D structure
+
+**Known limitations:**
+- Novel views (especially profiles/side views) may have poor quality:
+  - Inconsistent colors across viewing angles
+  - Dark or washed-out appearance from non-frontal views
+  - May not accurately match input person's appearance
+- This is **by design**, not a bug
+
+**Root cause:**
+- Feedforward mode outputs unconstrained spherical harmonic (SH) coefficients
+- No photometric regularization during single-image inference
+- SH values can be extreme (range: ±100+), causing view-dependent artifacts
+
+**For high-quality novel views:**
+The original FastAvatar paper achieves high quality using **test-time optimization** (`full_guidance` mode):
+- Requires: Multi-view images (8-16 views) + FLAME parameters + camera poses
+- Process: 400-800 optimization iterations with photometric loss
+- Time: 5-10 minutes per subject
+- Result: SH coefficients regularized, consistent appearance across all views
+
+This implementation prioritizes **speed over quality** - instant reconstruction without test-time optimization. For production use requiring high-quality novel view synthesis, you would need to:
+
+1. Capture multi-view images with known camera poses
+2. Extract FLAME parameters for each view
+3. Implement test-time optimization loop (see `FINDINGS.md` for details)
+
+See `FINDINGS.md` for detailed technical analysis and comparison with ground truth multi-view data.
 
 ## Docker Configuration
 

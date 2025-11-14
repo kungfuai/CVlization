@@ -3,7 +3,7 @@ capability: generative/face_reconstruction
 modalities:
 - vision
 datasets: []
-stability: stable
+stability: experimental
 resources:
   gpu: 1
   vram_gb: 8

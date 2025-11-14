@@ -14,6 +14,9 @@ data/*.png
 data/*.jpg
 data/*.jpeg
 !data/example.png
+data/*/  # Exclude multi-view datasets
+data/422/
+data/sample_422_multiview/
 
 # Python
 __pycache__/

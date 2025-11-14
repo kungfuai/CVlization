@@ -59,26 +59,25 @@ def create_camera_pose(elevation_deg, azimuth_deg, distance=2.5):
     return torch.from_numpy(w2c).float()  # Return full 4x4 matrix
 
 
-def get_projection_matrix(fov_deg=50, width=512, height=512, near=0.01, far=100.0):
+def get_projection_matrix(width=550, height=802, fx=2049.778, fy=2049.768, cx=None, cy=None):
     """
     Create perspective projection matrix.
 
     Args:
-        fov_deg: Field of view in degrees
         width: Image width
         height: Image height
-        near: Near clipping plane
-        far: Far clipping plane
+        fx: Focal length in x (pixels)
+        fy: Focal length in y (pixels)
+        cx: Principal point x (default: width/2)
+        cy: Principal point y (default: height/2)
 
     Returns:
         3x3 intrinsics matrix
     """
-    fov = np.radians(fov_deg)
-    focal = width / (2 * np.tan(fov / 2))
-
-    fx = fy = focal
-    cx = width / 2
-    cy = height / 2
+    if cx is None:
+        cx = width / 2.0
+    if cy is None:
+        cy = height / 2.0
 
     # Build 3x3 intrinsics matrix
     K = torch.tensor([
@@ -90,7 +89,7 @@ def get_projection_matrix(fov_deg=50, width=512, height=512, near=0.01, far=100.
     return K
 
 
-def render_view(splats, viewmat, K, width=512, height=512, device='cuda'):
+def render_view(splats, viewmat, K, width=550, height=802, device='cuda'):
     """
     Render a single view using gsplat.
 
@@ -114,13 +113,13 @@ def render_view(splats, viewmat, K, width=512, height=512, device='cuda'):
     scales = torch.exp(splats['scales']).to(device).unsqueeze(0)  # [1, N, 3]
     opacities = torch.sigmoid(splats['opacities']).to(device).unsqueeze(0)  # [1, N, 1]
 
-    # Convert spherical harmonics to RGB (use DC component sh0)
-    # sh0 is [N, 1, 3], extract the RGB from DC component
+    # Concatenate full spherical harmonics coefficients (sh0 + shN)
+    # gsplat will handle SH-to-RGB conversion based on view direction
     sh0 = splats['sh0'].to(device)  # [N, 1, 3]
-    colors = sh0[:, 0, :]  # [N, 3] - take DC component
-    colors = torch.sigmoid(colors).unsqueeze(0)  # [1, N, 3]
+    shN = splats['shN'].to(device)  # [N, 15, 3]
+    colors = torch.cat([sh0, shN], 1).unsqueeze(0)  # [1, N, 16, 3]
 
-    # Render using gsplat
+    # Render using gsplat with spherical harmonics
     with torch.no_grad():
         render_colors, render_alphas, info = rasterization(
             means=means,
@@ -133,6 +132,8 @@ def render_view(splats, viewmat, K, width=512, height=512, device='cuda'):
             width=width,
             height=height,
             packed=False,
+            sh_degree=3,  # Use degree-3 spherical harmonics
+            render_mode='RGB',
         )
 
     # Convert to numpy and format as image
@@ -150,16 +151,22 @@ def main():
                        help='Path to splats.ply file')
     parser.add_argument('--output_dir', type=str, default='novel_views',
                        help='Directory to save rendered views')
-    parser.add_argument('--width', type=int, default=512,
-                       help='Render width')
-    parser.add_argument('--height', type=int, default=512,
-                       help='Render height')
+    parser.add_argument('--width', type=int, default=550,
+                       help='Render width (default: 550 to match training data)')
+    parser.add_argument('--height', type=int, default=802,
+                       help='Render height (default: 802 to match training data)')
+    parser.add_argument('--fx', type=float, default=2049.778,
+                       help='Focal length x in pixels (default: 2049.778 from training data)')
+    parser.add_argument('--fy', type=float, default=2049.768,
+                       help='Focal length y in pixels (default: 2049.768 from training data)')
     parser.add_argument('--device', type=str, default='cuda',
                        help='Device to use')
     parser.add_argument('--num_views', type=int, default=8,
                        help='Number of azimuth views to render')
     parser.add_argument('--elevation', type=float, default=0.0,
                        help='Elevation angle in degrees')
+    parser.add_argument('--distance', type=float, default=1.0,
+                       help='Camera distance from origin (default: 1.0)')
 
     args = parser.parse_args()
 
@@ -173,8 +180,13 @@ def main():
 
     print(f"Loaded {splats['means'].shape[0]} Gaussians")
 
-    # Get intrinsics
-    K = get_projection_matrix(fov_deg=50, width=args.width, height=args.height)
+    # Get intrinsics with proper focal lengths matching training data
+    K = get_projection_matrix(
+        width=args.width,
+        height=args.height,
+        fx=args.fx,
+        fy=args.fy
+    )
 
     # Render views at different azimuth angles
     azimuth_angles = np.linspace(0, 360, args.num_views, endpoint=False)
@@ -188,7 +200,7 @@ def main():
         viewmat = create_camera_pose(
             elevation_deg=args.elevation,
             azimuth_deg=azimuth,
-            distance=2.5
+            distance=args.distance
         )
 
         # Render
