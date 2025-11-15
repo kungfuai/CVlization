@@ -9,8 +9,9 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 TP_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
 SERVED_NAME="${PHI4_SERVED_NAME:-phi-4-multimodal}"
-# Default to a longer 128k context unless overridden.
-MAX_LEN="${PHI4_MAX_MODEL_LEN:-131072}"
+# Default to 16k context (fits in 22GB GPU). For longer contexts, set PHI4_MAX_MODEL_LEN.
+# 128k context requires ~48GB+ VRAM
+MAX_LEN="${PHI4_MAX_MODEL_LEN:-16384}"
 IMAGE_NAME="${PHI4_IMAGE:-phi-4-multimodal-instruct}"
 CONTAINER_NAME="${CVL_CONTAINER_NAME:-phi4-vllm-server}"
 
