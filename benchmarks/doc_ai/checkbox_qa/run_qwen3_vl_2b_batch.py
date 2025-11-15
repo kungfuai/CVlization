@@ -12,6 +12,13 @@ import sys
 from pathlib import Path
 from typing import List, Dict
 
+# Optional trackio support
+try:
+    import trackio
+    TRACKIO_AVAILABLE = True
+except ImportError:
+    TRACKIO_AVAILABLE = False
+
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent.parent.parent
 QWEN3_DIR = REPO_ROOT / "examples/perception/vision_language/qwen3_vl"
@@ -257,6 +264,17 @@ def main():
         default=None,
         help="Top-k sampling (only used if --sample is set)"
     )
+    parser.add_argument(
+        "--track",
+        action="store_true",
+        help="Enable experiment tracking with trackio (requires: pip install trackio)"
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        default="checkbox-qa",
+        help="Trackio project name (only used if --track is set)"
+    )
 
     args = parser.parse_args()
 
@@ -305,6 +323,63 @@ def main():
     # Run evaluation
     eval_output = args.output_dir / "eval_results.json"
     run_evaluation(predictions_file, args.subset, eval_output)
+
+    # Optional: Log to trackio
+    if args.track:
+        if not TRACKIO_AVAILABLE:
+            print("\nWarning: trackio not installed. Skipping tracking.", file=sys.stderr)
+            print("Install with: pip install trackio", file=sys.stderr)
+        else:
+            # Load evaluation results
+            with open(eval_output) as f:
+                eval_results = json.load(f)
+
+            # Build config dict
+            config = {
+                "model": f"qwen3-vl-{args.variant}",
+                "max_pages": args.max_pages,
+                "max_image_size": args.max_image_size,
+                "prompt_template": args.prompt_template,
+            }
+
+            if args.sample:
+                config["sampling"] = "enabled"
+                config["temperature"] = args.temperature
+                if args.top_p is not None:
+                    config["top_p"] = args.top_p
+                if args.top_k is not None:
+                    config["top_k"] = args.top_k
+            else:
+                config["sampling"] = "greedy"
+
+            # Generate run name
+            pages_str = f"{args.max_pages}p"
+            size_str = f"{args.max_image_size}px" if args.max_image_size else "default"
+            if args.sample:
+                sampling_str = f"T{args.temperature}"
+                if args.top_k:
+                    sampling_str += f"_k{args.top_k}"
+            else:
+                sampling_str = "greedy"
+            run_name = f"{pages_str}_{size_str}_{sampling_str}"
+
+            # Log to trackio
+            try:
+                run = trackio.init(
+                    project=args.project,
+                    name=run_name,
+                    config=config
+                )
+                run.log({
+                    "anls_score": eval_results["anls_score"],
+                    "num_correct": eval_results["num_correct"],
+                    "total_questions": eval_results["total_questions"],
+                    "accuracy": eval_results["num_correct"] / eval_results["total_questions"]
+                })
+                run.finish()
+                print(f"\n✓ Logged to trackio project '{args.project}' as '{run_name}'")
+            except Exception as e:
+                print(f"\nWarning: Failed to log to trackio: {e}", file=sys.stderr)
 
     # Clean up temp file
     if not args.keep_temp:
