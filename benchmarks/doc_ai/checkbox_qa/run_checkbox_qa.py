@@ -270,40 +270,10 @@ def main():
     print("=" * 80)
     print("\nLoading dataset...")
 
-    # Load from subset if specified, otherwise full gold
-    dataset = CheckboxQADataset(use_hf=False, data_dir=gold_file.parent if args.subset else Path('data'))
-
-    # If using subset, load from that file directly
     if args.subset:
-        # Reload with correct path
-        import json
-        dataset.documents = []
-        with open(gold_file, 'r') as f:
-            for line in f:
-                item = json.loads(line)
-                questions = []
-                for annotation in item["annotations"]:
-                    answers = []
-                    for value_dict in annotation["values"]:
-                        answers.append(value_dict["value"])
-                        if "value_variants" in value_dict:
-                            answers.extend(value_dict["value_variants"])
-                    from dataset_builder import Question
-                    questions.append(Question(
-                        id=annotation["id"],
-                        question=annotation["key"],
-                        answers=answers,
-                        document_id=item["name"]
-                    ))
-                pdf_path = Path('data/documents') / f"{item['name']}.{item['extension']}"
-                if not pdf_path.exists():
-                    pdf_path = None
-                from dataset_builder import Document
-                dataset.documents.append(Document(
-                    document_id=item["name"],
-                    pdf_path=pdf_path,
-                    questions=questions
-                ))
+        dataset = CheckboxQADataset.from_jsonl(gold_file, data_dir=Path('data'))
+    else:
+        dataset = CheckboxQADataset(use_hf=False, data_dir=Path('data'))
 
     print(f"Loaded {len(dataset)} documents with {dataset.total_questions()} questions")
 
