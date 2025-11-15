@@ -17,18 +17,35 @@ CONTAINER_NAME="${CVL_CONTAINER_NAME:-phi4-vllm-server}"
 
 echo "Starting vLLM server for $MODEL_ID on $HOST:$PORT (served name: $SERVED_NAME)"
 
-docker run --rm --gpus all \
-  --name "$CONTAINER_NAME" \
-  -p "${PORT}:${PORT}" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -e HF_TOKEN="${HF_TOKEN:-}" \
-  "$IMAGE_NAME" \
-  python3 -m vllm.entrypoints.openai.api_server \
+# Check if we're already inside a Docker container
+if [ -f /.dockerenv ] || grep -q docker /proc/1/cgroup 2>/dev/null; then
+  # Running inside Docker - start vLLM directly
+  exec python3 -m vllm.entrypoints.openai.api_server \
     --model "$MODEL_ID" \
     --served-model-name "$SERVED_NAME" \
     --host "$HOST" \
     --port "$PORT" \
     --tensor-parallel-size "$TP_SIZE" \
     --max-model-len "$MAX_LEN" \
+    --seed 42 \
     --trust-remote-code \
     ${PHI4_EXTRA_SERVE_ARGS:-}
+else
+  # Running on host - launch Docker container
+  docker run --rm --gpus all \
+    --name "$CONTAINER_NAME" \
+    -p "${PORT}:${PORT}" \
+    -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+    -e HF_TOKEN="${HF_TOKEN:-}" \
+    "$IMAGE_NAME" \
+    python3 -m vllm.entrypoints.openai.api_server \
+      --model "$MODEL_ID" \
+      --served-model-name "$SERVED_NAME" \
+      --host "$HOST" \
+      --port "$PORT" \
+      --tensor-parallel-size "$TP_SIZE" \
+      --max-model-len "$MAX_LEN" \
+      --seed 42 \
+      --trust-remote-code \
+      ${PHI4_EXTRA_SERVE_ARGS:-}
+fi
