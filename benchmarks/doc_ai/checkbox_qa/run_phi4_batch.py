@@ -12,6 +12,13 @@ import sys
 from pathlib import Path
 from typing import List, Dict
 
+# Optional trackio support
+try:
+    import trackio
+    TRACKIO_AVAILABLE = True
+except ImportError:
+    TRACKIO_AVAILABLE = False
+
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent.parent.parent
 PHI4_DIR = REPO_ROOT / "examples/perception/vision_language/phi_4_multimodal_instruct"
@@ -83,7 +90,7 @@ def create_batch_input(documents: List[Dict], output_file: Path, prompt_template
                 f.write(json.dumps(request) + "\n")
 
 
-def run_batch_predict(batch_input: Path, output_dir: Path, device: str = None, max_image_size: int = None) -> int:
+def run_batch_predict(batch_input: Path, output_dir: Path, device: str = None, max_image_size: int = None, sample: bool = False, temperature: float = 1.0, top_p: float = None, top_k: int = None) -> int:
     """Run batch_predict.py inside Docker container."""
     # Make paths absolute
     batch_input = batch_input.absolute()
@@ -113,11 +120,28 @@ def run_batch_predict(batch_input: Path, output_dir: Path, device: str = None, m
     if max_image_size:
         cmd.extend(["--max-image-size", str(max_image_size)])
 
+    if sample:
+        cmd.append("--sample")
+        cmd.extend(["--temperature", str(temperature)])
+        if top_p is not None:
+            cmd.extend(["--top-p", str(top_p)])
+        if top_k is not None:
+            cmd.extend(["--top-k", str(top_k)])
+
     print(f"Running batch_predict in Docker...")
     print(f"  Batch input: {batch_input}")
     print(f"  Output dir: {output_dir}")
     if max_image_size:
         print(f"  Max image size: {max_image_size}px")
+    if sample:
+        params = [f"temperature={temperature}"]
+        if top_p is not None:
+            params.append(f"top_p={top_p}")
+        if top_k is not None:
+            params.append(f"top_k={top_k}")
+        print(f"  Sampling: enabled ({', '.join(params)})")
+    else:
+        print(f"  Decoding: model defaults")
     result = subprocess.run(cmd)
     return result.returncode
 
@@ -233,6 +257,40 @@ def main():
         default=None,
         help="Maximum image dimension (width or height) in pixels. Resize larger images to save memory. Default: no resizing"
     )
+    parser.add_argument(
+        "--sample",
+        action="store_true",
+        help="Enable sampling (default: use model defaults)"
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=1.0,
+        help="Sampling temperature (only used if --sample is set, default: 1.0)"
+    )
+    parser.add_argument(
+        "--top-p",
+        type=float,
+        default=None,
+        help="Nucleus sampling top-p (only used if --sample is set)"
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="Top-k sampling (only used if --sample is set)"
+    )
+    parser.add_argument(
+        "--track",
+        action="store_true",
+        help="Enable experiment tracking with trackio (requires: pip install trackio)"
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        default="checkbox-qa",
+        help="Trackio project name (only used if --track is set)"
+    )
 
     args = parser.parse_args()
 
@@ -268,7 +326,7 @@ def main():
     # Run batch prediction
     print("\nRunning batch prediction...")
     batch_output_dir = args.output_dir / "batch_outputs"
-    returncode = run_batch_predict(batch_input, batch_output_dir, args.device, args.max_image_size)
+    returncode = run_batch_predict(batch_input, batch_output_dir, args.device, args.max_image_size, args.sample, args.temperature, args.top_p, args.top_k)
 
     if returncode != 0:
         print(f"Warning: batch_predict exited with code {returncode}", file=sys.stderr)
@@ -281,6 +339,64 @@ def main():
     # Run evaluation
     eval_output = args.output_dir / "eval_results.json"
     run_evaluation(predictions_file, args.subset, eval_output)
+
+    # Optional: Log to trackio
+    if args.track:
+        if not TRACKIO_AVAILABLE:
+            print("\nWarning: trackio not installed. Skipping tracking.", file=sys.stderr)
+            print("Install with: pip install trackio", file=sys.stderr)
+        else:
+            # Load evaluation results
+            with open(eval_output) as f:
+                eval_results = json.load(f)
+
+            # Build config dict
+            config = {
+                "model": "phi-4-14b",
+                "max_pages": args.max_pages,
+                "max_image_size": args.max_image_size,
+                "prompt_template": args.prompt_template,
+                "device": args.device or "cuda",
+            }
+
+            if args.sample:
+                config["sampling"] = "enabled"
+                config["temperature"] = args.temperature
+                if args.top_p is not None:
+                    config["top_p"] = args.top_p
+                if args.top_k is not None:
+                    config["top_k"] = args.top_k
+            else:
+                config["sampling"] = "model_default"
+
+            # Generate run name
+            pages_str = f"{args.max_pages}p"
+            size_str = f"{args.max_image_size}px" if args.max_image_size else "default"
+            if args.sample:
+                sampling_str = f"T{args.temperature}"
+                if args.top_k:
+                    sampling_str += f"_k{args.top_k}"
+            else:
+                sampling_str = "default"
+            run_name = f"phi4_{pages_str}_{size_str}_{sampling_str}"
+
+            # Log to trackio
+            try:
+                run = trackio.init(
+                    project=args.project,
+                    name=run_name,
+                    config=config
+                )
+                run.log({
+                    "anls_score": eval_results["anls_score"],
+                    "num_correct": eval_results["num_correct"],
+                    "total_questions": eval_results["total_questions"],
+                    "accuracy": eval_results["num_correct"] / eval_results["total_questions"]
+                })
+                run.finish()
+                print(f"\n✓ Logged to trackio project '{args.project}' as '{run_name}'")
+            except Exception as e:
+                print(f"\nWarning: Failed to log to trackio: {e}", file=sys.stderr)
 
     # Clean up temp file
     if not args.keep_temp:

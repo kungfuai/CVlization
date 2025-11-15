@@ -192,6 +192,29 @@ Example Usage:
         default=None,
         help="Maximum image dimension (width or height). Images larger than this will be resized maintaining aspect ratio. Default: no resizing"
     )
+    parser.add_argument(
+        "--sample",
+        action="store_true",
+        help="Enable sampling (stochastic decoding). Default: use model defaults (typically greedy)"
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=1.0,
+        help="Sampling temperature (only used if --sample is set). Default: 1.0"
+    )
+    parser.add_argument(
+        "--top-p",
+        type=float,
+        default=None,
+        help="Nucleus sampling top-p (only used if --sample is set)"
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="Top-k sampling (only used if --sample is set)"
+    )
 
     args = parser.parse_args()
 
@@ -208,6 +231,21 @@ Example Usage:
     # Load model once for all requests
     print("\nLoading model...")
     model, processor, generation_config, device = load_model(args.model_id, args.device)
+
+    # Apply sampling parameters if requested
+    if args.sample:
+        print(f"\nSampling enabled:")
+        print(f"  Temperature: {args.temperature}")
+        generation_config.do_sample = True
+        generation_config.temperature = args.temperature
+        if args.top_p is not None:
+            print(f"  Top-p: {args.top_p}")
+            generation_config.top_p = args.top_p
+        if args.top_k is not None:
+            print(f"  Top-k: {args.top_k}")
+            generation_config.top_k = args.top_k
+    else:
+        print("\nUsing model default generation config (typically greedy)")
 
     # Process batch
     print()
