@@ -36,13 +36,19 @@ OUTPUT_NAME=$(basename "$OUTPUT_ABS")
 
 mkdir -p "$OUTPUT_DIR"
 
-# Convert PDF first page to image
-TMP_IMG="/tmp/checkbox_qa_$(basename "$PDF_PATH" .pdf).png"
-pdftoppm -png -f 1 -l 1 -singlefile "$PDF_ABS" "${TMP_IMG%.png}"
+# Use cached page images
+DOC_ID="$(basename "$PDF_PATH" .pdf)"
+CACHE_ROOT="${CHECKBOX_QA_PAGE_CACHE:-$REPO_ROOT/benchmarks/doc_ai/checkbox_qa/data/page_images}"
+DOC_CACHE="$CACHE_ROOT/$DOC_ID"
 
-# Get image paths
-IMG_DIR=$(dirname "$TMP_IMG")
-IMG_NAME=$(basename "$TMP_IMG")
+if [ ! -d "$DOC_CACHE" ] || [ -z "$(ls -A "$DOC_CACHE"/page-*.png 2>/dev/null)" ]; then
+    echo "No cached images for $DOC_ID; run run_checkbox_qa.py to generate cache." >&2
+    exit 1
+fi
+
+FIRST_PAGE=$(ls -1v "$DOC_CACHE"/page-*.png | head -n 1)
+IMG_DIR=$(dirname "$FIRST_PAGE")
+IMG_NAME=$(basename "$FIRST_PAGE")
 
 # Run Phi-4-Multimodal with question as custom prompt
 # Follow CVlization pattern: mount repo for cvlization package
@@ -62,5 +68,4 @@ docker run --runtime nvidia --rm \
         --output "/outputs/$OUTPUT_NAME" \
         --prompt "$QUESTION"
 
-# Cleanup temp image
-rm -f "$TMP_IMG"
+# Cache is reused; no cleanup

@@ -123,20 +123,31 @@ class CheckboxQADataset:
             )
 
         print(f"Loading CheckboxQA from {gold_path}...")
+        self.documents = self._load_documents_from_jsonl(gold_path, self.data_dir / "documents")
+        print(f"Loaded {len(self.documents)} documents with {self.total_questions()} questions")
 
-        with open(gold_path, "r") as f:
+    @classmethod
+    def from_jsonl(cls, jsonl_path: Union[str, Path], data_dir: Union[str, Path]) -> "CheckboxQADataset":
+        """Create a dataset instance from a specific JSONL subset."""
+        dataset = cls.__new__(cls)
+        dataset.data_dir = Path(data_dir)
+        dataset.use_hf = False
+        dataset.split = "subset"
+        dataset.documents = dataset._load_documents_from_jsonl(Path(jsonl_path), dataset.data_dir / "documents")
+        return dataset
+
+    def _load_documents_from_jsonl(self, jsonl_path: Path, documents_dir: Path) -> List[Document]:
+        docs: List[Document] = []
+        with open(jsonl_path, "r") as f:
             for line in f:
                 item = json.loads(line)
                 questions = []
-
                 for annotation in item["annotations"]:
-                    # Collect all answer variants
                     answers = []
                     for value_dict in annotation["values"]:
                         answers.append(value_dict["value"])
                         if "value_variants" in value_dict:
                             answers.extend(value_dict["value_variants"])
-
                     questions.append(Question(
                         id=annotation["id"],
                         question=annotation["key"],
@@ -144,18 +155,16 @@ class CheckboxQADataset:
                         document_id=item["name"]
                     ))
 
-                # Check if PDF exists
-                pdf_path = self.data_dir / "documents" / f"{item['name']}.{item['extension']}"
+                pdf_path = documents_dir / f"{item['name']}.{item['extension']}"
                 if not pdf_path.exists():
                     pdf_path = None
 
-                self.documents.append(Document(
+                docs.append(Document(
                     document_id=item["name"],
                     pdf_path=pdf_path,
                     questions=questions
                 ))
-
-        print(f"Loaded {len(self.documents)} documents with {self.total_questions()} questions")
+        return docs
 
     def total_questions(self) -> int:
         """Get total number of questions across all documents."""

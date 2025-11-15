@@ -27,6 +27,10 @@ models:
     adapter: "adapters/moondream2.sh"
     description: "Moondream2 (1.9B params, ~4GB VRAM)"
 
+  granite_docling:
+    adapter: "adapters/granite_docling.sh"
+    description: "Granite-Docling first-page adapter"
+
   # Add more models here
   # model_name:
   #   adapter: "adapters/model_name.sh"
@@ -36,3 +40,7 @@ output:
   results_dir: "results"
   save_predictions: true
   save_leaderboard: true
+
+  granite_docling:
+    adapter: "adapters/granite_docling.sh"
+    description: "Granite-Docling first-page adapter"

@@ -33,8 +33,7 @@ echo "Running qwen3_vl_2b_multipage and qwen3_vl_4b_multipage..."
 ./run_checkbox_qa.py \
     qwen3_vl_2b_multipage \
     qwen3_vl_4b_multipage \
-    --subset "$SUBSET_FILE" \
-    --gold data/subset_dev.jsonl
+    --subset "$SUBSET_FILE"
 
 echo
 echo "================================="

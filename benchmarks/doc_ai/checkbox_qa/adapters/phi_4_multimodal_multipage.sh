@@ -57,11 +57,54 @@ if [ -n "${MAX_PAGES:-}" ] && [ "${#PAGE_FILES[@]}" -gt "$MAX_PAGES" ]; then
     PAGE_FILES=("${PAGE_FILES[@]:0:$MAX_PAGES}")
 fi
 
+API_MAX_PAGES="${PHI4_API_MAX_PAGES:-8}"
+if [ -n "${PHI4_API_BASE:-}" ] && [ "${#PAGE_FILES[@]}" -gt "$API_MAX_PAGES" ]; then
+    echo "API mode: limiting to first $API_MAX_PAGES pages to stay within context window"
+    PAGE_FILES=("${PAGE_FILES[@]:0:$API_MAX_PAGES}")
+fi
+
 TMP_DIR="/tmp/checkbox_qa_phi_${DOC_NAME}_$$"
 mkdir -p "$TMP_DIR"
 COMBINED_IMG="$TMP_DIR/${DOC_NAME}_combined.png"
+RESIZED_DIR="$TMP_DIR/resized"
+mkdir -p "$RESIZED_DIR"
+MAX_IMAGE_WIDTH="${PHI4_MAX_IMAGE_WIDTH:-1400}"
 
-python3 - "${PAGE_FILES[@]}" "$COMBINED_IMG" <<'PY'
+if command -v python3 >/dev/null 2>&1; then
+    :
+else
+    echo "python3 is required for resizing images" >&2
+    exit 1
+fi
+
+mapfile -t RESIZED_FILES < <(
+python3 - "$MAX_IMAGE_WIDTH" "$RESIZED_DIR" "${PAGE_FILES[@]}" <<'PY'
+import sys
+from pathlib import Path
+from PIL import Image
+
+max_width = int(sys.argv[1])
+out_dir = Path(sys.argv[2])
+paths = [Path(p) for p in sys.argv[3:]]
+
+for idx, path in enumerate(paths):
+    img = Image.open(path).convert("RGB")
+    if img.width > max_width:
+        ratio = max_width / img.width
+        new_height = max(1, int(img.height * ratio))
+        img = img.resize((max_width, new_height), Image.BICUBIC)
+    out_path = out_dir / f"{idx:03d}_{path.name}"
+    img.save(out_path, format="PNG")
+    print(out_path)
+PY
+)
+
+if [ "${#RESIZED_FILES[@]}" -eq 0 ]; then
+    echo "Failed to prepare resized images for $DOC_NAME" >&2
+    exit 1
+fi
+
+python3 - "${RESIZED_FILES[@]}" "$COMBINED_IMG" <<'PY'
 import sys
 from pathlib import Path
 from PIL import Image
@@ -96,7 +139,7 @@ if [ -n "${PHI4_API_BASE:-}" ]; then
         --api-base "$PHI4_API_BASE" \
         --model "$MODEL_NAME" \
         --prompt "$ENHANCED_PROMPT" \
-        --images "${PAGE_FILES[@]}" \
+        --images "${RESIZED_FILES[@]}" \
         --output "$OUTPUT_ABS"
     rm -rf "$TMP_DIR"
     echo "Phi-4 multipage complete for $DOC_NAME"
@@ -108,12 +151,11 @@ docker run --runtime nvidia --rm \
     -v "$TMP_DIR:/inputs:ro" \
     -v "$OUTPUT_DIR:/outputs" \
     -v "$REPO_ROOT:/cvlization_repo:ro" \
-    -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-    -e PYTHONPATH=/cvlization_repo \
-    -e HF_TOKEN=$HF_TOKEN \
-    -e PROMPT="$ENHANCED_PROMPT" \
-    phi-4-multimodal-instruct \
-    python3 predict.py \
+-v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+-e PYTHONPATH=/cvlization_repo \
+-e HF_TOKEN=$HF_TOKEN \
+phi-4-multimodal-instruct \
+python3 predict.py \
         --image "/inputs/$(basename "$COMBINED_IMG")" \
         --output "/outputs/$OUTPUT_NAME" \
         --prompt "$ENHANCED_PROMPT"

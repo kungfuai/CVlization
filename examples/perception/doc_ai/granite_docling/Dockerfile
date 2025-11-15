@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 WORKDIR /app
 
@@ -12,11 +12,7 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch (GPU version)
-RUN pip install --no-cache-dir \
-    torch torchvision --index-url https://download.pytorch.org/whl/cu124
-
-# Install transformers and required packages
+# Install transformers and required packages (torch already included in base image)
 RUN pip install --no-cache-dir \
     transformers \
     accelerate \
