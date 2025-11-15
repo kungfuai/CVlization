@@ -25,7 +25,7 @@ from typing import Dict, Any
 from tqdm import tqdm
 
 # Import reusable functions from predict.py
-from predict import load_model, load_images, run_inference, save_output, MODEL_VARIANTS, set_seed
+from predict import load_model, load_images, run_inference, save_output, MODEL_VARIANTS
 
 
 def process_batch(
