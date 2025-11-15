@@ -20,6 +20,11 @@ data/*/transforms_*.json
 data/*/*.mp4
 data/*/*.avi
 
+# BFM Model files
+data_utils/face_tracking/3DMM/
+*.mat
+*.bin
+
 # Python
 __pycache__/
 *.py[cod]
