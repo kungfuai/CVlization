@@ -1,14 +1,20 @@
-"""
-Utilities for caching CheckboxQA PDF pages as PNG images.
+"""Utilities for caching CheckboxQA PDF pages as PNG images.
 
 Used by run_checkbox_qa.py and model adapters to lazily populate caches.
+
+This module now also exposes a tiny CLI:
+
+    python page_cache.py --pdf path/to/doc.pdf --doc-id DOC123 --cache-dir data/page_images
+
+to mirror the convenience that tests expect.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Set
+from typing import List, Optional, Sequence
 
 import pypdfium2 as pdfium
 
@@ -75,9 +81,7 @@ def resolve_pdf_paths(
     documents_dir: Path,
     doc_ids: Optional[Sequence[str]] = None,
 ) -> List[Path]:
-    """
-    Locate PDF files under data/documents.
-    """
+    """Locate PDF files under data/documents."""
     docs: List[Path] = []
     if doc_ids:
         for doc_id in doc_ids:
@@ -87,3 +91,23 @@ def resolve_pdf_paths(
     else:
         docs.extend(sorted(documents_dir.glob("*.pdf")))
     return docs
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Render CheckboxQA PDFs into cached PNG pages")
+    parser.add_argument("--pdf", type=Path, required=True, help="Path to the PDF to render")
+    parser.add_argument("--doc-id", required=True, help="Document ID (used for directory naming)")
+    parser.add_argument("--cache-dir", type=Path, default=Path("data/page_images"), help="Root cache directory")
+    parser.add_argument("--overwrite", action="store_true", help="Force re-render even if cached")
+    parser.add_argument("--scale", type=float, default=DEFAULT_SCALE, help="Render scale for pdfium")
+
+    args = parser.parse_args()
+
+    target_dir = args.cache_dir / args.doc_id
+    count = render_pdf_to_images(args.pdf, target_dir, overwrite=args.overwrite, scale=args.scale)
+    print(f"Rendered {count} pages to {target_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -72,13 +72,8 @@ def load_model(model_id: str = MODEL_ID, device: str = None):
     # Determine attention implementation via native PyTorch support
     attn_implementation = "eager"
     if device == "cuda":
-        major, _ = torch.cuda.get_device_capability()
-        if major >= 8:
-            attn_implementation = "flash_attention_2"
-            print("Using PyTorch Flash Attention kernels")
-        else:
-            attn_implementation = "sdpa"
-            print("Falling back to SDP attention kernels")
+        attn_implementation = "sdpa"
+        print("Using PyTorch SDPA attention kernels")
     else:
         print("Running on CPU/MPS, using eager attention")
 

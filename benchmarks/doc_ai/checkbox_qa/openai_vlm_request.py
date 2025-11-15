@@ -52,6 +52,7 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY"))
+    parser.add_argument("--request-timeout", type=int, default=int(os.environ.get("VLM_REQUEST_TIMEOUT", "300")))
 
     args = parser.parse_args()
 
@@ -78,8 +79,12 @@ def main():
     if args.api_key:
         headers["Authorization"] = f"Bearer {args.api_key}"
 
-    response = requests.post(url, headers=headers, json=payload, timeout=120)
-    response.raise_for_status()
+    response = requests.post(url, headers=headers, json=payload, timeout=args.request_timeout)
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        print("Request failed:", exc, response.text, sep="\n")
+        raise
     data = response.json()
     choice = data["choices"][0]["message"]
     content = extract_text(choice.get("content", ""))
