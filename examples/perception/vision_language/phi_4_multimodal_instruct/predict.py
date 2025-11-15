@@ -69,14 +69,18 @@ def load_model(model_id: str = MODEL_ID, device: str = None):
     if device is None:
         device = detect_device()
 
-    # Determine attention implementation
-    try:
-        import flash_attn
-        attn_implementation = 'flash_attention_2'
-        print("Using Flash Attention 2")
-    except ImportError:
-        attn_implementation = 'eager'
-        print("Flash Attention 2 not available, using eager attention")
+    # Determine attention implementation via native PyTorch support
+    attn_implementation = "eager"
+    if device == "cuda":
+        major, _ = torch.cuda.get_device_capability()
+        if major >= 8:
+            attn_implementation = "flash_attention_2"
+            print("Using PyTorch Flash Attention kernels")
+        else:
+            attn_implementation = "sdpa"
+            print("Falling back to SDP attention kernels")
+    else:
+        print("Running on CPU/MPS, using eager attention")
 
     # Load processor
     processor = AutoProcessor.from_pretrained(

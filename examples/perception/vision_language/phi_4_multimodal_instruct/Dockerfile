@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install torch first (flash-attn needs it during build)
-RUN /root/.local/bin/uv pip install --system torch==2.6.0 torchvision
+RUN /root/.local/bin/uv pip install --system torch==2.8.0 torchvision
 
 # Copy requirements
 COPY requirements.txt .
