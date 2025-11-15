@@ -102,12 +102,13 @@ def load_model(model_id: str = MODEL_ID, device: str = None):
     return model, processor, generation_config, device
 
 
-def load_image(image_path: str):
+def load_image(image_path: str, max_size: int = None):
     """
     Load an image from file path or URL.
 
     Args:
         image_path: Path to image file or URL
+        max_size: Maximum dimension (width or height). If specified, resize maintaining aspect ratio.
 
     Returns:
         PIL.Image: Loaded image in RGB format
@@ -120,18 +121,35 @@ def load_image(image_path: str):
     else:
         image = Image.open(image_path)
 
-    return image.convert("RGB")
+    image = image.convert("RGB")
+
+    # Resize if max_size is specified
+    if max_size is not None:
+        width, height = image.size
+        if width > max_size or height > max_size:
+            # Calculate new dimensions maintaining aspect ratio
+            if width > height:
+                new_width = max_size
+                new_height = int(height * (max_size / width))
+            else:
+                new_height = max_size
+                new_width = int(width * (max_size / height))
+
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            print(f"Resized {image_path} from {width}x{height} to {new_width}x{new_height}")
+
+    return image
 
 
-def run_inference(model, processor, generation_config, image, prompt: str):
+def run_inference(model, processor, generation_config, images, prompt: str):
     """
-    Run inference on an image using Phi-4-multimodal-instruct.
+    Run inference on one or more images using Phi-4-multimodal-instruct.
 
     Args:
         model: Loaded Phi-4 model
         processor: Model processor
         generation_config: Generation configuration
-        image: PIL Image
+        images: Single PIL Image or list of PIL Images
         prompt: Text prompt/question
 
     Returns:
@@ -139,16 +157,29 @@ def run_inference(model, processor, generation_config, image, prompt: str):
     """
     print(f"Running inference with prompt: '{prompt[:50]}...'")
 
-    # Format prompt with Phi-4 chat template
-    # <|user|><|image_1|>{prompt}<|end|><|assistant|>
-    formatted_prompt = f"<|user|><|image_1|>{prompt}<|end|><|assistant|>"
+    # Normalize to list
+    if not isinstance(images, list):
+        images = [images]
 
-    # Process inputs
+    num_images = len(images)
+    print(f"Processing {num_images} image(s)")
+
+    # Format prompt with Phi-4 chat template
+    # For multi-image: <|user|><|image_1|><|image_2|>...<|image_N|>{prompt}<|end|><|assistant|>
+    image_tokens = "".join([f"<|image_{i+1}|>" for i in range(num_images)])
+    formatted_prompt = f"<|user|>{image_tokens}{prompt}<|end|><|assistant|>"
+
+    # Process inputs - try native multi-image support
     inputs = processor(
         text=formatted_prompt,
-        images=image,
+        images=images,
         return_tensors='pt'
     ).to(model.device)
+
+    # Print processed image size
+    if 'pixel_values' in inputs:
+        img_shape = inputs['pixel_values'].shape
+        print(f"Processed image tensor shape: {img_shape}")
 
     # Generate
     with torch.no_grad():
@@ -207,8 +238,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Image captioning
+  # Single image captioning
   python predict.py --image photo.jpg --prompt "Describe this image in detail."
+
+  # Multi-image comparison
+  python predict.py --images page1.jpg page2.jpg --prompt "Compare these images."
 
   # OCR (text extraction)
   python predict.py --image document.jpg --prompt "Extract all text from this image."
@@ -221,11 +255,18 @@ Examples:
         """
     )
 
-    parser.add_argument(
+    # Mutually exclusive group for single vs multi-image
+    image_group = parser.add_mutually_exclusive_group()
+    image_group.add_argument(
         "--image",
         type=str,
-        default="test_images/sample.jpg",
-        help="Path to input image or URL"
+        help="Path to single input image or URL"
+    )
+    image_group.add_argument(
+        "--images",
+        type=str,
+        nargs='+',
+        help="Paths to multiple input images"
     )
     parser.add_argument(
         "--model-id",
@@ -262,13 +303,24 @@ Examples:
 
     args = parser.parse_args()
 
+    # Handle default: if neither --image nor --images is provided, use default single image
+    if args.image is None and args.images is None:
+        args.image = "test_images/sample.jpg"
+
+    # Determine if single or multi-image mode
+    if args.images:
+        image_paths = args.images
+        multi_image = True
+    else:
+        image_paths = [args.image]
+        multi_image = False
+
     # Resolve paths for CVL compatibility
     try:
-        image_path = resolve_input_path(args.image)
+        image_paths = [resolve_input_path(p) for p in image_paths]
         output_path = resolve_output_path(args.output)
     except:
         # Fallback to direct paths if CVL not available
-        image_path = args.image
         output_path = args.output
 
     print("=" * 60)
@@ -279,14 +331,22 @@ Examples:
     # Load model
     model, processor, generation_config, device = load_model(args.model_id, args.device)
 
-    # Load image
-    print(f"\nLoading image: {image_path}")
-    image = load_image(image_path)
-    print(f"Image size: {image.size}")
+    # Load images
+    if multi_image:
+        print(f"\nLoading {len(image_paths)} images:")
+        for i, path in enumerate(image_paths, 1):
+            print(f"  {i}. {path}")
+        images = [load_image(path) for path in image_paths]
+        for i, img in enumerate(images, 1):
+            print(f"  Image {i} size: {img.size}")
+    else:
+        print(f"\nLoading image: {image_paths[0]}")
+        images = load_image(image_paths[0])
+        print(f"Image size: {images.size}")
 
     # Run inference
     print()
-    result = run_inference(model, processor, generation_config, image, args.prompt)
+    result = run_inference(model, processor, generation_config, images, args.prompt)
 
     # Display result
     print("\n" + "=" * 60)

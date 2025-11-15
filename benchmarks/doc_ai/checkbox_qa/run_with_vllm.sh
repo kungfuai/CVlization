@@ -83,13 +83,22 @@ else
         docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
     fi
     echo "Starting vLLM server (image: $IMAGE_NAME, container: $CONTAINER_NAME) ..."
+    echo "Command: docker run -d --gpus all --name $CONTAINER_NAME -p ${HOST_PORT}:8000 -v $EXAMPLE_DIR:/workspace -v $HOME/.cache/huggingface:/root/.cache/huggingface -w /workspace ${EXTRA_DOCKER_ENV[*]} $IMAGE_NAME bash serve.sh"
+
     CONTAINER_ID=$(docker run -d --gpus all \
         --name "$CONTAINER_NAME" \
         -p "${HOST_PORT}:8000" \
         -v "$EXAMPLE_DIR:/workspace" \
+        -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
         -w /workspace \
         "${EXTRA_DOCKER_ENV[@]}" \
         "$IMAGE_NAME" bash serve.sh)
+
+    echo "Container started with ID: $CONTAINER_ID"
+    sleep 2
+    echo "Initial logs:"
+    docker logs "$CONTAINER_NAME" 2>&1 | head -20
+
     STARTED_CONTAINER=1
 fi
 
@@ -102,16 +111,37 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Waiting for server to become healthy..."
-for _ in {1..150}; do
-    if ! docker ps --format '{{.ID}}' | grep -q "$CONTAINER_ID"; then
-        echo "vLLM container exited unexpectedly. Showing logs..." >&2
-        docker logs --tail 200 "$CONTAINER_ID" >&2 || true
+echo "Waiting for server to become healthy at $HEALTH_URL..."
+echo "Container ID: $CONTAINER_ID"
+echo "Container name: $CONTAINER_NAME"
+
+for i in {1..150}; do
+    # Check if container is still running (more reliable check)
+    if ! docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+        echo "vLLM container no longer exists. Showing logs..." >&2
+        docker logs "$CONTAINER_NAME" 2>&1 | tail -200 >&2 || true
         exit 1
     fi
+
+    CONTAINER_STATUS=$(docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
+    if [ "$CONTAINER_STATUS" != "running" ]; then
+        echo "vLLM container exited with status: $CONTAINER_STATUS" >&2
+        echo "--- Full container logs ---" >&2
+        docker logs "$CONTAINER_NAME" 2>&1 | tail -200 >&2 || true
+        exit 1
+    fi
+
     if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then
+        echo "✓ Server is healthy after ${i} checks"
         break
     fi
+
+    # Show progress every 10 iterations (20 seconds)
+    if [ $((i % 10)) -eq 0 ]; then
+        echo "Still waiting... (${i}/150, container status: $CONTAINER_STATUS)"
+        docker logs "$CONTAINER_NAME" 2>&1 | tail -3
+    fi
+
     sleep 2
 done
 

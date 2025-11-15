@@ -36,7 +36,47 @@ Or use the script directly:
 bash predict.sh --image test_image.png --prompt "What is in this image?"
 ```
 
-### 3. Start vLLM Server
+### 3. Batch Processing
+
+Process multiple images with different prompts from a JSONL file:
+
+```bash
+python3 batch_predict.py --batch-input requests.jsonl --output-dir results/
+```
+
+**JSONL input format** (one JSON object per line):
+```jsonl
+{"images": ["doc1.jpg"], "prompt": "Extract all text from this document"}
+{"images": ["page1.jpg", "page2.jpg"], "prompt": "Summarize these pages", "output": "summary.txt"}
+{"images": ["chart.png"], "prompt": "What trends are visible?", "id": "chart_001"}
+```
+
+**Required fields:**
+- `images`: List of image paths (can be single or multiple images)
+- `prompt`: Question or instruction for the model
+
+**Optional fields:**
+- `output`: Custom output filename (default: `request_N.txt`)
+- `id`: Request identifier for tracking
+- `format`: Output format - `"txt"` or `"json"` (default: `"txt"`)
+
+**Example:**
+```bash
+# Create sample batch input
+cat > batch_requests.jsonl << 'EOF'
+{"images": ["test_images/sample.jpg"], "prompt": "Describe this image"}
+{"images": ["test_images/sample.jpg"], "prompt": "Extract any visible text"}
+EOF
+
+# Run batch processing
+python3 batch_predict.py --batch-input batch_requests.jsonl --output-dir outputs/batch/
+
+# View results
+cat outputs/batch/request_1.txt
+cat outputs/batch/request_2.txt
+```
+
+### 4. Start vLLM Server
 
 ```bash
 cvl run phi-4-multimodal-instruct serve

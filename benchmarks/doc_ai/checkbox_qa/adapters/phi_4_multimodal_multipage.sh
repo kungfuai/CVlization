@@ -68,7 +68,7 @@ mkdir -p "$TMP_DIR"
 COMBINED_IMG="$TMP_DIR/${DOC_NAME}_combined.png"
 RESIZED_DIR="$TMP_DIR/resized"
 mkdir -p "$RESIZED_DIR"
-MAX_IMAGE_WIDTH="${PHI4_MAX_IMAGE_WIDTH:-1400}"
+MAX_IMAGE_WIDTH="${PHI4_MAX_IMAGE_WIDTH:-2500}"
 
 if command -v python3 >/dev/null 2>&1; then
     :
@@ -139,7 +139,7 @@ if [ -n "${PHI4_API_BASE:-}" ]; then
         --api-base "$PHI4_API_BASE" \
         --model "$MODEL_NAME" \
         --prompt "$ENHANCED_PROMPT" \
-        --images "${RESIZED_FILES[@]}" \
+        --images "$COMBINED_IMG" \
         --output "$OUTPUT_ABS"
     rm -rf "$TMP_DIR"
     echo "Phi-4 multipage complete for $DOC_NAME"

@@ -34,6 +34,45 @@ Environment variable shortcut:
 QWEN3_VL_VARIANT=4b bash predict.sh --image ...     # default variant if not passed via CLI
 ```
 
+## Batch Processing
+
+Process multiple images with different prompts from a JSONL file:
+
+```bash
+python3 batch_predict.py --batch-input requests.jsonl --output-dir results/ --variant 2b
+```
+
+**JSONL input format** (one JSON object per line):
+```jsonl
+{"images": ["doc1.jpg"], "prompt": "Extract all text from this document"}
+{"images": ["page1.jpg", "page2.jpg"], "prompt": "Summarize these pages", "output": "summary.txt"}
+{"images": ["chart.png"], "prompt": "What trends are visible?", "id": "chart_001"}
+```
+
+**Required fields:**
+- `images`: List of image paths
+- `prompt`: Question or instruction
+
+**Optional fields:**
+- `output`: Custom output filename (default: `request_N.txt`)
+- `id`: Request identifier
+- `format`: `"txt"` or `"json"`
+
+**Example:**
+```bash
+# Create sample batch input
+cat > batch_requests.jsonl << 'EOF'
+{"images": ["test_images/sample.jpg"], "prompt": "Describe this image"}
+{"images": ["test_images/sample.jpg"], "prompt": "Extract any visible text"}
+EOF
+
+# Run batch processing (model loads once, processes all requests)
+python3 batch_predict.py --batch-input batch_requests.jsonl --output-dir outputs/batch/ --variant 2b
+
+# View results
+cat outputs/batch/request_1.txt
+```
+
 ## CVL CLI Presets
 
 With the updated `example.yaml`, you can use the CVL CLI instead of bash scripts:

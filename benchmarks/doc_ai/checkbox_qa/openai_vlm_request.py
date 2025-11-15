@@ -50,7 +50,8 @@ def main():
     parser.add_argument("--output", required=True, help="Where to write the model response")
     parser.add_argument("--system", default=None, help="Optional system prompt")
     parser.add_argument("--max-tokens", type=int, default=256)
-    parser.add_argument("--temperature", type=float, default=0.2)
+    parser.add_argument("--temperature", type=float, default=float(os.environ.get("VLM_TEMPERATURE", "0.0")))
+    parser.add_argument("--seed", type=int, default=int(os.environ.get("VLM_SEED", "42")), help="Random seed for deterministic sampling")
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY"))
     parser.add_argument("--request-timeout", type=int, default=int(os.environ.get("VLM_REQUEST_TIMEOUT", "300")))
 
@@ -73,6 +74,7 @@ def main():
         "messages": messages,
         "temperature": args.temperature,
         "max_tokens": args.max_tokens,
+        "seed": args.seed,
     }
 
     headers = {"Content-Type": "application/json"}
