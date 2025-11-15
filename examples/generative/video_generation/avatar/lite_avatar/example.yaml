@@ -1,0 +1,32 @@
+name: lite-avatar
+capability: generative/video_generation
+modalities:
+- audio
+- vision
+datasets:
+- custom
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 6
+presets:
+  build:
+    script: build.sh
+    description: Build the LiteAvatar Docker image with bundled assets
+  predict:
+    script: predict.sh
+    description: Generate a talking-head video from an input WAV file
+tags:
+- lite-avatar
+- talking-head
+- audio-driven-animation
+- pytorch
+- modelscope
+tasks:
+- audio_to_video
+frameworks:
+- pytorch
+description: >
+  Dockerized wrapper around HumanAIGC's LiteAvatar audio-to-avatar pipeline. Uses ModelScope + FunASR
+  feature extractors to drive a 2D talking head from Mandarin speech with optional GPU acceleration.
