@@ -1,7 +1,33 @@
 import numpy as np
 from scipy.io import loadmat
+import os
+from pathlib import Path
+import sys
+
+# Auto-download BFM model if not present
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from bfm_model import download_bfm_model, BFM_CACHE_DIR
+
+    # Ensure BFM model is downloaded
+    bfm_cache = download_bfm_model(download_all=True)
+
+    # Create symlink from 3DMM to cache if needed
+    dmm_dir = Path("3DMM")
+    if not dmm_dir.exists():
+        print(f"Creating symlink: 3DMM -> {bfm_cache}")
+        dmm_dir.symlink_to(bfm_cache)
+except ImportError:
+    print("Warning: Could not import BFM download utility. Looking for files in 3DMM directory...")
 
 original_BFM = loadmat("3DMM/01_MorphableModel.mat")
+
+# Check for topology_info.npy
+if not os.path.exists("3DMM/topology_info.npy"):
+    raise FileNotFoundError(
+        "3DMM/topology_info.npy not found. This file must be generated or obtained from the original EGSTalker repository."
+    )
+
 sub_inds = np.load("3DMM/topology_info.npy", allow_pickle=True).item()["sub_inds"]
 
 shapePC = original_BFM["shapePC"]
