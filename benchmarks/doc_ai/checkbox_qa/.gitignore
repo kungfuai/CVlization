@@ -6,6 +6,9 @@ data/*.json
 # Results
 results/*/
 
+# Logs
+*.log
+
 # Python
 __pycache__/
 *.pyc
