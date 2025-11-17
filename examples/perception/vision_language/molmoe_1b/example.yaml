@@ -19,6 +19,9 @@ presets:
     script: predict.sh
     command: python3 predict.py
     description: Run multimodal inference on an image
+  batch_predict:
+    script: batch_predict.py
+    description: Batch inference from JSONL
 
 tags: [molmo, vlm, moe, ocr, vqa, captioning, allen-institute, pytorch, efficient]
 tasks: [ocr, image_captioning, visual_question_answering, document_understanding]

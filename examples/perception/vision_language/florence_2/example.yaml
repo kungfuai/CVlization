@@ -14,6 +14,9 @@ presets:
   predict:
     script: predict.sh
     description: Run inference (pass --variant base|large)
+  batch_predict:
+    script: batch_predict.py
+    description: Batch inference from JSONL (supports custom task prompts, DocVQA fine-tuned models)
   test:
     script: test.sh
     description: Smoke-test captioning with the default base variant
