@@ -21,8 +21,8 @@ RUN pip install --no-cache-dir \
 # Create directories
 RUN mkdir -p /app/inputs /app/outputs
 
-# Copy prediction script
-COPY predict.py /app/
+# Copy prediction scripts
+COPY predict.py batch_predict.py /app/
 
 # Default command runs the predict script
 CMD ["python", "predict.py"]

@@ -15,6 +15,9 @@ presets:
   predict:
     script: predict.sh
     description: Run multimodal inference (image, text, and speech)
+  batch_predict:
+    script: batch_predict.py
+    description: "Batch inference from JSONL (requires: --batch-input, --output-dir)"
   serve:
     script: serve.sh
     description: Launch vLLM OpenAI-compatible server for Phi-4-Multimodal
