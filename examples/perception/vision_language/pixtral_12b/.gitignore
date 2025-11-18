@@ -1,0 +1,8 @@
+outputs/
+__pycache__/
+*.pyc
+.DS_Store
+test_images/
+*.log
+unsloth_compiled_cache/
+test_*.py
