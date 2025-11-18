@@ -1,0 +1,37 @@
+name: llama3-vision
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 12
+image: llama3-vision
+presets:
+  build:
+    script: build.sh
+    description: Build the Llama 3.2 Vision Docker image
+  predict:
+    script: predict.sh
+    description: Run single-image vision prompt (Transformers)
+  test:
+    script: test.sh
+    description: Smoke test with bundled sample image
+tags:
+  - llama
+  - llama-3.2
+  - vlm
+  - vision
+  - captioning
+  - vqa
+  - pytorch
+  - transformers
+tasks:
+  - image_captioning
+  - visual_question_answering
+description: Self-contained Dockerized example for the Llama 3.2 Vision Instruct model using vLLM.
+verification:
+  last_verified: 2025-11-18
+  last_verification_note: "Verified build, inference with image inputs, model caching (6.8GB model downloads once), and text outputs on NVIDIA L4 (23GB VRAM). Uses 9.64GB VRAM (40%) with 4-bit quantization."

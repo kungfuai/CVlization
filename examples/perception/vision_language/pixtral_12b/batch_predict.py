@@ -63,12 +63,13 @@ def run_inference_batch(
         return_tensors="pt",
     ).to("cuda")
 
-    # Generate
+    # Generate with tight constraints for concise answers
     output_ids = model.generate(
         **inputs,
         max_new_tokens=max_tokens,
         use_cache=True,
         repetition_penalty=1.2,
+        do_sample=False,  # Greedy decoding for consistency
     )
 
     # Decode only the new tokens (skip the input)
