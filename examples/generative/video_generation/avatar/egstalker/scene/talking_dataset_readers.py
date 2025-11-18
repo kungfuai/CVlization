@@ -349,13 +349,8 @@ def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg
     aud_features = torch.from_numpy(aud_features)
 
     # support both [N, 16] labels and [N, 16, K] logits
-    # Also support [N, D] for Wav2Vec2 features
     if len(aud_features.shape) == 3:
-        aud_features = aud_features.float().permute(0, 2, 1) # [N, 16, 29] --> [N, 29, 16]
-    elif len(aud_features.shape) == 2:
-        # Wav2Vec2 features are [N, D], keep as is
-        aud_features = aud_features.float()
-        print(f'[INFO] Using 2D audio features (Wav2Vec2 format): {aud_features.shape}')
+        aud_features = aud_features.float().permute(0, 2, 1) # [N, 16, 29] --> [N, 29, 16]    
     else:
         raise NotImplementedError(f'[ERROR] aud_features.shape {aud_features.shape} not supported')
 
@@ -368,9 +363,9 @@ def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg
     #au_blink_info.columns = au_blink_info.columns.str.strip()
     eye_features = au_blink_info['AU45_r'].values
     
-
+    
     ply_path = os.path.join(path, "fused.ply")
-    # path = "datasets/Obama"  # FIXED: Don't overwrite path parameter
+    # path = "datasets/Obama"  # 或者根据你的项目结构，设置合适的路径
     mesh_path = os.path.join(path, "track_params.pt")
     
     timestamp_mapper, max_time = read_timeline(path)
@@ -385,11 +380,7 @@ def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg
         aud_features = np.load(os.path.join(path, custom_aud))
         aud_features = torch.from_numpy(aud_features)
         if len(aud_features.shape) == 3:
-            aud_features = aud_features.float().permute(0, 2, 1) # [N, 16, 29] --> [N, 29, 16]
-        elif len(aud_features.shape) == 2:
-            # Wav2Vec2 features are [N, D], keep as is
-            aud_features = aud_features.float()
-            print(f'[INFO] Using 2D audio features for custom audio (Wav2Vec2 format): {aud_features.shape}')
+            aud_features = aud_features.float().permute(0, 2, 1) # [N, 16, 29] --> [N, 29, 16]    
         else:
             raise NotImplementedError(f'[ERROR] aud_features.shape {aud_features.shape} not supported')
         print("Reading Custom Transforms")
