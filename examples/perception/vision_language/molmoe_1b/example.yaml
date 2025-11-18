@@ -2,11 +2,11 @@ name: molmoe-1b
 capability: perception/vision_language
 modalities: [vision, text]
 datasets: [custom]
-stability: stable
+stability: under_construction
 resources:
   gpu: 1
-  vram_gb: 3
-  disk_gb: 4
+  vram_gb: 14
+  disk_gb: 30
 
 # Docker image name for this example
 image: molmoe-1b
@@ -29,6 +29,6 @@ frameworks: [pytorch]
 description: Ultra-efficient 1.2B MoE vision-language model from Allen Institute that nearly matches GPT-4V
 
 verification:
-  last_verified: 2025-11-11
-  last_verification_note: "Build successful, but model FAILS quality verification - consistently hallucinates incorrect content (described non-existent 'woman' and 'Lorem Ipsum' text for invoice image). Needs debugging. Uses ~3GB VRAM."
-  status: FAILED
+  last_verified: 2025-11-18
+  last_verification_note: "UNDER CONSTRUCTION: Model loads successfully but takes ~16 minutes (from 27GB pytorch_model.bin), making it impractical for most use cases. Inference fails with 'NoneType' error in past_key_values during generate_from_batch(). TensorFlow workaround and GPU forcing (device_map='cuda:0') applied. Requires ~14GB VRAM. Issue appears to be transformers 4.57.1 incompatibility or model bug. Needs further investigation."
+  status: UNDER_CONSTRUCTION
