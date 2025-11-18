@@ -145,7 +145,7 @@ class Deformation(nn.Module):
         return hidden
     
     def attention_query_audio_batch(self, rays_pts_emb, scales_emb, rotations_emb, audio_features, eye_features, cam_features):
-        # audio_features [B, 8, 29, 16])
+        # audio_features [B, 8, 29, 16]) 
         B, _, _, _= audio_features.shape
         
         if self.only_infer: #cashing

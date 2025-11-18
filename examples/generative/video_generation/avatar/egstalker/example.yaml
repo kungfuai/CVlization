@@ -14,6 +14,12 @@ presets:
   build:
     script: build.sh
     description: Build the Docker image
+  preprocess:
+    script: preprocess.sh
+    description: Preprocess video data (extract faces, audio features, tracking)
+  train:
+    script: train.sh
+    description: Train EGSTalker model on preprocessed data
   predict:
     script: predict.sh
     description: Run inference with audio and reference
@@ -32,4 +38,4 @@ tasks:
 - video_generation
 frameworks:
 - pytorch
-description: EGSTalker - Real-time audio-driven talking head generation using 3D Gaussian Splatting with Efficient Spatial-Audio Attention (ESAA)
+description: EGSTalker - Real-time audio-driven talking head generation using 3D Gaussian Splatting with Efficient Spatial-Audio Attention (ESAA). Supports full preprocessing pipeline, training, and inference.

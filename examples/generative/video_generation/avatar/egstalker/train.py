@@ -29,7 +29,6 @@ from utils.loader_utils import FineSampler, get_stamp_list
 import lpips
 import copy
 import wandb
-import torchvision.utils
 
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
@@ -192,18 +191,13 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     wandb.log(log_dict)  
 
             # 清空 CUDA 缓存，以释放显存
-            torch.cuda.empty_cache()
-
+            torch.cuda.empty_cache()  
+                
             if iteration % 10 == 0:
                 progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}",
                                           "psnr": f"{psnr_:.{2}f}",
                                           "point":f"{total_point}"})
                 progress_bar.update(10)
-
-            # Print detailed loss every 100 iterations
-            if iteration % 100 == 0:
-                print(f"\n[ITER {iteration}] Loss: {ema_loss_for_log:.6f} | PSNR: {psnr_:.2f} | Points: {total_point}")
-
             if iteration == opt.iterations:
                 progress_bar.close()
 
@@ -254,11 +248,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
-
-    # Return final metrics
-    return ema_loss_for_log, ema_psnr_for_log, total_point
-
-
+                
+                
 def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, expname, use_wandb):
     # first_iter = 0
     tb_writer = prepare_output_and_logger(expname)
@@ -336,18 +327,6 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                             tb_writer.add_images(stage + "/"+config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
                             if iteration == testing_iterations[0]:
                                 tb_writer.add_images(stage + "/"+config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
-
-                            # Save preview PNGs for easy visual inspection
-                            if idx == 0 and iteration % 1000 == 0:  # Save first view every 1000 iterations
-                                preview_dir = os.path.join(dataset.model_path, f"preview_{stage}")
-                                os.makedirs(preview_dir, exist_ok=True)
-
-                                # Save side-by-side comparison (GT | Render)
-                                comparison = torch.cat([gt_image, image], dim=2)  # Concatenate horizontally
-                                torchvision.utils.save_image(
-                                    comparison,
-                                    os.path.join(preview_dir, f"{config['name']}_iter_{iteration:06d}.png")
-                                )
                     except:
                         pass
                     l1_test += l1_loss(image, gt_image).mean().double()

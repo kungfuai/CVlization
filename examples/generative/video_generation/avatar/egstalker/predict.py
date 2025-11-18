@@ -93,18 +93,23 @@ def find_model_checkpoint(model_path, iteration=None):
         else:
             logger.warning(f"Checkpoint {iteration} not found, searching for latest...")
     
-    # Find latest iteration
+    # Find latest iteration (check both model_dir and model_dir/point_cloud)
     iterations = []
-    for item in model_dir.iterdir():
-        if item.is_dir() and item.name.startswith("iteration_"):
-            try:
-                iter_num = int(item.name.split("_")[1])
-                iterations.append(iter_num)
-            except ValueError:
-                continue
-    
+    search_dirs = [model_dir, model_dir / "point_cloud"]
+
+    for search_dir in search_dirs:
+        if not search_dir.exists():
+            continue
+        for item in search_dir.iterdir():
+            if item.is_dir() and item.name.startswith("iteration_"):
+                try:
+                    iter_num = int(item.name.split("_")[1])
+                    iterations.append(iter_num)
+                except ValueError:
+                    continue
+
     if not iterations:
-        raise FileNotFoundError(f"No checkpoints found in {model_path}")
+        raise FileNotFoundError(f"No checkpoints found in {model_path} or {model_path}/point_cloud")
     
     latest_iter = max(iterations)
     logger.info(f"Using checkpoint iteration: {latest_iter}")
@@ -138,7 +143,7 @@ def main(args):
     # Note: EGSTalker expects .npy files for audio features
     # For now, we'll let EGSTalker handle this, or we need to preprocess
     audio_file = Path(args.audio_path)
-    audio_npy = dataset_path / audio_file.stem + ".npy"
+    audio_npy = Path(dataset_path) / (audio_file.stem + ".npy")
     
     # Build command-line arguments for EGSTalker render.py
     egstalker_args = [
@@ -157,8 +162,8 @@ def main(args):
         shutil.copy(audio_file, audio_target)
     
     egstalker_args.extend([
-        "--custom_aud", str(audio_npy) if audio_npy.exists() else "",
-        "--custom_wav", str(audio_target)
+        "--custom_aud", audio_npy.name if audio_npy.exists() else "",
+        "--custom_wav", audio_target.name
     ])
     
     if args.configs:

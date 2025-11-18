@@ -46,8 +46,6 @@ def extract_audio_features(path, mode='wav2vec'):
     print(f'[INFO] ===== extract audio labels for {path} use {mode} =====')
     if mode == 'wav2vec':
         cmd = f'python nerf/asr.py --wav {path} --save_feats'
-    elif mode == 'simple':
-        cmd = f'python data_utils/simple_audio_features.py --input {path}'
     else: # deepspeech
         cmd = f'python data_utils/deepspeech_features/extract_ds_features.py --input {path}'
     os.system(cmd)
@@ -273,27 +271,21 @@ def extract_torso_and_gt(base_dir, ori_imgs_dir):
     print(f'[INFO] ===== extracted torso and gt images =====')
 
 
-def face_tracking(ori_imgs_dir, tracker='bfm'):
+def face_tracking(ori_imgs_dir):
 
-    print(f'[INFO] ===== perform face tracking with {tracker} tracker =====')
+    print(f'[INFO] ===== perform face tracking =====')
 
     image_paths = glob.glob(os.path.join(ori_imgs_dir, '*.jpg'))
-
+    
     # read one image to get H/W
     tmp_image = cv2.imread(image_paths[0], cv2.IMREAD_UNCHANGED) # [H, W, 3]
     h, w = tmp_image.shape[:2]
 
-    if tracker == 'mediapipe':
-        # Use MediaPipe tracker (no BFM dependency)
-        from mediapipe_tracking import track_faces_mediapipe
-        base_dir = os.path.dirname(ori_imgs_dir)
-        track_faces_mediapipe(ori_imgs_dir, base_dir, img_h=h, img_w=w)
-    else:
-        # Use BFM tracker (original)
-        cmd = f'python data_utils/face_tracking/face_tracker.py --path={ori_imgs_dir} --img_h={h} --img_w={w} --frame_num={len(image_paths)}'
-        #python data_utils/face_tracking/face_tracker.py --path=data/frozenobama/ori_imgs --img_h=450 --img_w=450 --frame_num=7996
-        # import pdb; pdb.set_trace()
-        os.system(cmd)
+    cmd = f'python data_utils/face_tracking/face_tracker.py --path={ori_imgs_dir} --img_h={h} --img_w={w} --frame_num={len(image_paths)}'
+    #python data_utils/face_tracking/face_tracker.py --path=data/frozenobama/ori_imgs --img_h=450 --img_w=450 --frame_num=7996
+    # import pdb; pdb.set_trace()
+
+    os.system(cmd)
 
     print(f'[INFO] ===== finished face tracking =====')
 
@@ -388,9 +380,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('path', type=str, help="path to video file")
     parser.add_argument('--task', type=int, default=-1, help="-1 means all")
-    parser.add_argument('--asr', type=str, default='deepspeech', help="Audio feature extraction: 'wav2vec', 'deepspeech', or 'simple' (Wav2Vec2-based, no external deps)")
-    parser.add_argument('--tracker', type=str, default='bfm', choices=['bfm', 'mediapipe'],
-                        help="Face tracker: 'bfm' (requires BFM 2009) or 'mediapipe' (no BFM dependency)")
+    parser.add_argument('--asr', type=str, default='deepspeech', help="wav2vec or deepspeech")
 
     opt = parser.parse_args()
 
@@ -438,7 +428,7 @@ if __name__ == '__main__':
 
     # face tracking
     if opt.task == -1 or opt.task == 8:
-        face_tracking(ori_imgs_dir, tracker=opt.tracker)
+        face_tracking(ori_imgs_dir)
 
     # save transforms.json
     if opt.task == -1 or opt.task == 9:

@@ -10,15 +10,16 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 # Image name
 IMG="${CVL_IMAGE:-egstalker}"
 
-# Mount workspace as writable (predict script writes outputs to /workspace)
+# Mount workspace as writable (predict script writes outputs)
+# Note: Mount to /workspace/host to avoid conflicts with /workspace/egstalker in the image
 docker run --rm --gpus=all \
 	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
-	--workdir /workspace \
-	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+	--workdir /workspace/host \
+	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace/host" \
 	--mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
 	--mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
-	--env "PYTHONPATH=/cvlization_repo:/workspace/egstalker:/workspace" \
+	--env "PYTHONPATH=/workspace/host:/workspace/egstalker:/cvlization_repo" \
 	--env "PYTHONUNBUFFERED=1" \
 	${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
 	"$IMG" \
-	python predict.py "$@"
+	python /workspace/host/predict.py "$@"
