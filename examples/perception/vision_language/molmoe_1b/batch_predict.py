@@ -10,11 +10,21 @@ import argparse
 import json
 from pathlib import Path
 from typing import Dict, Any
+from unittest.mock import patch
 from PIL import Image
 import torch
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig
+from transformers.dynamic_module_utils import get_imports
 
 MODEL_ID = "allenai/MolmoE-1B-0924"
+
+
+def fixed_get_imports(filename):
+    """Workaround: Remove tensorflow from imports (not needed for PyTorch)."""
+    imports = get_imports(filename)
+    if "tensorflow" in imports:
+        imports.remove("tensorflow")
+    return imports
 
 
 def detect_device():
@@ -38,22 +48,22 @@ def load_model(model_id: str = MODEL_ID, device: str = None):
     if device is None:
         device = detect_device()
 
-    # Load processor
-    processor = AutoProcessor.from_pretrained(
-        model_id,
-        trust_remote_code=True
-    )
+    # Load with tensorflow workaround
+    with patch("transformers.dynamic_module_utils.get_imports", fixed_get_imports):
+        processor = AutoProcessor.from_pretrained(
+            model_id,
+            trust_remote_code=True
+        )
 
-    # Load model with memory optimization
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        trust_remote_code=True,
-        torch_dtype=torch.bfloat16,
-        device_map='auto',
-        low_cpu_mem_usage=True
-    )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16,
+            device_map='cuda:0',  # Force GPU (bfloat16: ~13.5GB fits in 23GB L4)
+            low_cpu_mem_usage=True
+        )
 
-    print(f"Model loaded successfully on {device}!")
+    print(f"Model loaded successfully!")
     return model, processor
 
 
@@ -118,12 +128,7 @@ def process_batch(
             )
 
             # Move to device and make batch of size 1
-            inputs = {
-                k: v.to(model.device).unsqueeze(0).to(model.dtype)
-                if v.dtype.is_floating_point
-                else v.to(model.device).unsqueeze(0)
-                for k, v in inputs.items()
-            }
+            inputs = {k: v.to(model.device).unsqueeze(0) for k, v in inputs.items()}
 
             # Generate with memory optimization
             with torch.no_grad():
