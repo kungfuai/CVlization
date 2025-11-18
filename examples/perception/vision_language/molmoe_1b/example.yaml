@@ -1,0 +1,34 @@
+name: molmoe-1b
+capability: perception/vision_language
+modalities: [vision, text]
+datasets: [custom]
+stability: under_construction
+resources:
+  gpu: 1
+  vram_gb: 14
+  disk_gb: 30
+
+# Docker image name for this example
+image: molmoe-1b
+
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    command: python3 predict.py
+    description: Run multimodal inference on an image
+  batch_predict:
+    script: batch_predict.py
+    description: Batch inference from JSONL
+
+tags: [molmo, vlm, moe, ocr, vqa, captioning, allen-institute, pytorch, efficient]
+tasks: [ocr, image_captioning, visual_question_answering, document_understanding]
+frameworks: [pytorch]
+description: Ultra-efficient 1.2B MoE vision-language model from Allen Institute that nearly matches GPT-4V
+
+verification:
+  last_verified: 2025-11-18
+  last_verification_note: "UNDER CONSTRUCTION: Model loads successfully but takes ~16 minutes (from 27GB pytorch_model.bin), making it impractical for most use cases. Inference fails with 'NoneType' error in past_key_values during generate_from_batch(). TensorFlow workaround and GPU forcing (device_map='cuda:0') applied. Requires ~14GB VRAM. Issue appears to be transformers 4.57.1 incompatibility or model bug. Needs further investigation."
+  status: UNDER_CONSTRUCTION

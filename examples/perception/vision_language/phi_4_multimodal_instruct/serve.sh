@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+MODEL_ID="${PHI4_MODEL_ID:-microsoft/Phi-4-multimodal-instruct}"
+HOST="${HOST:-0.0.0.0}"
+PORT="${PORT:-8000}"
+TP_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
+SERVED_NAME="${PHI4_SERVED_NAME:-phi-4-multimodal}"
+# Default to 16k context (fits in 22GB GPU). For longer contexts, set PHI4_MAX_MODEL_LEN.
+# 128k context requires ~48GB+ VRAM
+MAX_LEN="${PHI4_MAX_MODEL_LEN:-16384}"
+IMAGE_NAME="${PHI4_IMAGE:-phi-4-multimodal-instruct}"
+CONTAINER_NAME="${CVL_CONTAINER_NAME:-phi4-vllm-server}"
+
+echo "Starting vLLM server for $MODEL_ID on $HOST:$PORT (served name: $SERVED_NAME)"
+
+# Check if we're already inside a Docker container
+if [ -f /.dockerenv ] || grep -q docker /proc/1/cgroup 2>/dev/null; then
+  # Running inside Docker - start vLLM directly
+  exec python3 -m vllm.entrypoints.openai.api_server \
+    --model "$MODEL_ID" \
+    --served-model-name "$SERVED_NAME" \
+    --host "$HOST" \
+    --port "$PORT" \
+    --tensor-parallel-size "$TP_SIZE" \
+    --max-model-len "$MAX_LEN" \
+    --seed 42 \
+    --trust-remote-code \
+    ${PHI4_EXTRA_SERVE_ARGS:-}
+else
+  # Running on host - launch Docker container
+  docker run --rm --gpus all \
+    --name "$CONTAINER_NAME" \
+    -p "${PORT}:${PORT}" \
+    -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+    -e HF_TOKEN="${HF_TOKEN:-}" \
+    "$IMAGE_NAME" \
+    python3 -m vllm.entrypoints.openai.api_server \
+      --model "$MODEL_ID" \
+      --served-model-name "$SERVED_NAME" \
+      --host "$HOST" \
+      --port "$PORT" \
+      --tensor-parallel-size "$TP_SIZE" \
+      --max-model-len "$MAX_LEN" \
+      --seed 42 \
+      --trust-remote-code \
+      ${PHI4_EXTRA_SERVE_ARGS:-}
+fi

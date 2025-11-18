@@ -1,0 +1,5 @@
+torch
+unsloth
+transformers==4.56.2
+pillow>=10.0.0
+requests>=2.31.0

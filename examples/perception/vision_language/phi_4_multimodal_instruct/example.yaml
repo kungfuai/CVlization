@@ -1,0 +1,30 @@
+name: phi-4-multimodal-instruct
+capability: perception/vision_language
+modalities: [vision, text, audio]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 10
+  disk_gb: 12
+image: phi-4-multimodal-instruct
+
+presets:
+  build:
+    script: build.sh
+    description: Build the multimodal Docker image with Flash Attention 2
+  predict:
+    script: predict.sh
+    description: Run multimodal inference (image, text, and speech)
+  batch_predict:
+    script: batch_predict.py
+    description: "Batch inference from JSONL (requires: --batch-input, --output-dir)"
+  serve:
+    script: serve.sh
+    description: Launch vLLM OpenAI-compatible server for Phi-4-Multimodal
+tags: [phi, vlm, microsoft, ocr, vqa, captioning, reasoning, pytorch, multi-image, multimodal, speech-recognition, 128k-context, latest-2025]
+tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding, multi_image, speech_recognition, speech_translation]
+
+verification:
+  last_verified: 2025-11-12
+  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). 5.6B parameter model with vision, speech, and text capabilities. Excellent OCR quality with perfect accuracy and clean formatting. #1 on OpenASR leaderboard. VRAM usage ~10GB with Flash Attention 2. Released February 2025."
+  status: VERIFIED

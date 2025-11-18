@@ -1,0 +1,16 @@
+name: minicpm-v-2-6
+capability: perception/vision_language
+modalities: [vision, text]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 18
+image: minicpm-v-2-6
+tags: [minicpm, vlm, openbmb, ocr, vqa, captioning, best-ocr, pytorch, multi-image]
+tasks: [ocr, image_captioning, visual_question_answering, document_understanding, multi_image]
+
+verification:
+  last_verified: 2025-11-12
+  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). Gated model requires HuggingFace authentication (HF_TOKEN loaded from .env). Excellent OCR and captioning quality - 100% accurate on invoice test image. VRAM usage ~16GB with bfloat16."
+  status: VERIFIED

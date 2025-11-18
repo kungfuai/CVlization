@@ -1,0 +1,34 @@
+name: pixtral-12b
+capability: perception/vision_language
+modalities: [vision, text]
+datasets: [custom]
+stability: under_construction
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 25
+
+# Docker image name for this example
+image: pixtral-12b
+
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    command: python3 predict.py
+    description: Run multimodal inference on an image
+  batch_predict:
+    script: batch_predict.py
+    description: Batch inference from JSONL
+
+tags: [pixtral, mistral, vlm, ocr, vqa, captioning, reasoning, pytorch, 4bit-quantized]
+tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding]
+frameworks: [pytorch]
+description: Pixtral 12B vision-language model from Mistral AI with 4-bit quantization for efficient inference
+
+verification:
+  last_verified: 2025-11-18
+  last_verification_note: "UNDER CONSTRUCTION: Initial setup with 4-bit quantization support. Pending verification of model loading and inference."
+  status: UNDER_CONSTRUCTION

@@ -17,6 +17,9 @@ presets:
   predict:
     script: predict.sh
     description: Run predict
+  batch_predict:
+    script: batch_predict.py
+    description: "Batch inference from JSONL (requires: --batch-input, --output-dir)"
 tags:
 - granite
 - docling

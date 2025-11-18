@@ -1,0 +1,46 @@
+# CheckboxQA Benchmark Configuration
+
+dataset:
+  name: "mturski/CheckboxQA"
+  split: "test"
+  use_hf: false  # Load from local data/ (HF requires newer datasets library)
+  data_dir: "data"
+
+evaluation:
+  metric: "anls_star"
+  threshold: 0.5  # ANLS threshold
+
+models:
+  florence_2:
+    adapter: "adapters/florence_2.sh"
+    description: "Florence-2 (Base variant default, ~1GB VRAM)"
+
+  qwen3_vl_2b:
+    adapter: "adapters/qwen3_vl_2b.sh"
+    description: "Qwen3-VL-2B (2B params, ~4GB VRAM)"
+
+  phi_4_multimodal:
+    adapter: "adapters/phi_4_multimodal.sh"
+    description: "Phi-4-Multimodal (5.6B params, ~10GB VRAM)"
+
+  moondream2:
+    adapter: "adapters/moondream2.sh"
+    description: "Moondream2 (1.9B params, ~4GB VRAM)"
+
+  granite_docling:
+    adapter: "adapters/granite_docling.sh"
+    description: "Granite-Docling first-page adapter"
+
+  # Add more models here
+  # model_name:
+  #   adapter: "adapters/model_name.sh"
+  #   description: "Model description"
+
+output:
+  results_dir: "results"
+  save_predictions: true
+  save_leaderboard: true
+
+  granite_docling:
+    adapter: "adapters/granite_docling.sh"
+    description: "Granite-Docling first-page adapter"

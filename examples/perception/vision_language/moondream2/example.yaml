@@ -19,6 +19,9 @@ presets:
     script: predict.sh
     command: python3 predict.py
     description: Run OCR inference on an image
+  batch_predict:
+    script: batch_predict.py
+    description: Batch inference from JSONL
 
 tags: [moondream, vlm, ocr, vqa, captioning, pytorch]
 tasks: [ocr, image_captioning, visual_question_answering]
