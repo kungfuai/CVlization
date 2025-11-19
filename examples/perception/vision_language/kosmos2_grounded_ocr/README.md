@@ -26,4 +26,4 @@ Optional flags:
 
 - VRAM: notebook expects at least a single A100 class GPU (bf16). Training uses small batch size (1) with grad accumulation 4.
 - Training data stays on host; mount directories or set `HF_DATASETS_CACHE` to reuse downloads.
-- Trackio is installed; metrics log there if configured (default `report_to=["trackio"]`). Set `--report-to none` to disable.
+- Trackio logging is installed; training reports to Trackio by default. Pass `--report-to none` (or another list) to disable/change reporting.
