@@ -21,7 +21,17 @@ def llama_detect(state_dict, prefix=""):
 
 class LLAMA3Tokenizer(sd1_clip.SDTokenizer):
     def __init__(self, embedding_directory=None, tokenizer_data={}, min_length=256):
-        tokenizer_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "llama_tokenizer")
+        # Use HuggingFace model ID to auto-download and cache tokenizer
+        # Falls back to local path if LLAMA_TOKENIZER_PATH is set or if HF download fails
+        default_local_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "llama_tokenizer")
+
+        # Try HuggingFace model ID first, fall back to local if it exists
+        if os.path.exists(default_local_path):
+            tokenizer_path = default_local_path
+        else:
+            # Will auto-download to ~/.cache/huggingface/ on first use
+            tokenizer_path = os.getenv("LLAMA_TOKENIZER_PATH", "meta-llama/Meta-Llama-3-8B")
+
         super().__init__(tokenizer_path, embedding_directory=embedding_directory, pad_with_end=False, embedding_size=4096, embedding_key='llama', tokenizer_class=LlamaTokenizerFast, has_start_token=True, has_end_token=False, pad_to_max_length=False, max_length=99999999, pad_token=128258, end_token=128009, min_length=min_length)
 
 class LLAMAModel(sd1_clip.SDClipModel):
