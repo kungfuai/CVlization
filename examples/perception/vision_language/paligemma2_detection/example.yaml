@@ -1,0 +1,27 @@
+name: paligemma2-detection
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 40
+  disk_gb: 30
+image: paligemma2-detection
+presets:
+  build:
+    script: build.sh
+    description: Build the PaliGemma2 detection finetune image
+  train:
+    script: train.sh
+    description: Run training from JSONL annotations (A100 40GB VRAM recommended)
+tags:
+  - paligemma2
+  - detection
+  - finetune
+  - jupyter
+frameworks:
+  - pytorch
+  - transformers
+description: PaliGemma2 object detection finetune (Colab notebook runner) — requires A100 40GB VRAM per notebook.
