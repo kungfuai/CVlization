@@ -190,6 +190,26 @@ class TestRunScript(unittest.TestCase):
             self.assertIn("--arg1", call_args[0][0])
             self.assertIn("value1", call_args[0][0])
 
+    @patch("subprocess.run")
+    def test_run_script_creates_cache_dirs(self, mock_run):
+        """Ensure HF/Torch cache dirs are created before docker mounts."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_path = os.path.join(tmpdir, "test.sh")
+            with open(script_path, "w") as f:
+                f.write("#!/bin/bash\nexit 0")
+            os.chmod(script_path, 0o755)
+
+            mock_run.return_value = Mock(returncode=0)
+
+            with patch.dict(os.environ, {"HOME": tmpdir}, clear=False):
+                exit_code, _ = run_script(script_path, [], no_live=True)
+
+            self.assertEqual(exit_code, 0)
+            env_passed = mock_run.call_args.kwargs["env"]
+
+            for var in ["HF_HOME", "HF_DATASETS_CACHE", "HF_HUB_CACHE", "TRANSFORMERS_CACHE", "TORCH_HOME"]:
+                path = Path(env_passed[var])
+                self.assertTrue(path.exists(), f"{var} directory should exist")
 
 class TestRunExample(unittest.TestCase):
     """Test the run_example function."""
