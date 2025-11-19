@@ -44,6 +44,7 @@ class DocVQADataset(Dataset):
 class FlorenceCollator:
     processor: AutoProcessor
     device: torch.device
+    dtype: torch.dtype = torch.float32
 
     def __call__(self, batch):
         questions, answers, images = zip(*batch)
@@ -61,6 +62,9 @@ class FlorenceCollator:
         ).input_ids
 
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        # Convert pixel_values to model dtype (bfloat16 on CUDA)
+        if "pixel_values" in inputs:
+            inputs["pixel_values"] = inputs["pixel_values"].to(self.dtype)
         labels = labels.to(self.device)
         inputs["labels"] = labels
         return inputs
@@ -83,9 +87,27 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--no-freeze-vision", action="store_true", help="Do not freeze the vision tower")
     parser.add_argument("--grad-accum", type=int, default=1)
+    parser.add_argument("--max-train-samples", type=int, default=None, help="Limit training samples per epoch (for faster iterations)")
+    parser.add_argument("--max-val-samples", type=int, default=None, help="Limit validation samples (for faster validation)")
+    parser.add_argument("--val-every", type=int, default=None, help="Run validation every N steps (default: once per epoch)")
     parser.add_argument("--push-to-hub", action="store_true")
     parser.add_argument("--hub-model-id", default=None, help="Target repo name when pushing to hub")
     return parser.parse_args()
+
+
+def run_validation(model, val_loader):
+    """Run validation and return average loss"""
+    model.eval()
+    val_loss = 0.0
+    with torch.no_grad():
+        for batch in tqdm(val_loader, desc="Validation", leave=False):
+            labels = batch.pop("labels")
+            outputs = model(**batch, labels=labels)
+            val_loss += outputs.loss.item()
+
+    avg_val_loss = val_loss / len(val_loader)
+    model.train()  # Switch back to training mode
+    return avg_val_loss
 
 
 def main():
@@ -97,6 +119,14 @@ def main():
     train_split = dataset[args.train_split]
     val_split = dataset[args.val_split]
 
+    # Limit dataset size for faster iterations
+    if args.max_train_samples is not None:
+        train_split = train_split.select(range(min(args.max_train_samples, len(train_split))))
+        print(f"Limited training samples to {len(train_split)}")
+    if args.max_val_samples is not None:
+        val_split = val_split.select(range(min(args.max_val_samples, len(val_split))))
+        print(f"Limited validation samples to {len(val_split)}")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = AutoModelForCausalLM.from_pretrained(
@@ -104,8 +134,8 @@ def main():
         revision=args.revision,
         trust_remote_code=True,
         torch_dtype=torch.bfloat16 if device.type == "cuda" else torch.float32,
-        device_map="auto" if device.type == "cuda" else None,
-    )
+        attn_implementation="sdpa",  # Use PyTorch native SDPA instead of flash-attn
+    ).to(device)
     processor = AutoProcessor.from_pretrained(
         args.model_id,
         revision=args.revision,
@@ -119,7 +149,7 @@ def main():
     train_ds = DocVQADataset(train_split)
     val_ds = DocVQADataset(val_split)
 
-    collator = FlorenceCollator(processor=processor, device=model.device)
+    collator = FlorenceCollator(processor=processor, device=model.device, dtype=model.dtype)
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
@@ -165,21 +195,20 @@ def main():
                 optimizer.zero_grad()
                 global_step += 1
 
+                # Run validation every N steps if --val-every is set
+                if args.val_every is not None and global_step % args.val_every == 0:
+                    avg_val_loss = run_validation(model, val_loader)
+                    print(f"\nStep {global_step} - validation loss {avg_val_loss:.4f}")
+
             running_loss += loss.item() * args.grad_accum
 
         avg_loss = running_loss / len(train_loader)
         print(f"Epoch {epoch+1} - training loss {avg_loss:.4f}")
 
-        model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for batch in tqdm(val_loader, desc="Validation"):
-                labels = batch.pop("labels")
-                outputs = model(**batch, labels=labels)
-                val_loss += outputs.loss.item()
-
-        avg_val_loss = val_loss / len(val_loader)
-        print(f"Epoch {epoch+1} - validation loss {avg_val_loss:.4f}")
+        # Run validation at end of epoch (unless using --val-every)
+        if args.val_every is None:
+            avg_val_loss = run_validation(model, val_loader)
+            print(f"Epoch {epoch+1} - validation loss {avg_val_loss:.4f}")
 
         ckpt_dir = Path(args.checkpoint_dir) / f"epoch_{epoch+1}"
         ckpt_dir.mkdir(parents=True, exist_ok=True)

@@ -1,7 +1,7 @@
 datasets==2.19.1
 transformers==4.46.1
+accelerate==0.34.2
 timm==1.0.9
 einops==0.8.0
-flash-attn==2.6.3
 tqdm==4.66.5
 huggingface_hub==0.36.0
