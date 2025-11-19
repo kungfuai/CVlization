@@ -1,0 +1,11 @@
+# Outputs
+outputs/
+*.json
+*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Logs
+*.log

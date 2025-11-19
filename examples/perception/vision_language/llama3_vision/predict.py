@@ -12,7 +12,7 @@ from typing import Optional
 
 import torch
 from PIL import Image
-from transformers import MllamaForConditionalGeneration, MllamaProcessor, BitsAndBytesConfig
+from transformers import MllamaForConditionalGeneration, MllamaProcessor
 
 DEFAULT_MODEL = "unsloth/Llama-3.2-11B-Vision-Instruct-bnb-4bit"
 
@@ -34,35 +34,16 @@ def load_model(model_id: str, device: Optional[str]):
     if device is None:
         device = detect_device()
 
-    # Use 8-bit quantization for the full precision unsloth model
-    use_8bit = model_id == "unsloth/Llama-3.2-11B-Vision-Instruct"
-
-    if use_8bit:
-        print(f"Loading {model_id} on {device} with 8-bit quantization...")
-    else:
-        print(f"Loading {model_id} on {device} ...")
-
+    print(f"Loading {model_id} on {device} ...")
     processor = MllamaProcessor.from_pretrained(model_id)
 
     if device == "cuda":
-        if use_8bit:
-            bnb_config = BitsAndBytesConfig(
-                load_in_8bit=True,
-                llm_int8_enable_fp32_cpu_offload=True,
-            )
-            model = MllamaForConditionalGeneration.from_pretrained(
-                model_id,
-                device_map="auto",
-                quantization_config=bnb_config,
-                low_cpu_mem_usage=True,
-            )
-        else:
-            model = MllamaForConditionalGeneration.from_pretrained(
-                model_id,
-                device_map="auto",
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                low_cpu_mem_usage=True,
-            )
+        model = MllamaForConditionalGeneration.from_pretrained(
+            model_id,
+            device_map="auto",
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            low_cpu_mem_usage=True,
+        )
     else:
         model = MllamaForConditionalGeneration.from_pretrained(
             model_id,
