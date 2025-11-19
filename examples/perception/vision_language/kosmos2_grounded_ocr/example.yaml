@@ -1,0 +1,27 @@
+name: kosmos2-grounded-ocr
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 25
+image: kosmos2-grounded-ocr
+presets:
+  build:
+    script: build.sh
+    description: Build the Kosmos2.5 grounded OCR image
+  train:
+    script: train.sh
+    description: Finetune Kosmos2.5 on DocLayNet (requires powerful GPU)
+tags:
+  - kosmos
+  - grounded-ocr
+  - detection
+  - finetune
+frameworks:
+  - pytorch
+  - transformers
+description: Kosmos2.5 grounded OCR finetune (converted from Hugging Face notebook). Requires A100-class GPU for bf16 training.

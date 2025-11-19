@@ -1,0 +1,5 @@
+datasets==2.19.1
+transformers==4.46.1
+trackio==0.9.1
+accelerate==0.34.2
+matplotlib==3.9.2

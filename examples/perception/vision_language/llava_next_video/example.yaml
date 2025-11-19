@@ -1,0 +1,33 @@
+name: llava-next-video
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 30
+image: llava-next-video
+presets:
+  build:
+    script: build.sh
+    description: Build the LLaVA-NeXT-Video Docker image
+  predict:
+    script: predict.sh
+    description: Caption a video locally (defaults to sample URL)
+  test:
+    script: test.sh
+    description: Smoke-test captioning on sample URL
+tags:
+  - video
+  - captioning
+  - llava
+  - llama
+  - huggingface
+tasks:
+  - video_captioning
+frameworks:
+  - pytorch
+  - transformers
+description: Dockerized transformers runner for llava-hf/LLaVA-NeXT-Video-7B-hf (video+text -> text).

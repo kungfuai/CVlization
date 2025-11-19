@@ -1,0 +1,10 @@
+# Outputs
+outputs/
+checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Logs
+*.log

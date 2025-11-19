@@ -1,0 +1,27 @@
+name: paligemma2-segmentation
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 40
+  disk_gb: 40
+image: paligemma2-segmentation
+presets:
+  build:
+    script: build.sh
+    description: Build the PaliGemma2 segmentation finetune image
+  train:
+    script: train.sh
+    description: Convert COCO masks and train (A100 40GB VRAM recommended)
+tags:
+  - paligemma2
+  - segmentation
+  - finetune
+  - jupyter
+frameworks:
+  - pytorch
+  - transformers
+description: PaliGemma2 instance segmentation finetune (converted from Colab) — requires A100 40GB VRAM per notebook.

@@ -1,0 +1,26 @@
+name: florence2-finetune
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 30
+image: florence2-finetune
+presets:
+  build:
+    script: build.sh
+    description: Build the Florence-2 DocVQA finetune image
+  train:
+    script: train.sh
+    description: Finetune Florence-2 on DocumentVQA (requires high-memory GPU)
+tags:
+  - florence2
+  - docvqa
+  - finetune
+frameworks:
+  - pytorch
+  - transformers
+description: Florence-2 DocumentVQA finetune script (flash-attn + manual training loop) converted from the HF notebook.

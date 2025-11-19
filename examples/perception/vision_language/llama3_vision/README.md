@@ -40,6 +40,19 @@ The prompt is formatted via `processor.apply_chat_template` for a single user tu
 - `cvl run llama3_vision predict -- --prompt "Describe the scene." --image /path/to/img.jpg`
 - `cvl run llama3_vision test` – quick smoke test
 
+## Model compatibility notes
+
+### 8-bit quantization issues
+
+We attempted to load `unsloth/Llama-3.2-11B-Vision-Instruct` (non-quantized) with 8-bit quantization via `BitsAndBytesConfig(load_in_8bit=True)` but encountered compatibility issues with bitsandbytes 0.48.2:
+
+1. Initial error: `RuntimeError: view size is not compatible with input tensor's size and stride` in `bitsandbytes/backends/cuda/ops.py:145`
+2. After patching `.view(-1)` → `.reshape(-1)`: CUDA kernel errors (`index out of bounds`, `device-side assert triggered`)
+
+**Conclusion**: The `MllamaForConditionalGeneration` architecture has fundamental incompatibilities with bitsandbytes 8-bit quantization as of November 2025.
+
+**Recommended**: Use the pre-quantized 4-bit model (`unsloth/Llama-3.2-11B-Vision-Instruct-bnb-4bit`, 9.6GB VRAM) which works reliably, or use the full fp16/bf16 model on GPUs with 40GB+ VRAM.
+
 ## Files
 
 - `predict.py` – minimal Transformers runner
