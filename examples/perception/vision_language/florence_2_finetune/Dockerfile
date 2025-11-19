@@ -11,6 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 COPY requirements.txt .
+# Install flash-attn from wheel index (faster than building from source)
+RUN /root/.local/bin/uv pip install --system \
+    --find-links https://github.com/Dao-AILab/flash-attention/releases/expanded_assets/v2.6.3 \
+    flash-attn==2.6.3
+# Install remaining dependencies
 RUN /root/.local/bin/uv pip install --system -r requirements.txt
 
 ENV PYTHONUNBUFFERED=1

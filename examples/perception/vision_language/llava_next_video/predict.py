@@ -24,7 +24,7 @@ except Exception:
 decord.bridge.set_bridge("torch")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_VIDEO_URL = "https://huggingface.co/datasets/Narsil/video_dummy/resolve/main/small.mp4"
+DEFAULT_VIDEO_URL = "https://huggingface.co/datasets/raushan-testing-hf/videos-test/resolve/main/sample_demo_1.mp4"
 DEFAULT_MODEL = os.environ.get("LLAVA_NEXT_VIDEO_MODEL_ID", "llava-hf/LLaVA-NeXT-Video-7B-hf")
 CACHE_DIR = Path(os.environ.get("LLAVA_NEXT_VIDEO_CACHE", "/root/.cache/llava_next_video"))
 

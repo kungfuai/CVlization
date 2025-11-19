@@ -158,10 +158,13 @@ def run_request_local(img: Image.Image, prompt: str, model_id: str, tp_size: int
         max_tokens=max_tokens,
     )
 
+    # vLLM 0.11+ API: pass multi_modal_data inside the prompt dict
     outputs = llm.generate(
-        prompt_text,
+        {
+            "prompt": prompt_text,
+            "multi_modal_data": {"image": img},
+        },
         sampling_params=sampling,
-        multi_modal_data={"image": [img]},
     )
     return outputs[0].outputs[0].text
 

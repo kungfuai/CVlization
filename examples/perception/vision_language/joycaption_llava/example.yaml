@@ -31,3 +31,6 @@ frameworks:
   - pytorch
   - transformers
 description: Dockerized transformers runner for fancyfeast/llama-joycaption-beta-one-hf-llava.
+verification:
+  last_verified: 2025-11-19
+  last_verification_note: "Verified build (17.2GB), inference with image inputs, detailed captioning quality, and model caching on NVIDIA L4 (23GB VRAM). Generates long descriptive captions using LlavaForConditionalGeneration in bf16."
