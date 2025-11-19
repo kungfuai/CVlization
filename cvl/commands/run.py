@@ -375,6 +375,9 @@ def run_script(
         else:
             env["CVL_WORK_DIR"] = os.getcwd()
 
+        # Ensure common cache directories exist so docker bind mounts do not fail
+        _ensure_cache_dirs(env)
+
         if use_live:
             # Live mode with rich
             from rich.live import Live
@@ -484,6 +487,29 @@ def _format_duration(seconds: float) -> str:
     minutes = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{minutes}m {secs}s"
+
+
+def _ensure_cache_dirs(env: Dict[str, str]) -> None:
+    """Ensure common cache directories exist on the host before docker mounts.
+
+    Args:
+        env: Environment variables that will be passed to the script.
+    """
+    home = Path(env.get("HOME", str(Path.home()))).expanduser()
+
+    default_paths = {
+        "HF_HOME": home / ".cache" / "huggingface",
+        "HF_DATASETS_CACHE": home / ".cache" / "huggingface" / "datasets",
+        "HF_HUB_CACHE": home / ".cache" / "huggingface" / "hub",
+        "TRANSFORMERS_CACHE": home / ".cache" / "huggingface" / "hub",
+        "TORCH_HOME": home / ".cache" / "torch",
+    }
+
+    for var, path in default_paths.items():
+        value = env.get(var) or str(path)
+        resolved = Path(value).expanduser()
+        resolved.mkdir(parents=True, exist_ok=True)
+        env[var] = str(resolved)
 
 
 def _prompt_user_yes_no(question: str, default: bool = True) -> bool:
