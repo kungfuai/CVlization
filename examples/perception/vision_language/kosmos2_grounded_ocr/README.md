@@ -27,3 +27,7 @@ Optional flags:
 - VRAM: notebook expects at least a single A100 class GPU (bf16). Training uses small batch size (1) with grad accumulation 4.
 - Training data stays on host; mount directories or set `HF_DATASETS_CACHE` to reuse downloads.
 - Trackio logging is installed; training reports to Trackio by default. Pass `--report-to none` (or another list) to disable/change reporting.
+
+## References
+
+- smol-vision notebook: https://huggingface.co/merve/smol-vision/blob/main/Grounded_Fine_tuning.ipynb
