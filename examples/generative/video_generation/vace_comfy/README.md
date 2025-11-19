@@ -28,6 +28,12 @@ This folder contains the VACE (Video Animation Control Extension) implementation
 ### Prerequisites
 This implementation requires the ComfyUI-GGUF plugin functionality for loading quantized GGUF models. The required GGUF files are already integrated.
 
+### Download Tokenizers
+```bash
+# From the video_generation directory
+bash download_tokenizers.sh
+```
+
 ### Install Dependencies
 ```bash
 pip install -r requirements.txt
