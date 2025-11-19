@@ -1,0 +1,33 @@
+name: joycaption-llava
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 20
+image: joycaption-llava
+presets:
+  build:
+    script: build.sh
+    description: Build the JoyCaption transformers image
+  predict:
+    script: predict.sh
+    description: Run local captioning (defaults to sample.jpg)
+  test:
+    script: test.sh
+    description: Smoke-test captioning on sample.jpg
+tags:
+  - captioning
+  - llava
+  - llama
+  - siglip
+  - huggingface
+tasks:
+  - image_captioning
+frameworks:
+  - pytorch
+  - transformers
+description: Dockerized transformers runner for fancyfeast/llama-joycaption-beta-one-hf-llava.
