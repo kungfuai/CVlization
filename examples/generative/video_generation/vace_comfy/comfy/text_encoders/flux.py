@@ -8,7 +8,9 @@ import os
 
 class T5XXLTokenizer(sd1_clip.SDTokenizer):
     def __init__(self, embedding_directory=None, tokenizer_data={}):
-        tokenizer_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "t5_tokenizer")
+        default_local_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "t5_tokenizer")
+        # Use HuggingFace auto-caching: falls back to local if exists, otherwise downloads to ~/.cache/huggingface/
+        tokenizer_path = default_local_path if os.path.exists(default_local_path) else os.getenv("T5_TOKENIZER_PATH", "google/umt5-xxl")
         super().__init__(tokenizer_path, embedding_directory=embedding_directory, pad_with_end=False, embedding_size=4096, embedding_key='t5xxl', tokenizer_class=T5TokenizerFast, has_start_token=False, pad_to_max_length=False, max_length=99999999, min_length=256)
 
 
