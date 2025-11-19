@@ -1,0 +1,37 @@
+name: lighton-ocr
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 25
+image: lighton-ocr
+presets:
+  build:
+    script: build.sh
+    description: Build the LightOnOCR vLLM client/server image
+  serve:
+    script: serve.sh
+    description: Launch vLLM OpenAI-compatible server
+  predict:
+    script: predict.sh
+    description: Run local vLLM inference (defaults to sample.jpg)
+  test:
+    script: test.sh
+    description: Smoke-test OCR against sample.jpg (local inference)
+tags:
+  - ocr
+  - document-understanding
+  - vllm
+  - huggingface
+  - pytorch
+tasks:
+  - ocr
+  - document_understanding
+frameworks:
+  - pytorch
+  - vllm
+description: Dockerized vLLM server + client for LightOnOCR-1B-1025 (OpenAI-compatible).
