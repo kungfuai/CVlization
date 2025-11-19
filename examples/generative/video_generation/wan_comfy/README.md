@@ -4,9 +4,13 @@ This is still under development. There may be OOM issues when generating videos.
 
 ## Quick Start
 
-In the root directory of the repo, run the following command to download the models:
+In the root directory of the repo, run the following commands to download the models and tokenizers:
 
 ```bash
+# Download tokenizers (required - ~24 MB)
+bash examples/generative/video_generation/download_tokenizers.sh
+
+# Download model weights
 bash examples/video_gen/wan/download_models.sh
 ```
 
