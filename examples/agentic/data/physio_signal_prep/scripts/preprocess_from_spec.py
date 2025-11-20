@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import re
 import os
+from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -183,18 +185,124 @@ def summarize_with_llm(
     raise ValueError(f"Unsupported LLM provider '{provider}'.")
 
 
+def _matches_any(value: str, patterns: Sequence[str]) -> bool:
+    return any(fnmatch(value, pat) for pat in patterns)
+
+
+def _resolve_records_from_source(source: Dict[str, Any]) -> List[str]:
+    """Resolve record IDs from explicit list, globs, or record name patterns."""
+    if source.get("record_ids"):
+        return [r if r.endswith(".edf") else f"{r}.edf" for r in source["record_ids"]]
+
+    include_globs: Iterable[str] = source.get("include_globs") or []
+    exclude_globs: Iterable[str] = source.get("exclude_globs") or []
+    record_patterns: Iterable[str] = source.get("record_patterns") or []
+
+    candidates: List[str] = []
+    for pattern in include_globs:
+        for path_str in glob.glob(os.path.expanduser(pattern), recursive=True):
+            if exclude_globs and _matches_any(path_str, exclude_globs):
+                continue
+            if path_str.lower().endswith(".edf"):
+                candidates.append(path_str)
+
+    if not candidates:
+        raise ValueError(
+            "No EDF files found. Provide source.record_ids or populate source.include_globs with paths to .edf files."
+        )
+
+    record_ids: List[str] = []
+    for path_str in candidates:
+        name = Path(path_str).name
+        if record_patterns and not _matches_any(name, record_patterns):
+            continue
+        record_ids.append(name)
+
+    if not record_ids:
+        raise ValueError(
+            "No EDF files matched record_patterns; adjust source.record_patterns/include_globs or provide record_ids."
+        )
+    return sorted(set(record_ids))
+
+
+def _resolve_source_hz(record_id: str, sampling_cfg: Dict[str, Any]) -> Optional[float]:
+    source_hz_cfg = sampling_cfg.get("source_hz", {})
+    overrides = source_hz_cfg.get("overrides") or []
+    for override in overrides:
+        pattern = override.get("pattern")
+        if pattern and _matches_any(record_id, pattern):
+            return override.get("hz")
+    return source_hz_cfg.get("default") or sampling_cfg.get("original_hz")
+
+
+def _select_channels(
+    signals: np.ndarray,
+    channel_names: Sequence[str],
+    channel_cfg: Dict[str, Any],
+) -> Tuple[np.ndarray, List[str], List[str], List[str]]:
+    """Select, order, and optionally pad channels.
+
+    Returns (selected_signals, selected_names, missing_optional, padded_optional).
+    """
+    requested_required: List[str] = channel_cfg.get("required") or channel_cfg.get("include") or []
+    requested_optional: List[str] = channel_cfg.get("optional") or []
+    exclude_patterns: List[str] = channel_cfg.get("exclude") or []
+    pad_missing: bool = bool(channel_cfg.get("pad_missing_channels", False))
+
+    if not requested_required and not requested_optional and not exclude_patterns:
+        # Nothing to filter; keep all channels as-is.
+        return signals, list(channel_names), [], []
+
+    def _resolve_one(ch: str) -> Optional[str]:
+        if ch in channel_names:
+            return ch
+        alias = f"EEG {ch}" if not ch.startswith("EEG ") else ch
+        if alias in channel_names:
+            return alias
+        return None
+
+    selected_arrays: List[np.ndarray] = []
+    selected_names: List[str] = []
+    missing_optional: List[str] = []
+    padded_optional: List[str] = []
+
+    # Preserve order: required first, then optional.
+    for ch in requested_required + requested_optional:
+        resolved = _resolve_one(ch)
+        if resolved and not _matches_any(resolved, exclude_patterns):
+            idx = channel_names.index(resolved)
+            selected_arrays.append(signals[idx:idx+1, :])
+            selected_names.append(ch)
+        else:
+            if ch in requested_required:
+                raise ValueError(f"Channel '{ch}' not found (checked aliases) in record; available: {channel_names}")
+            missing_optional.append(ch)
+            if pad_missing:
+                padded_optional.append(ch)
+
+    if pad_missing and missing_optional:
+        n_samples = signals.shape[1]
+        for ch in missing_optional:
+            selected_arrays.append(np.full((1, n_samples), np.nan, dtype=signals.dtype))
+            selected_names.append(ch)
+
+    if not selected_arrays:
+        raise ValueError("No channels selected after applying required/optional/exclude rules.")
+
+    selected = np.vstack(selected_arrays)
+    return selected, selected_names, missing_optional, padded_optional
+
+
 def preprocess_from_spec(args: argparse.Namespace) -> None:
     _maybe_load_env()
     spec_path = Path(args.spec)
     metadata, body = parse_front_matter(spec_path)
 
     source = metadata.get("source", {})
-    record_ids = source.get("record_ids")
-    if not record_ids:
-        raise ValueError("spec.source.record_ids is required")
+    record_ids = _resolve_records_from_source(source)
     subset = source.get("subset", "sleep-cassette")
 
-    channels = metadata.get("channels", {}).get("include")
+    channel_cfg = metadata.get("channels", {}) or {}
     sampling = metadata.get("sampling", {})
     target_hz = sampling.get("target_hz")
 
@@ -205,7 +313,7 @@ def preprocess_from_spec(args: argparse.Namespace) -> None:
         subset=subset,
         records=[f"{record}-PSG.edf" if not record.endswith(".edf") else record for record in record_ids],
         load_signals=True,
-        channels=channels,
+        channels=None,  # load all channels; selection/padding handled downstream
     )
     train_ds = builder.training_dataset()
 
@@ -214,7 +322,10 @@ def preprocess_from_spec(args: argparse.Namespace) -> None:
     last_export_dir: Optional[Path] = None
     export_cfg = metadata.get("export", {})
     window_cfg = metadata.get("windowing", {})
-    normalization_mode = metadata.get("normalization")
+    normalization_cfg = metadata.get("normalization")
+    normalization_mode = (
+        normalization_cfg.get("strategy") if isinstance(normalization_cfg, dict) else normalization_cfg
+    )
 
     outputs_dir = Path("outputs")
     outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -224,20 +335,25 @@ def preprocess_from_spec(args: argparse.Namespace) -> None:
         signals = example.get("signals")
         if signals is None:
             continue
-        sampling_rate = example.get("sampling_rate") or sampling.get("original_hz")
+        sampling_rate = example.get("sampling_rate") or _resolve_source_hz(example["record_id"], sampling)
         if sampling_rate is None:
-            raise ValueError("Sampling rate missing; include sampling.original_hz in the spec.")
+            raise ValueError(
+                "Sampling rate missing; include sampling.source_hz.default or sampling.original_hz in the spec."
+            )
 
-        resampled, effective_hz = resample_signals(signals, sampling_rate, target_hz)
+        selected_signals, selected_names, missing_optional, padded_optional = _select_channels(
+            signals, example.get("channel_names") or [], channel_cfg
+        )
+
+        resampled, effective_hz = resample_signals(selected_signals, sampling_rate, target_hz)
         normalized = normalize_signals(resampled, normalization_mode)
         stats = compute_stats(normalized, clip_threshold)
         stats["effective_hz"] = effective_hz
 
-        channel_names = example.get("channel_names") or [f"ch_{i}" for i in range(normalized.shape[0])]
         export_path, export_dir = export_timeseries(
             normalized,
             effective_hz,
-            channel_names,
+            selected_names,
             outputs_dir,
             export_cfg,
         )
@@ -262,7 +378,10 @@ def preprocess_from_spec(args: argparse.Namespace) -> None:
                 "stats": stats,
                 "timeseries_path": str(export_path),
                 "window_count": len(windows),
-                "channel_names": channel_names,
+                "channel_names": selected_names,
+                "present_channels": selected_names,
+                "missing_optional_channels": missing_optional,
+                "padded_optional_channels": padded_optional,
             }
         )
 
