@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 import os
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -19,6 +20,7 @@ DEFAULT_RECORDS = [
     "SC4002E0-PSG.edf",
     "SC4011E0-PSG.edf",
 ]
+logger = logging.getLogger(__name__)
 
 
 def _default_data_dir() -> Path:
@@ -115,33 +117,46 @@ class SleepEDFBuilder:
     def dataset_provider(self):
         return DatasetProvider.CVLIZATION
 
-    def _annotation_name(self, record_name: str) -> Optional[str]:
+    def _annotation_name(self, record_name: str) -> Optional[List[str]]:
         if not self.download_annotations:
             return None
         if record_name.endswith("E0-PSG.edf"):
-            return record_name.replace("E0-PSG.edf", "EC-Hypnogram.edf")
+            base = record_name.replace("E0-PSG.edf", "")
+            return [
+                f"{base}EC-Hypnogram.edf",
+                f"{base}EH-Hypnogram.edf",
+            ]
         if record_name.endswith("F0-PSG.edf"):
-            return record_name.replace("F0-PSG.edf", "FC-Hypnogram.edf")
+            return [
+                record_name.replace("F0-PSG.edf", "FC-Hypnogram.edf"),
+            ]
         return None
 
-    def _download_file(self, url: str, dest: Path) -> None:
+    def _download_file(self, url: str, dest: Path, allow_missing: bool = False) -> bool:
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.exists():
-            return
-        with requests.get(url, stream=True, timeout=60) as response:
-            response.raise_for_status()
-            total = int(response.headers.get("content-length", 0))
-            with dest.open("wb") as fh, tqdm(
-                total=total,
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-                desc=f"Downloading {dest.name}",
-            ) as bar:
-                for chunk in response.iter_content(chunk_size=1 << 20):
-                    if chunk:
-                        fh.write(chunk)
-                        bar.update(len(chunk))
+            return True
+        try:
+            with requests.get(url, stream=True, timeout=60) as response:
+                response.raise_for_status()
+                total = int(response.headers.get("content-length", 0))
+                with dest.open("wb") as fh, tqdm(
+                    total=total,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc=f"Downloading {dest.name}",
+                ) as bar:
+                    for chunk in response.iter_content(chunk_size=1 << 20):
+                        if chunk:
+                            fh.write(chunk)
+                            bar.update(len(chunk))
+            return True
+        except requests.HTTPError as exc:
+            if allow_missing and exc.response is not None and exc.response.status_code == 404:
+                logger.warning("Remote file missing (404): %s", url)
+                return False
+            raise
 
     def _ensure_downloaded(self) -> List[SleepEDFRecord]:
         if self._downloaded_records is not None:
@@ -160,9 +175,22 @@ class SleepEDFBuilder:
             annotation_name = self._annotation_name(record_name)
             annotation_path = None
             if annotation_name is not None:
-                annotation_url = f"{SLEEP_EDF_BASE_URL}/{self.subset}/{annotation_name}"
-                annotation_path = subset_dir / annotation_name
-                self._download_file(annotation_url, annotation_path)
+                candidates: List[str] = annotation_name if isinstance(annotation_name, list) else [annotation_name]
+                for candidate in candidates:
+                    annotation_url = f"{SLEEP_EDF_BASE_URL}/{self.subset}/{candidate}"
+                    candidate_path = subset_dir / candidate
+                    ok = self._download_file(annotation_url, candidate_path, allow_missing=True)
+                    if ok:
+                        annotation_path = candidate_path
+                        if candidate.endswith("EH-Hypnogram.edf"):
+                            logger.info(
+                                "Fell back to EH hypnogram for %s (no EC file found).", record_name
+                            )
+                        break
+                else:
+                    logger.warning(
+                        "No hypnogram available for %s (tried: %s).", record_name, ", ".join(candidates)
+                    )
 
             downloaded.append(
                 SleepEDFRecord(
