@@ -103,7 +103,7 @@ class ModelHiddenParams(ParamGroup):
         self.static_mlp=False
         self.apply_rotation=False
         self.only_infer=False
-        self.d_model=512
+        self.d_model=128
         self.n_head=8
         self.agent_num=64
         self.drop_prob=0.1
