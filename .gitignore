@@ -92,3 +92,4 @@ examples/agentic/llamaindex/graph_rag_cognee/.cache/
 **/comfy/text_encoders/llama_tokenizer/
 **/comfy/text_encoders/t5_tokenizer/
 **/comfy/sd1_tokenizer/
+examples/generative/video_generation/wan_comfy/my_videos/
