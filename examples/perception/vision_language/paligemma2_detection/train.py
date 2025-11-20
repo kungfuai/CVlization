@@ -9,9 +9,10 @@ import argparse
 import json
 import os
 import random
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 
 import torch
 from PIL import Image
@@ -21,7 +22,14 @@ from transformers import (
     PaliGemmaProcessor,
     Trainer,
     TrainingArguments,
+    EvalPrediction,
+    TrainerCallback,
 )
+from torchmetrics.detection import MeanAveragePrecision
+
+
+# PaliGemma uses 0-1024 coordinate system for location tokens
+PALIGEMMA_LOCATION_RANGE = 1024
 
 
 class JSONLDataset(Dataset):
@@ -55,6 +63,30 @@ def augment_suffix(suffix: str) -> str:
     return " ; ".join(parts)
 
 
+def parse_paligemma_detections(text: str) -> List[Dict[str, Any]]:
+    """Parse PaliGemma detection output into list of boxes.
+
+    Format: '<loc{y1}><loc{x1}><loc{y2}><loc{x2}> class_label ; ...'
+    Returns: List of dicts with 'bbox' [x1, y1, x2, y2] and 'label'
+    """
+    detections = []
+    # Match pattern: <loc###><loc###><loc###><loc###> label
+    pattern = r'<loc(\d+)><loc(\d+)><loc(\d+)><loc(\d+)>\s+(\S+)'
+
+    for match in re.finditer(pattern, text):
+        y1, x1, y2, x2, label = match.groups()
+        # Convert from PaliGemma's 0-1024 range to 0-1 normalized coordinates
+        bbox = [
+            int(x1) / PALIGEMMA_LOCATION_RANGE,
+            int(y1) / PALIGEMMA_LOCATION_RANGE,
+            int(x2) / PALIGEMMA_LOCATION_RANGE,
+            int(y2) / PALIGEMMA_LOCATION_RANGE,
+        ]
+        detections.append({"bbox": bbox, "label": label})
+
+    return detections
+
+
 @dataclass
 class Collator:
     processor: PaliGemmaProcessor
@@ -76,6 +108,161 @@ class Collator:
         return inputs
 
 
+def evaluate_on_dataset(
+    model,
+    processor,
+    dataset: JSONLDataset,
+    device: torch.device,
+    max_new_tokens: int = 256,
+) -> Dict[str, Any]:
+    """Evaluate model on a dataset and compute mAP."""
+    from tqdm import tqdm
+
+    model.eval()
+
+    # Collect predictions and targets
+    preds = []
+    targets = []
+
+    # Build label mapping
+    all_labels = set()
+    for _, entry in dataset:
+        gt_dets = parse_paligemma_detections(entry["suffix"])
+        for det in gt_dets:
+            all_labels.add(det["label"])
+
+    label_to_idx = {label: idx for idx, label in enumerate(sorted(all_labels))}
+
+    with torch.no_grad():
+        for image, entry in tqdm(dataset, desc="Evaluating"):
+            # Prepare input
+            prefix = "<image>" + entry["prefix"]
+            inputs = processor(
+                text=prefix,
+                images=image,
+                return_tensors="pt",
+            ).to(device)
+
+            # Generate predictions
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
+
+            generated_text = processor.decode(outputs[0], skip_special_tokens=True)
+            pred_dets = parse_paligemma_detections(generated_text)
+            gt_dets = parse_paligemma_detections(entry["suffix"])
+
+            # Convert to torchmetrics format
+            img_w, img_h = image.size
+
+            if pred_dets:
+                pred_boxes = torch.tensor([d["bbox"] for d in pred_dets], dtype=torch.float32)
+                pred_labels = torch.tensor(
+                    [label_to_idx.get(d["label"], 0) for d in pred_dets],
+                    dtype=torch.int64
+                )
+                pred_scores = torch.ones(len(pred_dets), dtype=torch.float32)
+
+                # Convert to absolute coordinates
+                pred_boxes_abs = pred_boxes.clone()
+                pred_boxes_abs[:, [0, 2]] *= img_w
+                pred_boxes_abs[:, [1, 3]] *= img_h
+
+                preds.append({
+                    "boxes": pred_boxes_abs,
+                    "scores": pred_scores,
+                    "labels": pred_labels,
+                })
+            else:
+                preds.append({
+                    "boxes": torch.zeros((0, 4), dtype=torch.float32),
+                    "scores": torch.zeros(0, dtype=torch.float32),
+                    "labels": torch.zeros(0, dtype=torch.int64),
+                })
+
+            if gt_dets:
+                gt_boxes = torch.tensor([d["bbox"] for d in gt_dets], dtype=torch.float32)
+                gt_labels = torch.tensor(
+                    [label_to_idx.get(d["label"], 0) for d in gt_dets],
+                    dtype=torch.int64
+                )
+
+                gt_boxes_abs = gt_boxes.clone()
+                gt_boxes_abs[:, [0, 2]] *= img_w
+                gt_boxes_abs[:, [1, 3]] *= img_h
+
+                targets.append({
+                    "boxes": gt_boxes_abs,
+                    "labels": gt_labels,
+                })
+            else:
+                targets.append({
+                    "boxes": torch.zeros((0, 4), dtype=torch.float32),
+                    "labels": torch.zeros(0, dtype=torch.int64),
+                })
+
+    # Compute mAP
+    metric = MeanAveragePrecision(box_format="xyxy", iou_type="bbox")
+    metric.update(preds, targets)
+    results = metric.compute()
+
+    return results
+
+
+class mAPEvaluationCallback(TrainerCallback):
+    """Custom callback to evaluate mAP after each epoch."""
+
+    def __init__(self, model, processor, val_dataset, device, max_new_tokens=256):
+        self.model = model
+        self.processor = processor
+        self.val_dataset = val_dataset
+        self.device = device
+        self.max_new_tokens = max_new_tokens
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        """Called at the end of each epoch."""
+        print("\n" + "=" * 80)
+        print(f"EVALUATING ON VALIDATION SET - Epoch {int(state.epoch)}")
+        print("=" * 80)
+
+        results = evaluate_on_dataset(
+            self.model,
+            self.processor,
+            self.val_dataset,
+            self.device,
+            max_new_tokens=self.max_new_tokens,
+        )
+
+        print("\n" + "=" * 80)
+        print(f"VALIDATION RESULTS - Epoch {int(state.epoch)}")
+        print("=" * 80)
+        print(f"mAP@50:95: {results['map']:.4f}")
+        print(f"mAP@50:    {results['map_50']:.4f}")
+        print(f"mAP@75:    {results['map_75']:.4f}")
+        print(f"mAP (small):  {results['map_small']:.4f}")
+        print(f"mAP (medium): {results['map_medium']:.4f}")
+        print(f"mAP (large):  {results['map_large']:.4f}")
+        print("=" * 80 + "\n")
+
+        # Log to tensorboard if available
+        if state.is_world_process_zero:
+            try:
+                import tensorboard
+                # Write to the trainer's log history
+                state.log_history.append({
+                    "epoch": state.epoch,
+                    "eval_map": results['map'].item(),
+                    "eval_map_50": results['map_50'].item(),
+                    "eval_map_75": results['map_75'].item(),
+                })
+            except:
+                pass
+
+        return control
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Finetune PaliGemma2 for object detection")
     parser.add_argument("--model-id", default="google/paligemma2-3b-pt-448", help="Base model id")
@@ -91,6 +278,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-steps", type=int, default=2)
     parser.add_argument("--logging-steps", type=int, default=50)
     parser.add_argument("--save-steps", type=int, default=1000)
+    parser.add_argument("--skip-eval", action="store_true", help="Skip evaluation after training")
+    parser.add_argument("--eval-max-tokens", type=int, default=256, help="Max tokens for evaluation generation")
     return parser.parse_args()
 
 
@@ -134,15 +323,50 @@ def main():
         dataloader_pin_memory=False,
     )
 
+    # Create mAP evaluation callback
+    map_callback = mAPEvaluationCallback(
+        model=model,
+        processor=processor,
+        val_dataset=val_ds,
+        device=device,
+        max_new_tokens=args.eval_max_tokens,
+    )
+
     trainer = Trainer(
         model=model,
         train_dataset=train_ds,
         eval_dataset=val_ds,
         data_collator=collate,
         args=training_args,
+        callbacks=[map_callback],
     )
 
     trainer.train()
+
+    # Evaluate on validation set after training
+    if not args.skip_eval:
+        print("\n" + "=" * 80)
+        print("EVALUATING ON VALIDATION SET")
+        print("=" * 80)
+
+        results = evaluate_on_dataset(
+            model,
+            processor,
+            val_ds,
+            device,
+            max_new_tokens=args.eval_max_tokens,
+        )
+
+        print("\n" + "=" * 80)
+        print("VALIDATION RESULTS")
+        print("=" * 80)
+        print(f"mAP@50:95: {results['map']:.4f}")
+        print(f"mAP@50:    {results['map_50']:.4f}")
+        print(f"mAP@75:    {results['map_75']:.4f}")
+        print(f"mAP (small):  {results['map_small']:.4f}")
+        print(f"mAP (medium): {results['map_medium']:.4f}")
+        print(f"mAP (large):  {results['map_large']:.4f}")
+        print("=" * 80)
 
 
 if __name__ == "__main__":
