@@ -1,0 +1,8 @@
+# Tokenizers (auto-downloaded from HuggingFace)
+comfy/text_encoders/llama_tokenizer/
+comfy/text_encoders/t5_tokenizer/
+comfy/sd1_tokenizer/
+
+# Generated videos
+output/
+outputs/
