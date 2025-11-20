@@ -16,12 +16,13 @@ cd CVlization
 pip install .
 
 # Browse examples
-cvl list --tag llm
+cvl list --tag pytorch    # search by tag
+cvl list -k gpt           # search by keyword
 # or browse examples/ on GitHub
 
 # Run any example
-bash examples/perception/image_classification/torch/build.sh
-bash examples/perception/image_classification/torch/train.sh
+cvl run image-classification-torch build
+cvl run image-classification-torch train
 
 # Copy into your project
 cp -r examples/perception/image_classification/torch your-project/
@@ -57,6 +58,8 @@ examples/
 
 ### Catalog of Examples
 
+**Legend:** ✅ = Tested and maintained | 🧪 = Experimental
+
 #### 🔍 Perception (Understanding Signals)
 
 | Capability | Example Directory | Implementations | Status |
@@ -83,7 +86,7 @@ examples/
 
 | Capability | Example Directory | Implementations | Status |
 |------------|-------------------|-----------------|--------|
-| **Time Series Forecasting** | [`examples/analytical/time_series`](./examples/analytical/time_series) | Foundation models (chronos_zero_shot, moirai_zero_shot, uni2ts_finetune - experimental), Supervised (patchtst_supervised), Statistical baselines (statsforecast_baselines), Hierarchical (hierarchical_reconciliation), Anomaly detection (anomaly_transformer, merlion_anomaly_dashboard) | ✅ |
+| **Time Series Forecasting** | [`examples/analytical/time_series`](./examples/analytical/time_series) | Foundation models (chronos_zero_shot, moirai_zero_shot, uni2ts_finetune (experimental)), Supervised (patchtst_supervised), Statistical baselines (statsforecast_baselines), Hierarchical (hierarchical_reconciliation), Anomaly detection (anomaly_transformer, merlion_anomaly_dashboard) | ✅ |
 | **Tabular ML - AutoML** | [`examples/analytical/tabular/automl`](./examples/analytical/tabular/automl) | autogluon_structured, pycaret_structured | ✅ |
 | **Tabular ML - Causal Inference** | [`examples/analytical/tabular/causal`](./examples/analytical/tabular/causal) | causalml_campaign_optimization, dowhy_berkeley_bias, dowhy_policy_uplift, econml_heterogeneous_effects | ✅ |
 | **Tabular ML - Uncertainty Quantification** | [`examples/analytical/tabular/uncertainty`](./examples/analytical/tabular/uncertainty) | Conformal (conformal_lightgbm, mapie_conformal), Quantile (catboost_quantile, quantile_lightgbm), Bayesian (pymc_bayesian_regression) | ✅ |
@@ -98,90 +101,77 @@ examples/
 | **Prompt Optimization** | [`examples/agentic/optimization`](./examples/agentic/optimization) | dspy_gepa_promptops, mcts_prompt_agent | 🧪 |
 | **Tool Use & Coding** | [`examples/agentic`](./examples/agentic) | Code (autogen_pair_programmer), Data analysis (smolagents_data_analyst), Local AI (llamacpp_assistant) | 🧪 |
 
-✅ = Tested and maintained
-🧪 = Experimental
-
 Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. Each example may contain one or more implementations using different frameworks or models. To start with, we recommend starting with the Image Classification example.
 
 ## Browse Examples
 
 **Via GitHub:** Browse [perception/](./examples/perception/), [generative/](./examples/generative/), [analytical/](./examples/analytical/), or [agentic/](./examples/agentic/) directories
 
-**Via CLI:** Install with `pip install .` then:
+**Via CLI:** Install with `pip install .` then search by keyword or tag:
 
 ```bash
-# Find examples by tag
-cvl list --tag llm
-cvl list --tag time-series
-cvl list --tag causal-inference
-
-# Train a small LLM on Shakespeare text
-# (from Andrej Karpathy's nanoGPT: https://github.com/karpathy/nanoGPT)
-cvl run nanogpt train --max_iters=1000 --batch_size=16
-
-# Fine-tune Salesforce Moirai foundation model on your time series data
-cvl run analytical/time_series/uni2ts_finetune train
-
-# Run zero-shot forecasting with Moirai (GPU-accelerated)
-cvl run analytical/time_series/moirai_zero_shot forecast
-
-# Run document AI inference
-# (IBM Granite-Docling: https://huggingface.co/ibm-granite/granite-docling-258M)
-cvl run granite-docling predict -i input_pdf=@document.pdf
-```
-
-The `cvl` CLI is optional - you can always use bash scripts directly:
-```bash
-# These are equivalent:
-bash examples/generative/llm/nanogpt/train.sh
-cvl run nanogpt train
+cvl list -k gpt           # search by keyword
+cvl list --tag pytorch    # search by tag
+cvl list -k resnet
 ```
 
 ## Running an Example
 
-Every example follows the same simple pattern:
+You can run examples using the `cvl` CLI or directly with bash scripts:
+
+**Option 1: Using cvl CLI (recommended)**
 
 ```bash
-cd examples/<category>/<example_name>
-bash build.sh       # Build Docker image
-bash train.sh       # Train the model
-bash predict.sh     # Run inference
+cvl run image-classification-torch build
+cvl run image-classification-torch train
+cvl run image-classification-torch predict
 ```
 
-**Example: Train an image classifier on CIFAR-10**
+**Option 2: Using bash scripts directly**
 
 ```bash
 cd examples/perception/image_classification/torch
 bash build.sh
 bash train.sh
+bash predict.sh
+```
+
+**Examples:**
+
+```bash
+# Train a small LLM on Shakespeare text (Andrej Karpathy's nanoGPT)
+cvl run nanogpt train --max_iters=1000 --batch_size=16
+
+# Fine-tune Salesforce Moirai foundation model on time series data
+cvl run analytical/time_series/uni2ts_finetune train
+
+# Run zero-shot forecasting with Moirai
+cvl run analytical/time_series/moirai_zero_shot forecast
+
+# Document AI inference (IBM Granite-Docling)
+cvl run granite-docling predict -i input_pdf=@document.pdf
 ```
 
 For detailed instructions and available options, see the README.md in each example directory.
 
 **License Note:** Each example may reference projects with different licenses. Check the license file in each example directory.
 
-#### Design choices
+## Benefits of Using CVlization
 
-- The Dockerfile does not include the source code of the example. Instead, its main purpose is to provide a clean environment for the task at hand. The source code is mounted into the container at run time. If you need the docker image to be self-contained, please edit the Dockerfile to copy the source code into the image.
-- We try to pin the versions of the dependencies. However, some dependencies may not be pinned due to the fast pace of development in the field. If you find any issues, please submit a PR.
-
-### Centralized Caching
-
-All examples use `~/.cache/cvlization/` for models and datasets, avoiding re-downloads across examples:
-
-```bash
-docker run --shm-size 16G --gpus=all \
-	-v $(pwd)/examples/<my example directory>:/workspace \
-	-v ~/.cache/cvlization:/root/.cache \  # Centralized cache for models & datasets
-    -e CUDA_VISIBLE_DEVICES='0' \
-	<docker_image_name> \
-	python predict.py <my arguments>
-```
-
-**Benefits:**
+**Centralized Caching:** All examples use `~/.cache/cvlization/` for models and datasets, avoiding re-downloads across examples:
 - Automatic caching for HuggingFace Hub, PyTorch, and custom downloads
 - Managed by build scripts - no manual setup required
 - Shared across all examples to save disk space and bandwidth
+
+**Self-Contained Docker Environments:** Each example is isolated with pinned dependencies:
+- We battled CUDA versions and dependency conflicts so you don't have to
+- Source code is mounted at runtime (not baked into images) for easy iteration
+- Dependency versions are pinned where possible for reproducibility
+
+**Production-Ready Patterns:** Copy what works into your projects:
+- Consistent build/train/predict script structure across all examples
+- Battle-tested configurations for 90+ AI capabilities
+- Examples regularly updated and tested for compatibility
 
 ## Requirements
 
@@ -245,6 +235,13 @@ Detailed documentation can be found in the `doc/` directory:
 
 ## Licenses
 
-We plan for the source and binary distribution of the `cvlization` module (installed via `pip`), and all source code and data under the `cvlization/` directory to be derived from software with permissive licenses and commercial friendly.
+**CVlization Library & CLI:** MIT License
+- The `cvlization` package and `cvl` CLI tool are released under the MIT License
+- Safe for commercial use
 
-The source code in the `examples/` directory, however, may contain source code derived from software under copyleft and/or non-commercial licenses. Source code in `examples/` is not distributed when you install `cvlization`.
+**Examples Directory:** Mixed Licenses
+- Examples may reference projects with various licenses (copyleft, non-commercial, etc.)
+- Examples are NOT included when you `pip install cvlization`
+- Always check the license file in each example directory before using in production
+
+**Note:** Each example packages different open-source projects with their own licenses. Review licenses carefully for your use case.
