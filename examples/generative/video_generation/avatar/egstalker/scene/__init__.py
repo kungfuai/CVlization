@@ -27,8 +27,8 @@ class Scene:
 
     gaussians : GaussianModel
 
-    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None, 
-                 shuffle=True, resolution_scales=[1.0], load_coarse=False, custom_aud=None):
+    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None,
+                 shuffle=True, resolution_scales=[1.0], load_coarse=False, custom_aud=None, camera_mode='cycle'):
         """b
         :param path: Path to colmap scene main folder.
         """
@@ -47,7 +47,7 @@ class Scene:
         self.test_cameras = {}
         self.video_cameras = {}
 
-        scene_info = sceneLoadTypeCallbacks2["ER-NeRF"](args.source_path, False, args.eval, custom_aud=custom_aud)
+        scene_info = sceneLoadTypeCallbacks2["ER-NeRF"](args.source_path, False, args.eval, custom_aud=custom_aud, camera_mode=camera_mode)
         dataset_type = "ER-NeRF"
         
         self.maxtime = scene_info.maxtime

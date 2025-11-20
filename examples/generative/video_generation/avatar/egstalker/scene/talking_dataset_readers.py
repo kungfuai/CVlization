@@ -203,8 +203,8 @@ def euler2rot(euler_angle):
     ), 2)
     return torch.bmm(rot_x, torch.bmm(rot_y, rot_z))
 
-def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features, eye_features, 
-                                    extension=".jpg", mapper = {}, preload=False, custom_aud =None):
+def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features, eye_features,
+                                    extension=".jpg", mapper = {}, preload=False, custom_aud =None, camera_mode='cycle'):
     cam_infos = []
     mesh_path = os.path.join(path, meshfile)
     track_params = torch.load(mesh_path)
@@ -237,18 +237,37 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
         
     if custom_aud:
         auds = aud_features
-    else:    
+        # For custom audio, loop through ALL audio features, cycling camera poses as needed
+        num_audio_frames = aud_features.shape[0]
+        frame_indices = list(range(num_audio_frames))
+        print(f"[INFO] Custom audio: generating {num_audio_frames} frames (camera_mode: {camera_mode})")
+    else:
         auds = [aud_features[min(frame['aud_id'], aud_features.shape[0] - 1)] for frame in frames]
         auds = torch.stack(auds, dim=0)
-        
-    for idx, frame in enumerate(frames): # len(frames): 7272
-        
-        cam_name = os.path.join(f_path, str(frame["img_id"]) + extension)
-        aud_feature = get_audio_features(auds, att_mode = 2, index = idx)     
-        
-        
+        frame_indices = list(range(len(frames)))
+
+    for idx in frame_indices:
+        # Select camera pose based on camera_mode
+        if custom_aud and camera_mode == 'static':
+            # Static: Always use first frame's camera pose
+            frame = frames[0]
+            # For custom audio with static camera, use sequential tracking data
+            tracking_idx = min(idx, len(track_params["euler"]) - 1)
+        elif custom_aud and camera_mode == 'orbit':
+            # Orbit: Use modulo to cycle, will modify rotation later
+            frame = frames[idx % len(frames)]
+            tracking_idx = min(idx, len(track_params["euler"]) - 1)
+        else:
+            # Cycle (default): Cycle through available frames/camera poses
+            frame = frames[idx % len(frames)]
+            tracking_idx = min(idx, len(track_params["euler"]) - 1)
+
+        cam_name = os.path.join(f_path, str(tracking_idx) + extension)
+        aud_feature = get_audio_features(auds, att_mode = 2, index = idx)
+
+
         # Camera Codes
-        euler = track_params["euler"][frame["img_id"]]
+        euler = track_params["euler"][tracking_idx]
         R = euler2rot(euler.unsqueeze(0))
         
         flip_rot = torch.tensor(
@@ -266,7 +285,7 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
         # or torch.matmul(R, flip_rot) if the flip should be applied in the camera's local space.
         R = torch.matmul(flip_rot, R)
         R = R.squeeze(0).cpu().numpy()
-        T = track_params["trans"][frame["img_id"]].unsqueeze(0).cpu().numpy()
+        T = track_params["trans"][tracking_idx].unsqueeze(0).cpu().numpy()
         
         R = -np.transpose(R)
         T = -T
@@ -276,11 +295,11 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
         image_name = Path(cam_name).stem
 
         full_image_path = cam_name
-        torso_image_path = os.path.join(path, 'torso_imgs', str(frame['img_id']) + '.png')
+        torso_image_path = os.path.join(path, 'torso_imgs', str(tracking_idx) + '.png')
         mask_path = cam_name.replace('ori_imgs', 'parsing').replace('.jpg', '.png')
-        
+
         # Landmark and extract face
-        lms = np.loadtxt(os.path.join(path, 'ori_imgs', str(frame['img_id']) + '.lms')) # [68, 2]
+        lms = np.loadtxt(os.path.join(path, 'ori_imgs', str(tracking_idx) + '.lms')) # [68, 2]
 
         lh_xmin, lh_xmax = int(lms[31:36, 1].min()), int(lms[:, 1].max()) # actually lower half area
         xmin, xmax = int(lms[:, 1].min()), int(lms[:, 1].max())
@@ -289,9 +308,9 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
         lhalf_rect = [lh_xmin, lh_xmax, ymin, ymax]
         
         # Eye Area and Eye Rect
-        #print(f"frame['img_id']: {frame['img_id']}, eye_features.shape: {eye_features.shape}")
-        #print(f"img_id: {frame['img_id']}, eye_features length: {len(eye_features)}")
-        eye_area = eye_features[frame['img_id']]
+        #print(f"tracking_idx: {tracking_idx}, eye_features.shape: {eye_features.shape}")
+        #print(f"tracking_idx: {tracking_idx}, eye_features length: {len(eye_features)}")
+        eye_area = eye_features[tracking_idx]
         eye_area = np.clip(eye_area, 0, 2) / 2
         
         xmin, xmax = int(lms[36:48, 1].min()), int(lms[36:48, 1].max())
@@ -335,7 +354,7 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
         cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, full_image=ori_image, full_image_path=full_image_path,
                         image_name=image_name, width=contents["w"], height=contents["h"],
                         torso_image=torso_img, torso_image_path=torso_image_path, bg_image=bg_img, bg_image_path=bg_image_path,
-                        mask=seg, mask_path=mask_path, trans=trans_infos[frame["img_id"]],
+                        mask=seg, mask_path=mask_path, trans=trans_infos[tracking_idx],
                         face_rect=face_rect, lhalf_rect=lhalf_rect, aud_f=aud_feature, eye_f=eye_area, eye_rect=eye_rect, lips_rect=lips_rect))
     return cam_infos     
 
@@ -343,7 +362,7 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
 
 
 
-def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg",custom_aud=None):
+def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg",custom_aud=None, camera_mode='cycle'):
     # Audio Information
     aud_features = np.load(os.path.join(path, 'aud_ds.npy'))
     aud_features = torch.from_numpy(aud_features)
@@ -384,8 +403,8 @@ def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg
         else:
             raise NotImplementedError(f'[ERROR] aud_features.shape {aud_features.shape} not supported')
         print("Reading Custom Transforms")
-        custom_cam_infos = readCamerasFromTracksTransforms(path, "track_params.pt", "transforms_val.json", aud_features, eye_features, extension, 
-                                                           timestamp_mapper,custom_aud=custom_aud)
+        custom_cam_infos = readCamerasFromTracksTransforms(path, "track_params.pt", "transforms_val.json", aud_features, eye_features, extension,
+                                                           timestamp_mapper, custom_aud=custom_aud, camera_mode=camera_mode)
     else:
         custom_cam_infos=None
     if not eval:
