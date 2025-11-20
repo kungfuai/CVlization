@@ -138,13 +138,56 @@ def main(args):
         output_dir
     )
     logger.info(f"Dataset path: {dataset_path}")
-    
+
     # Prepare audio features if needed
     # Note: EGSTalker expects .npy files for audio features
-    # For now, we'll let EGSTalker handle this, or we need to preprocess
     audio_file = Path(args.audio_path)
+    audio_target = Path(dataset_path) / audio_file.name
     audio_npy = Path(dataset_path) / (audio_file.stem + ".npy")
-    
+
+    # Copy audio file to dataset directory if needed
+    if not audio_target.exists():
+        import shutil
+        shutil.copy(audio_file, audio_target)
+        logger.info(f"Copied audio to dataset: {audio_target}")
+
+    # Extract DeepSpeech features if .npy file doesn't exist
+    if not audio_npy.exists():
+        logger.info(f"Audio features not found, extracting DeepSpeech features...")
+        logger.info(f"This may take a few minutes...")
+
+        # Extract DeepSpeech features
+        # Determine the script directory
+        script_dir = Path(__file__).parent
+        extract_script = script_dir / "data_utils" / "deepspeech_features" / "extract_ds_features.py"
+
+        if not extract_script.exists():
+            raise FileNotFoundError(
+                f"DeepSpeech extraction script not found: {extract_script}"
+            )
+
+        extract_cmd = [
+            sys.executable,
+            str(extract_script),
+            "--input", str(audio_target)
+        ]
+
+        import subprocess
+        result = subprocess.run(extract_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"Failed to extract audio features: {result.stderr}")
+            raise RuntimeError(f"Audio feature extraction failed: {result.stderr}")
+        logger.info(f"Audio features extracted successfully: {audio_npy}")
+    else:
+        logger.info(f"Using existing audio features: {audio_npy}")
+
+    # Verify audio features exist
+    if not audio_npy.exists():
+        raise FileNotFoundError(
+            f"Audio feature file not found: {audio_npy}. "
+            f"Please run audio preprocessing first or check the extraction logs."
+        )
+
     # Build command-line arguments for EGSTalker render.py
     egstalker_args = [
         "-s", dataset_path,
@@ -154,15 +197,10 @@ def main(args):
         "--skip_train",
         "--skip_test",
     ]
-    
-    # Always use custom audio for our use case
-    audio_target = Path(dataset_path) / audio_file.name
-    if not audio_target.exists():
-        import shutil
-        shutil.copy(audio_file, audio_target)
-    
+
+    # Add custom audio arguments
     egstalker_args.extend([
-        "--custom_aud", audio_npy.name if audio_npy.exists() else "",
+        "--custom_aud", audio_npy.name,
         "--custom_wav", audio_target.name
     ])
     
@@ -219,20 +257,42 @@ def main(args):
             combined_args
         )
     
-    logger.info(f"Rendering complete. Output saved to: {output_dir}")
-    
+    logger.info(f"Rendering complete. Searching for output video...")
+
     # Find output video
+    # The video is saved in model_path/custom/ours_{iteration}/renders/
     output_video = None
-    for pattern in ["*renders.mov", "*renders.mp4"]:
-        videos = list(output_dir.rglob(pattern))
-        if videos:
-            output_video = videos[0]
+    search_locations = [
+        output_dir,
+        Path(model_path) / "custom" / f"ours_{iteration}" / "renders"
+    ]
+
+    for search_dir in search_locations:
+        if not search_dir.exists():
+            continue
+        for pattern in ["*renders.mov", "*renders.mp4"]:
+            videos = list(search_dir.rglob(pattern))
+            if videos:
+                output_video = videos[0]
+                break
+        if output_video:
             break
-    
+
     if output_video:
-        logger.info(f"Output video: {output_video}")
+        logger.info(f"Output video generated: {output_video}")
+        # Copy video to output directory if it's not already there
+        if not output_video.is_relative_to(output_dir):
+            import shutil
+            final_output = output_dir / output_video.name
+            shutil.copy(output_video, final_output)
+            logger.info(f"Video copied to: {final_output}")
     else:
-        logger.warning("Output video not found, check model_path for results")
+        logger.error("Output video was not generated!")
+        logger.error(f"Searched in: {[str(p) for p in search_locations]}")
+        raise RuntimeError(
+            "Rendering failed: No output video was generated. "
+            "Check the logs above for errors during rendering."
+        )
 
 
 if __name__ == "__main__":

@@ -135,11 +135,12 @@ def render_set(model_path, name, iteration, scene, gaussians, pipeline,audio_dir
     
 def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : PipelineParams, args):
     skip_train, skip_test, skip_video, batch_size= args.skip_train, args.skip_test, args.skip_video, args.batch
-    
+
     with torch.no_grad():
         data_dir = dataset.source_path
         gaussians = GaussianModel(dataset.sh_degree, hyperparam)
-        scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False, custom_aud=args.custom_aud)
+        camera_mode = getattr(args, 'camera_mode', 'cycle')
+        scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False, custom_aud=args.custom_aud, camera_mode=camera_mode)
         
         gaussians.eval()
         
@@ -199,6 +200,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch", type=int, required=True)
     parser.add_argument("--custom_aud", type=str, default='')
     parser.add_argument("--custom_wav", type=str, default='')
+    parser.add_argument("--camera_mode", type=str, default='cycle', choices=['cycle', 'static'],
+                        help='Camera pose mode for custom audio: cycle (cycle through training poses), static (single fixed pose)')
     # parser.add_argument("--audio_dir", type=str)
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)
