@@ -423,7 +423,9 @@ def load_embed(embedding_name, embedding_directory, embedding_size, embed_key=No
 class SDTokenizer:
     def __init__(self, tokenizer_path=None, max_length=77, pad_with_end=True, embedding_directory=None, embedding_size=768, embedding_key='clip_l', tokenizer_class=CLIPTokenizer, has_start_token=True, has_end_token=True, pad_to_max_length=True, min_length=None, pad_token=None, end_token=None, tokenizer_data={}, tokenizer_args={}):
         if tokenizer_path is None:
-            tokenizer_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "sd1_tokenizer")
+            default_local_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "sd1_tokenizer")
+            # Use HuggingFace auto-caching: falls back to local if exists, otherwise downloads to ~/.cache/huggingface/
+            tokenizer_path = default_local_path if os.path.exists(default_local_path) else os.getenv("SD1_TOKENIZER_PATH", "openai/clip-vit-large-patch14")
         self.tokenizer = tokenizer_class.from_pretrained(tokenizer_path, **tokenizer_args)
         self.max_length = max_length
         self.min_length = min_length
