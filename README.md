@@ -57,6 +57,8 @@ examples/
 
 ### Catalog of Examples
 
+**Legend:** ✅ = Tested and maintained | 🧪 = Experimental
+
 #### 🔍 Perception (Understanding Signals)
 
 | Capability | Example Directory | Implementations | Status |
@@ -83,7 +85,7 @@ examples/
 
 | Capability | Example Directory | Implementations | Status |
 |------------|-------------------|-----------------|--------|
-| **Time Series Forecasting** | [`examples/analytical/time_series`](./examples/analytical/time_series) | Foundation models (chronos_zero_shot, moirai_zero_shot, uni2ts_finetune - experimental), Supervised (patchtst_supervised), Statistical baselines (statsforecast_baselines), Hierarchical (hierarchical_reconciliation), Anomaly detection (anomaly_transformer, merlion_anomaly_dashboard) | ✅ |
+| **Time Series Forecasting** | [`examples/analytical/time_series`](./examples/analytical/time_series) | Foundation models (chronos_zero_shot, moirai_zero_shot, uni2ts_finetune (experimental)), Supervised (patchtst_supervised), Statistical baselines (statsforecast_baselines), Hierarchical (hierarchical_reconciliation), Anomaly detection (anomaly_transformer, merlion_anomaly_dashboard) | ✅ |
 | **Tabular ML - AutoML** | [`examples/analytical/tabular/automl`](./examples/analytical/tabular/automl) | autogluon_structured, pycaret_structured | ✅ |
 | **Tabular ML - Causal Inference** | [`examples/analytical/tabular/causal`](./examples/analytical/tabular/causal) | causalml_campaign_optimization, dowhy_berkeley_bias, dowhy_policy_uplift, econml_heterogeneous_effects | ✅ |
 | **Tabular ML - Uncertainty Quantification** | [`examples/analytical/tabular/uncertainty`](./examples/analytical/tabular/uncertainty) | Conformal (conformal_lightgbm, mapie_conformal), Quantile (catboost_quantile, quantile_lightgbm), Bayesian (pymc_bayesian_regression) | ✅ |
@@ -98,9 +100,6 @@ examples/
 | **Prompt Optimization** | [`examples/agentic/optimization`](./examples/agentic/optimization) | dspy_gepa_promptops, mcts_prompt_agent | 🧪 |
 | **Tool Use & Coding** | [`examples/agentic`](./examples/agentic) | Code (autogen_pair_programmer), Data analysis (smolagents_data_analyst), Local AI (llamacpp_assistant) | 🧪 |
 
-✅ = Tested and maintained
-🧪 = Experimental
-
 Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. Each example may contain one or more implementations using different frameworks or models. To start with, we recommend starting with the Image Classification example.
 
 ## Browse Examples
@@ -110,10 +109,10 @@ Note: These examples are regularly updated and tested to ensure compatibility wi
 **Via CLI:** Install with `pip install .` then:
 
 ```bash
-# Find examples by tag
-cvl list --tag llm
-cvl list --tag time-series
-cvl list --tag causal-inference
+# Find examples by keyword
+cvl list -k llm
+cvl list -k time-series
+cvl list -k ocr
 
 # Train a small LLM on Shakespeare text
 # (from Andrej Karpathy's nanoGPT: https://github.com/karpathy/nanoGPT)
