@@ -9,8 +9,9 @@ class canonical_tri_plane(nn.Module):
         self.D = D
         self.args = args
         self.grid = HexPlaneField(args.bounds, args.kplanes_config, args.multires)
+        input_dim = getattr(self.grid, "feat_dim", args.d_model)
         
-        self.feature_out = [nn.Linear(args.d_model,self.W)]
+        self.feature_out = [nn.Linear(input_dim,self.W)]
         
         for i in range(self.D-1):
             self.feature_out.append(nn.ReLU())

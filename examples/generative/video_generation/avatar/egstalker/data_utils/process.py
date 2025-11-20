@@ -381,6 +381,13 @@ if __name__ == '__main__':
     parser.add_argument('path', type=str, help="path to video file")
     parser.add_argument('--task', type=int, default=-1, help="-1 means all")
     parser.add_argument('--asr', type=str, default='deepspeech', help="wav2vec or deepspeech")
+    parser.add_argument(
+        '--tracker',
+        type=str,
+        default='bfm',
+        choices=['bfm'],
+        help="Face tracker to use (only 'bfm' is supported).",
+    )
 
     opt = parser.parse_args()
 
@@ -433,4 +440,3 @@ if __name__ == '__main__':
     # save transforms.json
     if opt.task == -1 or opt.task == 9:
         save_transforms(base_dir, ori_imgs_dir)
-
