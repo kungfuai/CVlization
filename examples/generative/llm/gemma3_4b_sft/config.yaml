@@ -1,0 +1,39 @@
+# Gemma-3 4B SFT Configuration
+# Based on: https://github.com/unslothai/notebooks/blob/main/nb/Gemma3_(4B).ipynb
+
+model:
+  name: "unsloth/gemma-3-4b-it"  # Instruct-tuned base model
+  max_seq_length: 2048  # Choose any for long context
+  load_in_4bit: true  # 4-bit quantization for memory efficiency
+  load_in_8bit: false  # Alternative: 8-bit (more accurate, uses 2x memory)
+
+lora:
+  r: 8  # Larger = higher accuracy, but might overfit
+  alpha: 8  # Recommended alpha == r at least
+  dropout: 0
+  finetune_attention_modules: true  # Good for GRPO, recommended for SFT too
+  finetune_mlp_modules: true  # Should leave on always
+
+dataset:
+  path: "mlabonne/FineTome-100k"  # High-quality instruction dataset
+  split: "train"
+  max_samples: 1000  # Limit for fast testing (remove for full training)
+  # For full training, comment out max_samples or set to null
+
+training:
+  output_dir: "outputs"
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 4  # Effective batch size = 2 * 4 = 8
+  warmup_steps: 5
+  max_steps: 30  # For quick testing; use num_train_epochs for full training
+  # num_train_epochs: 1  # Uncomment for full training run
+  learning_rate: 2.0e-4  # Reduce to 2e-5 for long training runs
+  logging_steps: 1
+  save_steps: 30
+  optim: "adamw_8bit"
+  weight_decay: 0.001
+  lr_scheduler_type: "linear"
+  seed: 3407
+  do_eval: true  # Set to true to enable validation
+  val_split_ratio: 0.1  # Validation split ratio (10% of data for validation)
+  val_steps: 10  # Validate every N steps to monitor model quality

@@ -1,0 +1,48 @@
+name: gemma3-vision-sft
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+datasets:
+  - unsloth/LaTeX_OCR
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 20
+image: cvlization/gemma3-vision-sft:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Fine-tune Gemma-3 vision model with SFT
+  test:
+    script: test.sh
+    description: Run smoke test (30 steps, 100 samples)
+tags:
+  - unsloth
+  - gemma
+  - gemma-3
+  - gemma-3n
+  - vision-language
+  - fine-tuning
+  - lora
+  - sft
+  - pytorch
+  - 4bit
+  - ocr
+  - latex
+tasks:
+  - image_to_text
+  - ocr
+  - vision_language
+frameworks:
+  - pytorch
+  - unsloth
+  - transformers
+description: Fine-tune Gemma-3 vision models (Gemma-3 or Gemma-3N) with Unsloth for efficient vision-language training. Includes LaTeX OCR example.
+verification:
+  last_verified: "2025-11-21"
+  last_verification_note: "Fully verified. Docker builds and smoke test passes (30 steps, 100 samples, 2m 59s, 5.6GB VRAM). Requires build-essential for bitsandbytes/triton compilation. Training completes successfully with model checkpointing. Supports both Gemma-3 and Gemma-3N vision models."

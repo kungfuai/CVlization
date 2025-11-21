@@ -1,0 +1,57 @@
+# Gemma-3 Vision GRPO Configuration
+# Based on: https://github.com/unslothai/notebooks/blob/main/nb/Gemma3_(4B)-Vision-GRPO.ipynb
+
+model:
+  name: "unsloth/gemma-3-4b-it"  # Use instruct model for GRPO
+  load_in_4bit: true
+  use_gradient_checkpointing: "unsloth"
+
+lora:
+  r: 16
+  alpha: 16
+  dropout: 0
+  finetune_vision_layers: false  # GRPO trains language only
+  finetune_language_layers: true
+  finetune_attention_modules: true  # Good for GRPO
+  finetune_mlp_modules: true
+
+dataset:
+  path: "AI4Math/MathVista"
+  split: "testmini"
+  max_samples: 50  # Limit for fast testing (remove for full training)
+  image_size: 512  # Resize images to reduce memory
+
+reward:
+  # Delimiter tokens for reasoning structure
+  reasoning_start: "<REASONING>"
+  reasoning_end: "</REASONING>"
+  solution_start: "<SOLUTION>"
+  solution_end: "</SOLUTION>"
+  # Reward values
+  formatting_reward: 1.0  # Reward for proper formatting
+  correctness_reward: 2.0  # Reward for correct answer
+
+training:
+  output_dir: "outputs"
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 2  # Increase to 4 for smoother training
+  learning_rate: 5.0e-6  # Lower LR for RL
+  adam_beta1: 0.9
+  adam_beta2: 0.99
+  weight_decay: 0.1
+  warmup_ratio: 0.1
+  lr_scheduler_type: "cosine"
+  optim: "adamw_8bit"
+  logging_steps: 1
+  num_generations: 4  # Decrease if out of memory
+  max_prompt_length: 1024
+  max_completion_length: 1024
+  importance_sampling_level: "sequence"
+  mask_truncated_completions: false
+  loss_type: "dr_grpo"
+  max_steps: 60  # For quick testing
+  # num_train_epochs: 2  # Uncomment for full training
+  save_steps: 60
+  max_grad_norm: 0.1
+  seed: 3407
+  test_after_training: true
