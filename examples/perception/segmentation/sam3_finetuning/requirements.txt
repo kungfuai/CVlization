@@ -1,0 +1,38 @@
+# SAM3 core dependencies
+timm>=1.0.17
+numpy==1.26.4
+tqdm
+ftfy==6.1.1
+regex
+iopath>=0.1.10
+typing_extensions
+huggingface_hub
+
+# Training dependencies
+hydra-core
+submitit
+tensorboard
+zstandard
+scipy
+torchmetrics
+fvcore
+fairscale
+scikit-image
+scikit-learn
+
+# PyTorch (installed via base image)
+# torch>=2.7.0
+# torchvision
+
+# Additional utilities
+pycocotools
+pillow
+supervision
+
+# Dataset download utilities
+datasets
+
+# SAM3 specific requirements
+einops
+decord
+av
