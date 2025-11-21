@@ -1,0 +1,11 @@
+unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git
+transformers
+trl
+datasets==3.4.1
+pyyaml==6.0.2
+accelerate
+peft
+bitsandbytes==0.47.0
+pillow==11.1.0
+timm==1.0.12
+python-Levenshtein==0.25.1
