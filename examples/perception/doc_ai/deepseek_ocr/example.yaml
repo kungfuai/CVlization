@@ -17,6 +17,11 @@ presets:
   predict:
     script: predict.sh
     description: Run OCR on a document image
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--output"
+        type: file
 tags:
   - ocr
   - document-ai
