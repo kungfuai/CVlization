@@ -1,4 +1,5 @@
 """Run command - execute example presets."""
+import json
 import os
 import sys
 import subprocess
@@ -37,6 +38,8 @@ def get_preset_info(example: Dict, preset_name: str) -> Optional[Dict]:
             # Include optional 'command' field for CVL docker mode
             if "command" in preset_data:
                 result["command"] = preset_data["command"]
+            if "path_args" in preset_data:
+                result["path_args"] = preset_data["path_args"]
             return result
         else:
             # Simple string value is treated as script name
@@ -158,12 +161,124 @@ def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[
     return None
 
 
+def _normalize_path_args_spec(raw_spec) -> List[Dict]:
+    """Normalize path_args spec from example.yaml into a list of dicts."""
+    if not raw_spec:
+        return []
+
+    if isinstance(raw_spec, dict):
+        raw_spec = [raw_spec]
+
+    normalized = []
+    for entry in raw_spec:
+        if isinstance(entry, str):
+            flags = [entry]
+            path_type = "file"
+        elif isinstance(entry, dict):
+            flags = []
+            if entry.get("flag"):
+                flags.append(entry["flag"])
+            flags.extend(entry.get("aliases", []))
+            flags = [f for f in flags if f]
+            if not flags:
+                continue
+            path_type = str(entry.get("type", "file")).lower()
+        else:
+            continue
+
+        normalized.append(
+            {
+                "flags": flags,
+                "type": path_type,
+            }
+        )
+    return normalized
+
+
+def _parse_path_args(spec: List[Dict], extra_args: List[str]) -> List[Dict]:
+    """Parse user extra_args using the path_args spec and collect path values."""
+    if not spec or not extra_args:
+        return []
+
+    # Map flag -> spec for quick lookup
+    flag_to_spec = {}
+    for item in spec:
+        for flag in item.get("flags", []):
+            flag_to_spec[flag] = item
+
+    results = []
+    i = 0
+    while i < len(extra_args):
+        arg = extra_args[i]
+        flag = None
+        value = None
+
+        if arg.startswith("-"):
+            if "=" in arg:
+                potential_flag, potential_value = arg.split("=", 1)
+                flag = potential_flag
+                value = potential_value
+            else:
+                flag = arg
+                if (i + 1) < len(extra_args):
+                    next_arg = extra_args[i + 1]
+                    # Only treat next as value if it is not another flag
+                    if not next_arg.startswith("-"):
+                        value = next_arg
+                        i += 1
+
+        if flag and flag in flag_to_spec and value is not None:
+            spec_entry = flag_to_spec[flag]
+            path_obj = Path(value)
+            results.append(
+                {
+                    "flag": flag,
+                    "value": value,
+                    "type": spec_entry.get("type", "file"),
+                    "is_absolute": path_obj.is_absolute(),
+                    "exists": path_obj.exists(),
+                    "parent": str(path_obj.parent),
+                }
+            )
+
+        i += 1
+
+    return results
+
+
+def _path_args_env(path_args: List[Dict]) -> Dict[str, str]:
+    """Prepare environment variables for path_args."""
+    if not path_args:
+        return {}
+    try:
+        payload = json.dumps(path_args, separators=(",", ":"))
+    except Exception:
+        return {}
+    return {"CVL_PATH_ARGS": payload}
+
+
+def _warn_path_args(path_args: List[Dict], work_dir: Optional[str]) -> None:
+    """Warn users about absolute paths that may not be mounted."""
+    if not path_args:
+        return
+
+    base = work_dir or os.getcwd()
+    for entry in path_args:
+        if entry.get("is_absolute"):
+            print(
+                f"⚠ Detected absolute path for {entry['flag']}: {entry['value']}\n"
+                f"   Ensure the directory is mounted in your docker run script or place the file under {base}",
+                file=sys.stderr,
+            )
+
+
 def run_cog_command(
     example_dir: str,
     cog_command: str,
     extra_args: List[str],
     no_live: bool = False,
     job_name: str = "",
+    env_overrides: Optional[Dict[str, str]] = None,
 ) -> Tuple[int, str]:
     """Execute a Cog command (build, predict, etc.).
 
@@ -223,6 +338,8 @@ def run_cog_command(
     # Use env to set PYTHONUNBUFFERED
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    if env_overrides:
+        env.update(env_overrides)
 
     try:
         if use_live:
@@ -374,6 +491,9 @@ def run_script(
             env["CVL_WORK_DIR"] = str(Path(work_dir).resolve())
         else:
             env["CVL_WORK_DIR"] = os.getcwd()
+
+        if path_args_env:
+            env.update(path_args_env)
 
         # Ensure common cache directories exist so docker bind mounts do not fail
         _ensure_cache_dirs(env)
@@ -737,6 +857,13 @@ def run_example(
         available = _get_available_presets(example)
         return (1, f"Preset '{preset_name}' not found. Available: {available}")
 
+    # Parse path_args (if any) to surface warnings and pass to scripts via env
+    path_args_spec = _normalize_path_args_spec(preset_info.get("path_args"))
+    path_args = _parse_path_args(path_args_spec, extra_args)
+    path_args_env = _path_args_env(path_args)
+    if path_args:
+        _warn_path_args(path_args, work_dir)
+
     # Handle downloads if this is a build preset and downloads are specified
     if preset_name == "build":
         downloads = example.get("resources", {}).get("downloads", [])
@@ -814,6 +941,7 @@ def run_example(
             extra_args,
             no_live=no_live,
             job_name=f"{example_name} {preset_name}",
+            env_overrides=path_args_env,
         )
 
         return (exit_code, error_msg)
