@@ -1,0 +1,27 @@
+# Data and outputs
+data/
+outputs/
+*.log
+
+# Temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+
+# SAM3 repo (should be cloned separately)
+projects/
+sam3_repo/
+<YOUR
+EXPERIMENET
+LOG_DIR>/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
