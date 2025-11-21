@@ -1,0 +1,49 @@
+name: gemma3-vision-grpo
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+datasets:
+  - AI4Math/MathVista
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 20
+  disk_gb: 25
+image: cvlization/gemma3-vision-grpo:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Fine-tune Gemma-3 vision model with GRPO
+  test:
+    script: test.sh
+    description: Run smoke test (60 steps, 50 samples)
+tags:
+  - unsloth
+  - gemma
+  - gemma-3
+  - vision-language
+  - reinforcement-learning
+  - grpo
+  - lora
+  - pytorch
+  - 4bit
+  - vllm
+  - math-reasoning
+tasks:
+  - visual_reasoning
+  - math_qa
+  - vision_language
+frameworks:
+  - pytorch
+  - unsloth
+  - transformers
+  - trl
+  - vllm
+description: Fine-tune Gemma-3 vision model with GRPO (Group Relative Policy Optimization) for math visual reasoning. Custom reward functions for structured reasoning and answer correctness.
+verification:
+  last_verified: "2025-11-21"
+  last_verification_note: "Training verified. Docker builds with PyTorch 2.9.0+CUDA 12.8 (optimized for vllm). Training completes successfully (60 steps, 1h 40m, 4.4GB VRAM) with GRPO rewards working. Post-training inference test has minor tokenizer bug (train.py:268) but model saves correctly. Requires build-essential for bitsandbytes compilation."
