@@ -1,0 +1,30 @@
+# Core dependencies
+python-dotenv
+trimesh
+mpmath
+scikit-image==0.25.2
+numpy==1.25.1
+scikit-learn==1.5.0
+tqdm==4.66.4
+torchmetrics[image]==1.4.0
+opencv-python==4.9.0.80
+Pillow==10.3.0
+tensorboard==2.19.0
+tensorly==0.8.1
+pyyaml==6.0.2
+matplotlib==3.9.0
+splines==0.3.0
+pandas>=1
+lpips
+onnxruntime
+plyfile
+mediapipe==0.10.15
+
+# Face recognition / rendering
+insightface>=0.7
+gsplat>=1.0
+tyro>=0.8.8
+imageio[ffmpeg]==2.35.1
+
+# For downloading models from Google Drive
+gdown
