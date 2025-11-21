@@ -1,0 +1,47 @@
+# Output directories
+outputs/
+results/
+*.mp4
+*.mov
+*.avi
+
+# Model checkpoints (too large for Docker context)
+models/
+checkpoints/
+*.ckpt
+*.pth
+*.pt
+*.safetensors
+
+# Cache directories
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# Data directories
+data/
+datasets/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Documentation builds
+docs/_build/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store

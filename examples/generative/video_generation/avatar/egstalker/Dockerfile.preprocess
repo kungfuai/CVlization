@@ -1,0 +1,5 @@
+ARG BASE_IMAGE=egstalker-base:latest
+FROM ${BASE_IMAGE}
+
+# Preprocessing-specific environment tweaks can be added here if needed.
+WORKDIR /workspace
