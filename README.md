@@ -66,21 +66,21 @@ examples/
 |------------|-------------------|-----------------|--------|
 | ![Image Classification](./doc/images/plant_classification.png) Image Classification | [`examples/perception/image_classification`](./examples/perception/image_classification) | torch | ✅ |
 | ![Object Detection](./doc/images/object_detection.jpg) Object Detection | [`examples/perception/object_detection`](./examples/perception/object_detection) | mmdet, torchvision | ✅ |
-| ![Segmentation](./doc/images/semantic_segmentation.png) Segmentation | [`examples/perception/segmentation`](./examples/perception/segmentation) | instance (mmdet, torchvision), semantic (mmseg, torchvision), panoptic (mmdet, torchvision), sam (experimental) | ✅ |
+| ![Segmentation](./doc/images/semantic_segmentation.png) Segmentation | [`examples/perception/segmentation`](./examples/perception/segmentation) | instance (mmdet, torchvision), semantic (mmseg, torchvision), panoptic (mmdet, torchvision), sam (experimental), sam3_finetuning | ✅ |
 | ![Pose Estimation](./doc/images/pose_estimation.jpeg) Pose Estimation | [`examples/perception/pose_estimation`](./examples/perception/pose_estimation) | dwpose, mmpose | ✅ |
 | ![Object Tracking](./doc/images/player_tracking.gif) Tracking | [`examples/perception/tracking`](./examples/perception/tracking) | global_tracking_transformer, soccer_visual_tracking | ✅ |
 | ![Line Detection](./doc/images/line_detection.png) Line Detection | [`examples/perception/line_detection`](./examples/perception/line_detection) | torch | ✅ |
 | ![Document AI](./doc/images/layoutlm.png) Document AI | [`examples/perception/doc_ai`](./examples/perception/doc_ai) | OCR (chandra_ocr, deepseek_ocr, docling, doctr, dots_ocr, nanonets_ocr, olmocr_2, paddleocr_vl, surya), VLMs (donut_doc_classification, donut_doc_parse, granite_docling, granite_docling_finetune), Leaderboard (leaderboard) | ✅ |
-| ![Vision-Language](./doc/images/layoutlm.png) Vision-Language Models | [`examples/perception/vision_language`](./examples/perception/vision_language) | florence_2, internvl3, minicpm_v_2_6, moondream2 (+ finetune), moondream3, phi_3_5_vision_instruct, phi_4_multimodal_instruct, qwen3_vl | ✅ |
+| ![Vision-Language](./doc/images/layoutlm.png) Vision-Language Models | [`examples/perception/vision_language`](./examples/perception/vision_language) | florence_2, internvl3, minicpm_v_2_6, moondream2 (+ finetune), moondream3, phi_3_5_vision_instruct, phi_4_multimodal_instruct, qwen3_vl, gemma3_vision_grpo, gemma3_vision_sft | ✅ |
 | ![3D: rendering and reconstruction](./doc/images/nerf.gif) 3D Reconstruction | [`examples/perception/3d_reconstruction`](./examples/perception/3d_reconstruction) | nerf_tf (experimental) | 🧪 |
 
 #### ✨ Generative (Creating Content)
 
 | Capability | Example Directory | Implementations | Status |
 |------------|-------------------|-----------------|--------|
-| ![LLMs](./doc/images/llm.png) LLMs (text generation) | [`examples/generative/llm`](./examples/generative/llm) | Small-scale pretraining (nanogpt, modded_nanogpt, nanochat), Fine-tuning (peft_mistral7b_sft, trl_sft, unsloth: gpt_oss_grpo, gpt_oss_sft, llama_3b_sft, qwen_7b_sft), Inference (mixtral8x7b) | ✅ |
-| ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, pixart (experimental), stable_diffusion, uva_energy (experimental), vqgan | ✅ |
-| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_x, cogvideox, framepack, mimic_motion, minisora, phantom (experimental), skyreals, svd_cog, vace, vace_comfy (experimental), video_in_between, wan2gp, wan_comfy | ✅ |
+| ![LLMs](./doc/images/llm.png) LLMs (text generation) | [`examples/generative/llm`](./examples/generative/llm) | Small-scale pretraining (nanogpt, modded_nanogpt, nanochat), Fine-tuning (peft_mistral7b_sft, trl_sft, unsloth: gpt_oss_grpo, gpt_oss_sft, llama_3b_sft, qwen_7b_sft, gemma3_4b_sft), Inference (mixtral8x7b) | ✅ |
+| ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, next_scene_qwen, pixart (experimental), stable_diffusion, uva_energy (experimental), vqgan | ✅ |
+| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_x, cogvideox, framepack, mimic_motion, minisora, phantom (experimental), skyreals, svd_cog, vace, vace_comfy (experimental), video_in_between, wan2gp, wan_comfy, krea_realtime_scope (experimental) | ✅ |
 
 #### 📊 Analytical (Prediction & Forecasting)
 
