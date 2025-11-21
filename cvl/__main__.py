@@ -7,6 +7,7 @@ from cvl.core.discovery import find_all_examples
 from cvl.commands.list import list_examples
 from cvl.commands.info import get_example_info
 from cvl.commands.run import run_example
+from cvl.commands.export import export_example
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -96,6 +97,25 @@ def create_parser() -> argparse.ArgumentParser:
         help="Additional arguments to pass to the script"
     )
 
+    # export command
+    export_parser = subparsers.add_parser(
+        "export",
+        help="Export an example along with the cvlization package for standalone use"
+    )
+    export_parser.add_argument(
+        "example",
+        help="Example path (e.g., generative/minisora)"
+    )
+    export_parser.add_argument(
+        "-o", "--dest",
+        help="Destination directory for the export (default: ./<example-name>-export)"
+    )
+    export_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite destination if it already exists"
+    )
+
     return parser
 
 
@@ -117,6 +137,25 @@ def cmd_list(args) -> int:
         )
         print(output)
         return 0
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_export(args) -> int:
+    """Handle the export command."""
+    try:
+        examples = find_all_examples()
+        exit_code, message = export_example(
+            examples,
+            args.example,
+            dest=getattr(args, "dest", None),
+            overwrite=getattr(args, "force", False),
+        )
+        stream = sys.stderr if exit_code else sys.stdout
+        if message:
+            print(message, file=stream)
+        return exit_code
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
@@ -189,6 +228,8 @@ def main() -> int:
         return cmd_info(args)
     elif args.command == "run":
         return cmd_run(args)
+    elif args.command == "export":
+        return cmd_export(args)
     else:
         parser.print_help()
         return 1

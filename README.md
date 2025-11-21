@@ -24,8 +24,8 @@ cvl list -k gpt           # search by keyword
 cvl run image-classification-torch build
 cvl run image-classification-torch train
 
-# Copy into your project
-cp -r examples/perception/image_classification/torch your-project/
+# Copy into your project (bundled with cvlization)
+cvl export perception/image_classification/torch -o your-project/
 ```
 
 That's it! Each example is self-contained with its own Dockerfile and dependencies. (We battled CUDA versions and dependency conflicts so you don't have to.)
