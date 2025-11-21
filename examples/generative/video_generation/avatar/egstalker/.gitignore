@@ -48,3 +48,10 @@ wandb/
 # OS
 .DS_Store
 Thumbs.db
+
+# Binary files (should not be committed)
+*.ttf
+*.TTF
+*.otf
+*.whl
+scene/KAN/dist/

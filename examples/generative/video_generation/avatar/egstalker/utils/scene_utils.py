@@ -35,7 +35,11 @@ def render_training_image(scene, gaussians, viewpoints, render_func, pipe, backg
         draw1 = ImageDraw.Draw(image_with_labels)
 
         # 选择字体和字体大小
-        font = ImageFont.truetype('./utils/TIMES.TTF', size=40)  # 请将路径替换为您选择的字体文件路径
+        try:
+            # Try to use system fonts (Times New Roman or fallback to default)
+            font = ImageFont.truetype('/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf', size=40)
+        except:
+            font = ImageFont.load_default()
 
         # 选择文本颜色
         text_color = (255, 0, 0)  # 白色
