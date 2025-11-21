@@ -310,6 +310,31 @@ class TestRunExample(unittest.TestCase):
         self.assertEqual(args[1], ["--epochs", "10"])
         self.assertFalse(kwargs.get("no_live"))
 
+    @patch("cvl.commands.run.check_docker_image_exists", return_value=True)
+    @patch("cvl.commands.run.check_docker_running", return_value=(True, ""))
+    @patch("cvl.commands.run.run_script")
+    @patch("cvl.commands.run.find_script")
+    def test_path_args_env_passed_to_run_script(self, mock_find_script, mock_run_script, _mock_docker, _mock_image):
+        """Test that path_args_env is properly passed from run_example to run_script."""
+        mock_find_script.return_value = "/path/to/train.sh"
+        mock_run_script.return_value = (0, "")
+
+        exit_code, error_msg = run_example(
+            self.examples,
+            "generative/test_example",
+            "train",
+            [],
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(error_msg, "")
+
+        # Verify path_args_env is passed to run_script
+        mock_run_script.assert_called_once()
+        args, kwargs = mock_run_script.call_args
+        self.assertIn("path_args_env", kwargs)
+        # Should be passed even if None/empty
+        self.assertIsInstance(kwargs.get("path_args_env"), (dict, type(None)))
+
 
 if __name__ == "__main__":
     unittest.main()
