@@ -1,0 +1,7 @@
+data/
+outputs/
+weights/model_1.onnx
+weights/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/model.pb
+weights/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/lm/lm.pb
+
+.ipynb_checkpoints/

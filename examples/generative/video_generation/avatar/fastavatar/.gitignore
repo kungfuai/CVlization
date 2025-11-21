@@ -1,0 +1,43 @@
+# Outputs
+results/
+novel_views/
+*.ply
+*.npy
+
+# Models and cache
+pretrained_weights/
+*.pth
+*.pt
+
+# Data
+data/*.png
+data/*.jpg
+data/*.jpeg
+!data/example.png
+data/*/  # Exclude multi-view datasets
+data/422/
+data/sample_422_multiview/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
