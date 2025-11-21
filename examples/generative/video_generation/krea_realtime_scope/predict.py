@@ -6,7 +6,22 @@ Supports offline batch video generation from text prompts.
 import os
 import sys
 import argparse
+import logging
+import warnings
 from pathlib import Path
+
+# Suppress verbose logging by default
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("DIFFUSERS_VERBOSITY", "error")
+
+# Suppress PyTorch CUDA warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torch.cuda")
+
+# Configure logging - only show errors by default
+logging.basicConfig(level=logging.ERROR)
+for logger_name in ["transformers", "diffusers", "torch", "triton"]:
+    logging.getLogger(logger_name).setLevel(logging.ERROR)
 
 import numpy as np
 import torch
@@ -142,8 +157,19 @@ def main():
         choices=["none", "fp8"],
         help="Quantization mode (default: none, use fp8 for 32GB VRAM GPUs)"
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging (shows Triton compilation, warnings, etc.)"
+    )
 
     args = parser.parse_args()
+
+    # Enable verbose logging if requested
+    if args.verbose:
+        logging.basicConfig(level=logging.INFO, force=True)
+        for logger_name in ["transformers", "diffusers", "torch", "triton"]:
+            logging.getLogger(logger_name).setLevel(logging.INFO)
 
     # Set up paths
     output_path = Path(args.output)
