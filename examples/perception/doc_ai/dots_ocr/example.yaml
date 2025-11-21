@@ -17,6 +17,13 @@ presets:
   predict:
     script: predict.sh
     description: Run predict
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--model-path"
+        type: file
+      - flag: "--output"
+        type: file
 tags:
 - ocr
 - document-understanding

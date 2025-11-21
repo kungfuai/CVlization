@@ -16,9 +16,23 @@ presets:
   predict:
     script: predict.sh
     description: Run inference (pass --variant 2b|4b|8b)
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--images"
+        type: file
+      - flag: "--output"
+        type: file
   batch_predict:
     script: batch_predict.py
     description: "Batch inference from JSONL (requires: --batch-input, --output-dir, --variant)"
+    path_args:
+      - flag: "--batch-input"
+        type: file
+      - flag: "--output-dir"
+        type: dir
+      - flag: "--stats-output"
+        type: file
   test:
     script: test.sh
     description: "Smoke-test (arg: variant, defaults to 2b)"
