@@ -1,0 +1,39 @@
+name: krea-realtime-scope
+capability: generative/video_generation
+modalities:
+  - vision
+  - text
+datasets:
+  - custom
+stability: beta
+resources:
+  gpu: 1
+  vram_gb: 40
+  disk_gb: 50
+presets:
+  build:
+    script: build.sh
+    description: Build Docker image with Scope framework
+  predict:
+    script: predict.sh
+    description: Generate video from text prompt using Scope implementation
+tags:
+  - video-generation
+  - text-to-video
+  - real-time
+  - scope
+  - pytorch
+  - krea
+tasks:
+  - video_generation
+frameworks:
+  - pytorch
+  - scope
+description: >
+  Real-time text-to-video generation with Krea 14B model via Scope framework.
+  Uses Scope's production-ready implementation with proper 14B architecture support.
+  Alternative to krea-realtime example which is blocked pending official SDK updates.
+verification:
+  last_verified: "2025-11-21"
+  last_verification_note: "New example using Scope framework (github.com/daydreamlive/scope) which properly supports 14B model architecture. Requires 40GB+ VRAM. To be tested."
+  status: "pending"
