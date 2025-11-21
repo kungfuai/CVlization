@@ -1,0 +1,49 @@
+name: nvidia_nemotron_parse
+capability: perception/doc_ai
+modalities:
+  - vision
+  - text
+datasets:
+  - custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 10
+image: cvlization/nvidia-nemotron-parse:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run document parsing with spatial grounding
+  test:
+    script: test.sh
+    description: Run smoke test on sample document
+tags:
+  - ocr
+  - document-ai
+  - document-parsing
+  - spatial-grounding
+  - layout-analysis
+  - table-extraction
+  - nvidia
+  - transformers
+  - vision-language
+  - bounding-boxes
+tasks:
+  - ocr
+  - document_understanding
+  - document_parsing
+  - layout_analysis
+  - table_extraction
+  - information_extraction
+frameworks:
+  - pytorch
+  - transformers
+description: NVIDIA Nemotron Parse v1.1 - Document structure understanding with spatial grounding (<1B params)
+
+verification:
+  last_verified: "2025-11-20"
+  last_verification_note: "Verified with CVL test - model loads and runs successfully. Extracts invoice data with 100% accuracy as LaTeX table with bounding boxes. Post-processing logic needs refinement for cleaner output."
