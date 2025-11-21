@@ -431,7 +431,8 @@ def run_script(
     no_live: bool = False,
     job_name: str = "",
     image_name: str = "",
-    work_dir: Optional[str] = None
+    work_dir: Optional[str] = None,
+    path_args_env: Optional[Dict[str, str]] = None
 ) -> Tuple[int, str]:
     """Execute a script with optional arguments.
 
@@ -1026,7 +1027,8 @@ def run_example(
         no_live=no_live,
         job_name=f"{example_name} {preset_name}",
         image_name=image_name,
-        work_dir=work_dir
+        work_dir=work_dir,
+        path_args_env=path_args_env
     )
 
     # Show path mappings after completion (if successful)
