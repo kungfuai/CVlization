@@ -1,0 +1,25 @@
+real_name: Wan2.1-T2V-14B
+text_encoder_fsdp_wrap_strategy: size
+denoising_step_list:
+- 1000
+- 937
+- 833
+- 625
+- 0
+warp_denoising_step: false
+ts_schedule: false
+num_train_timestep: 1000
+timestep_shift: 5.0
+guidance_scale: 3.0
+denoising_loss_type: flow
+mixed_precision: true
+seed: 0
+num_frame_per_block: 3
+load_raw_video: false
+model_kwargs:
+  timestep_shift: 5.0
+checkpoint_path: "checkpoints/krea-realtime-video-14b.safetensors"
+use_trt: false
+use_taehv: false
+enable_fp8: false
+do_kv_recomp: true

@@ -19,34 +19,47 @@ def download_models():
     """Download required models if they don't exist."""
     from huggingface_hub import hf_hub_download, snapshot_download
 
-    # Download base model (Wan 2.1 T2V 1.3B)
+    # Download base model (Wan 2.1 T2V 14B) - note: uses 1.3B architecture but 14B checkpoint
     model_folder = os.environ.get("MODEL_FOLDER", "/root/.cache/huggingface/wan_models")
-    base_model_path = Path(model_folder) / "Wan2.1-T2V-1.3B"
 
-    if not base_model_path.exists():
+    # Download 1.3B base model (used for VAE and text encoder)
+    base_model_path_1_3b = Path(model_folder) / "Wan2.1-T2V-1.3B"
+    if not base_model_path_1_3b.exists():
         print("📥 Downloading base model (Wan-AI/Wan2.1-T2V-1.3B)...")
         print("   This is a large download (~15GB) and will take several minutes...")
         snapshot_download(
             repo_id="Wan-AI/Wan2.1-T2V-1.3B",
-            local_dir=str(base_model_path),
+            local_dir=str(base_model_path_1_3b),
             local_dir_use_symlinks=False,
         )
         print("✅ Base model downloaded successfully")
 
-    # Download Krea checkpoint
-    checkpoint_path = Path("/opt/krea-sdk/checkpoints/krea-realtime-video-14b.safetensors")
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    # Create symlink for 14B if it doesn't exist
+    base_model_path_14b = Path(model_folder) / "Wan2.1-T2V-14B"
+    if not base_model_path_14b.exists():
+        base_model_path_14b.symlink_to("Wan2.1-T2V-1.3B")
 
-    if not checkpoint_path.exists():
+    # Download Krea checkpoint to persistent cache
+    checkpoint_cache_dir = Path("/root/.cache/huggingface/checkpoints")
+    checkpoint_cache_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_cache_path = checkpoint_cache_dir / "krea-realtime-video-14b.safetensors"
+
+    if not checkpoint_cache_path.exists():
         print("📥 Downloading Krea checkpoint (krea/krea-realtime-video)...")
         print("   This is a large file (~28.6GB) and will take several minutes...")
         hf_hub_download(
             repo_id="krea/krea-realtime-video",
             filename="krea-realtime-video-14b.safetensors",
-            local_dir=str(checkpoint_path.parent),
+            local_dir=str(checkpoint_cache_dir),
             local_dir_use_symlinks=False,
         )
         print("✅ Krea checkpoint downloaded successfully")
+
+    # Create symlink from SDK checkpoint location to cached file
+    checkpoint_path = Path("/opt/krea-sdk/checkpoints/krea-realtime-video-14b.safetensors")
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    if not checkpoint_path.exists():
+        checkpoint_path.symlink_to(checkpoint_cache_path)
 
 
 def main():
@@ -104,8 +117,8 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/self_forcing_server_14b.yaml",
-        help="Path to SDK config file (relative to /opt/krea-sdk)"
+        default="/workspace/self_forcing_server_14b_fixed.yaml",
+        help="Path to SDK config file"
     )
 
     args = parser.parse_args()

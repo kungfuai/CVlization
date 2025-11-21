@@ -42,4 +42,5 @@ description: >
   with 4-6 inference steps for fast generation.
 verification:
   last_verified: "2025-11-21"
-  last_verification_note: "Updated to integrate official Krea AI SDK (github.com/krea-ai/realtime-video). Supports predict (offline batch) and serve (WebSocket streaming) presets. Docker image includes full SDK with custom ModularPipeline. Requires 40GB+ VRAM for 14B model. Ready for testing."
+  last_verification_note: "BLOCKED - SDK architecture incompatibility. The official Krea SDK (github.com/krea-ai/realtime-video) only supports 1.3B model architecture (1536 dim, 30 blocks) but krea-realtime-video-14b.safetensors checkpoint contains 14B model (5120 dim, 40 blocks). SDK has hardcoded model_name='Wan2.1-T2V-1.3B' in wan_wrapper.py with 14B option commented out. Example cannot run until SDK adds 14B architecture support. Docker build succeeds. Fixed checkpoint caching to use persistent /root/.cache/huggingface/checkpoints/ directory."
+  status: "blocked"
