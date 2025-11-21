@@ -1,0 +1,47 @@
+name: churro_3b
+capability: perception/doc_ai
+modalities:
+  - vision
+  - text
+datasets:
+  - custom
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 10
+image: cvlization/churro-3b:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run historical document OCR
+  test:
+    script: test.sh
+    description: Run smoke test on sample document
+tags:
+  - ocr
+  - document-ai
+  - historical-documents
+  - multilingual
+  - churro
+  - stanford
+  - qwen
+  - transformers
+  - handwriting
+  - xml-output
+tasks:
+  - ocr
+  - document_understanding
+  - historical_document_transcription
+  - multilingual_ocr
+frameworks:
+  - pytorch
+  - transformers
+description: CHURRO-3B - Historical document OCR for 22 centuries and 46 language clusters with exceptional accuracy
+
+verification:
+  last_verified: "2025-11-21"
+  last_verification_note: "Verified build, inference, model caching (7.1GB models), and outputs on NVIDIA L4 (23GB VRAM). Extracts invoice with 100% accuracy using bfloat16 precision. Uses transformers from git for Qwen2.5-VL support."

@@ -1,0 +1,9 @@
+transformers==4.48.2
+pillow==11.1.0
+requests==2.32.3
+accelerate==1.2.1
+opencv-python==4.10.0.84
+albumentations==1.4.23
+timm==1.0.12
+einops==0.8.0
+open-clip-torch==2.31.0
