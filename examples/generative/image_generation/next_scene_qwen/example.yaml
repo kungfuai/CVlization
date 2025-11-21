@@ -1,0 +1,46 @@
+name: next-scene-qwen
+capability: generative/image_generation
+modalities:
+  - vision
+  - text
+datasets:
+  - custom
+stability: beta
+resources:
+  gpu: 1
+  vram_gb: 10
+  disk_gb: 25
+  downloads:
+    - url: "hf://lovis93/next-scene-qwen-image-lora-2509"
+      dest: "models/next-scene-lora"
+presets:
+  build:
+    script: build.sh
+    description: Build Docker image with Qwen and LoRA support
+  predict:
+    script: predict.sh
+    description: Generate next scene from prompt
+  sequence:
+    script: sequence.sh
+    description: Generate multi-scene narrative sequence
+tags:
+  - image-generation
+  - lora
+  - qwen
+  - cinematic
+  - storytelling
+  - sequential
+  - narrative
+tasks:
+  - image_generation
+  - sequential_generation
+frameworks:
+  - pytorch
+  - diffusers
+description: >
+  Cinematic scene progression using Qwen-Image-Edit with Next-Scene LoRA.
+  Creates natural visual transitions with camera dynamics, environmental
+  progression, and narrative continuity for sequential storytelling.
+verification:
+  last_verified: "2025-11-21"
+  last_verification_note: "Verified structure, Docker build (19.8GB), CVL integration, and successful inference generation on A10 GPU (23GB VRAM). Generated 512x384 PNG in ~1s using SDXL base + Next-Scene LoRA. Includes PEFT LoRA support."
