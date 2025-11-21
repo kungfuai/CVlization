@@ -2,6 +2,7 @@
 outputs/
 *.json
 *.txt
+!requirements.txt
 
 # Python
 __pycache__/
@@ -9,3 +10,4 @@ __pycache__/
 
 # Logs
 *.log
+
