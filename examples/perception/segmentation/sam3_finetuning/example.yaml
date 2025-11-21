@@ -1,0 +1,35 @@
+name: sam3-finetuning
+capability: perception/segmentation
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 30
+image: sam3-finetuning
+presets:
+  build:
+    script: build.sh
+    description: Build the SAM3 finetune image
+  train:
+    script: train.sh
+    description: Train SAM3 on COCO-format segmentation dataset
+tags:
+  - sam3
+  - segmentation
+  - finetune
+  - open-vocabulary
+frameworks:
+  - pytorch
+  - transformers
+datasets:
+  - coco
+description: SAM3 (Segment Anything Model 3) fine-tuning on custom segmentation datasets with COCO annotations
+tasks:
+  - instance_segmentation
+  - semantic_segmentation
+verification:
+  last_verified: 2025-11-21
+  last_verification_note: "Initial implementation. Requires testing with actual dataset."
