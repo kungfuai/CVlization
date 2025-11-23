@@ -1,0 +1,53 @@
+name: map_anything
+capability: perception/3d_reconstruction
+modalities:
+  - vision
+stability: experimental
+resources:
+  gpu:
+    count: 1
+    vram_gb: 16
+  cpu_cores: 8
+  ram_gb: 32
+  disk_gb: 20
+presets:
+  build:
+    - build.sh
+  predict:
+    - predict.sh
+tags:
+  - 3d-reconstruction
+  - multi-view
+  - structure-from-motion
+  - multi-view-stereo
+  - depth-estimation
+  - camera-pose
+  - transformer
+  - end-to-end
+  - gaussian-splatting
+frameworks:
+  - pytorch
+description: |
+  MapAnything is an end-to-end trained transformer model that directly regresses
+  factored metric 3D geometry from various inputs (images, calibration, poses, depth).
+
+  It supports 12+ 3D reconstruction tasks through a single feed-forward architecture:
+  - Structure-from-Motion (SfM)
+  - Multi-View Stereo (MVS)
+  - Monocular depth estimation
+  - Registration
+  - Depth completion
+
+  The model handles multi-modal inputs and produces comprehensive outputs including
+  3D points, depth maps, camera parameters, and confidence metrics.
+
+  This example provides image-only inference for 3D reconstruction.
+datasets: []
+image: map_anything
+model_source: facebook/map-anything
+license: CC-BY-NC-4.0
+paper: https://arxiv.org/abs/2501.05252
+repository: https://github.com/facebookresearch/map-anything
+verification:
+  last_verified: 2025-11-23
+  last_verification_note: "Verified build (PyTorch 2.9.0), inference with single image, model caching (1.13GB DINOv2), and outputs (3D points, depth, camera parameters) on NVIDIA RTX PRO 6000 Blackwell (97.9GB VRAM). Requires PyTorch 2.9.0+ for Blackwell GPU compatibility."

@@ -1,0 +1,7 @@
+# Test data and outputs
+data/images/*
+!data/images/.gitkeep
+!data/images/02.png
+output/
+*.pyc
+__pycache__/
