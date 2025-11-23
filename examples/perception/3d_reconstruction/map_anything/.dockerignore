@@ -1,0 +1,27 @@
+# Ignore output and data directories
+output/
+data/
+
+# Ignore git
+.git/
+.gitignore
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore logs
+*.log
+
+# Ignore model caches (will be mounted)
+.cache/
