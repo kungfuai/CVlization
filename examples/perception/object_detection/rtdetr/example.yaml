@@ -1,0 +1,30 @@
+name: rtdetr
+capability: perception/object_detection
+modalities:
+  - vision
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 10
+image: rtdetr
+presets:
+  build:
+    script: build.sh
+    description: Build the RT-DETR inference image
+  predict:
+    script: predict.sh
+    description: Run RT-DETR object detection on an image
+tags:
+  - rtdetr
+  - object-detection
+  - inference
+frameworks:
+  - pytorch
+  - transformers
+description: RT-DETRv2 single-image object detection with TorchHub or Transformers backends.
+tasks:
+  - object_detection
+verification:
+  last_verified: 2025-11-23
+  last_verification_note: "Initial inference-only example using RT-DETRv2 torchhub/transformers backends."
