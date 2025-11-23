@@ -1,0 +1,14 @@
+# Core inference deps (pinned where sensible)
+timm==1.0.22
+numpy==1.26.4
+pillow==11.0.0
+ftfy==6.1.1
+regex==2025.11.3
+iopath==0.1.10
+typing_extensions==4.12.2
+einops==0.8.1
+decord==0.6.0
+av==16.0.1
+pycocotools==2.0.10
+huggingface_hub>=1.0.0,<2.0
+git+https://github.com/huggingface/transformers.git@bdee0889714e9cb3e53d3b1b2a626919479d356c#egg=transformers
