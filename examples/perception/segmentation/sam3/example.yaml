@@ -1,0 +1,33 @@
+name: sam3
+capability: perception/segmentation
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 15
+image: sam3
+presets:
+  build:
+    script: build.sh
+    description: Build the SAM3 inference image
+  predict:
+    script: predict.sh
+    description: Run text-prompted SAM3 segmentation on an image
+tags:
+  - sam3
+  - segmentation
+  - inference
+  - open-vocabulary
+frameworks:
+  - pytorch
+  - transformers
+description: SAM3 text-prompted segmentation inference in a slim runtime container.
+tasks:
+  - instance_segmentation
+  - semantic_segmentation
+verification:
+  last_verified: 2025-11-21
+  last_verification_note: "Initial inference-only example; GPU recommended for performance."
