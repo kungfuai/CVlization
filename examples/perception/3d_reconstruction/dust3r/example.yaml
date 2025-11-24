@@ -1,0 +1,40 @@
+name: dust3r
+capability: perception/3d_reconstruction
+modalities:
+  - vision
+stability: experimental
+resources:
+  gpu:
+    count: 1
+    vram_gb: 16
+  cpu_cores: 8
+  ram_gb: 32
+  disk_gb: 20
+presets:
+  build:
+    - build.sh
+  predict:
+    - predict.sh
+tags:
+  - 3d-reconstruction
+  - multi-view
+  - structure-from-motion
+  - depth-estimation
+  - point-cloud
+  - dense-matching
+  - transformer
+  - feed-forward
+frameworks:
+  - pytorch
+description: |
+  DUSt3R (Dense Unconstrained Stereo 3D Reconstruction) performs 3D reconstruction
+  from uncalibrated images using dense matching and global optimization.
+  Outputs include 3D scenes (GLB), depth maps, and confidence maps.
+datasets: []
+image: dust3r
+model_source: naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt
+license: CC-BY-NC-SA-4.0
+repository: https://github.com/naver/dust3r
+verification:
+  last_verified: 2025-11-24
+  last_verification_note: "Verified build, inference (2 images), model caching (2.2GB), output file generation (GLB with 387k vertices, depth/confidence PNGs+NPYs) on RTX PRO 6000 Blackwell (96GB VRAM). Technical verification only - 3D geometry quality not inspected. RoPE CUDA compilation fails gracefully (PyTorch fallback works). Images mounted from hunyuanworld_mirror."
