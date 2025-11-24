@@ -1,0 +1,29 @@
+name: yolov13
+capability: perception/object_detection
+modalities:
+  - vision
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 6
+  disk_gb: 10
+image: yolov13
+presets:
+  build:
+    script: build.sh
+    description: Build the YOLOv13 inference image
+  predict:
+    script: predict.sh
+    description: Run YOLOv13 object detection on an image
+tags:
+  - yolov13
+  - object-detection
+  - inference
+frameworks:
+  - pytorch
+description: YOLOv13 object detection inference using ultralytics weights.
+tasks:
+  - object_detection
+verification:
+  last_verified: 2025-11-23
+  last_verification_note: "Initial YOLOv13 inference preset; GPU recommended for speed."

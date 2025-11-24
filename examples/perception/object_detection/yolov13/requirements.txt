@@ -1,0 +1,3 @@
+git+https://github.com/iMoonLab/yolov13.git@73289949533efac82bb5f72ec19b746618656bd2
+opencv-python-headless==4.10.0.84
+huggingface_hub==0.36.0
