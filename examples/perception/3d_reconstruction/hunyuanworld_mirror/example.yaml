@@ -1,0 +1,59 @@
+name: hunyuanworld_mirror
+capability: perception/3d_reconstruction
+modalities:
+  - vision
+stability: experimental
+resources:
+  gpu:
+    count: 1
+    vram_gb: 20
+  cpu_cores: 8
+  ram_gb: 32
+  disk_gb: 25
+presets:
+  build:
+    - build.sh
+  predict:
+    - predict.sh
+tags:
+  - 3d-reconstruction
+  - multi-view
+  - structure-from-motion
+  - depth-estimation
+  - surface-normals
+  - gaussian-splatting
+  - point-cloud
+  - transformer
+  - feed-forward
+  - colmap
+frameworks:
+  - pytorch
+description: |
+  HunyuanWorld-Mirror is a feed-forward model for comprehensive 3D geometric
+  prediction from images. It generates multiple 3D representations in a single pass.
+
+  Outputs include:
+  - Point clouds
+  - Multi-view depth maps
+  - Surface normals
+  - 3D Gaussians
+  - Camera parameters
+  - Optional COLMAP reconstruction
+
+  The model accepts optional geometric priors (camera poses, intrinsics, depth)
+  and handles various 3D reconstruction tasks through a unified architecture.
+datasets: []
+image: hunyuanworld_mirror
+model_source: tencent/HunyuanWorld-Mirror
+license: Apache-2.0
+repository: https://github.com/Tencent-Hunyuan/HunyuanWorld-Mirror
+verification:
+  last_verified: 2025-11-23
+  last_verification_note: |
+    Verified build (PyTorch 2.9.0 runtime), inference with Desk example (2 images),
+    model caching (~3GB HuggingFace), and core outputs on NVIDIA RTX PRO 6000 Blackwell (97.9GB VRAM).
+    Outputs: 357,765-point cloud (5.2MB PLY), 2 depth maps (PNG+NPY), 2 normal maps (PNG).
+    Requires PyTorch 2.9.0+ for Blackwell GPU compatibility.
+    Note: Advanced features (3D Gaussians, rendered videos, COLMAP) disabled by default
+    in runtime image due to missing CUDA toolkit. Enable with --save-gs, --save-rendered,
+    --save-colmap flags (requires switching to devel base image).

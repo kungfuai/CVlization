@@ -1,0 +1,24 @@
+# MonST3R dependencies (installed from upstream repo in Dockerfile)
+# This file is for reference only
+
+# Core dependencies (from monst3r/requirements.txt)
+torch
+torchvision
+roma
+gradio
+matplotlib
+tqdm
+opencv-python
+scipy
+einops
+trimesh
+pyglet<2
+huggingface-hub[torch]>=0.22
+
+# Additional tools
+gdown  # For checkpoint downloads
+evo    # For camera trajectory evaluation
+
+# Third-party (installed from monst3r repo)
+# - SAM2 (third_party/sam2)
+# - RAFT (third_party/RAFT)
