@@ -1,0 +1,43 @@
+name: monst3r
+capability: perception/3d_reconstruction
+modalities:
+  - vision
+  - video
+stability: experimental
+resources:
+  gpu:
+    count: 1
+    vram_gb: 80
+  cpu_cores: 8
+  ram_gb: 32
+  disk_gb: 25
+presets:
+  build:
+    - build.sh
+  predict:
+    - predict.sh
+tags:
+  - 3d-reconstruction
+  - 4d-reconstruction
+  - dynamic-scenes
+  - video-reconstruction
+  - multi-view
+  - structure-from-motion
+  - depth-estimation
+  - point-cloud
+  - temporal
+  - motion-segmentation
+  - transformer
+  - feed-forward
+frameworks:
+  - pytorch
+description: |
+  MonST3R performs 4D reconstruction (3D + time) from dynamic videos using
+  feed-forward dense matching and global optimization. Handles motion with
+  dynamic/static segmentation. Outputs time-varying point clouds, depth maps,
+  camera poses, and dynamic masks.
+datasets: []
+image: monst3r
+model_source: Junyi42/MonST3R_PO-TA-S-W_ViTLarge_BaseDecoder_512_dpt
+license: CC-BY-NC-SA-4.0
+repository: https://github.com/junyi42/monst3r

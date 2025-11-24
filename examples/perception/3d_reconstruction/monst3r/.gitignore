@@ -1,0 +1,25 @@
+# Outputs
+outputs/
+
+# Data (demo data is inside container from git clone during build)
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Model caches (will be mounted)
+.cache/
