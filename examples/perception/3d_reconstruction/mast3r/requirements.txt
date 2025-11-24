@@ -1,0 +1,12 @@
+roma==1.5.0
+gradio==4.44.1
+matplotlib==3.10.0
+tqdm==4.67.1
+opencv-python==4.10.0.84
+scipy==1.14.1
+einops==0.8.0
+trimesh==4.5.3
+tensorboard==2.18.0
+pyglet==1.5.29
+huggingface-hub[torch]==0.26.2
+scikit-learn==1.5.2
