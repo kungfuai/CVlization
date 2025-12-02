@@ -1,0 +1,31 @@
+name: owl_vit
+capability: perception/vision_language
+modalities: [vision, text]
+datasets: [custom, coco, lvis]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 5
+
+# Docker image name for this example
+image: owl_vit
+
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    command: python3 predict.py
+    description: Run open-vocabulary object detection
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--output"
+        type: file
+
+tags: [owl-vit, owlv2, zero-shot, object-detection, open-vocabulary, vision-transformer, clip, pytorch]
+tasks: [object_detection, zero_shot_object_detection, open_vocabulary_detection]
+frameworks: [pytorch, transformers]
+description: Open-vocabulary object detection using OWL-ViT/OWLv2 - detect any object with text queries
