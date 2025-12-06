@@ -9,7 +9,7 @@ Uses the official anls_star library for compatibility with CheckboxQA paper.
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Tuple, Union
 import sys
 
 try:
