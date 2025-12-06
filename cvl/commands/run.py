@@ -40,6 +40,9 @@ def get_preset_info(example: Dict, preset_name: str) -> Optional[Dict]:
                 result["command"] = preset_data["command"]
             if "path_args" in preset_data:
                 result["path_args"] = preset_data["path_args"]
+            # Include optional 'docker' field (defaults to True if not specified)
+            if "docker" in preset_data:
+                result["docker"] = preset_data["docker"]
             return result
         else:
             # Simple string value is treated as script name
@@ -824,16 +827,7 @@ def run_example(
     if extra_args is None:
         extra_args = []
 
-    # Check if Docker is running
-    docker_running, docker_error = check_docker_running()
-    if not docker_running:
-        return (1, f"✗ Docker is not running\n{docker_error}")
-
-    # Handle downloads before finding the example
-    # (so we can show better error messages if example not found)
-    downloads_to_run = None
-
-    # Find matching examples
+    # Find matching examples first (needed to check if docker is required)
     matches, suggestions = find_matching_examples(examples, example_identifier)
 
     if len(matches) == 0:
@@ -852,11 +846,23 @@ def run_example(
     example = matches[0]
     example_path = get_example_path(examples, example_identifier)
 
-    # Get preset info
+    # Get preset info early to check if docker is required
     preset_info = get_preset_info(example, preset_name)
     if preset_info is None:
         available = _get_available_presets(example)
         return (1, f"Preset '{preset_name}' not found. Available: {available}")
+
+    # Check if this preset requires Docker (default: True for backward compatibility)
+    requires_docker = preset_info.get("docker", True)
+
+    # Check if Docker is running (skip if preset doesn't require it)
+    if requires_docker:
+        docker_running, docker_error = check_docker_running()
+        if not docker_running:
+            return (1, f"✗ Docker is not running\n{docker_error}")
+
+    # Handle downloads (only for build preset)
+    downloads_to_run = None
 
     # Parse path_args (if any) to surface warnings and pass to scripts via env
     path_args_spec = _normalize_path_args_spec(preset_info.get("path_args"))
@@ -954,8 +960,8 @@ def run_example(
     if script_path is None:
         return (1, f"Script not found: {script_name} in {example_path}")
 
-    # Check if Docker image exists (except for build preset)
-    if preset_name != "build":
+    # Check if Docker image exists (except for build preset or presets that don't need Docker)
+    if preset_name != "build" and requires_docker:
         image_name = get_docker_image_name(example_path, example)
         if image_name and not check_docker_image_exists(image_name):
             # Check if build preset exists
@@ -992,7 +998,7 @@ def run_example(
 
     # CVL startup header with delimiter
     print("=" * 80)
-    print("CVL")
+    print("CVL" + (" (no Docker)" if not requires_docker else ""))
     print("=" * 80)
     print(f"Running {example_name} {preset_name}...")
 
@@ -1002,20 +1008,22 @@ def run_example(
     else:
         print(f"Example: {example_full_path}")
 
-    print(f"Docker:  {image_name}")
+    if requires_docker:
+        print(f"Docker:  {image_name}")
     print(f"Script:  {script_name}")
 
-    # Show directory mounting information
-    print("\nMounts:")
-    print(f"  {example_path}")
-    print(f"    → /workspace (container)")
+    # Show directory mounting information (only relevant for Docker)
+    if requires_docker:
+        print("\nMounts:")
+        print(f"  {example_path}")
+        print(f"    → /workspace (container)")
 
-    if work_dir:
-        work_dir_abs = Path(work_dir).resolve()
-        print(f"  {work_dir_abs}")
-    else:
-        print(f"  {os.getcwd()}")
-    print(f"    → /mnt/cvl/workspace (container)")
+        if work_dir:
+            work_dir_abs = Path(work_dir).resolve()
+            print(f"  {work_dir_abs}")
+        else:
+            print(f"  {os.getcwd()}")
+        print(f"    → /mnt/cvl/workspace (container)")
 
     print("=" * 80)
     print()  # Blank line before script output
