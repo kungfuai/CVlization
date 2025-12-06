@@ -144,6 +144,33 @@ Images should be:
 - Use `--output result.png` to save instead
 - Add `--no-show` for headless servers
 
+## Version Compatibility
+
+This example uses pinned dependency versions as specified by the OpenVLA team:
+
+| Package | Version | Notes |
+|---------|---------|-------|
+| PyTorch | 2.2.0 | Required |
+| transformers | 4.40.1 | Required |
+| tokenizers | 0.19.1 | Must match transformers |
+| timm | 0.9.10 | Must be < 1.0.0 |
+| flash-attn | 2.5.5 | Optional but recommended |
+
+**Why not newer versions?**
+
+OpenVLA's model code (loaded via `trust_remote_code=True`) has hard-coded version checks and API dependencies:
+- Rejects `timm >= 1.0.0` with `NotImplementedError`
+- Missing `_supports_sdpa` attribute required by transformers 4.50+
+- Attention implementation tied to specific flash-attn API
+
+Tested with PyTorch 2.9.1 + transformers 4.57 + timm 1.0.22 - fails at model load.
+
+**Future upgrade path:**
+1. Fork the OpenVLA model code from HuggingFace
+2. Update version checks and add missing API attributes
+3. Test inference outputs match original model
+4. Consider contributing upstream if successful
+
 ## References
 
 - [OpenVLA Paper](https://arxiv.org/abs/2406.09246)
