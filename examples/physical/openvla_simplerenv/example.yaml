@@ -1,0 +1,45 @@
+name: openvla-simplerenv
+capability: physical/vla
+modalities:
+  - vision
+  - text
+  - action
+datasets:
+  - bridge_v2
+  - fractal
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 30
+image: cvlization/openvla-simplerenv:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image with SimplerEnv and OpenVLA
+  run:
+    script: run.sh
+    description: Start the web demo server
+  test:
+    script: test.sh
+    description: Run smoke test (environment + random actions)
+tags:
+  - openvla
+  - simplerenv
+  - maniskill2
+  - vla
+  - robot-manipulation
+  - websocket
+  - demo
+tasks:
+  - robot_manipulation
+  - policy_evaluation
+frameworks:
+  - pytorch
+  - transformers
+  - maniskill2
+  - fastapi
+description: |
+  Web-based demo for evaluating OpenVLA robot manipulation policies
+  in ManiSkill2 simulation via SimplerEnv. Stream simulation frames
+  to a browser UI and select from Google Robot and WidowX tasks.

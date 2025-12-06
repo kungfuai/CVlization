@@ -1,0 +1,22 @@
+# Web server
+fastapi==0.115.6
+uvicorn==0.34.0
+websockets==14.1
+
+# Image processing (use --no-deps to avoid numpy upgrade)
+opencv-python-headless==4.10.0.84
+Pillow==11.0.0
+
+# Utilities
+pyyaml==6.0.2
+transforms3d==0.4.2
+
+# Pin numpy to 1.x to maintain Isaac Sim compatibility
+# (must be listed LAST to override any upgrades)
+numpy>=1.17,<2.0
+
+# Already in base image, but pinning for clarity:
+# torch==2.3.1
+# torchvision==0.18.1
+# transformers>=4.48.0
+# accelerate==0.32.1
