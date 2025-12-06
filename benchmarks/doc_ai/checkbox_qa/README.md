@@ -22,40 +22,23 @@ Results are saved to `results/` and optionally tracked via [trackio](https://git
 
 ## Available Models
 
-| Model | Preset | Notes |
-|-------|--------|-------|
-| Qwen3-VL-2B | `qwen3-2b` | Good baseline, fast |
-| Qwen3-VL-4B | `qwen3-4b` | Best results so far |
-| Moondream2 | `moondream2` | Tiny (1.9B), competitive |
-| Phi-4 (14B) | `phi4` | Requires smaller images for L4 GPU |
-| Florence-2 | `florence2` | OCR-focused, not VQA |
+| Model | Preset | Recommended Command | ANLS* |
+|-------|--------|---------------------|-------|
+| Phi-4 (14B) | `phi4` | `cvl run checkbox_qa phi4 --max-pages 1 --max-image-size 800` | 0.34 |
+| Qwen3-VL-4B | `qwen3-4b` | `cvl run checkbox_qa qwen3-4b --max-pages 3 --max-image-size 1800` | 0.31 |
+| Qwen3-VL-2B | `qwen3-2b` | `cvl run checkbox_qa qwen3-2b --max-pages 2 --max-image-size 1800` | 0.28 |
+| Moondream2 | `moondream2` | `cvl run checkbox_qa moondream2 --max-pages 2` | 0.27 |
+
+Scores on `subset_test.jsonl` (20 docs, 117 questions). Checkbox understanding remains challenging for current VLMs.
 
 ## Configuration Options
 
-```bash
-cvl run checkbox_qa <preset> [options]
-```
-
 | Flag | Description |
 |------|-------------|
-| `--subset <path>` | Subset JSONL file (default: subset_dev.jsonl) |
-| `--max-pages <n>` | Pages per document (default: 20) |
-| `--max-image-size <px>` | Max image dimension (default: no resize) |
+| `--max-pages <n>` | Pages per document |
+| `--max-image-size <px>` | Max image dimension (resize if larger) |
 | `--track` | Enable experiment tracking |
 | `--project <name>` | Trackio project name |
-
-## Example Results
-
-On `subset_test.jsonl` (20 docs, 117 questions):
-
-| Model | Config | ANLS* |
-|-------|--------|-------|
-| Qwen3-VL-4B | 3p, 1800px | 0.31 |
-| Qwen3-VL-4B | 2p, 1800px | 0.29 |
-| Qwen3-VL-2B | 2p, 1800px | 0.28 |
-| Moondream2 | 2p, 756px | 0.27 |
-
-These are modest scores - checkbox understanding remains challenging for current VLMs.
 
 ## Dataset Subsets
 
