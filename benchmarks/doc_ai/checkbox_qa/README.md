@@ -26,9 +26,9 @@ Results are saved to `results/` and optionally tracked via [trackio](https://git
 |-------|--------|-------|
 | Qwen3-VL-2B | `qwen3-2b` | Good baseline, fast |
 | Qwen3-VL-4B | `qwen3-4b` | Best results so far |
-| Moondream2 | `moondream2-batch` | Tiny (1.9B), competitive |
+| Moondream2 | `moondream2` | Tiny (1.9B), competitive |
 | Phi-4 (14B) | `phi4` | Requires smaller images for L4 GPU |
-| Florence-2 | `florence2-batch` | OCR-focused, not VQA |
+| Florence-2 | `florence2` | OCR-focused, not VQA |
 
 ## Configuration Options
 

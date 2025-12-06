@@ -65,12 +65,12 @@ presets:
       Phi-4-Multimodal batch eval with hyperparameter support.
       Args: --max-pages N --max-image-size N --sample --temperature T --top-k K
 
-  moondream2-batch:
+  moondream2:
     script: run_moondream2_batch.sh
     docker: false
     description: Moondream2 batch evaluation
 
-  florence2-batch:
+  florence2:
     script: run_florence2_batch.sh
     docker: false
     description: Florence-2 batch evaluation
