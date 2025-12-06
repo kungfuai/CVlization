@@ -15,7 +15,7 @@ Modern VLMs struggle with checkboxes, radio buttons, and form elements - the "ch
 cvl run qwen3_vl build
 
 # Run evaluation
-cvl run checkbox_qa qwen3-2b --max-pages 2 --max-image-size 1800 --track
+cvl run checkbox_qa qwen3-4b --max-pages 5 --max-image-size 1800 --track
 ```
 
 Results are saved to `results/` and optionally tracked via [trackio](https://github.com/huggingface/trackio).
@@ -24,9 +24,9 @@ Results are saved to `results/` and optionally tracked via [trackio](https://git
 
 | Model | Preset | Recommended Command | ANLS* |
 |-------|--------|---------------------|-------|
-| Phi-4 (14B) | `phi4` | `cvl run checkbox_qa phi4 --max-pages 1 --max-image-size 800` | 0.34 |
-| Qwen3-VL-4B | `qwen3-4b` | `cvl run checkbox_qa qwen3-4b --max-pages 3 --max-image-size 1800` | 0.31 |
-| Qwen3-VL-2B | `qwen3-2b` | `cvl run checkbox_qa qwen3-2b --max-pages 2 --max-image-size 1800` | 0.28 |
+| Qwen3-VL-4B | `qwen3-4b` | `cvl run checkbox_qa qwen3-4b --max-pages 5 --max-image-size 1800` | 0.38 |
+| Phi-4 (14B) | `phi4` | `cvl run checkbox_qa phi4 --max-pages 1 --max-image-size 1200` | 0.37 |
+| Qwen3-VL-2B | `qwen3-2b` | `cvl run checkbox_qa qwen3-2b --max-pages 2 --max-image-size 1700` | 0.29 |
 | Moondream2 | `moondream2` | `cvl run checkbox_qa moondream2 --max-pages 2` | 0.27 |
 
 Scores on `subset_test.jsonl` (20 docs, 117 questions). Checkbox understanding remains challenging for current VLMs.
