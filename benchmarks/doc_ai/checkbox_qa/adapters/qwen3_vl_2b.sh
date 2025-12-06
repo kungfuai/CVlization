@@ -40,18 +40,13 @@ OUTPUT_NAME=$(basename "$OUTPUT_ABS")
 
 mkdir -p "$OUTPUT_DIR"
 
-DOC_NAME=$(basename "$PDF_PATH" .pdf)
-PAGE_CACHE_ROOT="${CHECKBOX_QA_PAGE_CACHE:-$REPO_ROOT/benchmarks/doc_ai/checkbox_qa/data/page_images}"
-DOC_CACHE="$PAGE_CACHE_ROOT/$DOC_NAME"
-FIRST_PAGE="$DOC_CACHE/page-001.png"
+# Convert PDF first page to image
+TMP_IMG="/tmp/checkbox_qa_$(basename "$PDF_PATH" .pdf).png"
+pdftoppm -png -f 1 -l 1 -singlefile "$PDF_ABS" "${TMP_IMG%.png}"
 
-if [ ! -f "$FIRST_PAGE" ]; then
-    echo "No cached first page for $DOC_NAME; run run_checkbox_qa.py to generate cache." >&2
-    exit 1
-fi
-
-IMG_DIR=$(dirname "$FIRST_PAGE")
-IMG_NAME=$(basename "$FIRST_PAGE")
+# Get image paths
+IMG_DIR=$(dirname "$TMP_IMG")
+IMG_NAME=$(basename "$TMP_IMG")
 
 CLIENT_SCRIPT="$SCRIPT_DIR/../openai_vlm_request.py"
 
@@ -90,4 +85,5 @@ docker run --runtime nvidia --rm \
         --task vqa \
         --prompt "$PROMPT"
 
-# No cleanup needed; cache persists for future runs
+# Cleanup temp image
+rm -f "$TMP_IMG"

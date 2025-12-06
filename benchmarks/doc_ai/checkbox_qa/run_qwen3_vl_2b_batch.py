@@ -22,7 +22,11 @@ except ImportError:
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent.parent.parent
 QWEN3_DIR = REPO_ROOT / "examples/perception/vision_language/qwen3_vl"
-PAGE_CACHE_ROOT = SCRIPT_DIR / "data/page_images"
+
+# Import lazy page caching utilities
+from page_cache import get_page_images, get_page_cache_root
+
+PAGE_CACHE_ROOT = get_page_cache_root()
 
 
 def load_checkbox_qa_subset(subset_file: Path) -> List[Dict]:
@@ -32,20 +36,6 @@ def load_checkbox_qa_subset(subset_file: Path) -> List[Dict]:
         for line in f:
             documents.append(json.loads(line))
     return documents
-
-
-def get_page_images(doc_id: str, max_pages: int = 20) -> List[Path]:
-    """Get list of page image paths for a document."""
-    doc_cache = PAGE_CACHE_ROOT / doc_id
-    if not doc_cache.exists():
-        print(f"Warning: No page cache for {doc_id}", file=sys.stderr)
-        return []
-
-    page_files = sorted(doc_cache.glob("page-*.png"))
-    if max_pages and len(page_files) > max_pages:
-        page_files = page_files[:max_pages]
-
-    return page_files
 
 
 def create_batch_input(documents: List[Dict], output_file: Path, prompt_template: str, max_pages: int = 20) -> None:
@@ -81,7 +71,7 @@ def create_batch_input(documents: List[Dict], output_file: Path, prompt_template
                 f.write(json.dumps(request) + "\n")
 
 
-def run_batch_predict(batch_input: Path, output_dir: Path, variant: str = "2b", max_image_size: int = None, sample: bool = False, temperature: float = 0.2, top_p: float = None, top_k: int = None) -> int:
+def run_batch_predict(batch_input: Path, output_dir: Path, variant: str = "2b", max_image_size: int = None, sample: bool = False, temperature: float = 0.2, top_p: float = None, top_k: int = None, min_pixels: int = None, max_pixels: int = None) -> int:
     """Run batch_predict.py inside Docker container."""
     batch_input = batch_input.absolute()
     output_dir = output_dir.absolute()
@@ -108,6 +98,12 @@ def run_batch_predict(batch_input: Path, output_dir: Path, variant: str = "2b", 
     if max_image_size:
         cmd.extend(["--max-image-size", str(max_image_size)])
 
+    if min_pixels is not None:
+        cmd.extend(["--min-pixels", str(min_pixels)])
+
+    if max_pixels is not None:
+        cmd.extend(["--max-pixels", str(max_pixels)])
+
     if sample:
         cmd.append("--sample")
         cmd.extend(["--temperature", str(temperature)])
@@ -121,6 +117,10 @@ def run_batch_predict(batch_input: Path, output_dir: Path, variant: str = "2b", 
     print(f"  Output dir: {output_dir}")
     if max_image_size:
         print(f"  Max image size: {max_image_size}px")
+    if min_pixels is not None:
+        print(f"  Min pixels: {min_pixels} ({min_pixels // (28*28)} tokens)")
+    if max_pixels is not None:
+        print(f"  Max pixels: {max_pixels} ({max_pixels // (28*28)} tokens)")
     if sample:
         params = [f"temperature={temperature}"]
         if top_p is not None:
@@ -132,6 +132,33 @@ def run_batch_predict(batch_input: Path, output_dir: Path, variant: str = "2b", 
         print(f"  Decoding: model defaults")
     result = subprocess.run(cmd)
     return result.returncode
+
+
+def parse_python_list_answer(text: str) -> str:
+    """Extract answer from Python list format like '["ANSWER"]' or '["A", "B"]'.
+
+    Returns the first element if single, comma-joined if multiple, or original text if not a list.
+    """
+    text = text.strip()
+    if not text:
+        return ""
+
+    # Try to parse as JSON/Python list
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            if len(parsed) == 0:
+                return ""
+            elif len(parsed) == 1:
+                return str(parsed[0])
+            else:
+                # Multiple answers - join with comma
+                return ", ".join(str(x) for x in parsed)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Return original if not a valid list format
+    return text
 
 
 def convert_to_predictions(batch_input: Path, output_dir: Path, predictions_file: Path) -> None:
@@ -152,7 +179,9 @@ def convert_to_predictions(batch_input: Path, output_dir: Path, predictions_file
         # Read model output
         output_file = output_dir / f"{request_id}.txt"
         if output_file.exists():
-            answer = output_file.read_text().strip()
+            raw_answer = output_file.read_text().strip()
+            # Post-process: extract from Python list format if present
+            answer = parse_python_list_answer(raw_answer)
         else:
             answer = ""
             print(f"Warning: Missing output for {request_id}", file=sys.stderr)
@@ -275,6 +304,18 @@ def main():
         default="checkbox-qa",
         help="Trackio project name (only used if --track is set)"
     )
+    parser.add_argument(
+        "--min-pixels",
+        type=int,
+        default=None,
+        help="Min pixels for processor (controls min visual tokens). Example: 200704 = 256 * 28 * 28 = 256 tokens"
+    )
+    parser.add_argument(
+        "--max-pixels",
+        type=int,
+        default=None,
+        help="Max pixels for processor (controls max visual tokens). Example: 1003520 = 1280 * 28 * 28 = 1280 tokens"
+    )
 
     args = parser.parse_args()
 
@@ -310,7 +351,7 @@ def main():
     # Run batch prediction
     print("\nRunning batch prediction...")
     batch_output_dir = args.output_dir / "batch_outputs"
-    returncode = run_batch_predict(batch_input, batch_output_dir, args.variant, args.max_image_size, args.sample, args.temperature, args.top_p, args.top_k)
+    returncode = run_batch_predict(batch_input, batch_output_dir, args.variant, args.max_image_size, args.sample, args.temperature, args.top_p, args.top_k, args.min_pixels, args.max_pixels)
 
     if returncode != 0:
         print(f"Warning: batch_predict exited with code {returncode}", file=sys.stderr)
@@ -340,6 +381,8 @@ def main():
                 "max_pages": args.max_pages,
                 "max_image_size": args.max_image_size,
                 "prompt_template": args.prompt_template,
+                "min_pixels": args.min_pixels,
+                "max_pixels": args.max_pixels,
             }
 
             if args.sample:
@@ -354,7 +397,11 @@ def main():
 
             # Generate run name
             pages_str = f"{args.max_pages}p"
-            size_str = f"{args.max_image_size}px" if args.max_image_size else "default"
+            size_str = f"{args.max_image_size}px" if args.max_image_size else "noresize"
+            if args.min_pixels or args.max_pixels:
+                min_tok = args.min_pixels // (28*28) if args.min_pixels else "?"
+                max_tok = args.max_pixels // (28*28) if args.max_pixels else "?"
+                size_str += f"_tok{min_tok}-{max_tok}"
             if args.sample:
                 sampling_str = f"T{args.temperature}"
                 if args.top_k:

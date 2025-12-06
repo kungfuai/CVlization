@@ -23,7 +23,11 @@ except ImportError:
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent.parent.parent
 FLORENCE_DIR = REPO_ROOT / "examples/perception/vision_language/florence_2"
-PAGE_CACHE_ROOT = SCRIPT_DIR / "data/page_images"
+
+# Import lazy page caching utilities
+from page_cache import get_page_images, get_page_cache_root
+
+PAGE_CACHE_ROOT = get_page_cache_root()
 
 
 def load_checkbox_qa_subset(subset_file: Path) -> List[Dict]:
@@ -33,20 +37,6 @@ def load_checkbox_qa_subset(subset_file: Path) -> List[Dict]:
         for line in f:
             documents.append(json.loads(line))
     return documents
-
-
-def get_page_images(doc_id: str, max_pages: int = 20) -> List[Path]:
-    """Get list of page image paths for a document."""
-    doc_cache = PAGE_CACHE_ROOT / doc_id
-    if not doc_cache.exists():
-        print(f"Warning: No page cache for {doc_id}", file=sys.stderr)
-        return []
-
-    page_files = sorted(doc_cache.glob("page-*.png"))
-    if max_pages and len(page_files) > max_pages:
-        page_files = page_files[:max_pages]
-
-    return page_files
 
 
 def create_batch_input(documents: List[Dict], output_file: Path, prompt_template: str, max_pages: int = 20) -> None:
