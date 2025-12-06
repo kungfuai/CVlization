@@ -163,7 +163,7 @@ OpenVLA's model code (loaded via `trust_remote_code=True`) has hard-coded versio
 - Missing `_supports_sdpa` attribute required by transformers 4.50+
 - Attention implementation tied to specific flash-attn API
 
-Tested with PyTorch 2.9.1 + transformers 4.57 + timm 1.0.22 - fails at model load.
+Tested with PyTorch 2.9.1 + transformers 4.57 + timm 1.0.22 - fails at model load. See `Dockerfile.torch29` for the experimental configuration.
 
 **Future upgrade path:**
 1. Fork the OpenVLA model code from HuggingFace
