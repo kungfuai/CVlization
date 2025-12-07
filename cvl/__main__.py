@@ -107,6 +107,11 @@ def create_parser() -> argparse.ArgumentParser:
         help="Disable live panel and progress bars (sets HF_HUB_DISABLE_PROGRESS_BARS=1, TQDM_DISABLE=1, PIP_PROGRESS_BAR=off)"
     )
     run_parser.add_argument(
+        "--no-docker",
+        action="store_true",
+        help="Run without Docker (requires local Python environment with dependencies)"
+    )
+    run_parser.add_argument(
         "extra_args",
         nargs=argparse.REMAINDER,  # Captures all remaining args without parsing
         # Note: Using REMAINDER allows `cvl run example preset --flag value` without needing `--` separator
@@ -233,7 +238,8 @@ def cmd_run(args) -> int:
             extra_args,
             work_dir=getattr(args, 'work_dir', None),
             no_live=getattr(args, 'no_live', False) or getattr(args, 'simple_display', False),
-            simple_display=getattr(args, 'simple_display', False)
+            simple_display=getattr(args, 'simple_display', False),
+            no_docker=getattr(args, 'no_docker', False)
         )
 
         if error_msg:
