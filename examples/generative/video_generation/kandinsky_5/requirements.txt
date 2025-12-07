@@ -1,0 +1,25 @@
+# Kandinsky 5.0 dependencies
+pillow
+packaging
+requests
+anyio
+pydantic
+aiohttp
+beautifulsoup4
+torchvision
+transformers>=4.45.0
+diffusers
+accelerate
+einops
+imageio
+imageio-ffmpeg
+opencv-python
+sentencepiece
+tqdm
+av
+omegaconf
+numpy
+bitsandbytes
+peft
+safetensors
+huggingface_hub
