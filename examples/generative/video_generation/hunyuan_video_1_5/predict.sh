@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+IMG="cvlization/hunyuan-video-1-5:latest"
+
+# Use HF cache from host
+HF_CACHE="${HOME}/.cache/huggingface"
+
+# Check if models are in cache
+if [ ! -d "${HF_CACHE}/hub/models--tencent--HunyuanVideo-1.5" ]; then
+    echo "ERROR: Model not found in HuggingFace cache"
+    echo ""
+    echo "Please download the models first by running:"
+    echo "  ./download_models.sh"
+    echo ""
+    exit 1
+fi
+
+docker run --rm --gpus=all \
+    --workdir /workspace \
+    --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
+    --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
+    --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
+    --env "PYTHONPATH=/cvlization_repo" \
+    --env "HF_HOME=/root/.cache/huggingface" \
+    --env "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" \
+    --shm-size=16g \
+    "$IMG" python3 predict.py --model_path tencent/HunyuanVideo-1.5 "$@"

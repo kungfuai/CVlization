@@ -1,0 +1,45 @@
+# HunyuanVideo-1.5 dependencies
+# Based on upstream requirements.txt with frozen versions
+
+# Core ML
+torch>=2.6.0
+torchvision>=0.21.0
+torchaudio==2.6.0
+
+# Diffusion
+diffusers==0.35.0
+safetensors>=0.5.3
+accelerate>=0.30.0
+
+# Transformers
+transformers[accelerate,tiktoken]==4.57.1
+huggingface-hub==0.34.0
+huggingface_hub[cli]
+
+# Image/Video processing
+pillow==11.3.0
+imageio==2.37.0
+imageio-ffmpeg==0.6.0
+einops==0.8.0
+
+# Config and utilities
+omegaconf>=2.3.0
+loguru==0.7.3
+tqdm==4.67.1
+numpy==1.26.4
+
+# Qwen VL utils (for text encoder)
+qwen-vl-utils==0.0.8
+
+# PEFT for efficient inference
+peft==0.17.0
+
+# OpenAI (for prompt rewriting - optional)
+openai==2.8.0
+
+# Misc
+wheel
+psutil
+setuptools
+modelscope
+angelslim==0.2.1

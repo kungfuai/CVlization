@@ -1,0 +1,46 @@
+name: hunyuan-video-1-5
+capability: generative/video_generation
+modalities:
+  - vision
+  - text
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 14  # Minimum with offloading enabled
+  ram_gb: 48   # Minimum for model loading with CPU offloading (32GB will OOM)
+  disk_gb: 60  # Single variant ~50GB (full repo is 372GB)
+image: cvlization/hunyuan-video-1-5:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  download:
+    script: download_models.sh
+    description: Download model weights (~42GB)
+  predict:
+    script: predict.sh
+    description: Generate video from text/image prompt
+  test:
+    script: test.sh
+    description: Run smoke test with short video generation
+tags:
+  - hunyuan
+  - tencent
+  - video-generation
+  - text-to-video
+  - image-to-video
+  - diffusion
+  - dit
+  - pytorch
+tasks:
+  - text_to_video
+  - image_to_video
+frameworks:
+  - pytorch
+  - diffusers
+description: HunyuanVideo-1.5 - 8.3B parameter video generation model from Tencent with T2V/I2V support
+
+verification:
+  last_verified: "2025-12-06"
+  last_verification_note: "Docker image builds successfully (7.39GB). Model download works (~50GB for 480p T2V variant). Requires 48GB+ system RAM for inference with CPU offloading. OOM on 32GB RAM systems during model loading."
