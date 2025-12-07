@@ -1,0 +1,18 @@
+# Outputs
+outputs/
+*.mp4
+*.gif
+
+# Legacy local checkpoints (now use HF cache)
+ckpts/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+hyvideo/__pycache__/
+hyvideo/**/__pycache__/
+
+# Logs
+*.log
