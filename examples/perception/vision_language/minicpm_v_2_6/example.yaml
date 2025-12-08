@@ -7,6 +7,21 @@ resources:
   vram_gb: 16
   disk_gb: 18
 image: minicpm-v-2-6
+presets:
+  build:
+    script: build.sh
+    description: Build the MiniCPM-V-2.6 Docker image
+  predict:
+    script: predict.sh
+    description: Run inference on an image (pass --image, --task, --prompt)
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run smoke test to verify model works
 tags: [minicpm, vlm, openbmb, ocr, vqa, captioning, best-ocr, pytorch, multi-image]
 tasks: [ocr, image_captioning, visual_question_answering, document_understanding, multi_image]
 

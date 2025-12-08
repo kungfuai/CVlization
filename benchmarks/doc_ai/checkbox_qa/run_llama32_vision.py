@@ -72,7 +72,7 @@ def ask_question(
     processor,
     image_path: Path,
     question: str,
-    max_tokens: int = 256,
+    max_tokens: int = 50,
     max_image_size: int = 1400
 ) -> str:
     """Ask a VQA question about the document image."""
@@ -80,8 +80,11 @@ def ask_question(
     # Load and resize image
     image = resize_image(image_path, max_image_size)
 
-    # Build message
-    prompt = f"Look at this document and answer the following question. Answer concisely.\n\nQuestion: {question}\n\nAnswer:"
+    # Build message - force very short answers
+    prompt = f"""Look at this document. Answer the question with ONLY the checkbox label, option text, or Yes/No. Give just the value - no explanation.
+
+Question: {question}
+Answer (1-5 words only):"""
 
     messages = [
         {
@@ -140,7 +143,7 @@ def run_evaluation(
     processor,
     subset_path: Path,
     output_dir: Path,
-    max_tokens: int = 256,
+    max_tokens: int = 50,
     max_image_size: int = 1400
 ):
     """Run LLaMA-3.2-Vision VQA on CheckboxQA."""
@@ -240,8 +243,8 @@ def main():
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=256,
-        help="Max tokens to generate"
+        default=50,
+        help="Max tokens to generate (shorter = more concise)"
     )
     parser.add_argument(
         "--max-image-size",

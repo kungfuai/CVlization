@@ -254,6 +254,22 @@ Examples:
 
     args = parser.parse_args()
 
+    # If no image provided, just download the model
+    if args.image == "test_images/sample.jpg" and not Path(args.image).exists():
+        print("=" * 60)
+        print(f"Downloading model: {args.model_id}")
+        print("=" * 60)
+        # Use from_pretrained to ensure all custom code files are fetched
+        # (important for trust_remote_code=True models)
+        _ = AutoTokenizer.from_pretrained(args.model_id, trust_remote_code=True)
+        _ = AutoModel.from_pretrained(
+            args.model_id,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16
+        )
+        print("Model downloaded successfully!")
+        return
+
     # Validate inputs
     if args.task == "vqa" and args.prompt is None:
         parser.error("--prompt is required for VQA task")

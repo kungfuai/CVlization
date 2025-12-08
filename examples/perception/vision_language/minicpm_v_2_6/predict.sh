@@ -14,10 +14,17 @@ IMG="${CVL_IMAGE:-minicpm-v-2-6}"
 # Also mount test_images directory for shared test images
 # Mount HuggingFace cache for model caching across runs
 # Load HF_TOKEN from .env file (for gated model access)
-ENV_FILE="${REPO_ROOT}/../CVlization/.env"
-if [ -f "$ENV_FILE" ]; then
-  source "$ENV_FILE"
-fi
+# Check multiple possible locations
+for ENV_FILE in \
+  "${REPO_ROOT}/.env" \
+  "${REPO_ROOT}/../CVlization/.env" \
+  "${HOME}/projects/CVlization/.env" \
+  "${HOME}/.env"; do
+  if [ -f "$ENV_FILE" ]; then
+    source "$ENV_FILE"
+    break
+  fi
+done
 
 docker run --rm --gpus=all \
   ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
