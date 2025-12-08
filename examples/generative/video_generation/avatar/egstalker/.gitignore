@@ -1,62 +1,7 @@
-# Training outputs
+# EGSTalker example artifacts and vendored code
+datasets/
+data/
 output/
-*.pth
-*.pt
-video_frame*.png
-
-# Data files
-data/*/ori_imgs/
-data/*/parsing/
-data/*/torso_imgs/
-data/*/gt_imgs/
-data/*/*.wav
-data/*/*.npy
-data/*/*.csv
-data/*/*.jpg
-data/*/*.jpeg
-data/*/*.png
-data/*/*.pt
-data/*/transforms_*.json
-data/*/*.mp4
-data/*/*.avi
-
-# BFM Model files
-data_utils/face_tracking/3DMM/
-*.mat
-*.bin
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-.venv
-
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Logs
-*.log
-wandb/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Binary files (should not be committed)
-*.ttf
-*.TTF
-*.otf
-*.whl
-scene/KAN/dist/
+results/
+models/
+submodules/
