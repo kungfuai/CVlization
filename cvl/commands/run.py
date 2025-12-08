@@ -272,6 +272,17 @@ def _warn_path_args(path_args: List[Dict], work_dir: Optional[str]) -> None:
             )
 
 
+def _simple_display_env(enabled: bool) -> Dict[str, str]:
+    """Return env overrides to suppress progress bars and status spam."""
+    if not enabled:
+        return {}
+    return {
+        "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+        "TQDM_DISABLE": "1",
+        "PIP_PROGRESS_BAR": "off",
+    }
+
+
 def run_cog_command(
     example_dir: str,
     cog_command: str,
@@ -432,7 +443,8 @@ def run_script(
     job_name: str = "",
     image_name: str = "",
     work_dir: Optional[str] = None,
-    path_args_env: Optional[Dict[str, str]] = None
+    path_args_env: Optional[Dict[str, str]] = None,
+    env_overrides: Optional[Dict[str, str]] = None,
 ) -> Tuple[int, str]:
     """Execute a script with optional arguments.
 
@@ -443,6 +455,8 @@ def run_script(
         job_name: Name of the job (for live display)
         image_name: Docker image name (for live display)
         work_dir: Working directory for inputs/outputs (defaults to cwd if None)
+        path_args_env: Extra env for path args (auto-populated from example.yaml)
+        env_overrides: Additional env overrides (e.g., simple display quiet mode)
 
     Returns:
         Tuple of (exit_code, error_message)
@@ -495,6 +509,8 @@ def run_script(
 
         if path_args_env:
             env.update(path_args_env)
+        if env_overrides:
+            env.update(env_overrides)
 
         # Ensure common cache directories exist so docker bind mounts do not fail
         _ensure_cache_dirs(env)
@@ -806,6 +822,7 @@ def run_example(
     extra_args: Optional[List[str]] = None,
     work_dir: Optional[str] = None,
     no_live: bool = False,
+    simple_display: bool = False,
 ) -> Tuple[int, str]:
     """Run an example with a specific preset.
 
@@ -864,6 +881,10 @@ def run_example(
     path_args_env = _path_args_env(path_args)
     if path_args:
         _warn_path_args(path_args, work_dir)
+
+    # Display mode controls
+    live_disabled = no_live or simple_display
+    quiet_env = _simple_display_env(simple_display)
 
     # Handle downloads if this is a build preset and downloads are specified
     if preset_name == "build":
@@ -940,9 +961,9 @@ def run_example(
             example_path,
             preset_name,
             extra_args,
-            no_live=no_live,
+            no_live=live_disabled,
             job_name=f"{example_name} {preset_name}",
-            env_overrides=path_args_env,
+            env_overrides={**path_args_env, **quiet_env},
         )
 
         return (exit_code, error_msg)
@@ -975,7 +996,10 @@ def run_example(
                         examples,
                         example_identifier,
                         "build",
-                        []
+                        [],
+                        work_dir=work_dir,
+                        no_live=live_disabled,
+                        simple_display=simple_display,
                     )
                     if exit_code != 0:
                         return (exit_code, "Build failed")
@@ -1024,11 +1048,12 @@ def run_example(
     exit_code, error_msg = run_script(
         script_path,
         extra_args,
-        no_live=no_live,
+        no_live=live_disabled,
         job_name=f"{example_name} {preset_name}",
         image_name=image_name,
         work_dir=work_dir,
-        path_args_env=path_args_env
+        path_args_env=path_args_env,
+        env_overrides=quiet_env,
     )
 
     # Show path mappings after completion (if successful)
