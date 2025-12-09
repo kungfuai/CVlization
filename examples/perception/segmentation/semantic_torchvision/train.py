@@ -12,7 +12,7 @@ from cvlization.data.dataset_builder import TransformedMapStyleDataset
 from cvlization.transforms.image_augmentation_builder import ImageAugmentationBuilder
 from cvlization.transforms.example_transform import ExampleTransform
 from cvlization.specs.prediction_tasks.semantic_segmentation import SemanticSegmentation
-from cvlization import CrossFrameworkTrainingPipeline
+from cvlization.cross_framework_training_pipeline import CrossFrameworkTrainingPipeline
 from cvlization.dataset.stanford_background import StanfordBackgroundDatasetBuilder
 from cvlization.torch.net.semantic_segmentation.torchvision import (
     TorchvisionSemanticSegmentationModelFactory,

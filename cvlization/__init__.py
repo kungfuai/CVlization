@@ -3,20 +3,16 @@ Copyright (c) 2022 KUNGFU.AI.
 All rights reserved.
 """
 
-from .base_trainer import BaseTrainer as Trainer
-from .data.ml_dataset import MLDataset
-from .data.data_rows import DataRows as RichDataFrame
-from .specs import ModelSpec
-from .cross_framework_training_pipeline import CrossFrameworkTrainingPipeline
-
 
 def configure_logging(level=None):
-    """Configure default logging for consumers of the library."""
+    """Configure default logging for consumers of the library.
+
+    Call this explicitly if you want cvlization's default logging setup.
+    """
     import logging
 
     if level is None:
         level = logging.INFO
-    # Avoid duplicate handlers if caller already configured logging.
     if not logging.getLogger().handlers:
         logging.basicConfig(
             level=level,
@@ -24,14 +20,3 @@ def configure_logging(level=None):
         )
     else:
         logging.getLogger().setLevel(level)
-
-
-configure_logging()
-
-__all__ = [
-    "Trainer",
-    "MLDataset",
-    "RichDataFrame",
-    "ModelSpec",
-    "CrossFrameworkTrainingPipeline",
-]

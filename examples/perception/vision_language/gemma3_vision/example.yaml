@@ -1,0 +1,31 @@
+name: gemma3_vision
+capability: perception/vision_language
+modalities: [vision, text]
+datasets: [custom]
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 8  # With 4-bit quantization; 16GB+ without
+  disk_gb: 10
+
+# Docker image name for this example
+image: gemma3-vision
+
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    command: python3 predict.py
+    description: Run vision-language inference on an image
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--output"
+        type: file
+
+tags: [gemma, google, vlm, multimodal, vision, pytorch]
+tasks: [image_captioning, visual_question_answering, ocr, image_understanding]
+frameworks: [pytorch, transformers]
+description: Google's Gemma-3 multimodal model for vision-language tasks (4B/12B/27B)
