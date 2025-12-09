@@ -84,7 +84,7 @@ docker run --runtime nvidia \
     -v $(pwd)/examples/perception/vision_language/molmoe_1b:/workspace \
     -v $(pwd)/${CVL_HF_CACHE:-$HOME/.cache/huggingface}:/root/.cache/huggingface \
     -e HF_TOKEN=$HF_TOKEN \
-    molmoe-1b \
+    molmoe_1b \
     python3 predict.py \
         --image examples/sample.jpg \
         --task ocr
