@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenVLA SimplerEnv Demo</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>OpenVLA + SimplerEnv</h1>
+            <p class="subtitle">Robot Manipulation Task Evaluation Demo</p>
+        </header>
+
+        <main>
+            <div class="controls">
+                <div class="control-group">
+                    <label for="task-select">Task:</label>
+                    <select id="task-select">
+                        <option value="">Loading tasks...</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="max-steps">Max Steps:</label>
+                    <input type="number" id="max-steps" value="200" min="10" max="500">
+                </div>
+
+                <div class="control-group checkbox-group">
+                    <input type="checkbox" id="use-random">
+                    <label for="use-random">Random actions (no model)</label>
+                </div>
+
+                <div class="button-group">
+                    <button id="start-btn" class="primary">Start Episode</button>
+                    <button id="stop-btn" class="secondary" disabled>Stop</button>
+                </div>
+            </div>
+
+            <div class="viewer">
+                <div class="canvas-container">
+                    <canvas id="sim-canvas" width="480" height="480"></canvas>
+                    <div id="loading-overlay" class="hidden">
+                        <div class="spinner"></div>
+                        <p>Loading model...</p>
+                    </div>
+                </div>
+
+                <div class="info-panel">
+                    <div class="info-row">
+                        <span class="label">Instruction:</span>
+                        <span id="instruction" class="value">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Step:</span>
+                        <span id="step-count" class="value">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Status:</span>
+                        <span id="status" class="value">Ready</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="task-description">
+                <h3>Task Description</h3>
+                <p id="task-desc">Select a task to see its description.</p>
+                <div class="task-meta">
+                    <span id="embodiment-badge" class="badge hidden"></span>
+                    <span id="freq-badge" class="badge hidden"></span>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by <a href="https://github.com/openvla/openvla" target="_blank">OpenVLA</a>
+               and <a href="https://github.com/simpler-env/SimplerEnv" target="_blank">SimplerEnv</a></p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

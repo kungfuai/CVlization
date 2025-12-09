@@ -1,0 +1,47 @@
+name: openvla_single_step
+description: OpenVLA single-step inference with action visualization
+category: physical
+tags:
+  - vla
+  - openvla
+  - inference
+  - robot-manipulation
+  - vision-language
+
+docker:
+  image: openvla-inference:latest
+  gpu: required
+  vram_gb: 16
+
+model:
+  name: openvla/openvla-7b
+  size_gb: 14
+  type: vision-language-action
+
+inputs:
+  - image: RGB camera image (256x256 recommended)
+  - instruction: Natural language task description
+
+outputs:
+  - action: 7-DoF robot action [dx, dy, dz, droll, dpitch, dyaw, gripper]
+  - visualization: Matplotlib figure showing action overlay
+
+references:
+  - https://arxiv.org/abs/2406.09246
+  - https://github.com/openvla/openvla
+
+verification:
+  status: verified
+  date: 2025-12-06
+  gpu: NVIDIA L4 (24GB)
+  notes: |
+    - Docker build: success
+    - Model loading: success (14GB, Flash Attention 2)
+    - Inference: success (7-DoF action prediction)
+    - Visualization: success (matplotlib output saved)
+  dependencies:
+    torch: 2.2.0
+    transformers: 4.40.1
+    tokenizers: 0.19.1
+    timm: 0.9.10
+    flash-attn: 2.5.5
