@@ -1,4 +1,4 @@
-name: molmoe-1b
+name: molmoe_1b
 capability: perception/vision_language
 modalities: [vision, text]
 datasets: [custom]
@@ -9,7 +9,7 @@ resources:
   disk_gb: 30
 
 # Docker image name for this example
-image: molmoe-1b
+image: molmoe_1b
 
 presets:
   build:

@@ -4,12 +4,39 @@ CheckboxQA Dataset Builder
 
 Loads the CheckboxQA dataset from HuggingFace or local JSONL files.
 Provides a simple interface for accessing questions and ground truth answers.
+
+DEPRECATED: This module is maintained for backward compatibility.
+Use the new checkbox_qa package instead:
+
+    from checkbox_qa import load_checkbox_qa
+    dataset = load_checkbox_qa()
+
+The new package provides:
+- Automatic download and caching to ~/.cache/cvlization/data/checkbox_qa/
+- HuggingFace datasets-like API
+- PDF download support
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 from dataclasses import dataclass
+
+# Try to import from the new checkbox_qa package
+try:
+    from checkbox_qa import get_cache_dir as _get_cache_dir
+except ImportError:
+    _get_cache_dir = None
+
+
+def get_default_cache_dir() -> Path:
+    """Get the default cache directory for CheckboxQA."""
+    if _get_cache_dir:
+        return _get_cache_dir()
+    # Fallback if checkbox_qa package not available
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    return Path(cache_home) / "cvlization" / "data" / "checkbox_qa"
 
 
 @dataclass
@@ -37,12 +64,17 @@ class CheckboxQADataset:
 
     Supports loading from:
     1. HuggingFace datasets (mturski/CheckboxQA)
-    2. Local JSONL file (data/gold.jsonl)
+    2. Local JSONL file (data/gold.jsonl or cached files)
+
+    NOTE: Consider using the new checkbox_qa package for automatic download:
+
+        from checkbox_qa import load_checkbox_qa
+        dataset = load_checkbox_qa()
     """
 
     def __init__(
         self,
-        data_dir: Union[str, Path] = "data",
+        data_dir: Union[str, Path] = None,
         use_hf: bool = False,
         split: str = "test"
     ):
@@ -50,11 +82,20 @@ class CheckboxQADataset:
         Initialize dataset.
 
         Args:
-            data_dir: Directory containing local data files
+            data_dir: Directory containing local data files.
+                     Default: ~/.cache/cvlization/data/checkbox_qa/ or ./data/
             use_hf: If True, load from HuggingFace; else load from local files (default: False)
                    Note: HuggingFace version requires newer datasets library with Pdf feature support
             split: Dataset split ('test' only for CheckboxQA)
         """
+        # Use cache directory by default, fall back to ./data/ for backward compatibility
+        if data_dir is None:
+            cache_dir = get_default_cache_dir()
+            if (cache_dir / "gold.jsonl").exists():
+                data_dir = cache_dir
+            else:
+                data_dir = Path("data")
+
         self.data_dir = Path(data_dir)
         self.use_hf = use_hf
         self.split = split
@@ -117,19 +158,30 @@ class CheckboxQADataset:
         gold_path = self.data_dir / "gold.jsonl"
 
         if not gold_path.exists():
-            raise FileNotFoundError(
-                f"Gold file not found at {gold_path}. "
-                "Either set use_hf=True or download the dataset locally."
-            )
+            # Try cache directory as fallback
+            cache_dir = get_default_cache_dir()
+            cache_gold = cache_dir / "gold.jsonl"
+            if cache_gold.exists():
+                self.data_dir = cache_dir
+                gold_path = cache_gold
+            else:
+                raise FileNotFoundError(
+                    f"Gold file not found at {gold_path} or {cache_gold}.\n"
+                    "Download the dataset with:\n"
+                    "  python -m checkbox_qa.dataset --download-only\n"
+                    "Or use: from checkbox_qa import load_checkbox_qa; load_checkbox_qa()"
+                )
 
         print(f"Loading CheckboxQA from {gold_path}...")
         self.documents = self._load_documents_from_jsonl(gold_path, self.data_dir / "documents")
         print(f"Loaded {len(self.documents)} documents with {self.total_questions()} questions")
 
     @classmethod
-    def from_jsonl(cls, jsonl_path: Union[str, Path], data_dir: Union[str, Path]) -> "CheckboxQADataset":
+    def from_jsonl(cls, jsonl_path: Union[str, Path], data_dir: Union[str, Path] = None) -> "CheckboxQADataset":
         """Create a dataset instance from a specific JSONL subset."""
         dataset = cls.__new__(cls)
+        if data_dir is None:
+            data_dir = get_default_cache_dir()
         dataset.data_dir = Path(data_dir)
         dataset.use_hf = False
         dataset.split = "subset"
@@ -155,7 +207,7 @@ class CheckboxQADataset:
                         document_id=item["name"]
                     ))
 
-                pdf_path = documents_dir / f"{item['name']}.{item['extension']}"
+                pdf_path = documents_dir / f"{item['name']}.{item.get('extension', 'pdf')}"
                 if not pdf_path.exists():
                     pdf_path = None
 

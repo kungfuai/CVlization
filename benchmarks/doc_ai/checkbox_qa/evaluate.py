@@ -9,7 +9,7 @@ Uses the official anls_star library for compatibility with CheckboxQA paper.
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Tuple, Union
 import sys
 
 try:
@@ -48,7 +48,7 @@ def read_jsonl(file_path: Path) -> Dict[str, Dict[str, List[Union[str, Tuple[str
                         answers.append(None)
                     else:
                         # Store value_variants as tuple (official format)
-                        if 'value_variants' in value_dict:
+                        if 'value_variants' in value_dict and value_dict['value_variants']:
                             answers.append(tuple([a for a in value_dict['value_variants']]))
                         else:
                             answers.append(value_dict['value'])
@@ -60,49 +60,6 @@ def read_jsonl(file_path: Path) -> Dict[str, Dict[str, List[Union[str, Tuple[str
     return documents
 
 
-def count_correct_predictions(
-    pred_dict: Dict,
-    gold_dict: Dict,
-    threshold: float = 0.5
-) -> Tuple[int, int]:
-    """
-    Count total questions and number of correct predictions.
-
-    This is a supplementary function since anls_star library doesn't
-    provide per-question accuracy.
-
-    Returns:
-        (total_questions, num_correct)
-    """
-    from anls_star import anls_score as compute_anls
-
-    total_questions = 0
-    num_correct = 0
-
-    for doc_id, gold_qas in gold_dict.items():
-        if doc_id not in pred_dict:
-            total_questions += len(gold_qas)
-            continue
-
-        pred_qas = pred_dict[doc_id]
-
-        for question, gold_answers in gold_qas.items():
-            total_questions += 1
-
-            if question not in pred_qas:
-                continue
-
-            # Compute score for this single question
-            single_gold = {doc_id: {question: gold_answers}}
-            single_pred = {doc_id: {question: pred_qas[question]}}
-            score = compute_anls(single_gold, single_pred)
-
-            if score >= threshold:
-                num_correct += 1
-
-    return total_questions, num_correct
-
-
 def main():
     parser = argparse.ArgumentParser(
         description='Evaluate CheckboxQA predictions using ANLS* (official anls_star library)'
@@ -111,8 +68,6 @@ def main():
                         help='Path to predictions JSONL file')
     parser.add_argument('--gold', type=Path, default=Path('data/gold.jsonl'),
                         help='Path to gold standard JSONL file')
-    parser.add_argument('--threshold', type=float, default=0.5,
-                        help='ANLS threshold for counting correct answers (default: 0.5)')
     parser.add_argument('--output', type=Path,
                         help='Path to save detailed results (JSON)')
 
@@ -136,16 +91,13 @@ def main():
     print("Computing ANLS* score using anls_star library...")
     anls = anls_score(gold_dict, pred_dict)
 
-    # Count correct predictions for additional statistics
-    total_questions, num_correct = count_correct_predictions(
-        pred_dict, gold_dict, args.threshold
-    )
+    # Count total questions
+    total_questions = sum(len(qas) for qas in gold_dict.values())
 
     # Print results
     print("\n" + "=" * 60)
     print(f"ANLS* Score: {anls:.4f}")
     print(f"Total Questions: {total_questions}")
-    print(f"Correct (>= {args.threshold}): {num_correct} ({num_correct/total_questions*100:.1f}%)")
     print("=" * 60)
 
     # Save detailed results
@@ -153,8 +105,6 @@ def main():
         results = {
             "anls_score": anls,
             "total_questions": total_questions,
-            "num_correct": num_correct,
-            "threshold": args.threshold,
             "prediction_file": str(args.pred),
             "gold_file": str(args.gold)
         }

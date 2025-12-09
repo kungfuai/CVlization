@@ -230,6 +230,18 @@ Example Usage:
         default=None,
         help="Top-k sampling (only used if --sample is set)"
     )
+    parser.add_argument(
+        "--min-pixels",
+        type=int,
+        default=None,
+        help="Min pixels for processor (controls min visual tokens). Example: 200704 = 256 * 28 * 28 = 256 tokens"
+    )
+    parser.add_argument(
+        "--max-pixels",
+        type=int,
+        default=None,
+        help="Max pixels for processor (controls max visual tokens). Example: 1003520 = 1280 * 28 * 28 = 1280 tokens"
+    )
 
     args = parser.parse_args()
 
@@ -258,7 +270,7 @@ Example Usage:
 
     # Load model once for all requests
     print("\nLoading model...")
-    model, processor = load_model(model_id, args.device)
+    model, processor = load_model(model_id, args.device, args.min_pixels, args.max_pixels)
 
     # Process batch
     print()

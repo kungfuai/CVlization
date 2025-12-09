@@ -5,3 +5,5 @@ accelerate==1.11.0
 pillow>=10.0.0
 requests>=2.31.0
 einops==0.8.1
+pypdfium2>=4.0.0
+anls-star>=0.1.0

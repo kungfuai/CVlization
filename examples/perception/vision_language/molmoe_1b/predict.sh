@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Image name
-IMG="${CVL_IMAGE:-molmoe-1b}"
+IMG="${CVL_IMAGE:-molmoe_1b}"
 
 # Mount workspace as writable (predict script writes outputs to /workspace/outputs)
 # Also mount test_images directory for shared test images

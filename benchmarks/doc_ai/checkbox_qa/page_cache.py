@@ -63,6 +63,87 @@ def list_cached_pages(cache_dir: Path) -> List[Path]:
     return sorted(cache_dir.glob("page-*.png"))
 
 
+# Default cache locations
+_LOCAL_PAGE_CACHE = Path(__file__).parent / "data/page_images"
+_SYSTEM_PAGE_CACHE = Path.home() / ".cache/cvlization/data/checkbox_qa/page_images"
+_SYSTEM_DOCS_DIR = Path.home() / ".cache/cvlization/data/checkbox_qa/documents"
+
+
+def get_page_cache_root() -> Path:
+    """Get the page cache root directory, preferring system cache."""
+    if _SYSTEM_PAGE_CACHE.exists():
+        return _SYSTEM_PAGE_CACHE
+    return _LOCAL_PAGE_CACHE
+
+
+def ensure_page_cache(doc_id: str, page_cache_root: Optional[Path] = None) -> bool:
+    """
+    Ensure page images are rendered for a document. Returns True if successful.
+
+    Lazily renders PDF pages to PNG if not already cached.
+    """
+    import sys
+
+    if page_cache_root is None:
+        page_cache_root = get_page_cache_root()
+
+    doc_cache = page_cache_root / doc_id
+
+    # Already cached?
+    if doc_cache.exists() and list(doc_cache.glob("page-*.png")):
+        return True
+
+    # Find PDF
+    pdf_path = _SYSTEM_DOCS_DIR / f"{doc_id}.pdf"
+    if not pdf_path.exists():
+        # Try local data/documents
+        local_pdf = Path(__file__).parent / "data/documents" / f"{doc_id}.pdf"
+        if local_pdf.exists():
+            pdf_path = local_pdf
+        else:
+            print(f"Warning: PDF not found for {doc_id}", file=sys.stderr)
+            return False
+
+    # Render pages
+    try:
+        print(f"Rendering page images for {doc_id}...", file=sys.stderr)
+        doc_cache.mkdir(parents=True, exist_ok=True)
+        render_pdf_to_images(pdf_path, doc_cache)
+        return True
+    except Exception as e:
+        print(f"Error rendering {doc_id}: {e}", file=sys.stderr)
+        return False
+
+
+def get_page_images(doc_id: str, max_pages: int = 20, page_cache_root: Optional[Path] = None) -> List[Path]:
+    """
+    Get list of page image paths for a document. Renders lazily if needed.
+
+    Args:
+        doc_id: Document ID (e.g., "2ba32ee0")
+        max_pages: Maximum number of pages to return (None for all)
+        page_cache_root: Override the page cache directory
+
+    Returns:
+        List of Path objects to page PNG files
+    """
+    if page_cache_root is None:
+        page_cache_root = get_page_cache_root()
+
+    doc_cache = page_cache_root / doc_id
+
+    # Try lazy rendering if not cached
+    if not doc_cache.exists() or not list(doc_cache.glob("page-*.png")):
+        if not ensure_page_cache(doc_id, page_cache_root):
+            return []
+
+    page_files = sorted(doc_cache.glob("page-*.png"))
+    if max_pages and len(page_files) > max_pages:
+        page_files = page_files[:max_pages]
+
+    return page_files
+
+
 def load_document_ids_from_subset(subset_path: Path) -> List[str]:
     """
     Read a CheckboxQA subset jsonl file and return document IDs.
