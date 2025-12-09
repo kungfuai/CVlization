@@ -31,6 +31,7 @@ def filter_examples(
     tag: Optional[str] = None,
     stability: Optional[str] = None,
     keyword: Optional[str] = None,
+    example_type: Optional[str] = None,
 ) -> List[Dict]:
     """Filter examples by criteria (pure function).
 
@@ -40,12 +41,17 @@ def filter_examples(
         tag: Filter by tag (e.g., "ocr", "video")
         stability: Filter by stability (e.g., "stable", "beta")
         keyword: Filter by keyword in name, description, or tags
+        example_type: Filter by type ("example", "benchmark", or None for all)
 
     Returns:
         Filtered list of examples
     """
     # Exclude archived examples by default
     filtered = [e for e in examples if not e.get('archived', False)]
+
+    # Filter by type (example vs benchmark)
+    if example_type:
+        filtered = [e for e in filtered if e.get('_type', 'example') == example_type]
 
     if capability:
         filtered = [e for e in filtered if capability.lower() in e.get('capability', '').lower()]
@@ -109,12 +115,33 @@ def format_table(examples: List[Dict], keyword: Optional[str] = None) -> str:
     return "\n".join([header, separator, *rows])
 
 
-def format_list(examples: List[Dict], keyword: Optional[str] = None) -> str:
+def format_type_badge(example_type: str) -> str:
+    """Format a type badge with color.
+
+    Args:
+        example_type: Type string ('example' or 'benchmark')
+
+    Returns:
+        Colored badge string
+    """
+    # ANSI codes
+    CYAN = '\033[36m'
+    MAGENTA = '\033[35m'
+    RESET = '\033[0m'
+
+    if example_type == 'benchmark':
+        return f"{MAGENTA}[benchmark]{RESET}"
+    else:
+        return f"{CYAN}[example]{RESET}"
+
+
+def format_list(examples: List[Dict], keyword: Optional[str] = None, show_type: bool = True) -> str:
     """Format examples as a simple list.
 
     Args:
         examples: List of example metadata dicts
         keyword: Optional keyword to highlight in output
+        show_type: Whether to show the type badge (default: True)
 
     Returns:
         Formatted list as string
@@ -128,6 +155,7 @@ def format_list(examples: List[Dict], keyword: Optional[str] = None) -> str:
         cap = e.get('capability', '')
         path = e.get('_path', '')
         stability = e.get('stability', 'unknown')
+        example_type = e.get('_type', 'example')
 
         # Apply highlighting if keyword provided
         if keyword:
@@ -136,9 +164,13 @@ def format_list(examples: List[Dict], keyword: Optional[str] = None) -> str:
             path = highlight_matches(path, keyword)
             stability = highlight_matches(stability, keyword)
 
-        # Format: name (capability) - stability
+        # Format: name (capability) [type] - stability
         #           path
-        lines.append(f"{name} ({cap}) - {stability}")
+        if show_type:
+            type_badge = format_type_badge(example_type)
+            lines.append(f"{name} ({cap}) {type_badge} - {stability}")
+        else:
+            lines.append(f"{name} ({cap}) - {stability}")
         lines.append(f"  {path}")
         lines.append("")  # Blank line between entries
 
@@ -156,6 +188,7 @@ def list_examples(
     stability: Optional[str] = None,
     keyword: Optional[str] = None,
     format_type: str = 'list',
+    example_type: Optional[str] = None,
 ) -> str:
     """List examples with optional filtering (pure function).
 
@@ -166,14 +199,19 @@ def list_examples(
         stability: Optional stability filter
         keyword: Optional keyword filter
         format_type: Output format ('list' or 'table')
+        example_type: Filter by type ('example', 'benchmark', or None for all)
 
     Returns:
         Formatted string
     """
-    filtered = filter_examples(examples, capability, tag, stability, keyword)
+    filtered = filter_examples(examples, capability, tag, stability, keyword, example_type)
 
-    # Sort by capability, then name
-    filtered.sort(key=lambda e: (e.get('capability', ''), e.get('name', '')))
+    # Sort by type (benchmarks first), then capability, then name
+    filtered.sort(key=lambda e: (
+        0 if e.get('_type') == 'benchmark' else 1,
+        e.get('capability', ''),
+        e.get('name', '')
+    ))
 
     # Choose formatter based on format_type
     if format_type == 'table':

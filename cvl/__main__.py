@@ -28,7 +28,7 @@ def create_parser() -> argparse.ArgumentParser:
     # list command
     list_parser = subparsers.add_parser(
         "list",
-        help="List available examples"
+        help="List available examples and benchmarks"
     )
     list_parser.add_argument(
         "--capability",
@@ -53,6 +53,18 @@ def create_parser() -> argparse.ArgumentParser:
         choices=["list", "table"],
         default="list",
         help="Output format (default: list)"
+    )
+    # Type filter flags (mutually exclusive)
+    type_group = list_parser.add_mutually_exclusive_group()
+    type_group.add_argument(
+        "--examples",
+        action="store_true",
+        help="Show only examples (exclude benchmarks)"
+    )
+    type_group.add_argument(
+        "--benchmarks",
+        action="store_true",
+        help="Show only benchmarks (exclude examples)"
     )
 
     # info command
@@ -127,13 +139,22 @@ def cmd_list(args) -> int:
     """
     try:
         examples = find_all_examples()
+
+        # Determine example_type filter from flags
+        example_type = None
+        if getattr(args, 'examples', False):
+            example_type = 'example'
+        elif getattr(args, 'benchmarks', False):
+            example_type = 'benchmark'
+
         output = list_examples(
             examples,
             capability=args.capability,
             tag=args.tag,
             stability=args.stability,
             keyword=getattr(args, 'keyword', None),
-            format_type=getattr(args, 'format', 'list')
+            format_type=getattr(args, 'format', 'list'),
+            example_type=example_type,
         )
         print(output)
         return 0

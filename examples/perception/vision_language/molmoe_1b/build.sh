@@ -5,4 +5,4 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Build from the script's directory, works from anywhere
-docker build -t molmoe-1b "$SCRIPT_DIR"
+docker build -t molmoe_1b "$SCRIPT_DIR"

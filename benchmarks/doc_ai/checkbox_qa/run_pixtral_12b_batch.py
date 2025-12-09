@@ -235,7 +235,7 @@ Examples:
     parser.add_argument(
         "--prompt-template",
         type=str,
-        default="Answer this question using information from the form: {question}\n\nProvide only the answer value. Do not describe the form or repeat the question.",
+        default="{question}",
         help="Prompt template with {question} placeholder"
     )
     parser.add_argument(

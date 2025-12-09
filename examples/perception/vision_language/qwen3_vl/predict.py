@@ -16,7 +16,7 @@ from typing import List, Optional
 
 from PIL import Image
 import torch
-from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
+from transformers import Qwen3VLForConditionalGeneration, AutoProcessor, set_seed
 
 from cvlization.paths import (
     resolve_input_path,
@@ -61,12 +61,22 @@ def detect_device() -> str:
     return device
 
 
-def load_model(model_id: str, device: Optional[str]) -> tuple:
+def load_model(model_id: str, device: Optional[str], min_pixels: int = None, max_pixels: int = None) -> tuple:
     if device is None:
         device = detect_device()
 
     print(f"Loading {model_id} on {device} ...")
-    processor = AutoProcessor.from_pretrained(model_id)
+
+    # Build processor kwargs
+    processor_kwargs = {}
+    if min_pixels is not None:
+        processor_kwargs["min_pixels"] = min_pixels
+        print(f"  min_pixels: {min_pixels} ({min_pixels // (28*28)} tokens)")
+    if max_pixels is not None:
+        processor_kwargs["max_pixels"] = max_pixels
+        print(f"  max_pixels: {max_pixels} ({max_pixels // (28*28)} tokens)")
+
+    processor = AutoProcessor.from_pretrained(model_id, **processor_kwargs)
 
     if device == "cuda":
         model = Qwen3VLForConditionalGeneration.from_pretrained(
@@ -232,6 +242,18 @@ Examples:
         default=None,
         help="Top-k sampling (only used if --sample is set)",
     )
+    parser.add_argument(
+        "--min-pixels",
+        type=int,
+        default=None,
+        help="Min pixels for processor (controls min visual tokens). Example: 200704 = 256 * 28 * 28 = 256 tokens",
+    )
+    parser.add_argument(
+        "--max-pixels",
+        type=int,
+        default=None,
+        help="Max pixels for processor (controls max visual tokens). Example: 1003520 = 1280 * 28 * 28 = 1280 tokens",
+    )
     return parser.parse_args()
 
 
@@ -271,7 +293,7 @@ def main():
 
     prompt = args.prompt or TASK_PROMPTS[args.task]
 
-    model, processor = load_model(model_id, args.device)
+    model, processor = load_model(model_id, args.device, args.min_pixels, args.max_pixels)
     images = load_images(image_paths)
     response = run_inference(model, processor, images, prompt, max_tokens, args.sample, args.temperature, args.top_p, args.top_k)
 

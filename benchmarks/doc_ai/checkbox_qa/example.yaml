@@ -1,0 +1,109 @@
+name: checkbox_qa
+capability: benchmarks/doc_ai
+modalities:
+  - vision
+  - text
+datasets:
+  - mturski/CheckboxQA
+stability: stable
+resources:
+  gpu: 0  # Orchestration only; models run in their own containers
+  vram_gb: 0
+  disk_gb: 2
+
+# No Docker image needed - benchmark scripts run locally and call model adapters
+# which each use their own Docker containers
+
+presets:
+  download:
+    script: download.sh
+    docker: false  # Runs with local Python, no Docker needed
+    description: Download CheckboxQA dataset to cache (~/.cache/cvlization/data/checkbox_qa/)
+
+  evaluate:
+    script: evaluate.sh
+    docker: false  # Orchestrates model adapters; models run in their own Docker containers
+    description: Run evaluation on one or more VLM models
+    # Usage: cvl run checkbox_qa evaluate moondream2 --subset dev
+
+  # Convenience presets for common workflows
+  eval-dev:
+    script: eval_dev.sh
+    docker: false
+    description: Quick evaluation on dev subset (5 docs, ~4 min per model)
+
+  eval-test:
+    script: eval_test.sh
+    docker: false
+    description: Evaluation on test subset (20 docs)
+
+  eval-full:
+    script: eval_full.sh
+    docker: false
+    description: Full evaluation on all 88 documents (~10 hours per model)
+
+  # Batch mode presets with hyperparameter support
+  qwen3-2b:
+    script: run_qwen3_vl_2b_batch.sh
+    docker: false
+    description: |
+      Qwen3-VL-2B batch eval with hyperparameter support.
+      Args: --max-pages N --max-image-size N --sample --temperature T --top-k K
+      Example: cvl run checkbox_qa qwen3-2b --max-pages 2 --max-image-size 1800
+
+  qwen3-4b:
+    script: run_qwen3_vl_4b_batch.sh
+    docker: false
+    description: |
+      Qwen3-VL-4B batch eval with hyperparameter support.
+      Args: --max-pages N --max-image-size N --sample --temperature T --top-k K
+
+  phi4:
+    script: run_phi4_batch.sh
+    docker: false
+    description: |
+      Phi-4-Multimodal batch eval with hyperparameter support.
+      Args: --max-pages N --max-image-size N --sample --temperature T --top-k K
+
+  moondream2:
+    script: run_moondream2_batch.sh
+    docker: false
+    description: Moondream2 batch evaluation
+
+  florence2:
+    script: run_florence2_batch.sh
+    docker: false
+    description: Florence-2 batch evaluation
+
+tags:
+  - benchmark
+  - checkbox
+  - form-understanding
+  - document-ai
+  - vlm
+  - evaluation
+  - anls
+
+tasks:
+  - document_understanding
+  - visual_question_answering
+  - form_parsing
+
+frameworks:
+  - pytorch
+
+description: |
+  CheckboxQA benchmark for evaluating VLMs on checkbox and form element understanding.
+  Dataset: 88 documents, 579 questions. Metric: ANLS* (Average Normalized Levenshtein Similarity).
+
+  Quick start:
+    cvl run checkbox_qa download           # Download dataset
+    cvl run checkbox_qa eval-dev moondream2  # Quick test (5 docs)
+    cvl run checkbox_qa evaluate moondream2 florence_2 --subset test
+
+  Batch mode with hyperparameters (recommended):
+    cvl run checkbox_qa qwen3-2b --max-pages 2 --max-image-size 1800
+    cvl run checkbox_qa qwen3-4b --max-pages 3 --max-image-size 1800 --sample --temperature 0.7 --top-k 10
+    cvl run checkbox_qa phi4 --max-pages 1 --max-image-size 800
+
+license: CC BY-NC 4.0

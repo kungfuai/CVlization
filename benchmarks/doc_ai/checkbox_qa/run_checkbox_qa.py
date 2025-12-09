@@ -3,6 +3,11 @@
 CheckboxQA Benchmark Runner
 
 Runs models on CheckboxQA dataset and evaluates results.
+
+The dataset is automatically downloaded on first use to:
+    ~/.cache/cvlization/data/checkbox_qa/
+
+Override with CHECKBOX_QA_CACHE_DIR environment variable.
 """
 
 import argparse
@@ -16,7 +21,70 @@ from typing import Dict, List, Optional
 
 from tqdm import tqdm
 
-from dataset_builder import CheckboxQADataset
+# Use new checkbox_qa package for auto-download support
+try:
+    from checkbox_qa import load_checkbox_qa, get_cache_dir, CheckboxQADataset
+except ImportError:
+    # Fallback to legacy dataset_builder
+    from dataset_builder import CheckboxQADataset
+    get_cache_dir = None
+    load_checkbox_qa = None
+
+
+def get_data_dir() -> Path:
+    """Get the data directory, preferring cache over local ./data/."""
+    if get_cache_dir:
+        cache_dir = get_cache_dir()
+        if (cache_dir / "gold.jsonl").exists():
+            return cache_dir
+    # Fallback to local data directory
+    local_data = Path(__file__).parent / "data"
+    if (local_data / "gold.jsonl").exists():
+        return local_data
+    # Return cache dir (will trigger download)
+    if get_cache_dir:
+        return get_cache_dir()
+    return local_data
+
+
+def check_docker_image_exists(image_name: str) -> bool:
+    """Check if a Docker image exists locally."""
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", image_name],
+            capture_output=True,
+            check=False,
+        )
+        return result.returncode == 0
+    except FileNotFoundError:
+        return False
+
+
+# Mapping from adapter names to Docker image names
+# (when they differ from the adapter name)
+ADAPTER_TO_DOCKER_IMAGE = {
+    "qwen3_vl_2b": "qwen3-vl",
+    "qwen3_vl_2b_multipage": "qwen3-vl",
+    "qwen3_vl_4b_multipage": "qwen3-vl",
+    "florence_2": "florence-2",
+    "phi_4_multimodal": "phi-4-multimodal",
+    "phi_4_multimodal_multipage": "phi-4-multimodal",
+}
+
+
+def check_model_docker_images(model_names: List[str], adapters_dir: Path) -> List[str]:
+    """
+    Check if Docker images exist for the specified models.
+
+    Returns list of missing image names.
+    """
+    missing = []
+    for model_name in model_names:
+        # Get actual Docker image name (may differ from adapter name)
+        docker_image = ADAPTER_TO_DOCKER_IMAGE.get(model_name, model_name)
+        if not check_docker_image_exists(docker_image):
+            missing.append(docker_image)
+    return missing
 
 
 def run_model_on_document(
@@ -233,23 +301,86 @@ def run_benchmark(
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Run CheckboxQA benchmark')
+    # Determine default data directory
+    default_data_dir = get_data_dir()
+
+    parser = argparse.ArgumentParser(
+        description='Run CheckboxQA benchmark',
+        epilog=f'Data directory: {default_data_dir}'
+    )
     parser.add_argument('models', nargs='+', help='Model names to evaluate')
     parser.add_argument('--adapters-dir', type=Path, default=Path('adapters'),
                         help='Directory containing model adapters')
     parser.add_argument('--output-dir', type=Path, default=Path('results'),
                         help='Output directory for results')
     parser.add_argument('--subset', type=Path,
-                        help='Path to subset JSONL file (default: use full gold.jsonl)')
+                        help='Path to subset JSONL file (default: use full gold.jsonl). '
+                             'Can use "dev" or "test" as shortcuts.')
     parser.add_argument('--max-docs', type=int,
                         help='[Deprecated] Use --subset instead. Maximum number of documents to process')
-    parser.add_argument('--gold', type=Path, default=Path('data/gold.jsonl'),
-                        help='Path to gold standard file (used for loading dataset and evaluation)')
+    parser.add_argument('--gold', type=Path,
+                        help='Path to gold standard file (default: auto-detect from cache or data/)')
+    parser.add_argument('--data-dir', type=Path,
+                        help='Data directory containing gold.jsonl and documents/ '
+                             f'(default: {default_data_dir})')
     parser.add_argument('--page-cache-dir', type=Path,
-                        default=Path(os.environ.get('CHECKBOX_QA_PAGE_CACHE', 'data/page_images')),
-                        help='Directory for cached PNG page images (default: data/page_images)')
+                        help='Directory for cached PNG page images (default: disabled - adapters handle conversion)')
+    parser.add_argument('--enable-page-cache', action='store_true',
+                        help='Enable page caching (requires checkbox_qa Docker image)')
 
     args = parser.parse_args()
+
+    # Resolve data directory
+    data_dir = args.data_dir if args.data_dir else default_data_dir
+
+    # Set page cache - disabled by default since adapters handle PDF->image conversion
+    if args.enable_page_cache:
+        if args.page_cache_dir is None:
+            args.page_cache_dir = Path(os.environ.get('CHECKBOX_QA_PAGE_CACHE', str(data_dir / 'page_images')))
+    else:
+        args.page_cache_dir = None
+
+    # Handle subset shortcuts
+    if args.subset:
+        subset_str = str(args.subset)
+        if subset_str in ('dev', 'test'):
+            args.subset = data_dir / f'subset_{subset_str}.jsonl'
+        elif not args.subset.exists():
+            # Try in data_dir
+            alt_path = data_dir / args.subset.name
+            if alt_path.exists():
+                args.subset = alt_path
+
+    # Resolve gold file
+    if args.gold:
+        gold_file = args.gold
+    elif args.subset:
+        gold_file = args.subset
+    else:
+        gold_file = data_dir / 'gold.jsonl'
+
+    # Load dataset
+    print("=" * 80)
+    print("CheckboxQA Benchmark")
+    print("=" * 80)
+    print(f"\nData directory: {data_dir}")
+
+    # Auto-download if needed
+    if not gold_file.exists():
+        if load_checkbox_qa:
+            print("\nDataset not found. Downloading...")
+            try:
+                # This triggers download
+                _ = load_checkbox_qa(cache_dir=data_dir)
+                print("Download complete!")
+            except Exception as e:
+                print(f"Error downloading dataset: {e}", file=sys.stderr)
+                print("Please download manually with: python -m checkbox_qa.dataset --download-only", file=sys.stderr)
+                return 1
+        else:
+            print(f"Error: Gold file not found: {gold_file}", file=sys.stderr)
+            print("Please download the dataset first.", file=sys.stderr)
+            return 1
 
     # If subset is specified, use it as gold for both loading and evaluation
     if args.subset:
@@ -259,26 +390,40 @@ def main():
         gold_file = args.subset
         print(f"Using subset: {args.subset}")
     else:
-        gold_file = args.gold
         if args.max_docs:
             print(f"Warning: --max-docs is deprecated. Use --subset instead.", file=sys.stderr)
             print(f"Creating temporary subset with {args.max_docs} documents...", file=sys.stderr)
 
-    # Load dataset
-    print("=" * 80)
-    print("CheckboxQA Benchmark")
-    print("=" * 80)
     print("\nLoading dataset...")
 
     if args.subset:
-        dataset = CheckboxQADataset.from_jsonl(gold_file, data_dir=Path('data'))
+        dataset = CheckboxQADataset.from_jsonl(gold_file, data_dir=data_dir)
     else:
-        dataset = CheckboxQADataset(use_hf=False, data_dir=Path('data'))
+        dataset = CheckboxQADataset(use_hf=False, data_dir=data_dir)
 
     print(f"Loaded {len(dataset)} documents with {dataset.total_questions()} questions")
 
     if args.max_docs and not args.subset:
         print(f"Note: Processing only first {args.max_docs} documents (use --subset for better control)")
+
+    # Check if Docker images exist for all models
+    print("\nChecking Docker images...")
+    missing_images = check_model_docker_images(args.models, args.adapters_dir)
+    if missing_images:
+        print("\n" + "=" * 70)
+        print("ERROR: Missing Docker images for the following models:")
+        print("=" * 70)
+        for model in missing_images:
+            print(f"  • {model}")
+        print("\nBuild the missing images first:")
+        for model in missing_images:
+            print(f"  cvl run {model} build")
+        print("\nOr using shell scripts:")
+        for model in missing_images:
+            print(f"  cd examples/perception/vision_language/{model} && ./build.sh")
+        print("=" * 70)
+        return 1
+    print("All Docker images found.")
 
     # Create timestamped results directory
     from datetime import datetime

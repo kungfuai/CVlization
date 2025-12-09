@@ -114,7 +114,13 @@ def load_example_yaml(example_dir: Path) -> Optional[Dict]:
         with open(yaml_path) as f:
             data = yaml.safe_load(f)
             # Add path for reference
-            data['_path'] = str(example_dir.relative_to(find_repo_root()))
+            rel_path = str(example_dir.relative_to(find_repo_root()))
+            data['_path'] = rel_path
+            # Add type based on path (example or benchmark)
+            if rel_path.startswith("benchmarks/"):
+                data['_type'] = 'benchmark'
+            else:
+                data['_type'] = 'example'
             return data
     except (yaml.YAMLError, IOError):
         return None
@@ -122,6 +128,8 @@ def load_example_yaml(example_dir: Path) -> Optional[Dict]:
 
 def find_all_examples(repo_root: Optional[Path] = None) -> List[Dict]:
     """Find all examples with example.yaml files.
+
+    Searches both examples/ and benchmarks/ directories.
 
     Args:
         repo_root: Repository root (auto-detected if not provided)
@@ -132,14 +140,22 @@ def find_all_examples(repo_root: Optional[Path] = None) -> List[Dict]:
     if repo_root is None:
         repo_root = find_repo_root()
 
-    examples_dir = repo_root / "examples"
-    if not examples_dir.exists():
-        return []
-
     examples = []
-    for yaml_file in examples_dir.rglob("example.yaml"):
-        example = load_example_yaml(yaml_file.parent)
-        if example:
-            examples.append(example)
+
+    # Search in examples/ directory
+    examples_dir = repo_root / "examples"
+    if examples_dir.exists():
+        for yaml_file in examples_dir.rglob("example.yaml"):
+            example = load_example_yaml(yaml_file.parent)
+            if example:
+                examples.append(example)
+
+    # Search in benchmarks/ directory
+    benchmarks_dir = repo_root / "benchmarks"
+    if benchmarks_dir.exists():
+        for yaml_file in benchmarks_dir.rglob("example.yaml"):
+            example = load_example_yaml(yaml_file.parent)
+            if example:
+                examples.append(example)
 
     return examples
