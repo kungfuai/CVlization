@@ -7,13 +7,41 @@ on:
   pull_request:
 
 jobs:
+  # Detect which files changed to determine which jobs to run
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.filter.outputs.core }}
+      examples: ${{ steps.filter.outputs.examples }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            core:
+              - 'cvl/**'
+              - 'cvlization/**'
+              - 'tests/**'
+              - 'Dockerfile'
+              - 'pyproject.toml'
+              - 'requirements*.txt'
+              - 'bin/**'
+              - '.github/**'
+            examples:
+              - 'examples/**'
+              - 'benchmarks/**'
+
   build_and_test:
+    needs: changes
+    # Only run if core files changed (applies to both push and PR)
+    if: needs.changes.outputs.core == 'true'
     env:
       DOCKER_BUILDKIT: "1"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -34,3 +62,59 @@ jobs:
           ./bin/ci-test.sh -vv
         env:
           CVL_DOCKER_IMAGE: cvlization-test:${{ github.sha }}
+
+  # Lightweight checks for examples/benchmarks-only changes
+  examples_check:
+    needs: changes
+    if: needs.changes.outputs.examples == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Python syntax check
+        run: |
+          # Check syntax of changed Python files in examples/ and benchmarks/
+          changed_py=$(git diff --name-only origin/main...HEAD -- 'examples/**/*.py' 'benchmarks/**/*.py' || true)
+          if [ -n "$changed_py" ]; then
+            echo "Checking Python syntax for:"
+            echo "$changed_py"
+            echo "$changed_py" | xargs python -m py_compile
+          else
+            echo "No Python files changed in examples/ or benchmarks/"
+          fi
+
+      - name: Dockerfile lint
+        run: |
+          # Check changed Dockerfiles with hadolint
+          changed_dockerfiles=$(git diff --name-only origin/main...HEAD -- 'examples/**/Dockerfile' 'benchmarks/**/Dockerfile' || true)
+          if [ -n "$changed_dockerfiles" ]; then
+            echo "Linting Dockerfiles:"
+            echo "$changed_dockerfiles"
+            # Download hadolint
+            curl -sL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o /tmp/hadolint
+            chmod +x /tmp/hadolint
+            echo "$changed_dockerfiles" | xargs -I {} /tmp/hadolint --failure-threshold error {}
+          else
+            echo "No Dockerfiles changed in examples/ or benchmarks/"
+          fi
+
+      - name: Shell script lint
+        run: |
+          # Check changed shell scripts with shellcheck
+          changed_sh=$(git diff --name-only origin/main...HEAD -- 'examples/**/*.sh' 'benchmarks/**/*.sh' || true)
+          if [ -n "$changed_sh" ]; then
+            echo "Linting shell scripts:"
+            echo "$changed_sh"
+            sudo apt-get update && sudo apt-get install -y shellcheck
+            echo "$changed_sh" | xargs shellcheck
+          else
+            echo "No shell scripts changed in examples/ or benchmarks/"
+          fi
