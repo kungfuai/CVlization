@@ -19,14 +19,35 @@ examples/agentic/data/physio_signal_prep/
 ```
 
 ## Quickstart
+
+### Using cvl CLI (recommended)
+```bash
+# With Docker (default)
+cvl run physio_signal_prep build
+cvl run physio_signal_prep ingest --records SC4001E0-PSG.edf SC4002E0-PSG.edf
+cvl run physio_signal_prep preprocess
+
+# Without Docker (requires local Python environment with dependencies)
+pip install -r examples/agentic/data/physio_signal_prep/requirements.txt
+cvl run physio_signal_prep --no-docker ingest --records SC4001E0-PSG.edf
+cvl run physio_signal_prep --no-docker preprocess
+```
+
+### Using shell scripts directly
 ```bash
 cd examples/agentic/data/physio_signal_prep
+
+# With Docker
 ./build.sh
 ./ingest.sh --records SC4001E0-PSG.edf SC4002E0-PSG.edf
-# Fill out specs/data_spec.sample.md (YAML front matter + notes)
 ./preprocess.sh specs/data_spec.sample.md
 # LLM-assisted summary (requires OPENAI_API_KEY)
 ./preprocess.sh specs/data_spec.sample.md --llm-provider openai --llm-model gpt-5-nano
+
+# Without Docker
+pip install -r requirements.txt
+CVL_NO_DOCKER=1 ./ingest.sh --records SC4001E0-PSG.edf SC4002E0-PSG.edf
+CVL_NO_DOCKER=1 ./preprocess.sh specs/data_spec.sample.md
 ```
 
 This pulls a small subset of Sleep-EDF Expanded data into the centralized cache (`~/.cache/cvlization/data/sleep-edf`) and writes `outputs/sleep_edf_manifest.json` with the train/val split.
