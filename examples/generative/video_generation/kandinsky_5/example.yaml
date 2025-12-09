@@ -1,0 +1,34 @@
+name: kandinsky-5
+capability: generative/video_generation
+modalities:
+  - vision
+  - text
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 12  # Minimum with offloading + quantization
+  ram_gb: 32   # Minimum with Qwen quantization
+  disk_gb: 30  # Model weights (~25GB)
+image: cvlization/kandinsky-5:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate video/image from text prompt
+  test:
+    script: test.sh
+    description: Run smoke test
+license: MIT
+source: https://github.com/kandinskylab/kandinsky-5
+paper: https://arxiv.org/abs/2511.14993
+frameworks:
+  - pytorch
+  - diffusers
+description: Kandinsky 5.0 - 2B parameter video/image generation model with T2V, I2V, T2I support
+
+verification:
+  last_verified: "2025-12-06"
+  last_verification_note: "Verified on RTX 3090 24GB. Docker builds, models download to ~/.cache/cvlization/kandinsky5, 5s video generated successfully in ~10min (with downloads) or ~5min (cached)."

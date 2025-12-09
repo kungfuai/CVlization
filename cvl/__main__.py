@@ -102,6 +102,11 @@ def create_parser() -> argparse.ArgumentParser:
         help="Disable live status display (simpler output)"
     )
     run_parser.add_argument(
+        "--simple-display",
+        action="store_true",
+        help="Disable live panel and progress bars (sets HF_HUB_DISABLE_PROGRESS_BARS=1, TQDM_DISABLE=1, PIP_PROGRESS_BAR=off)"
+    )
+    run_parser.add_argument(
         "extra_args",
         nargs=argparse.REMAINDER,  # Captures all remaining args without parsing
         # Note: Using REMAINDER allows `cvl run example preset --flag value` without needing `--` separator
@@ -216,14 +221,19 @@ def cmd_run(args) -> int:
         Exit code (0 for success, 1 for error)
     """
     try:
+        extra_args = list(getattr(args, 'extra_args', [])) or []
+        if getattr(args, "simple_display", False):
+            extra_args = [a for a in extra_args if a != "--simple-display"]
+
         examples = find_all_examples()
         exit_code, error_msg = run_example(
             examples,
             args.example,
             args.preset,
-            args.extra_args,
+            extra_args,
             work_dir=getattr(args, 'work_dir', None),
-            no_live=getattr(args, 'no_live', False)
+            no_live=getattr(args, 'no_live', False) or getattr(args, 'simple_display', False),
+            simple_display=getattr(args, 'simple_display', False)
         )
 
         if error_msg:

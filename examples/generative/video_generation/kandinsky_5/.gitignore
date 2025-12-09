@@ -1,0 +1,19 @@
+# Outputs
+outputs/
+*.mp4
+*.png
+*.gif
+
+# Weights (mounted from ~/.cache/cvlization/kandinsky5)
+weights/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+kandinsky/__pycache__/
+kandinsky/**/__pycache__/
+
+# Logs
+*.log
