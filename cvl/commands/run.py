@@ -448,6 +448,7 @@ def run_script(
     work_dir: Optional[str] = None,
     path_args_env: Optional[Dict[str, str]] = None,
     env_overrides: Optional[Dict[str, str]] = None,
+    no_docker: bool = False,
 ) -> Tuple[int, str]:
     """Execute a script with optional arguments.
 
@@ -460,6 +461,7 @@ def run_script(
         work_dir: Working directory for inputs/outputs (defaults to cwd if None)
         path_args_env: Extra env for path args (auto-populated from example.yaml)
         env_overrides: Additional env overrides (e.g., simple display quiet mode)
+        no_docker: Run without Docker (sets CVL_NO_DOCKER=1)
 
     Returns:
         Tuple of (exit_code, error_message)
@@ -509,6 +511,10 @@ def run_script(
             env["CVL_WORK_DIR"] = str(Path(work_dir).resolve())
         else:
             env["CVL_WORK_DIR"] = os.getcwd()
+
+        # Set CVL_NO_DOCKER if running without Docker
+        if no_docker:
+            env["CVL_NO_DOCKER"] = "1"
 
         if path_args_env:
             env.update(path_args_env)
@@ -826,6 +832,7 @@ def run_example(
     work_dir: Optional[str] = None,
     no_live: bool = False,
     simple_display: bool = False,
+    no_docker: bool = False,
 ) -> Tuple[int, str]:
     """Run an example with a specific preset.
 
@@ -836,6 +843,7 @@ def run_example(
         extra_args: Additional arguments to pass to script
         work_dir: Working directory for inputs/outputs (defaults to cwd if None)
         no_live: Disable live status display (default: False, use rich live mode)
+        no_docker: Run without Docker (default: False)
 
     Returns:
         Tuple of (exit_code, error_message)
@@ -870,9 +878,10 @@ def run_example(
         return (1, f"Preset '{preset_name}' not found. Available: {available}")
 
     # Check if this preset requires Docker (default: True for backward compatibility)
-    requires_docker = preset_info.get("docker", True)
+    # Docker can be skipped via: (1) --no-docker CLI flag, or (2) docker: false in preset
+    requires_docker = preset_info.get("docker", True) and not no_docker
 
-    # Check if Docker is running (skip if preset doesn't require it)
+    # Check if Docker is running (skip if preset doesn't require it or --no-docker)
     if requires_docker:
         docker_running, docker_error = check_docker_running()
         if not docker_running:
@@ -981,7 +990,7 @@ def run_example(
     if script_path is None:
         return (1, f"Script not found: {script_name} in {example_path}")
 
-    # Check if Docker image exists (except for build preset or presets that don't need Docker)
+    # Check if Docker image exists (except for build preset or when Docker not required)
     if preset_name != "build" and requires_docker:
         image_name = get_docker_image_name(example_path, example)
         if image_name and not check_docker_image_exists(image_name):
@@ -1034,6 +1043,8 @@ def run_example(
 
     if requires_docker:
         print(f"Docker:  {image_name}")
+    else:
+        print(f"Mode:    no-docker (using local Python)")
     print(f"Script:  {script_name}")
 
     # Show directory mounting information (only relevant for Docker)
@@ -1062,10 +1073,11 @@ def run_example(
         work_dir=work_dir,
         path_args_env=path_args_env,
         env_overrides=quiet_env,
+        no_docker=no_docker,
     )
 
-    # Show path mappings after completion (if successful)
-    if exit_code == 0:
+    # Show path mappings after completion (if successful, Docker mode only)
+    if exit_code == 0 and requires_docker:
         print("\nPath Mappings (Container → Host):")
         print(f"  /workspace → {example_path}")
 
