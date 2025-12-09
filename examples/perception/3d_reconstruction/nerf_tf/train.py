@@ -5,7 +5,7 @@ from tensorflow import keras
 from cvlization.tensorflow.net.nerf.tiny_nerf import TinyNerfModel
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.specs.prediction_tasks.nerf import Nerf
-from cvlization import CrossFrameworkTrainingPipeline
+from cvlization.cross_framework_training_pipeline import CrossFrameworkTrainingPipeline
 from cvlization.dataset.tiny_nerf import TinyNerfDatasetBuilder
 
 

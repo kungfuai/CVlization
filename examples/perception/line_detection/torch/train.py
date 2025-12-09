@@ -2,7 +2,7 @@ from cvlization.dataset.york_lines import YorkLinesDatasetBuilder
 from cvlization.torch.net.line_detection.model_factory import (
     TorchLineDetectionModelFactory,
 )
-from cvlization import CrossFrameworkTrainingPipeline
+from cvlization.cross_framework_training_pipeline import CrossFrameworkTrainingPipeline
 from cvlization.specs.ml_framework import MLFramework
 from cvlization.torch.net.line_detection.letr.util import collate_fn
 
