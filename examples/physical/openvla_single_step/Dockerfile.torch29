@@ -1,0 +1,68 @@
+# OpenVLA Single-Step Inference - PyTorch 2.9.1 Variant
+#
+# Experimental: Testing OpenVLA with newer PyTorch/transformers versions.
+# May have compatibility issues with OpenVLA's custom model code.
+
+FROM nvidia/cuda:12.6.3-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    curl \
+    build-essential \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.10 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip setuptools wheel
+
+WORKDIR /opt
+
+# Install numpy (compatible with PyTorch 2.9)
+RUN pip install --no-cache-dir "numpy>=1.26,<2.0"
+
+# Install PyTorch 2.9.x with CUDA 12.6 support
+RUN pip install --no-cache-dir \
+    torch \
+    torchvision \
+    --index-url https://download.pytorch.org/whl/cu126
+
+# Install OpenVLA dependencies - try latest transformers first
+# If this fails, we may need to pin to 4.40.1
+RUN pip install --no-cache-dir \
+    "transformers>=4.40.1" \
+    accelerate \
+    pillow \
+    matplotlib \
+    "timm>=0.9.10" \
+    sentencepiece \
+    protobuf
+
+# Install flash-attn for PyTorch 2.9 (build from source)
+RUN pip install --no-cache-dir flash-attn --no-build-isolation || \
+    echo "Flash attention not installed - will use standard attention"
+
+WORKDIR /workspace
+
+# Copy application files
+COPY inference.py .
+COPY sample_images/ ./sample_images/
+
+# Environment variables
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV HF_HOME=/workspace/.cache/huggingface
+
+# Default command
+CMD ["python", "inference.py", "--help"]
