@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
 
 # Install system dependencies including build tools for bitsandbytes
 RUN apt-get update && apt-get install -y \
