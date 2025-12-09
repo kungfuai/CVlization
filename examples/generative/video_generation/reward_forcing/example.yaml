@@ -1,0 +1,34 @@
+name: reward-forcing
+capability: generative/video_generation
+modalities:
+  - vision
+  - text
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 40
+  disk_gb: 80
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image for Reward-Forcing inference
+  predict:
+    script: run_inference.sh
+    description: Run text-to-video inference via Docker
+tags:
+  - reward-forcing
+  - text-to-video
+  - video-generation
+  - pytorch
+  - docker
+tasks:
+  - video_generation
+frameworks:
+  - pytorch
+description: >
+  Reward-Forcing text-to-video inference packaged in a Docker image (PyTorch 2.9.1 / CUDA 12.8),
+  with centralized Hugging Face cache and bind-mounted checkpoints/outputs.
+verification:
+  status: pending
