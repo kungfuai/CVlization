@@ -1,0 +1,8 @@
+# Gemma-3 Vision Inference Requirements
+# Note: Most dependencies are installed via unsloth in Dockerfile
+
+# Image processing
+pillow>=10.0.0
+
+# HTTP requests for URL images
+requests>=2.31.0
