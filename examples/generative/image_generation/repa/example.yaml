@@ -1,0 +1,49 @@
+name: repa
+capability: generative/image_generation
+modalities:
+  - vision
+datasets:
+  - cifar10
+  - cifar100
+  - imagenet
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 50
+image: cvlization/repa:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train REPA model (default CIFAR-10)
+  generate:
+    script: generate.sh
+    description: Generate images with pretrained model
+  test:
+    script: test.sh
+    description: Run smoke test (short training run)
+tags:
+  - repa
+  - sit
+  - diffusion-transformer
+  - representation-alignment
+  - dinov2
+  - pytorch
+  - accelerate
+tasks:
+  - image_generation
+  - representation_learning
+frameworks:
+  - pytorch
+  - transformers
+  - diffusers
+description: REPA - Representation Alignment for training diffusion transformers with 17.5x speedup
+verification:
+  last_verified: 2025-12-10
+  last_verification_note: |
+    Build successful. Training verified on CIFAR-10 with SiT-S/2 model.
+    100 steps completed in ~16s, loss decreased 1.68→1.06, REPA projection loss active.
+    DINOv2-ViT-B encoder loaded successfully. CIFAR-10 auto-downloads (~170MB).
