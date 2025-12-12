@@ -1,0 +1,51 @@
+name: rae
+capability: generative/image_generation
+modalities:
+  - vision
+datasets:
+  - imagenet
+  - cifar10
+  - cifar100
+  - animalfaces
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 20
+image: cvlization/rae:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  generate:
+    script: generate.sh
+    description: Generate images with pretrained RAE+DiT model
+  train:
+    script: train.sh
+    description: Train Stage-2 diffusion model (default CIFAR-10, or set DATASET=imagenet with DATA_PATH)
+  train_stage1:
+    script: train_stage1.sh
+    description: Train Stage-1 RAE autoencoder with GAN+LPIPS losses
+  test:
+    script: test.sh
+    description: Run smoke test (quick generation)
+tags:
+  - rae
+  - dit
+  - diffusion-transformer
+  - representation-autoencoder
+  - dinov2
+  - pytorch
+frameworks:
+  - pytorch
+  - transformers
+tasks:
+  - image_generation
+  - representation_learning
+description: RAE - Representation Autoencoders for diffusion transformers with pretrained visual encoders
+verification:
+  last_verified: 2025-12-10
+  last_verification_note: |
+    Build successful. Generation verified with DiT-XL/DDT model on ImageNet-256.
+    Generated 2 images in ~1.4s (10 steps). Models auto-download from HuggingFace (~4GB total).
+    DINOv2-with-registers encoder and ViT-XL decoder loaded successfully.

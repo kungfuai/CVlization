@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find repo root for cvlization package (go up 4 levels from example dir)
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
+# Setup centralized caching
+mkdir -p "${HOME}/.cache/huggingface" "${HOME}/.cache/torch"
+
 # Image name
 IMG="${CVL_IMAGE:-repa}"
 
