@@ -1,0 +1,21 @@
+# Outputs
+outputs/*.wav
+outputs/*.mp3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
+.cache/
+*.cache

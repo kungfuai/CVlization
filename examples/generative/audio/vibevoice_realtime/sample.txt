@@ -1,0 +1,1 @@
+Welcome to the demonstration of VibeVoice Realtime, a text to speech model developed by Microsoft Research. This model is designed for real-time applications with approximately three hundred millisecond latency to first audio output. It can generate natural sounding speech for up to ten minutes of continuous audio from a single text input.
