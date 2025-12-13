@@ -1,12 +1,13 @@
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
-# Install system dependencies
+# Install system dependencies (build-essential needed for Triton JIT compilation)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     ffmpeg \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for faster pip installs
