@@ -99,7 +99,16 @@ Multi-GPU:
 
 ## Performance
 
-On RTX 4090 (24GB):
+**On Blackwell GPU (97GB VRAM, no offloading, 25 frames, 10 steps):**
+
+| Mode | Time | Peak VRAM | Output |
+|------|------|-----------|--------|
+| 480p T2V | ~11s | 49GB | 848x480 |
+| 480p + SR | ~32s | 65GB | 1280x720 |
+| 720p T2V | ~66s | 49GB | 1280x720 |
+| 720p + SR | ~159s | 65GB | 1904x1072 |
+
+**On RTX 4090 (24GB, with offloading):**
 - 480p I2V with step distillation: ~75 seconds end-to-end
 - 480p T2V with CFG distillation: ~3-4 minutes
 - 720p T2V: ~8-10 minutes

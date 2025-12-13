@@ -1,10 +1,6 @@
 # HunyuanVideo-1.5 dependencies
 # Based on upstream requirements.txt with frozen versions
-
-# Core ML
-torch>=2.6.0
-torchvision>=0.21.0
-torchaudio==2.6.0
+# Note: torch/torchvision/torchaudio come from base image (2.9.1+)
 
 # Diffusion
 diffusers==0.35.0
