@@ -1,0 +1,42 @@
+name: vibevoice_realtime
+capability: generative/audio
+modalities:
+  - text
+  - audio
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 15
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate speech from text
+    path_args:
+      - flag: "--input"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run smoke test
+tags:
+  - tts
+  - text-to-speech
+  - speech-synthesis
+  - real-time
+  - streaming
+  - microsoft
+  - qwen
+tasks:
+  - text_to_speech
+  - speech_synthesis
+frameworks:
+  - pytorch
+  - transformers
+description: Real-time text-to-speech with ~300ms latency using Microsoft VibeVoice-Realtime-0.5B
