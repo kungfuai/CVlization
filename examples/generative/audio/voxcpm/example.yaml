@@ -43,3 +43,6 @@ frameworks:
   - pytorch
   - transformers
 description: Tokenizer-free TTS with voice cloning using OpenBMB VoxCPM1.5 (0.5B params)
+verification:
+  last_verified: 2025-12-13
+  last_verification_note: "Verified build, inference, model caching (HuggingFace + ModelScope), and 44.1kHz audio outputs on RTX 3090 (24GB). Uses ~2.4GB VRAM (10%) with bfloat16. First run downloads ~1GB models."
