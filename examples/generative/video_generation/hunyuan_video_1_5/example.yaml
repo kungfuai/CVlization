@@ -42,5 +42,5 @@ frameworks:
 description: HunyuanVideo-1.5 - 8.3B parameter video generation model from Tencent with T2V/I2V support
 
 verification:
-  last_verified: "2025-12-06"
-  last_verification_note: "Docker image builds successfully (7.39GB). Model download works (~50GB for 480p T2V variant). Requires 48GB+ system RAM for inference with CPU offloading. OOM on 32GB RAM systems during model loading."
+  last_verified: "2025-12-13"
+  last_verification_note: "480p T2V: ~11s, 49GB VRAM, 848x480. 480p+SR: ~32s, 65GB VRAM, 1280x720. 720p T2V: ~66s, 49GB VRAM, 1280x720. 720p+SR: ~159s, 65GB VRAM, 1904x1072. All 25 frames, 10 steps (SR adds 6-8 steps), --no_offload. Variants lazy-loaded. Blackwell GPU (sm_120), PyTorch 2.9.1."

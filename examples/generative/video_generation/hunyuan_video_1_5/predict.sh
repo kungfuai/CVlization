@@ -18,6 +18,12 @@ if [ ! -d "${HF_CACHE}/hub/models--tencent--HunyuanVideo-1.5" ]; then
     exit 1
 fi
 
+# Pass through CUDA_VISIBLE_DEVICES if set in environment
+CUDA_ENV=""
+if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
+    CUDA_ENV="--env CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
+fi
+
 docker run --rm --gpus=all \
     --workdir /workspace \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
@@ -26,5 +32,6 @@ docker run --rm --gpus=all \
     --env "PYTHONPATH=/cvlization_repo" \
     --env "HF_HOME=/root/.cache/huggingface" \
     --env "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" \
+    ${CUDA_ENV} \
     --shm-size=16g \
     "$IMG" python3 predict.py --model_path tencent/HunyuanVideo-1.5 "$@"
