@@ -38,6 +38,7 @@ from diffusers.models import AutoencoderKL
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.schedulers import KarrasDiffusionSchedulers
 from diffusers.utils import BaseOutput, deprecate, logging
+from huggingface_hub import snapshot_download
 
 from hyvideo.commons import (
     PIPELINE_CONFIGS,
@@ -189,6 +190,25 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
         return scheduler
 
     @classmethod
+    def _download_glyph_from_modelscope(cls, glyph_root):
+        """Auto-download Glyph-SDXL-v2 from ModelScope if missing."""
+        try:
+            from modelscope import snapshot_download as ms_snapshot_download
+            loguru.logger.info("Downloading Glyph-SDXL-v2 from ModelScope...")
+            # Download to parent directory (text_encoder/)
+            parent_dir = os.path.dirname(glyph_root)
+            os.makedirs(parent_dir, exist_ok=True)
+            ms_snapshot_download(
+                'AI-ModelScope/Glyph-SDXL-v2',
+                local_dir=glyph_root,
+            )
+            loguru.logger.info(f"Downloaded Glyph-SDXL-v2 to {glyph_root}")
+        except ImportError:
+            raise RuntimeError(
+                "modelscope package not installed. Please install with: pip install modelscope"
+            )
+
+    @classmethod
     def _load_byt5(cls, cached_folder, glyph_byT5_v2, byt5_max_length, device):
         if not glyph_byT5_v2:
             byt5_kwargs = None
@@ -198,17 +218,8 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             load_from = os.path.join(cached_folder, "text_encoder")
             glyph_root = os.path.join(load_from, "Glyph-SDXL-v2")
             if not os.path.exists(glyph_root):
-                raise RuntimeError(
-                    f"Glyph checkpoint not found from '{glyph_root}'. \n"
-                    "Please download from https://modelscope.cn/models/AI-ModelScope/Glyph-SDXL-v2/files.\n\n"
-                    "- Required files:\n"
-                    "    Glyph-SDXL-v2\n"
-                    "    ├── assets\n"
-                    "    │   ├── color_idx.json\n"
-                    "    │   └── multilingual_10-lang_idx.json\n"
-                    "    └── checkpoints\n"
-                    "        └── byt5_model.pt\n"
-                )
+                # Auto-download from ModelScope
+                cls._download_glyph_from_modelscope(glyph_root)
 
             byT5_google_path = os.path.join(load_from, "byt5-small")
             if not os.path.exists(byT5_google_path):
@@ -1078,7 +1089,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                 f"Rewritten Prompt:          {prompt if prompt_rewrite else '<disabled>'}\n"
                 f"Aspect Ratio:              {aspect_ratio if task_type == 't2v' else f'{width}:{height}'}\n"
                 f"Video Length:              {video_length}\n"
-                f"Reference Image:           {user_reference_image} {reference_image.size}\n"
+                f"Reference Image:           {user_reference_image} {reference_image.size if reference_image is not None else 'N/A'}\n"
                 f"Guidance Scale:            {guidance_scale}\n"
                 f"Guidance Embedded Scale:   {embedded_guidance_scale}\n"
                 f"Shift:                     {flow_shift}\n"
@@ -1469,8 +1480,25 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                     f'The provided pretrained_model_name_or_path "{pretrained_model_name_or_path}"'
                     " is neither a valid local path nor a valid repo id. Please check the parameter."
                 )
-            cached_folder = cls.download(
-                pretrained_model_name_or_path,
+            # Use snapshot_download instead of cls.download() since HunyuanVideo-1.5
+            # doesn't have model_index.json that diffusers expects
+            # Filter to only download needed files (full repo is 372GB)
+            # Note: text_encoder models (Qwen, byt5) are downloaded separately from their own repos
+            allow_patterns = [
+                "config.json",
+                f"transformer/{transformer_version}/*",
+                "vae/*",
+                "scheduler/*",
+            ]
+            # If SR pipeline is requested, also download SR transformer and upsampler
+            if create_sr_pipeline:
+                sr_version = TRANSFORMER_VERSION_TO_SR_VERSION.get(transformer_version)
+                if sr_version:
+                    allow_patterns.append(f"transformer/{sr_version}/*")
+                    allow_patterns.append(f"upsampler/{sr_version}/*")
+            cached_folder = snapshot_download(
+                repo_id=pretrained_model_name_or_path,
+                allow_patterns=allow_patterns,
                 **kwargs,
             )
         else:
@@ -1578,9 +1606,8 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
     def _load_text_encoders(cls, pretrained_model_path, device):
         text_encoder_path = f'{pretrained_model_path}/text_encoder/llm'
         if not os.path.exists(text_encoder_path):
-            msg = f"{text_encoder_path} not found. Please refer to checkpoints-download.md to download the text encoder checkpoints."
-            loguru.logger.error(msg)
-            raise FileNotFoundError(msg)
+            loguru.logger.warning(f"{text_encoder_path} not found. Falling back to Qwen/Qwen2.5-VL-7B-Instruct from HuggingFace.")
+            text_encoder_path = "Qwen/Qwen2.5-VL-7B-Instruct"
         text_encoder = TextEncoder(
             text_encoder_type='llm',
             tokenizer_type='llm',
@@ -1603,9 +1630,8 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
     def _load_vision_encoder(cls, pretrained_model_name_or_path, device):
         vision_encoder_path = f'{pretrained_model_name_or_path}/vision_encoder/siglip'
         if not os.path.exists(vision_encoder_path):
-            msg = f"{vision_encoder_path} not found. Please refer to checkpoints-download.md to download the vision encoder checkpoints."
-            loguru.logger.error(msg)
-            raise FileNotFoundError(msg)
+            loguru.logger.warning(f"{vision_encoder_path} not found. Vision encoder is optional for T2V mode.")
+            return None
         vision_encoder = VisionEncoder(
             vision_encoder_type="siglip",
             vision_encoder_precision="fp16",
