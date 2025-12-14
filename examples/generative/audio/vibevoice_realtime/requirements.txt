@@ -1,0 +1,9 @@
+# VibeVoice-Realtime-0.5B dependencies
+# Note: VibeVoice is installed from git in Dockerfile, these are supplementary
+
+# Audio processing
+soundfile==0.13.1
+librosa==0.10.2
+
+# Utilities (versions from NVIDIA container are sufficient)
+# transformers, torch, accelerate come from VibeVoice install
