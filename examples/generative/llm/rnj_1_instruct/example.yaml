@@ -1,0 +1,38 @@
+name: rnj-1-instruct
+capability: generative/llm
+modalities:
+  - text
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 18
+  disk_gb: 20
+image: cvlization/rnj-1-instruct:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run inference
+  test:
+    script: test.sh
+    description: Run smoke test
+tags:
+  - essential-ai
+  - code-generation
+  - tool-calling
+  - stem
+  - inference
+  - pytorch
+tasks:
+  - text_generation
+  - code_generation
+frameworks:
+  - pytorch
+  - transformers
+description: RNJ-1-Instruct 8B code and STEM model by Essential AI. Strong on SWE-bench, HumanEval+, and tool calling.
+verification:
+  last_verified: "2025-12-13"
+  last_verification_note: "Verified build and predict via CVL CLI on RTX 3090 (24GB). Model loads in bfloat16 (~17GB VRAM), generates correct code. Inference ~34s including model load. cvl info, cvl run build, cvl run predict all work correctly."
