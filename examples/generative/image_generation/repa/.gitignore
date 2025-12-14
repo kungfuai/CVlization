@@ -1,0 +1,25 @@
+# Outputs
+outputs/
+pretrained_models/
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Logs
+logs/
+*.log
+wandb/
+
+# Checkpoints
+*.pt
+*.pth
+*.ckpt
+
+# Generated images
+*.png
+*.jpg
+*.jpeg
+!README_*.png

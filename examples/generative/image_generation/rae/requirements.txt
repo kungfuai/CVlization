@@ -1,0 +1,16 @@
+# RAE dependencies - frozen versions for reproducibility
+# Note: torch and torchvision come from the base Docker image (2.9.1)
+transformers==4.51.0
+timm==0.9.16
+accelerate==0.30.0
+huggingface_hub==0.30.0
+safetensors==0.4.5
+tqdm==4.66.4
+numpy==1.26.4
+Pillow==10.2.0
+einops==0.7.0
+omegaconf==2.3.0
+torchdiffeq==0.2.5
+wandb==0.16.3
+lpips==0.1.4
+datasets==2.21.0
