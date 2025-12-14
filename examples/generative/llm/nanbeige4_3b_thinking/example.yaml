@@ -1,0 +1,40 @@
+name: nanbeige4-3b-thinking
+docker: nanbeige4_3b_thinking
+capability: generative/llm
+modalities:
+- text
+datasets: []
+stability: testing
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 15
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run chat/tool inference
+  test:
+    script: test.sh
+    description: Smoke test prompt (downloads weights)
+tags:
+- nanbeige
+- llama
+- reasoning
+- tool-use
+- bf16
+- 3b
+tasks:
+- text_generation
+- reasoning
+- tool_use
+frameworks:
+- pytorch
+- transformers
+description: Nanbeige4-3B-Thinking-2510 chat/tool inference with Docker (bf16 CUDA,
+  65k context; truncation flag included).
+verification:
+  last_verified: "2025-12-14"
+  last_verification_note: "Smoke test OK via `cvl run generative/llm/nanbeige4_3b_thinking test` (max_new_tokens=512, temperature=0.0) and predict preset OK via `cvl run generative/llm/nanbeige4_3b_thinking predict -- --prompt \"Tell me a fun fact about prime numbers under 20.\" --max-new-tokens 128 --temperature 0.0` on NVIDIA A10 24GB; observed VRAM ~7.97GB during predict; outputs saved to outputs/."
