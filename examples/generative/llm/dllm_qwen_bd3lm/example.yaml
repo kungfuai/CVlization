@@ -1,0 +1,41 @@
+name: dllm
+capability: generative/llm
+modalities:
+  - text
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 2  # Minimum for qwen-bd3lm; llada needs 16GB
+  disk_gb: 20
+image: cvlization/dllm-qwen-bd3lm:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run diffusion inference (default qwen-bd3lm)
+  test:
+    script: test.sh
+    description: Run smoke test
+tags:
+  - dllm
+  - diffusion
+  - bd3lm
+  - mdlm
+  - llada
+  - bert
+  - qwen
+  - inference
+  - pytorch
+tasks:
+  - text_generation
+frameworks:
+  - pytorch
+  - transformers
+  - dllm
+description: Diffusion Language Models (dLLM) - text generation via iterative denoising. Supports Qwen-BD3LM (0.6B), BERT-Chat (395M), and LLaDA (8B).
+verification:
+  last_verified: 2025-12-13
+  last_verification_note: "Verified build, inference for all 3 models on RTX 3090 (24GB). VRAM: qwen-bd3lm 1.8GB, bert-chat 1.2GB, llada 15.4GB. Model caching via HuggingFace hub."
