@@ -1,0 +1,6 @@
+# RNJ-1-Instruct dependencies
+# Model requires transformers >= 4.51.2
+transformers>=4.51.2
+accelerate>=1.2.0
+sentencepiece>=0.2.0
+protobuf>=5.29.0
