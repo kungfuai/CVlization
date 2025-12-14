@@ -1,0 +1,6 @@
+transformers==4.46.2
+torch==2.5.1
+accelerate==1.2.1
+sentencepiece==0.2.0
+huggingface-hub==0.26.2
+hf-transfer==0.1.7
