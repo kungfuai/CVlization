@@ -1,0 +1,43 @@
+name: nomos-1-inference
+docker: nomos_1
+capability: generative/llm
+modalities:
+  - text
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 32
+  disk_gb: 120
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run inference
+  test:
+    script: test.sh
+    description: Run smoke test
+tags:
+  - nomos
+  - nous-research
+  - qwen3
+  - moe
+  - math
+  - reasoning
+  - proof-writing
+  - pytorch
+tasks:
+  - text_generation
+  - mathematical_reasoning
+frameworks:
+  - pytorch
+  - transformers
+description: Nomos-1 31B MoE model for mathematical reasoning and proof-writing (Apache 2.0)
+verification:
+  last_verified: 2025-12-14
+  last_verification_note: |
+    Verified build, inference, model caching (114GB), and outputs on NVIDIA RTX PRO 6000 Blackwell (96GB VRAM).
+    Peak VRAM: 29.1GB (30% of 96GB). Model loads in ~15s, inference completes in ~25s.
+    Requires PyTorch 2.9.1+ with CUDA 12.8 for Blackwell GPU support.
