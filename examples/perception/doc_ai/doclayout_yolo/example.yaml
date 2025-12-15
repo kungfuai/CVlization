@@ -1,0 +1,41 @@
+name: doclayout-yolo
+capability: perception/doc_ai
+modalities:
+- vision
+datasets:
+- DocSynth-300K
+- DocLayNet
+- D4LA
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 1
+  disk_gb: 3
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run DocLayout-YOLO layout detection
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--output"
+        type: file
+tags:
+- document-layout
+- layout-detection
+- yolo
+- object-detection
+- bounding-boxes
+tasks:
+- layout_detection
+- document_analysis
+frameworks:
+- pytorch
+- yolov10
+description: Document layout detection using DocLayout-YOLO (YOLOv10-based). Detects 11 layout elements including text, titles, tables, figures, formulas, headers, footers, captions, lists, and footnotes.
+verification:
+  last_verified: 2025-12-15
+  last_verification_note: "Verified build + predict via script and CVL CLI on NVIDIA A10 (24GB). Peak VRAM ~0.6GB, inference ~82ms/image at 1024px. Model cached to HF hub (39MB)."
