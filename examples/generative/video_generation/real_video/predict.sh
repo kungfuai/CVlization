@@ -57,7 +57,7 @@ docker run --rm \
     --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
-    ${MODEL_MOUNTS} \
+    "${MODEL_MOUNTS}" \
     --env "PYTHONPATH=/cvlization_repo:/workspace/RealVideo" \
     --env "HF_HOME=/root/.cache/huggingface" \
     --env "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512" \
@@ -65,9 +65,9 @@ docker run --rm \
     --env "TORCHINDUCTOR_CACHE_DIR=/workspace/.inductor_cache" \
     --env "NCCL_DEBUG=VERSION" \
     --env "CUDA_DEVICE_MAX_CONNECTIONS=1" \
-    ${CUDA_ENV} \
+    "${CUDA_ENV}" \
     --shm-size=32g \
     --ipc=host \
     "$IMG" \
-    torchrun --standalone --nproc_per_node=${GPU_COUNT} \
+    torchrun --standalone --nproc_per_node="${GPU_COUNT}" \
         predict.py "$@"
