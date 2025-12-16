@@ -1,0 +1,47 @@
+# Core dependencies
+fastapi==0.104.1
+uvicorn==0.24.0
+websockets==12.0
+python-multipart==0.0.6
+jinja2==3.1.2
+aiofiles==23.2.1
+starlette
+pydantic==2.10.6
+
+# ML/DL dependencies (torch 2.9.1 from base image)
+torchvision
+torchao
+torchaudio
+
+# Diffusion/transformers
+diffusers==0.31.0
+transformers==4.52.4
+tokenizers==0.21.1
+accelerate==1.7.0
+
+# Audio/Video processing
+soundfile==0.12.1
+librosa
+opencv-python
+imageio-ffmpeg
+av==13.1.0
+
+# Other ML libs
+easydict
+ftfy
+numpy<2
+omegaconf
+einops
+open_clip_torch
+sentencepiece
+scikit-image
+matplotlib
+
+# Utilities
+wandb
+dominate
+pycocotools
+lmdb
+huggingface_hub[cli]
+aiohttp
+orjson
