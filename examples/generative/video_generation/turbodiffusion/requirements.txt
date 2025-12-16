@@ -1,0 +1,25 @@
+# TurboDiffusion dependencies
+# Note: torch 2.9.1 is provided by base Docker image (pytorch/pytorch:2.9.1-cuda12.6-cudnn9-devel)
+# Do NOT reinstall torch - it would break CUDA compatibility
+
+# Required
+triton>=3.3.0
+flash-attn
+einops
+numpy
+pillow
+loguru
+imageio[ffmpeg]
+pandas
+PyYAML
+omegaconf
+attrs
+fvcore
+ftfy
+regex
+transformers
+nvidia-ml-py
+huggingface_hub
+
+# Optional (for SageSLA attention - installed from git in Dockerfile)
+# git+https://github.com/thu-ml/SpargeAttn.git
