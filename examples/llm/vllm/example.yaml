@@ -14,7 +14,7 @@ presets:
     description: Build vLLM container (torch 2.9.1 + vLLM 0.12.0)
   predict:
     script: predict.sh
-    description: Run a local vLLM inference (no server required)
+    description: Run a local vLLM inference (no server required). Default model: allenai/Olmo-3-7B-Instruct.
   serve:
     script: serve.sh
     description: Launch OpenAI-compatible vLLM server with auto-tuning

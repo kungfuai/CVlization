@@ -16,7 +16,7 @@ bash examples/llm/vllm/serve.sh
 ```
 
 Defaults:
-- Model: `Qwen/Qwen2.5-1.5B-Instruct` (set `MODEL_ID` to change; served name mirrors the model unless `SERVED_MODEL_NAME` is set)
+- Model: `allenai/Olmo-3-7B-Instruct` (set `MODEL_ID` to change; served name mirrors the model unless `SERVED_MODEL_NAME` is set)
 - Port: `8000`, Host: `0.0.0.0`
 - Base: `pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime`
 
