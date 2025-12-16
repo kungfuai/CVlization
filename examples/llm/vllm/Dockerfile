@@ -31,12 +31,12 @@ RUN pip install --no-cache-dir \
       lark==1.2.2 \
       llguidance \
       lm-format-enforcer==0.11.3 \
-      mistral_common>=1.8.5 \
+      "mistral_common>=1.8.5" \
       model-hosting-container-standards \
       msgspec \
       ninja \
       numba==0.61.2 \
-      openai-harmony>=0.0.3 \
+      "openai-harmony>=0.0.3" \
       opencv-python-headless \
       outlines_core==0.2.11 \
       partial-json-parser \
@@ -46,10 +46,10 @@ RUN pip install --no-cache-dir \
       psutil \
       py-cpuinfo \
       pybase64 \
-      pydantic>=2.12.0 \
+      "pydantic>=2.12.0" \
       python-json-logger \
       pyzmq \
-      ray>=2.48.0 \
+      "ray>=2.48.0" \
       regex \
       scipy \
       sentencepiece \
