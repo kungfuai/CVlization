@@ -8,6 +8,10 @@
 
 using namespace cute;
 
+// X is an alias for Underscore (added in newer CUTLASS versions)
+// Used in Step<_1, X, _1> to skip dimensions in local_tile
+using X = Underscore;
+
 template <
   class OutputDtype_,
   bool IsEvenM,

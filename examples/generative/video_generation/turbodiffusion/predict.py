@@ -18,7 +18,7 @@ from tqdm import tqdm
 from huggingface_hub import hf_hub_download
 
 # Add TurboDiffusion to path
-sys.path.insert(0, "/workspace/TurboDiffusion/turbodiffusion")
+sys.path.insert(0, "/workspace/turbodiffusion")
 
 from imaginaire.utils.io import save_image_or_video
 from imaginaire.utils import log
@@ -29,7 +29,8 @@ from inference.modify_model import tensor_kwargs, create_model
 
 torch._dynamo.config.suppress_errors = True
 
-CHECKPOINT_DIR = Path("/workspace/checkpoints")
+# Use environment variable for checkpoint caching, default to /workspace/checkpoints
+CHECKPOINT_DIR = Path(os.environ.get("CHECKPOINT_DIR", "/workspace/checkpoints"))
 
 # HuggingFace model repos
 HF_REPOS = {
@@ -120,9 +121,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--attention_type",
         type=str,
-        default="sagesla",
+        default="sla",
         choices=["original", "sla", "sagesla"],
-        help="Attention type (sagesla recommended for speed)",
+        help="Attention type (sla recommended; sagesla requires specific SpargeAttn version)",
     )
     parser.add_argument(
         "--sla_topk",
