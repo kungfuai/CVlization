@@ -1,0 +1,21 @@
+independent_first_frame: false
+denoising_step_list:
+- 1000
+- 500
+warp_denoising_step: true # need to remove - 0 in denoising_step_list if warp_denoising_step is true
+ts_schedule: false
+num_train_timestep: 1000
+timestep_shift: 3.0
+guidance_scale: 2.0
+denoising_loss_type: flow
+mixed_precision: true
+
+sp_size: 1
+num_frame_per_block: 2
+load_raw_video: false
+is_sparse_causal: true
+local_attn_size: 2
+
+model_kwargs:
+  timestep_shift: 3.0
+  model_name: Wan2.2-S2V-14B
