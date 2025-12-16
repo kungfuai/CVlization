@@ -1,0 +1,35 @@
+# Output files
+outputs/*.mp4
+outputs/*.avi
+outputs/*.gif
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Results directory (created by upstream inference script)
+results/
