@@ -1,4 +1,4 @@
-name: miles_qwen3_grpo
+name: miles_grpo
 capability: generative/llm
 modalities:
   - text
@@ -9,7 +9,7 @@ resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 20
-image: cvlization/miles_qwen3_grpo:latest
+image: cvlization/miles_grpo:latest
 presets:
   build:
     script: build.sh
@@ -34,7 +34,7 @@ frameworks:
   - megatron
   - sglang
   - ray
-description: Enterprise-grade GRPO training with Miles framework using Qwen3-0.6B
+description: Enterprise-grade GRPO training with Miles framework. Supports Qwen3, Qwen2.5, and other HuggingFace models.
 verification:
   last_verified: 2025-12-16
   last_verification_note: Full training verified on RTX 3090 (24GB). 10 rollout steps completed in ~2 min. Requires --fsdp-state-dict-cpu-offload and reduced batch sizes for 24GB GPU.

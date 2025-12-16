@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-IMG="${CVL_IMAGE:-cvlization/dllm-qwen-bd3lm:latest}"
+IMG="${CVL_IMAGE:-cvlization/dllm:latest}"
 
 mkdir -p "$SCRIPT_DIR/outputs"
 

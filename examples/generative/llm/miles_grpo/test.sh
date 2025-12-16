@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMG="cvlization/miles_qwen3_grpo:latest"
+IMG="cvlization/miles_grpo:latest"
 
 echo "Running Miles GRPO smoke test..."
 
