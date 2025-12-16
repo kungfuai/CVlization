@@ -1,0 +1,44 @@
+# PersonaLive dependencies
+# Upgraded to PyTorch 2.5.1 with compatible xformers
+# Note: Skip TensorRT for simpler setup (pure PyTorch mode)
+
+# Core ML (PyTorch 2.5.1 from base image)
+# torch and torchvision provided by base image
+accelerate==1.2.0
+
+# Diffusion
+diffusers==0.32.2
+safetensors==0.7.0
+
+# Transformers
+transformers==4.48.3
+huggingface-hub==0.27.1
+
+# Image/Video processing
+pillow==11.3.0
+opencv-contrib-python==4.11.0.86
+opencv-python-headless==4.10.0.84
+decord==0.6.0
+av==11.0.0
+scikit-image==0.22.0
+
+# Face detection
+mediapipe==0.10.11
+
+# Config and utilities
+omegaconf==2.3.0
+einops==0.8.1
+numpy==1.26.3
+tqdm==4.67.1
+peft==0.14.0
+
+# xformers for memory efficient attention (required)
+# Using version compatible with PyTorch 2.5.1
+xformers==0.0.29.post1
+
+# Web/API (for online mode - optional)
+# fastapi==0.117.1
+# uvicorn==0.37.0
+# starlette==0.48.0
+# pydantic==2.12.5
+# python-multipart==0.0.20
