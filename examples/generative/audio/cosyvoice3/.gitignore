@@ -1,0 +1,15 @@
+# Generated outputs
+outputs/
+*.wav
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Model caches (models are downloaded at runtime)
+pretrained_models/
+
+# IDE
+.vscode/
+.idea/

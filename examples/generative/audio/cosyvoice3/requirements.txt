@@ -1,0 +1,5 @@
+# Fun-CosyVoice3-0.5B additional dependencies
+
+soundfile==0.12.1
+huggingface_hub==0.30.2
+x-transformers==2.11.24
