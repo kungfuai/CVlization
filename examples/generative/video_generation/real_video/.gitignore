@@ -1,0 +1,15 @@
+# Model weights
+models/
+
+# Cache
+.inductor_cache/
+__pycache__/
+*.pyc
+
+# Outputs
+outputs/
+uploads/
+*.mp4
+
+# Test data
+examples/
