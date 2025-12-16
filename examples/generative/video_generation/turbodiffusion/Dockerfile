@@ -11,17 +11,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone TurboDiffusion with submodules (CUTLASS)
-RUN git clone --recursive https://github.com/thu-ml/TurboDiffusion.git /workspace/TurboDiffusion
+# Copy TurboDiffusion source (included in example folder)
+COPY ops/ /workspace/turbodiffusion/ops/
+COPY rcm/ /workspace/turbodiffusion/rcm/
+COPY imaginaire/ /workspace/turbodiffusion/imaginaire/
+COPY SLA/ /workspace/turbodiffusion/SLA/
+COPY inference/ /workspace/turbodiffusion/inference/
+COPY setup.py pyproject.toml __init__.py /workspace/turbodiffusion/
 
-WORKDIR /workspace/TurboDiffusion
+# Download CUTLASS v3.4.1 headers
+RUN git clone --depth 1 --branch v3.4.1 https://github.com/NVIDIA/cutlass.git \
+    /workspace/turbodiffusion/ops/cutlass
 
-# Patch setup.py to remove compute_120a (requires CUDA 12.8+) for CUDA 12.6 compatibility
-RUN sed -i 's/"-gencode", "arch=compute_120a,code=sm_120a",//' setup.py
+WORKDIR /workspace/turbodiffusion
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \
-    triton>=3.3.0 \
+    "triton>=3.3.0" \
     einops \
     numpy \
     pillow \
@@ -46,16 +52,16 @@ RUN pip install --no-cache-dir \
 # Build and install TurboDiffusion CUDA extensions
 RUN MAX_JOBS=2 pip install -e . --no-build-isolation
 
-# Optional: Install SpargeAttn for SageSLA attention (best quality/speed tradeoff)
-RUN MAX_JOBS=2 pip install --no-cache-dir git+https://github.com/thu-ml/SpargeAttn.git || true
+# Note: SpargeAttn (for SageSLA) has compatibility issues on RTX 30xx GPUs.
+# The default 'sla' attention type works on all GPUs and provides similar speedup.
 
 # Copy inference wrapper
 COPY predict.py /workspace/predict.py
 
 WORKDIR /workspace
 
-# Create checkpoints directory (will be mounted or downloaded at runtime)
+# Create checkpoints directory
 RUN mkdir -p /workspace/checkpoints /workspace/outputs
 
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/workspace/TurboDiffusion:$PYTHONPATH
+ENV PYTHONPATH=/workspace/turbodiffusion
