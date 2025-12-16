@@ -1,0 +1,28 @@
+batch_size: 1
+height: 512
+width: 512
+reference_image_height: 512
+reference_image_width: 512
+temporal_adaptive_step: 4
+temporal_window_size: 4
+num_inference_steps: 4
+dtype: "fp16"
+fps: 16
+
+vae_model_path: './pretrained_weights/sd-vae-ft-mse'
+image_encoder_path: './pretrained_weights/sd-image-variations-diffusers/image_encoder'
+pretrained_base_model_path: './pretrained_weights/sd-image-variations-diffusers'
+
+reference_unet_weight_path: "./pretrained_weights/personalive/reference_unet.pth"
+denoising_unet_path: "./pretrained_weights/personalive/denoising_unet.pth"
+pose_guider_path: "./pretrained_weights/personalive/pose_guider.pth"
+motion_encoder_path: './pretrained_weights/personalive/motion_encoder.pth'
+temporal_module_path: "./pretrained_weights/personalive/temporal_module.pth"
+pose_encoder_path: './pretrained_weights/personalive/motion_extractor.pth'
+
+onnx_path: './pretrained_weights/onnx/unet/unet.onnx'
+onnx_opt_path: './pretrained_weights/onnx/unet_opt/unet_opt.onnx'
+tensorrt_target_model: './pretrained_weights/tensorrt/unet_work.engine'
+
+inference_config: "./configs/inference/inference_stage3.yaml"
+seed: 42
