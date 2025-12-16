@@ -1,0 +1,10 @@
+# Additional dependencies for Miles GRPO wrapper
+# Base Miles image (radixark/miles) includes: torch, transformers, ray, sglang, megatron, etc.
+# These are extra packages that may not be in the base image or need specific versions.
+
+# Config loading
+pyyaml>=6.0
+
+# Dataset loading - let Miles base image control versions to avoid conflicts
+# Only install if missing from base image
+datasets>=2.0.0
