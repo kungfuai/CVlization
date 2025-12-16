@@ -1,0 +1,60 @@
+name: real-video
+capability: generative/video_generation
+modalities:
+  - vision
+  - audio
+datasets: []
+stability: experimental
+resources:
+  gpu: 2
+  vram_gb: 160  # 2x 80GB GPUs minimum (H100/H200/Blackwell)
+  ram_gb: 64
+  disk_gb: 60   # ~52GB for models
+image: cvlization/real-video:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  download:
+    script: download_models.sh
+    description: Download model weights (~52GB)
+  predict:
+    script: predict.sh
+    description: Generate lip-synced video from audio input
+    path_args:
+      - flag: --audio
+        aliases: [-a]
+        type: file
+      - flag: --image
+        aliases: [-i]
+        type: file
+      - flag: --output
+        aliases: [-o]
+        type: file
+tags:
+  - realvideo
+  - zai
+  - video-generation
+  - lip-sync
+  - speech-to-video
+  - avatar
+  - diffusion
+  - self-forcing
+  - pytorch
+  - blackwell
+tasks:
+  - speech_to_video
+  - lip_sync
+  - avatar_animation
+frameworks:
+  - pytorch
+  - diffusers
+description: RealVideo - Generate lip-synced talking head video from audio using Self-Forcing diffusion
+verification:
+  last_verified: 2025-12-15
+  status: failed
+  last_verification_note: |
+    Build passes, but inference fails. predict.py is incompatible with actual RealVideo API.
+    RealVideo is a real-time streaming server (socket IPC between ranks), not batch inference.
+    Requires rewrite of predict.py to match actual app.py/dit_service.py architecture.
+    Missing librosa dependency was added. Docker builds on PyTorch 2.9.1 without flash-attn (native SDPA).
