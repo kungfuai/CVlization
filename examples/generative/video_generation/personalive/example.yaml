@@ -1,0 +1,49 @@
+name: personalive
+capability: generative/video_generation
+modalities:
+  - vision
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 15
+image: cvlization/personalive:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run portrait animation inference
+  test:
+    script: test.sh
+    description: Run smoke test with demo assets
+  download:
+    script: download_models.sh
+    description: Download model weights from HuggingFace
+tags:
+  - personalive
+  - portrait-animation
+  - diffusion
+  - real-time
+  - streaming
+  - gvclab
+  - pytorch
+tasks:
+  - video_generation
+  - image_to_video
+  - portrait_animation
+frameworks:
+  - pytorch
+  - diffusers
+  - xformers
+description: PersonaLive - Real-time expressive portrait animation for live streaming
+verification:
+  last_verified: 2025-12-15
+  last_verification_note: |
+    Verified via CVL CLI (cvl run personalive test) on RTX 3090 (24GB VRAM).
+    Peak VRAM: 11.5GB (47.9%) during inference. Inference time: ~42s total (3s diffusion).
+    Models cached to ~/.cache/huggingface/ (~17GB: PersonaLive 9.9GB, SD base 7GB, VAE 320MB).
+    Output: 512x512 MP4 H.264 video, 8 frames @ 25fps (65KB).
