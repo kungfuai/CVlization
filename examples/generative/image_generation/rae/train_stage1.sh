@@ -47,7 +47,7 @@ docker run --rm --gpus all --shm-size 32G --ipc=host \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
-    $MOUNT_ARGS \
+    ${MOUNT_ARGS:+"$MOUNT_ARGS"} \
     --env "PYTHONPATH=/cvlization_repo" \
     --env "PYTHONUNBUFFERED=1" \
     --env "HF_HOME=/root/.cache/huggingface" \
@@ -58,7 +58,7 @@ docker run --rm --gpus all --shm-size 32G --ipc=host \
     torchrun --standalone --nproc_per_node=1 train_stage1.py \
         --config "$CONFIG" \
         --dataset "$DATASET" \
-        $DATA_PATH_ARG \
+        ${DATA_PATH_ARG:+"$DATA_PATH_ARG"} \
         --results-dir "$RESULTS_DIR" \
         --image-size 256 \
         --precision bf16 \

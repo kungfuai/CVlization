@@ -32,6 +32,6 @@ docker run --rm --gpus=all \
     --env "PYTHONPATH=/cvlization_repo" \
     --env "HF_HOME=/root/.cache/huggingface" \
     --env "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" \
-    ${CUDA_ENV} \
+    ${CUDA_ENV:+"$CUDA_ENV"} \
     --shm-size=16g \
     "$IMG" python3 predict.py --model_path tencent/HunyuanVideo-1.5 "$@"
