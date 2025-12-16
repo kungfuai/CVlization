@@ -1,0 +1,57 @@
+# Miles GRPO Training Configuration
+# Defaults are set for smoke testing (~10 min on single GPU)
+
+model:
+  # Qwen3-0.6B - small model for single GPU training
+  name: "Qwen/Qwen3-0.6B"
+
+dataset:
+  # Math dataset with labeled answers for reward computation
+  name: "zhuzilin/dapo-math-17k"
+  # Limit samples for smoke test (increase for full training)
+  max_samples: 100
+
+training:
+  output_dir: "outputs"
+
+  # Training loop - LOW values for smoke test
+  num_rollout: 10           # Number of rollout iterations (increase to 3000 for full training)
+  rollout_batch_size: 2     # Samples per rollout batch (reduced from 4 for 24GB GPU)
+  n_samples_per_prompt: 2   # Generations per prompt (reduced from 4 for 24GB GPU)
+  global_batch_size: 4      # Total batch size (must equal rollout_batch_size * n_samples_per_prompt)
+
+  # Generation settings
+  max_response_len: 256     # Max tokens per response (reduced for memory; 8192 for full training)
+  temperature: 0.8          # Sampling temperature
+
+  # Optimizer
+  learning_rate: 1.0e-6
+  weight_decay: 0.1
+
+  # Checkpointing
+  save_interval: 50         # Save every 50 steps (less frequent to avoid OOM)
+
+  # Reward model
+  rm_type: "math"           # math, deepscaler, or custom
+
+  # Hardware - adjust based on your GPU
+  num_gpus: 1               # Number of GPUs
+  max_tokens_per_gpu: 1024  # Reduced for 24GB GPU
+  sglang_mem_fraction: 0.35 # Reduced from 0.5 to leave room for FSDP save
+
+grpo:
+  # GRPO algorithm settings
+  kl_coef: 0.0              # KL penalty coefficient
+  kl_type: "low_var_kl"     # k1, k2, k3, or low_var_kl
+  entropy_coef: 0.0         # Entropy bonus coefficient
+  eps_clip: 0.2             # PPO clip range (lower)
+  eps_clip_high: 0.28       # PPO clip range (upper)
+
+# Full training settings (uncomment for production):
+# training:
+#   num_rollout: 3000
+#   rollout_batch_size: 32
+#   n_samples_per_prompt: 8
+#   global_batch_size: 256
+#   max_response_len: 8192
+#   max_tokens_per_gpu: 9216
