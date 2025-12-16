@@ -8,7 +8,7 @@ resources:
   gpu: 1
   vram_gb: 2  # Minimum for qwen-bd3lm; llada needs 16GB
   disk_gb: 20
-image: cvlization/dllm-qwen-bd3lm:latest
+image: cvlization/dllm:latest
 presets:
   build:
     script: build.sh
