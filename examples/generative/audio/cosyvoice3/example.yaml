@@ -1,0 +1,53 @@
+name: cosyvoice3
+capability: generative/audio
+modalities:
+  - text
+  - audio
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 20
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate speech from text
+    path_args:
+      - flag: "--input"
+        type: file
+      - flag: "--output"
+        type: file
+      - flag: "--prompt-wav"
+        type: file
+  test:
+    script: test.sh
+    description: Run smoke test
+tags:
+  - tts
+  - text-to-speech
+  - speech-synthesis
+  - zero-shot
+  - voice-cloning
+  - multilingual
+  - alibaba
+  - funaudiollm
+  - cosyvoice
+tasks:
+  - text_to_speech
+  - speech_synthesis
+  - voice_cloning
+frameworks:
+  - pytorch
+  - transformers
+description: Zero-shot multilingual TTS with voice cloning using Fun-CosyVoice3-0.5B
+verification:
+  last_verified: 2024-12-16
+  last_verification_note: |
+    Build successful (11.1GB image). Inference verified on A10 GPU.
+    Model downloads lazily to ~/.cache/modelscope (~10GB).
+    Output: 24kHz WAV audio generated successfully.
