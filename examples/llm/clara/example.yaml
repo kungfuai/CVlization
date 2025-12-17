@@ -1,0 +1,25 @@
+name: clara
+capability: llm
+modalities: [text]
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 10
+image: cvl-clara
+
+presets:
+  build:
+    script: build.sh
+    description: Build CLaRa inference image (torch 2.9.1 + vendored modeling code)
+  predict:
+    script: predict.sh
+    description: Run a single QA using CLaRa generate_from_text (default apple/CLaRa-7B-Instruct)
+
+tags: [clara, rag, llm, huggingface, inference]
+tasks: [text_generation, retrieval_augmented_generation]
+
+verification:
+  status: VERIFIED
+  last_verified: 2025-12-16
+  last_verification_note: "Verified on NVIDIA A10 (24GB) with apple/CLaRa-7B-Instruct, compression-16, bf16, --max-tokens 32/64 (text/paraphrase). Stage3 questions mode verified with MODEL_ID=apple/CLaRa-7B-E2E, COMPRESSION_DIR=compression-16, bf16, --max-tokens 64. Uses vendored modeling_clara.py + peft 0.17.1."
