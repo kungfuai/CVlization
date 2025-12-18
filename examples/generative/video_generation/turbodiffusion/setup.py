@@ -21,13 +21,14 @@ nvcc_flags = [
     "-lineinfo",
     "-DCUTLASS_DEBUG_TRACE_LEVEL=0",
     "-DNDEBUG",
-    "-DCUDA_FP8_ENABLED=0",  # Disable FP8 to avoid CUDA 12.6 compatibility issues
+    "-DCUDA_FP8_ENABLED=1",  # Enable FP8 with CUDA 12.8+
     "-Xcompiler",
     "-fPIC"
 ]
 
-# Removed compute_120a (requires CUDA 12.8+)
+# GPU architectures: Ampere (80, 86), Ada (89), Hopper (90), Blackwell (120)
 cc_flag = [
+    "-gencode", "arch=compute_120,code=sm_120",
     "-gencode", "arch=compute_90,code=sm_90",
     "-gencode", "arch=compute_89,code=sm_89",
     "-gencode", "arch=compute_86,code=sm_86",

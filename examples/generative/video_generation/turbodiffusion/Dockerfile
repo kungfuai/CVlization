@@ -1,6 +1,6 @@
 # TurboDiffusion: 100-205x accelerated video generation
 # Uses Wan2.1-1.3B model for text-to-video generation
-FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
 
 WORKDIR /workspace
 
@@ -46,8 +46,9 @@ RUN pip install --no-cache-dir \
 
 # Install flash-attn from pre-built wheel (avoids OOM during compilation)
 # Wheel from: https://github.com/mjun0812/flash-attention-prebuild-wheels
+# CUDA 12.8, PyTorch 2.9, Python 3.11
 RUN pip install --no-cache-dir \
-    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.5.4/flash_attn-2.6.3%2Bcu126torch2.9-cp311-cp311-linux_x86_64.whl"
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.0/flash_attn-2.8.3%2Bcu128torch2.9-cp311-cp311-linux_x86_64.whl"
 
 # Build and install TurboDiffusion CUDA extensions
 RUN MAX_JOBS=2 pip install -e . --no-build-isolation

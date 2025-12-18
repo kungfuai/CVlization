@@ -54,7 +54,7 @@ echo ""
 docker run --rm --gpus all \
     -v "${SCRIPT_DIR}/outputs:/workspace/outputs" \
     -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
-    cvlization/turbodiffusion:latest \
+    turbodiffusion \
     python /workspace/predict.py \
         --prompt "${PROMPT}" \
         --output "/workspace/${OUTPUT}" \
