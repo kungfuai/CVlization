@@ -9,13 +9,22 @@ tags:
   - diffusion
   - lora
 
-docker:
-  image: cvlization/live-avatar:latest
-  build_script: build.sh
+image: live_avatar
 
-scripts:
-  build: build.sh
-  predict: predict.sh
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate lip-synced talking head video from audio and image
+    path_args:
+      - flag: --audio
+        type: file
+      - flag: --image
+        type: file
+      - flag: --output
+        type: file
 
 hardware:
   gpu_required: true

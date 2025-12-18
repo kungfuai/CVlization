@@ -4,6 +4,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "Building Docker image: cvlization/live-avatar:latest"
-docker build -t cvlization/live-avatar:latest .
+echo "Building Docker image: live_avatar"
+docker build -t live_avatar .
 echo "Build complete!"
