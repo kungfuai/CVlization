@@ -12,9 +12,8 @@ import os
 import sys
 from pathlib import Path
 
-# Add IMTalker and generator to path (generator has relative imports)
-sys.path.insert(0, "/workspace/IMTalker")
-sys.path.insert(0, "/workspace/IMTalker/generator")
+# Add vendored IMTalker to path
+sys.path.insert(0, "/workspace/local/vendor")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,7 +26,7 @@ def download_models_if_needed():
     """Download model checkpoints if not present."""
     from huggingface_hub import hf_hub_download
 
-    checkpoints_dir = Path("/workspace/IMTalker/checkpoints")
+    checkpoints_dir = Path("/workspace/checkpoints/IMTalker")
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
     # Download generator checkpoint
@@ -106,9 +105,9 @@ def run_inference(
         "--ref_path", image_path,
         "--aud_path", audio_path,
         "--res_dir", os.path.dirname(output_path) or ".",
-        "--generator_path", "/workspace/IMTalker/checkpoints/generator.ckpt",
-        "--renderer_path", "/workspace/IMTalker/checkpoints/renderer.ckpt",
-        "--wav2vec_model_path", "/workspace/IMTalker/checkpoints/wav2vec2-base-960h",
+        "--generator_path", "/workspace/checkpoints/IMTalker/generator.ckpt",
+        "--renderer_path", "/workspace/checkpoints/IMTalker/renderer.ckpt",
+        "--wav2vec_model_path", "/workspace/checkpoints/IMTalker/wav2vec2-base-960h",
         "--a_cfg_scale", str(a_cfg_scale),
         "--nfe", str(nfe),
         "--seed", str(seed),

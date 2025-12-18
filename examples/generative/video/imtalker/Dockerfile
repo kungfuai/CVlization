@@ -8,7 +8,6 @@ ENV MAX_JOBS=4
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
     ffmpeg \
     libsm6 \
     libxext6 \
@@ -19,11 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
-
-# Clone IMTalker repository
-RUN git clone https://github.com/bigai-nlco/IMTalker.git /workspace/IMTalker
-
-WORKDIR /workspace/IMTalker
 
 # Install Python dependencies
 # Note: face_alignment requires dlib which needs cmake and takes time to build
@@ -50,7 +44,7 @@ RUN pip install --no-cache-dir \
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/workspace/IMTalker
+ENV PYTHONPATH=/workspace/local/vendor
 
 # Default command
 CMD ["python", "--version"]

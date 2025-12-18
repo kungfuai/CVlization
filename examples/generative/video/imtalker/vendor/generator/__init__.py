@@ -1,0 +1,1 @@
+# IMTalker generator module
