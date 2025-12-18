@@ -40,3 +40,6 @@ description: >
   transfer with flow matching. It achieves 40+ FPS on RTX 4090 with 512x512
   output resolution. Supports audio-driven and video-driven generation modes.
   Uses Wav2Vec2 for audio encoding and Flow Matching for motion generation.
+verification:
+  last_verified: 2025-12-18
+  last_verification_note: "Verified build, inference with vendored code, and video output on RTX PRO 6000 Blackwell (96GB VRAM). First run downloads ~2.3GB models. Inference ~10s after model load."
