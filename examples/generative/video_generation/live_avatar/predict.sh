@@ -16,5 +16,5 @@ docker run --rm \
     --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
     -e HF_HOME=/root/.cache/huggingface \
     -e CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
-    cvlization/live-avatar:latest \
+    live_avatar \
     python3 /workspace/predict.py "$@"
