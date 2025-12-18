@@ -1,0 +1,16 @@
+# Model weights
+ckpt/
+models/
+
+# Cache
+.inductor_cache/
+__pycache__/
+*.pyc
+
+# Outputs
+output/
+outputs/
+*.mp4
+
+# Test data
+examples/
