@@ -1,5 +1,5 @@
 name: clara
-capability: llm
+capability: agentic/rag
 modalities: [text]
 stability: experimental
 resources:

@@ -8,11 +8,11 @@ Dockerized SGLang preset with sensible defaults. Includes:
 ## Quick start
 ```bash
 # From repo root
-bash examples/llm/sglang/build.sh
-bash examples/llm/sglang/predict.sh  # chat (starts server+client), writes outputs/result.txt
+bash examples/generative/llm/sglang/build.sh
+bash examples/generative/llm/sglang/predict.sh  # chat (starts server+client), writes outputs/result.txt
 
 # To serve (OpenAI-compatible)
-bash examples/llm/sglang/serve.sh
+bash examples/generative/llm/sglang/serve.sh
 ```
 
 Defaults:
@@ -35,13 +35,13 @@ Defaults:
 ## Client usage
 ```bash
 # Chat (local server started automatically)
-bash examples/llm/sglang/predict.sh --prompt "Summarize SGLang routing."
+bash examples/generative/llm/sglang/predict.sh --prompt "Summarize SGLang routing."
 
 # Override model / context / TP
 MODEL_ID=microsoft/Phi-4-mini-instruct \
 SGLANG_CONTEXT_LENGTH=4096 \
 SGLANG_TP_SIZE=1 \
-bash examples/llm/sglang/predict.sh --max-tokens 64
+bash examples/generative/llm/sglang/predict.sh --max-tokens 64
 ```
 
 ## Notes

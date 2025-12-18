@@ -8,11 +8,11 @@ Dockerized vLLM preset with sensible defaults and optional auto-tuning based on 
 ## Quick start
 ```bash
 # From repo root
-bash examples/llm/vllm/build.sh
-bash examples/llm/vllm/predict.sh  # chat (local), writes outputs/result.txt
+bash examples/generative/llm/vllm/build.sh
+bash examples/generative/llm/vllm/predict.sh  # chat (local), writes outputs/result.txt
 
 # To serve (OpenAI-compatible)
-bash examples/llm/vllm/serve.sh
+bash examples/generative/llm/vllm/serve.sh
 ```
 
 Defaults:
@@ -39,21 +39,21 @@ VLLM_TP_SIZE=4 \
 VLLM_MAX_MODEL_LEN=65536 \
 VLLM_DTYPE=bfloat16 \
 VLLM_EXTRA_ARGS="--trust-remote-code --gpu-memory-utilization 0.96" \
-bash examples/llm/vllm/serve.sh
+bash examples/generative/llm/vllm/serve.sh
 ```
 
 ## Client usage
 ```bash
 # Chat local (no server)
-bash examples/llm/vllm/predict.sh --prompt "Summarize PagedAttention."
+bash examples/generative/llm/vllm/predict.sh --prompt "Summarize PagedAttention."
 
 # Embeddings (encoder or decoder models) - runs locally with transformers
-python examples/llm/vllm/predict.py --mode embed \
+python examples/generative/llm/vllm/predict.py --mode embed \
   --model google/embeddinggemma-300m \
   --text-a "hello world" --normalize
 
 # Rerank (cross-encoder) - runs locally with transformers
-python examples/llm/vllm/predict.py --mode rerank \
+python examples/generative/llm/vllm/predict.py --mode rerank \
   --model mixedbread-ai/mxbai-rerank-base-v2 \
   --text-a "query text" \
   --doc "candidate 1" --doc "candidate 2" \
