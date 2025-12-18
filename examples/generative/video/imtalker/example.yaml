@@ -1,0 +1,45 @@
+name: imtalker
+capability: generative/video
+modalities:
+  - vision
+  - audio
+  - video
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 8
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate talking video from image and audio
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+tasks:
+  - audio_to_video
+  - talking_head_generation
+frameworks:
+  - pytorch
+tags:
+  - talking-head
+  - audio-driven
+  - video-generation
+  - flow-matching
+  - implicit-motion-transfer
+description: >
+  IMTalker generates high-quality talking face videos using implicit motion
+  transfer with flow matching. It achieves 40+ FPS on RTX 4090 with 512x512
+  output resolution. Supports audio-driven and video-driven generation modes.
+  Uses Wav2Vec2 for audio encoding and Flow Matching for motion generation.
+verification:
+  last_verified: 2025-12-18
+  last_verification_note: "Verified build, inference with vendored code, and video output on RTX PRO 6000 Blackwell (96GB VRAM). First run downloads ~2.3GB models. Inference ~10s after model load."

@@ -1,0 +1,10 @@
+{
+    "sample": {
+        "image_path": "./examples/images/1p-0.png",
+        "caption": "The man stands in the dusty western street, backlit by the setting sun, and his determined gaze speaks of a rugged spirit.",
+        "enhance_caption": "The man stands in the dusty western street, backlit by the setting sun, and his determined gaze speaks of a rugged spirit.",
+        "audio_list": [
+            "./examples/audios/1p-0.wav"
+        ]
+    }
+}
