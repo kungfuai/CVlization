@@ -1,0 +1,6 @@
+transformers==4.57.2
+huggingface-hub==0.36.0
+peft==0.17.1
+sentencepiece==0.2.1
+safetensors==0.7.0
+requests>=2.32.0
