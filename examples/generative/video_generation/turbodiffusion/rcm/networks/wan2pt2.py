@@ -316,8 +316,10 @@ class WanSelfAttention(nn.Module):
             return q, k, v
 
         q, k, v = qkv_fn(x)
+        q = rope_apply(q, video_size, freqs)
+        k = rope_apply(k, video_size, freqs)
 
-        x = self.attn_op(rope_apply(q, video_size, freqs), rope_apply(k, video_size, freqs), v)
+        x = self.attn_op(q, k, v)
 
         # output
         x = x.flatten(2)
