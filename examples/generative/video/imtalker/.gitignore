@@ -1,0 +1,7 @@
+outputs/
+*.mp4
+*.avi
+*.mov
+__pycache__/
+*.pyc
+checkpoints/
