@@ -7,7 +7,7 @@ echo "Building TurboDiffusion Docker image..."
 echo "Note: This build compiles custom CUDA kernels and may take 10-20 minutes."
 echo ""
 
-docker build -t cvlization/turbodiffusion:latest "${SCRIPT_DIR}"
+docker build -t turbodiffusion "${SCRIPT_DIR}"
 
 echo ""
-echo "Build complete: cvlization/turbodiffusion:latest"
+echo "Build complete: turbodiffusion"
