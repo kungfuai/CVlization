@@ -1,25 +1,36 @@
 name: turbodiffusion
 description: Fast text-to-video generation with 100x+ speedup using TurboDiffusion
 category: generative/video_generation
-model: TurboWan2.1-T2V-1.3B-480P
+tags:
+  - video-generation
+  - text-to-video
+  - diffusion
+  - acceleration
 
-requirements:
-  gpu: true
-  vram_gb: 24
-  disk_gb: 8
+image: turbodiffusion
 
-docker:
-  base_image: pytorch/pytorch:2.9.1-cuda12.6-cudnn9-devel
-  image_name: cvlization/turbodiffusion:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image (compiles CUDA kernels, ~10-20 min)
+  predict:
+    script: predict.sh
+    description: Generate video from text prompt
+    path_args:
+      - flag: --output
+        type: file
 
-inference:
-  input_type: text
-  output_type: video
-  default_prompt: "A cat playing piano in a jazz club, cinematic lighting"
-  output_format: mp4
-  fps: 16
-  frames: 77
-  resolution: 480p
+hardware:
+  gpu_required: true
+  min_vram_gb: 24
+  recommended_vram_gb: 24
+  min_ram_gb: 32
+
+models:
+  - name: TurboWan2.1-T2V-1.3B-480P
+    source: huggingface
+    repo_id: TurboDiffusion/TurboWan2.1-T2V-1.3B-480P
+    size_gb: 5
 
 references:
   paper: https://jt-zhang.github.io/files/TurboDiffusion_Technical_Report.pdf

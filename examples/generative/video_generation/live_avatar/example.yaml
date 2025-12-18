@@ -1,0 +1,48 @@
+name: live-avatar
+description: Audio-driven avatar video generation using LiveAvatar with Wan2.2-S2V-14B + LoRA
+category: generative/video_generation
+tags:
+  - video-generation
+  - talking-head
+  - lip-sync
+  - audio-to-video
+  - diffusion
+  - lora
+
+image: live_avatar
+
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate lip-synced talking head video from audio and image
+    path_args:
+      - flag: --audio
+        type: file
+      - flag: --image
+        type: file
+      - flag: --output
+        type: file
+
+hardware:
+  gpu_required: true
+  min_vram_gb: 80
+  recommended_vram_gb: 80
+  min_ram_gb: 64
+
+models:
+  - name: Wan2.2-S2V-14B
+    source: huggingface
+    repo_id: Wan-AI/Wan2.2-S2V-14B
+    size_gb: 50
+  - name: LiveAvatar LoRA
+    source: huggingface
+    repo_id: Quark-Vision/Live-Avatar
+    size_gb: 0.5
+
+references:
+  paper: https://arxiv.org/abs/2512.04677
+  github: https://github.com/Alibaba-Quark/LiveAvatar
+  project_page: https://liveavatar.github.io/

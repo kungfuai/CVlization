@@ -1,0 +1,29 @@
+# Core ML
+diffusers==0.31.0
+transformers==4.49.0
+accelerate==1.1.1
+peft==0.17.1
+safetensors==0.4.5
+
+# Audio processing (don't pin torchaudio - use base image version)
+librosa==0.10.2
+openai-whisper==20240930
+
+# Image/Video processing
+opencv-python==4.10.0.84
+imageio[ffmpeg]==2.36.1
+imageio-ffmpeg==0.5.1
+decord==0.6.0
+Pillow==11.0.0
+
+# Utils
+tqdm==4.67.1
+easydict==1.13
+omegaconf==2.3.0
+einops==0.8.0
+ftfy==6.3.1
+huggingface_hub==0.27.0
+
+# Config
+HyperPyYAML==1.2.2
+hydra-core==1.3.2
