@@ -5,8 +5,8 @@ Dockerized, in-process inference demo for Apple's CLaRa 7B (RAG compressor/gener
 ## Quick start
 ```bash
 # From repo root
-bash examples/llm/clara/build.sh
-HF_TOKEN=... bash examples/llm/clara/predict.sh --max-tokens 64
+bash examples/agentic/rag/clara/build.sh
+HF_TOKEN=... bash examples/agentic/rag/clara/predict.sh --max-tokens 64
 ```
 
 Defaults:
