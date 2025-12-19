@@ -2,8 +2,6 @@
 
 A curated collection of 150+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need.
 
-**Browse:** Vision (classification, detection, segmentation, OCR) • Language (LLMs, fine-tuning) • Multimodal (VLMs, document AI) • Generative (image, video, audio, avatars) • Analytical (time series, tabular ML) • Physical (robotics) • Agentic (RAG, tool use, optimization)
-
 *CVlization stands on the shoulders of giants - we package and test amazing open source projects so you can use them with confidence.*
 
 ## Quick Start
@@ -21,8 +19,8 @@ cvl list -k gpt           # search by keyword
 # or browse examples/ on GitHub
 
 # Run any example
-cvl run image-classification-torch build
-cvl run image-classification-torch train
+cvl run nanogpt build
+cvl run nanogpt train
 
 # Copy into your project (bundled with cvlization)
 cvl export perception/image_classification/torch -o your-project/
@@ -107,7 +105,7 @@ examples/
 | **Prompt Optimization** | [`examples/agentic/optimization`](./examples/agentic/optimization) | dspy_gepa_promptops, mcts_prompt_agent | 🧪 |
 | **Tool Use & Coding** | [`examples/agentic`](./examples/agentic) | Code (autogen_pair_programmer), Data analysis (smolagents_data_analyst), Local AI (llamacpp_assistant) | 🧪 |
 
-Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. We recommend starting with the Image Classification example.
+Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. We recommend starting with the nanogpt example.
 
 **Browse on GitHub:** [perception/](./examples/perception/) • [generative/](./examples/generative/) • [analytical/](./examples/analytical/) • [physical/](./examples/physical/) • [agentic/](./examples/agentic/)
 
@@ -120,34 +118,32 @@ You can run examples using the `cvl` CLI or directly with bash scripts.
 **Option 1: Using cvl CLI (recommended)**
 
 ```bash
-cvl run image-classification-torch build
-cvl run image-classification-torch train
-cvl run image-classification-torch predict
+cvl run nanogpt build
+cvl run nanogpt train
 ```
 
 **Option 2: Using bash scripts directly**
 
 ```bash
-cd examples/perception/image_classification/torch
+cd examples/generative/llm/nanogpt
 bash build.sh
 bash train.sh
-bash predict.sh
 ```
 
 **More examples:**
 
 ```bash
-# Train a small LLM on Shakespeare text (Andrej Karpathy's nanoGPT)
-cvl run nanogpt train --max_iters=1000 --batch_size=16
+# RL post-training with GRPO (cutting-edge reasoning model training)
+cvl run miles_grpo train
 
-# Fine-tune Salesforce Moirai foundation model on time series data
-cvl run analytical/time_series/uni2ts_finetune train
+# Generate video from text prompt (Tencent HunyuanVideo)
+cvl run hunyuan-video-1-5 predict --prompt "A cat playing piano"
 
-# Run zero-shot forecasting with Moirai
-cvl run analytical/time_series/moirai_zero_shot forecast
-
-# Document AI inference (IBM Granite-Docling)
+# Document AI extraction (IBM Granite-Docling)
 cvl run granite-docling predict -i input_pdf=@document.pdf
+
+# RAG agent with LangGraph
+cvl run agentic-rag-langgraph-helpdesk predict --question "How do I list examples?"
 ```
 
 For detailed instructions and available options, see the README.md in each example directory.
