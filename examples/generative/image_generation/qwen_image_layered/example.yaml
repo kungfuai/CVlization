@@ -1,0 +1,40 @@
+name: qwen_image_layered
+capability: generative/image_generation
+modalities:
+  - vision
+datasets:
+  - custom
+stability: beta
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 30
+presets:
+  build:
+    script: build.sh
+    description: Build Docker image for Qwen-Image-Layered
+  predict:
+    script: predict.sh
+    description: Decompose an image into RGBA layers via CLI
+  serve:
+    script: serve.sh
+    description: Launch Gradio UI for layer decomposition + PPTX export
+  edit:
+    script: edit.sh
+    description: Launch RGBA layer edit UI (Qwen-Image-Edit)
+tags:
+  - image-generation
+  - layer-decomposition
+  - rgba
+  - qwen
+  - gradio
+  - diffusers
+tasks:
+  - image_generation
+  - image_editing
+frameworks:
+  - pytorch
+  - diffusers
+description: >
+  Decompose an input image into multiple RGBA layers using Qwen-Image-Layered,
+  export layered PPTX, and optionally edit individual layers with Qwen-Image-Edit.
