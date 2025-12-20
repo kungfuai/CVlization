@@ -1,10 +1,11 @@
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
-# Install system dependencies
+# Install system dependencies (build-essential needed for PyAV)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     ffmpeg \
+    build-essential \
     pkg-config \
     libavformat-dev \
     libavcodec-dev \
@@ -20,9 +21,15 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install xformers from cu128 index (matches base image PyTorch 2.9.1+cu128, includes Blackwell sm_120)
+RUN pip install --no-cache-dir xformers --index-url https://download.pytorch.org/whl/cu128
+
+# Install Python dependencies (torch/torchvision/xformers already installed above)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Sanity check: confirm CUDA arch support
+RUN python -c "import torch; print('torch', torch.__version__); print('cuda', torch.version.cuda); print('arch', torch.cuda.get_arch_list())"
 
 # Set working directory
 WORKDIR /workspace

@@ -1,13 +1,13 @@
 # PersonaLive dependencies
-# Upgraded to PyTorch 2.5.1 with compatible xformers
+# Updated for PyTorch 2.9.1 + CUDA 12.8
 # Note: Skip TensorRT for simpler setup (pure PyTorch mode)
 
-# Core ML (PyTorch 2.5.1 from base image)
+# Core ML (PyTorch 2.9.1 from base image)
 # torch and torchvision provided by base image
 accelerate==1.2.0
 
-# Diffusion
-diffusers==0.32.2
+# Diffusion (pin to 0.33.0 for compatibility with PersonaLive)
+diffusers==0.33.0
 safetensors==0.7.0
 
 # Transformers
@@ -19,7 +19,7 @@ pillow==11.3.0
 opencv-contrib-python==4.11.0.86
 opencv-python-headless==4.10.0.84
 decord==0.6.0
-av==11.0.0
+av==14.0.0
 scikit-image==0.22.0
 
 # Face detection
@@ -32,9 +32,7 @@ numpy==1.26.3
 tqdm==4.67.1
 peft==0.14.0
 
-# xformers for memory efficient attention (required)
-# Using version compatible with PyTorch 2.5.1
-xformers==0.0.29.post1
+# xformers built from source in Dockerfile for Blackwell GPU support
 
 # Web/API (for online mode - optional)
 # fastapi==0.117.1
