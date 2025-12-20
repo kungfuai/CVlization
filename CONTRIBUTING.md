@@ -20,7 +20,7 @@ Thank you for contributing to CVlization! This guide documents the standardizati
 2. **Find a similar example** in CVlization to use as a template
    ```bash
    # Browse examples with similar patterns
-   ls examples/generative/video/      # for video/avatar examples
+   ls examples/generative/video_generation/avatar/  # for avatar examples
    ls examples/perception/doc_ai/     # for document AI examples
    ```
 

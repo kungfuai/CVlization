@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 RUN python - <<'PY'
 from pathlib import Path
-path = Path("/opt/conda/lib/python3.10/site-packages/modelscope/utils/ast_utils.py")
+path = Path("/opt/conda/lib/python3.11/site-packages/modelscope/utils/ast_utils.py")
 text = path.read_text()
 if "getattr(node, field, None)" not in text:
     text = text.replace("getattr(node, field)", "getattr(node, field, None)")

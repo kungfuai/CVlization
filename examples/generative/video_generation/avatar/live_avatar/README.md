@@ -32,10 +32,10 @@ You can use sample files from other CVlization examples:
 
 ```bash
 # Audio sample
-../avatar/lite_avatar/funasr_local/runtime/triton_gpu/client/test_wavs/mid.wav
+../lite_avatar/funasr_local/runtime/triton_gpu/client/test_wavs/mid.wav
 
 # Portrait sample
-../avatar/fastavatar/data/example.png
+../fastavatar/data/example.png
 ```
 
 Or use LiveAvatar's bundled examples (after build):
