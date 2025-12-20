@@ -203,16 +203,17 @@ def load_pipeline(config_path: str, device: str, dtype: torch.dtype):
     # Force garbage collection to free CPU memory
     gc.collect()
 
-    # Enable xformers for memory efficiency
-    if is_xformers_available():
-        reference_unet.enable_xformers_memory_efficient_attention()
-        denoising_unet.enable_xformers_memory_efficient_attention()
-        print("xformers memory efficient attention enabled")
-    else:
-        raise ValueError(
-            "xformers is not available. Make sure it is installed correctly. "
-            "Run: pip install xformers"
-        )
+    # Enable memory efficient attention if available
+    # Skip xformers on Blackwell GPUs (sm_120) - PyTorch 2.0+ uses native SDPA by default
+    try:
+        if is_xformers_available():
+            reference_unet.enable_xformers_memory_efficient_attention()
+            denoising_unet.enable_xformers_memory_efficient_attention()
+            print("xformers memory efficient attention enabled")
+    except Exception as e:
+        # xformers may not support newer GPUs (e.g., Blackwell sm_120)
+        # PyTorch 2.0+ uses native SDPA by default, so just continue
+        print(f"xformers not available for this GPU, using default attention: {type(e).__name__}")
 
     # Setup scheduler
     sched_kwargs = OmegaConf.to_container(infer_config.noise_scheduler_kwargs)

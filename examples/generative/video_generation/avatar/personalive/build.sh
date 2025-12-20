@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Image name (matches example.yaml)
-IMG="${CVL_IMAGE:-cvlization/personalive:latest}"
+IMG="${CVL_IMAGE:-personalive}"
 
 # Build from the script's directory
 echo "Building Docker image: ${IMG}"
