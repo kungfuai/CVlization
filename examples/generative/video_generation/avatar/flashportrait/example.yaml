@@ -1,0 +1,43 @@
+name: flashportrait
+capability: generative/video_generation
+modalities:
+  - vision
+  - video
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 60
+  disk_gb: 70
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate portrait animation from image and driving video
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--video"
+        type: file
+      - flag: "--output"
+        type: file
+tasks:
+  - video_generation
+  - portrait_animation
+  - image_to_video
+frameworks:
+  - pytorch
+  - diffusers
+tags:
+  - flashportrait
+  - portrait-animation
+  - diffusion
+  - wan2.1
+  - video-dit
+  - infinite-length
+description: >
+  FlashPortrait - 6x faster infinite portrait animation using Wan2.1-14B DiT.
+  Generates ID-preserving portrait videos from a reference image and driving video.
+  Supports multiple resolutions (512x512 to 1280x720) and memory modes (10GB-60GB VRAM).
