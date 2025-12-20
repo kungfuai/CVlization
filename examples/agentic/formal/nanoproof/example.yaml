@@ -1,0 +1,26 @@
+name: nanoproof
+capability: agentic/formal
+modalities:
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 80
+  disk_gb: 50
+presets:
+  build:
+    script: build.sh
+    description: Build the nanoproof inference image (GPU)
+  predict:
+    script: predict.sh
+    description: Run tactic generation inside the container
+tags:
+  - nanoproof
+  - lean
+  - mcts
+  - pytorch
+tasks:
+  - reasoning
+frameworks:
+  - pytorch
+description: Dockerized nanoproof inference wrapper with lazy asset download (tokenizer & checkpoints) and optional Lean server sidecar.
