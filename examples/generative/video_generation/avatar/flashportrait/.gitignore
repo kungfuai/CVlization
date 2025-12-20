@@ -1,0 +1,8 @@
+outputs/
+checkpoints/
+test_inputs/
+*.mp4
+*.avi
+*.mov
+__pycache__/
+*.pyc
