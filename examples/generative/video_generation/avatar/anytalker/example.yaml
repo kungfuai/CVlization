@@ -1,5 +1,5 @@
 name: anytalker
-capability: generative/video
+capability: generative/video_generation
 modalities:
   - vision
   - audio

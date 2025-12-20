@@ -78,7 +78,7 @@ examples/
 | ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, next_scene_qwen, pixart (experimental), rae, repa, stable_diffusion, uva_energy (experimental), vqgan | ✅ |
 | ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_x, cogvideox, deforum, framepack, hunyuan_video_1_5, kandinsky_5, krea_realtime_scope (experimental), mimic_motion, minisora, phantom (experimental), real_video, reward_forcing, skyreals, svd_cog, svd_comfy, turbodiffusion, vace, vace_comfy (experimental), video_in_between, wan2gp, wan_comfy | ✅ |
 | Text-to-Speech (TTS) | [`examples/generative/audio`](./examples/generative/audio) | cosyvoice3, vibevoice_realtime, voxcpm | ✅ |
-| Avatar & Talking Head | [`examples/generative/video`](./examples/generative/video), [`examples/generative/video_generation/avatar`](./examples/generative/video_generation/avatar) | anytalker, imtalker, live_avatar, personalive, avatar (egstalker, fastavatar, lite_avatar) | ✅ |
+| Avatar & Talking Head | [`examples/generative/video_generation/avatar`](./examples/generative/video_generation/avatar) | anytalker, imtalker, egstalker, fastavatar, lite_avatar, live_avatar, personalive | ✅ |
 
 #### 📊 Analytical (Prediction & Forecasting)
 

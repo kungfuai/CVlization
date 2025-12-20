@@ -9,7 +9,7 @@ resources:
   gpu: 1
   vram_gb: 12
   disk_gb: 15
-image: cvlization/personalive:latest
+image: personalive
 presets:
   build:
     script: build.sh
