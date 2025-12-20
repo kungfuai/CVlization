@@ -1,0 +1,33 @@
+name: gemma-scope-2-270m-it
+docker: gemma_scope_2_270m_it
+capability: generative/llm
+modalities:
+  - text
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 30
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run Gemma Scope 2 token analysis
+  test:
+    script: test.sh
+    description: Run smoke test
+tags:
+  - gemma
+  - interpretability
+  - sae
+  - transformers
+tasks:
+  - text_generation
+frameworks:
+  - pytorch
+  - transformers
+  - sae-lens
+description: Gemma Scope 2 SAE analysis on Gemma 3 270M IT with optional HTML/JSON exports.
