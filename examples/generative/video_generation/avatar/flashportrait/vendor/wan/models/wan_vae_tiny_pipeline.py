@@ -60,6 +60,9 @@ def setup_tiny_vae(pipeline, model_type="wan2.1", tiny_vae_path=None, parallel_d
     
     original_decode = tiny_vae.decode
     def patched_decode(latents, **kwargs):
+        # Ensure tiny VAE is on same device as latents (handles CPU offload mode)
+        if latents.device != tiny_vae.device:
+            tiny_vae.to(latents.device)
         result = original_decode(latents, parallel=parallel_decode)
         return DecoderOutput(sample=result)
     tiny_vae.decode = patched_decode
