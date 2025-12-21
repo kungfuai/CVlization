@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 IMG="${CVL_IMAGE:-flashportrait}"
 
 mkdir -p "${HOME}/.cache/huggingface"
@@ -12,6 +13,7 @@ docker run --rm --gpus=all \
     --shm-size 16G \
     --workdir /workspace \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace/local" \
+    --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
     --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
     --env "PYTHONUNBUFFERED=1" \
     --env "HF_HOME=/root/.cache/huggingface" \
