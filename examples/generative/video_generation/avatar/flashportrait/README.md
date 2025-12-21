@@ -25,21 +25,30 @@
 # Build
 cvl run flashportrait build
 
-# Fast mode (4-step inference) - RECOMMENDED
+# Run with sample inputs (auto-downloaded from HuggingFace)
 cvl run flashportrait predict \
-    --image reference.jpg \
-    --video driving.mp4 \
+    --image test_inputs/reference.png \
+    --video test_inputs/driven_video.mp4 \
+    --output outputs/result.mp4 \
+    --fast
+
+# Run with your own inputs
+cvl run flashportrait predict \
+    --image your_portrait.jpg \
+    --video your_driving.mp4 \
     --output output.mp4 \
     --fast
 
 # Higher resolution (slower)
 cvl run flashportrait predict \
-    --image reference.jpg \
-    --video driving.mp4 \
-    --output output.mp4 \
+    --image test_inputs/reference.png \
+    --video test_inputs/driven_video.mp4 \
+    --output outputs/result_720.mp4 \
     --fast \
     --max_size 720
 ```
+
+Sample inputs are automatically downloaded from [zzsi/cvl](https://huggingface.co/datasets/zzsi/cvl/tree/main/flashportrait) on first run.
 
 ## Performance
 

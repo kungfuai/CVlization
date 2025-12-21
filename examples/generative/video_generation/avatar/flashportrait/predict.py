@@ -37,6 +37,62 @@ def download_models_if_needed(cache_dir):
     return fp_path, wan_path
 
 
+def download_sample_inputs_if_needed(image_path, video_path):
+    """Download sample inputs from HuggingFace if they don't exist locally."""
+    from huggingface_hub import hf_hub_download
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    test_inputs_dir = os.path.join(script_dir, "test_inputs")
+
+    # Check if using default sample paths
+    default_image = os.path.join(test_inputs_dir, "reference.png")
+    default_video = os.path.join(test_inputs_dir, "driven_video.mp4")
+
+    needs_download = False
+    if image_path == default_image and not os.path.exists(image_path):
+        needs_download = True
+    if video_path == default_video and not os.path.exists(video_path):
+        needs_download = True
+
+    if needs_download:
+        print("Downloading sample inputs from HuggingFace...")
+        os.makedirs(test_inputs_dir, exist_ok=True)
+
+        if not os.path.exists(default_image):
+            print("  Downloading reference.png...")
+            hf_hub_download(
+                repo_id="zzsi/cvl",
+                filename="flashportrait/reference.png",
+                repo_type="dataset",
+                local_dir=test_inputs_dir,
+            )
+            # Move from subdirectory to test_inputs root
+            src = os.path.join(test_inputs_dir, "flashportrait", "reference.png")
+            if os.path.exists(src):
+                os.rename(src, default_image)
+
+        if not os.path.exists(default_video):
+            print("  Downloading driven_video.mp4...")
+            hf_hub_download(
+                repo_id="zzsi/cvl",
+                filename="flashportrait/driven_video.mp4",
+                repo_type="dataset",
+                local_dir=test_inputs_dir,
+            )
+            # Move from subdirectory to test_inputs root
+            src = os.path.join(test_inputs_dir, "flashportrait", "driven_video.mp4")
+            if os.path.exists(src):
+                os.rename(src, default_video)
+
+        # Clean up subdirectory
+        subdir = os.path.join(test_inputs_dir, "flashportrait")
+        if os.path.exists(subdir):
+            import shutil
+            shutil.rmtree(subdir, ignore_errors=True)
+
+        print("  Sample inputs downloaded!")
+
+
 def get_emo_feature(video_path, face_aligner, pd_fpg_motion, device):
     """Extract emotion features from driving video."""
     import cv2
@@ -362,6 +418,9 @@ def main():
         args.image = os.path.join(script_dir, args.image)
     if not os.path.isabs(args.video):
         args.video = os.path.join(script_dir, args.video)
+
+    # Download sample inputs from HuggingFace if needed
+    download_sample_inputs_if_needed(args.image, args.video)
 
     # Load and resize reference image
     image_start = clip_image = Image.open(args.image).convert("RGB")
