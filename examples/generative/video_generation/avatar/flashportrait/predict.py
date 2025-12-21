@@ -356,6 +356,13 @@ def main():
     # Process inputs
     print("\nProcessing inputs...")
 
+    # Resolve input paths relative to script directory for container compatibility
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if not os.path.isabs(args.image):
+        args.image = os.path.join(script_dir, args.image)
+    if not os.path.isabs(args.video):
+        args.video = os.path.join(script_dir, args.video)
+
     # Load and resize reference image
     image_start = clip_image = Image.open(args.image).convert("RGB")
     width, height = image_start.size
