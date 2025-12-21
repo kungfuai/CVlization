@@ -181,6 +181,38 @@ def main():
     if args.steps is None:
         args.steps = 4 if args.fast else 30
 
+    # Early path validation (fail fast before loading models)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    workspace_dir = "/mnt/cvl/workspace"  # Current working directory mount
+
+    def resolve_input_path(path, name):
+        """Resolve input path: check workspace first, then script dir, then absolute."""
+        if os.path.isabs(path):
+            return path
+        # Try workspace (current directory) first
+        workspace_path = os.path.join(workspace_dir, path)
+        if os.path.exists(workspace_path):
+            return workspace_path
+        # Then try script directory (for test_inputs/)
+        script_path = os.path.join(script_dir, path)
+        return script_path  # Return script_path even if doesn't exist (for download check)
+
+    args.image = resolve_input_path(args.image, "image")
+    args.video = resolve_input_path(args.video, "video")
+
+    # Download sample inputs if needed (only for default test_inputs paths)
+    download_sample_inputs_if_needed(args.image, args.video)
+
+    # Validate input files exist
+    if not os.path.exists(args.image):
+        print(f"Error: Image file not found: {args.image}")
+        print("Tip: Place files in current directory or use absolute paths.")
+        sys.exit(1)
+    if not os.path.exists(args.video):
+        print(f"Error: Video file not found: {args.video}")
+        print("Tip: Place files in current directory or use absolute paths.")
+        sys.exit(1)
+
     # Imports (after argparse to speed up --help)
     import numpy as np
     import torch
@@ -411,16 +443,6 @@ def main():
 
     # Process inputs
     print("\nProcessing inputs...")
-
-    # Resolve input paths relative to script directory for container compatibility
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    if not os.path.isabs(args.image):
-        args.image = os.path.join(script_dir, args.image)
-    if not os.path.isabs(args.video):
-        args.video = os.path.join(script_dir, args.video)
-
-    # Download sample inputs from HuggingFace if needed
-    download_sample_inputs_if_needed(args.image, args.video)
 
     # Load and resize reference image
     image_start = clip_image = Image.open(args.image).convert("RGB")
