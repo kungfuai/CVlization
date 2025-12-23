@@ -16,7 +16,9 @@ echo "Running CLaRa inference in container (${IMAGE}) with model ${MODEL_ID}"
 docker run --rm --gpus all --ipc=host --shm-size 16g \
   -v "${HF_CACHE}:/root/.cache/huggingface" \
   -v "${SCRIPT_DIR}:/workspace" \
+  -v "${REPO_ROOT}:/cvlization_repo:ro" \
   -w /workspace \
+  -e PYTHONPATH="/cvlization_repo" \
   -e MODEL_ID="${MODEL_ID}" \
   -e REVISION="${REVISION:-}" \
   -e HF_TOKEN="${HF_TOKEN:-}" \
