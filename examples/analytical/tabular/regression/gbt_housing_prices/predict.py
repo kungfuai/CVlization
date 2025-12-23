@@ -45,7 +45,7 @@ def main() -> None:
 
     model_dir = Path(resolve_input_path(args.model_dir))
     input_path = Path(resolve_input_path(args.input))
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     calibrator_path = Path(args.calibrator)
 
     if not model_dir.exists():

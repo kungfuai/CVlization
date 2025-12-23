@@ -130,12 +130,14 @@ def main() -> None:
     if not audio_file.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_file}")
 
-    args.result_dir.mkdir(parents=True, exist_ok=True)
+    # Resolve output path for CVL mode
+    result_dir = Path(resolve_output_path(str(args.result_dir)))
+    result_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Running LiteAvatar inference")
     logger.info("Data directory: {}", data_dir)
     logger.info("Audio input: {}", audio_file)
-    logger.info("Output directory: {}", args.result_dir)
+    logger.info("Output directory: {}", result_dir)
 
     avatar = liteAvatar(
         data_dir=str(data_dir),
@@ -144,9 +146,9 @@ def main() -> None:
         use_gpu=args.use_gpu,
         fps=args.fps,
     )
-    avatar.handle(str(audio_file), str(args.result_dir))
+    avatar.handle(str(audio_file), str(result_dir))
 
-    logger.info("Finished! Rendered video: {}", args.result_dir / "test_demo.mp4")
+    logger.info("Finished! Rendered video: {}", result_dir / "test_demo.mp4")
 
 
 if __name__ == "__main__":

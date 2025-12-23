@@ -70,7 +70,7 @@ def main() -> None:
         if args.top_k:
             result = result.head(args.top_k)
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output_path, index=False)
     print(f"Ranked predictions saved to {output_path}")

@@ -42,7 +42,7 @@ def main() -> None:
 
     model_path = Path(resolve_input_path(args.model))
     input_path = Path(resolve_input_path(args.input))
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
 
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")

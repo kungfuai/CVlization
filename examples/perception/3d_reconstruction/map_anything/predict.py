@@ -52,7 +52,7 @@ def main():
 
     # Setup paths
     images_path = Path(resolve_input_path(args.images))
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.mkdir(parents=True, exist_ok=True)
 
     if not images_path.exists():

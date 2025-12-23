@@ -47,7 +47,7 @@ def main():
 
     df = pd.read_csv(resolve_input_path(args.input))
     result = predict(df)
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output_path, index=False)
     print(f"Predictions saved to {output_path}")

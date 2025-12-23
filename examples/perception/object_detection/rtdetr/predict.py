@@ -299,7 +299,7 @@ def main():
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Running on device: {device}")
-    output_dir = Path(args.output_dir)
+    output_dir = Path(resolve_output_path(args.output_dir))
 
     if args.backend == "torchhub":
         print(f"Backend: torchhub (model: {args.model_name})")

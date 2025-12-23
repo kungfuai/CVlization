@@ -80,7 +80,7 @@ def main() -> None:
     else:
         output_df = summary
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     print(f"Predictions written to {output_path}")

@@ -87,7 +87,8 @@ def text_to_video(args):
     )
 
     if video is not None:
-        save_video(video, args.output, fps=args.fps)
+        output_path = resolve_output_path(args.output)
+        save_video(video, output_path, fps=args.fps)
     else:
         print("Generation was interrupted or failed")
 
@@ -137,7 +138,8 @@ def image_to_video(args):
     )
 
     if video is not None:
-        save_video(video, args.output, fps=args.fps)
+        output_path = resolve_output_path(args.output)
+        save_video(video, output_path, fps=args.fps)
     else:
         print("Generation was interrupted or failed")
 
