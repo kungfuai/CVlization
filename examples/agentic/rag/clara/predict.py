@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import List
 
 import torch
+from cvlization.paths import resolve_output_path
 from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer
 
@@ -162,7 +163,7 @@ def main():
         # topk indices come back as tensor; keep only text output
         answer = generations[0] if isinstance(generations, list) else str(generations)
 
-    out_path = Path(args.output)
+    out_path = Path(resolve_output_path(args.output))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(answer.strip(), encoding="utf-8")
     print(f"\nAnswer:\n{answer.strip()}")

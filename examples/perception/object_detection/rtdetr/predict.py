@@ -8,6 +8,8 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 COCO_CLASSES = [
     "person",
     "bicycle",
@@ -146,7 +148,7 @@ def draw_boxes(
 
 def run_torchhub(args, device: torch.device, output_dir: Path):
     image, tensor, orig_sizes = prepare_image(
-        Path(args.image), device, resize_to=args.input_size
+        Path(resolve_input_path(args.image)), device, resize_to=args.input_size
     )
     model = load_torchhub_model(device, model_name=args.model_name)
     with torch.no_grad():
@@ -179,7 +181,7 @@ def run_transformers(args, device: torch.device, output_dir: Path):
     from transformers import AutoImageProcessor
 
     processor, model = load_transformers_model(args.model_id, device)
-    image = Image.open(args.image).convert("RGB")
+    image = Image.open(resolve_input_path(args.image)).convert("RGB")
     inputs = processor(images=image, return_tensors="pt").to(device)
     try:
         with torch.no_grad():

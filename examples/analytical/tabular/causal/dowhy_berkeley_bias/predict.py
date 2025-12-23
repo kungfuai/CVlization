@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from dowhy import CausalModel
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 GRAPH = r"""
 digraph {
     gender_binary -> department;
@@ -69,7 +71,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    raw = pd.read_csv(args.input)
+    raw = pd.read_csv(resolve_input_path(args.input))
     expanded = expand_input(raw)
 
     naive_gap = compute_naive_gap(expanded)

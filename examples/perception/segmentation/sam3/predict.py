@@ -13,6 +13,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 TRANSFORMERS_AVAILABLE = True
 try:
     from transformers import Sam3Model, Sam3Processor  # type: ignore
@@ -87,7 +89,7 @@ def overlay_masks(image: Image.Image, masks: torch.Tensor) -> Image.Image:
 def main() -> None:
     args = parse_args()
 
-    image_path = Path(args.image)
+    image_path = Path(resolve_input_path(args.image))
     output_path = Path(args.output)
     if args.image == "examples/sample.jpg":
         print(f"No --image provided, using default sample: {image_path}")

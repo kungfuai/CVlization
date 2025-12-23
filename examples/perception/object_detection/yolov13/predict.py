@@ -6,6 +6,8 @@ from typing import Dict, List
 import torch
 from PIL import Image
 from ultralytics import YOLO
+
+from cvlization.paths import resolve_input_path, resolve_output_path
 from ultralytics.utils import ASSETS
 
 _DEFAULT_BUS = ASSETS / "bus.jpg"
@@ -17,7 +19,7 @@ def run_inference(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = YOLO(args.weights)
     results = model.predict(
-        source=args.image,
+        source=resolve_input_path(args.image),
         imgsz=args.imgsz,
         conf=args.conf,
         iou=args.iou,

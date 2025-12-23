@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 
 import torch
+
+from cvlization.paths import resolve_input_path, resolve_output_path
 import numpy as np
 from tqdm import tqdm
 
@@ -49,7 +51,7 @@ def main():
     args = parser.parse_args()
 
     # Setup paths
-    images_path = Path(args.images)
+    images_path = Path(resolve_input_path(args.images))
     output_path = Path(args.output)
     output_path.mkdir(parents=True, exist_ok=True)
 

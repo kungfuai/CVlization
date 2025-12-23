@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_DIR = Path("artifacts/models")
 BASE_MODEL_PATH = MODEL_DIR / "lightgbm_classifier.joblib"
 SIGMOID_CALIBRATOR_PATH = MODEL_DIR / "sigmoid_calibrator.joblib"
@@ -69,7 +71,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    raw_input = pd.read_csv(args.input)
+    raw_input = pd.read_csv(resolve_input_path(args.input))
 
     preprocessor = load_json(PREPROCESSOR_PATH)
     feature_cols: List[str] = preprocessor["feature_columns"]

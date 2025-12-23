@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+from cvlization.paths import resolve_input_path, resolve_output_path
 import torch.jit
 from torchvision.datasets.folder import pil_loader
 from torchvision.transforms.functional import pil_to_tensor, resize, center_crop
@@ -171,9 +172,12 @@ def main(args):
             task.resolution = args.resolution
         if args.sample_stride is not None:
             task.sample_stride = args.sample_stride
+        # Resolve input paths for CVL mode
+        ref_video_path = resolve_input_path(task.ref_video_path)
+        ref_image_path = resolve_input_path(task.ref_image_path)
         ############################################## Pre-process data ##############################################
         pose_pixels, image_pixels = preprocess(
-            task.ref_video_path, task.ref_image_path, 
+            ref_video_path, ref_image_path,
             resolution=task.resolution, sample_stride=task.sample_stride
         )
         print(f"shapes: pose_pixels: {pose_pixels.shape}, image_pixels: {image_pixels.shape}")
@@ -188,8 +192,8 @@ def main(args):
         ################################### save results to output folder. ###########################################
         logger.info("Saving video (%d frames) to %s", _video_frames.shape[0], args.output_dir)
         save_to_mp4(
-            _video_frames, 
-            f"{args.output_dir}/{os.path.basename(task.ref_video_path).split('.')[0]}" \
+            _video_frames,
+            f"{args.output_dir}/{os.path.basename(ref_video_path).split('.')[0]}" \
             f"_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp4",
             fps=task.fps,
         )
@@ -250,6 +254,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Resolve output directory for CVL mode
+    args.output_dir = resolve_output_path(args.output_dir.rstrip('/') + '/').rstrip('/')
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     set_logger(args.log_file \
                if args.log_file is not None else f"{args.output_dir}/{datetime.now().strftime('%Y%m%d%H%M%S')}.log")

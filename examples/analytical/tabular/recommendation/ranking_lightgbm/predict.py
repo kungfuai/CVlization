@@ -7,6 +7,8 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_PATH = Path("artifacts/ranking_lightgbm.txt")
 FEATURE_NAMES_PATH = Path("artifacts/feature_names.json")
 
@@ -43,7 +45,7 @@ def main() -> None:
     args = parser.parse_args()
 
     feature_names = load_feature_names()
-    df = pd.read_csv(args.input)
+    df = pd.read_csv(resolve_input_path(args.input))
 
     missing = [name for name in feature_names if name not in df.columns]
     if missing:

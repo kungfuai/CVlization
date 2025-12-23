@@ -93,9 +93,12 @@ if hasattr(_aum, 'load_state_dict') and 'safe_load_file' in _aum.load_state_dict
 
 import argparse
 import logging
+import time
 import warnings
 from datetime import datetime
 from pathlib import Path
+
+from cvlization.paths import resolve_input_path, resolve_output_path
 
 warnings.filterwarnings('ignore')
 
@@ -120,6 +123,7 @@ def parse_args():
     parser.add_argument("--size", type=str, default="704*384", help="Output video size (width*height)")
     parser.add_argument("--num_clips", type=int, default=100, help="Max number of clips to generate")
     parser.add_argument("--sample_steps", type=int, default=4, help="Number of denoising steps")
+    parser.add_argument("--infer_frames", type=int, default=48, help="Frames per clip (default: 48)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--offload", action="store_true", default=True, help="Offload model to CPU when not in use")
     return parser.parse_args()
@@ -144,6 +148,10 @@ def download_models():
 
 def main():
     args = parse_args()
+
+    # Resolve input paths (check workspace mount first for user files)
+    args.audio = resolve_input_path(args.audio)
+    args.image = resolve_input_path(args.image)
 
     # Check GPU
     if not torch.cuda.is_available():
@@ -241,9 +249,11 @@ def main():
         pretrained_lora_path="Quark-Vision/Live-Avatar",
         load_lora_weight_only=False,
     )
+    t_model_ready = time.perf_counter()
 
     # Generate video
     logger.info("Generating video...")
+    t_gen_start = time.perf_counter()
     video, dataset_info = wan_s2v.generate(
         input_prompt=args.prompt,
         ref_image_path=args.image,
@@ -252,7 +262,7 @@ def main():
         num_repeat=args.num_clips,
         generate_size=args.size,
         max_area=MAX_AREA_CONFIGS.get(args.size, 270336),
-        infer_frames=48,
+        infer_frames=args.infer_frames,
         shift=cfg.sample_shift,
         sample_solver="euler",
         sampling_steps=args.sample_steps,
@@ -264,6 +274,27 @@ def main():
         enable_vae_parallel=False,
         enable_online_decode=False,
     )
+    t_gen_end = time.perf_counter()
+
+    # Calculate and report performance metrics
+    generation_time = t_gen_end - t_gen_start
+    latency = t_gen_start - t_model_ready
+    # Total frames = num_clips * infer_frames
+    total_frames = args.num_clips * args.infer_frames
+    # Actual frames may be limited by audio length, use dataset_info if available
+    actual_clips = dataset_info.get('num_clips', args.num_clips) if isinstance(dataset_info, dict) else args.num_clips
+    actual_frames = actual_clips * args.infer_frames
+    throughput = actual_frames / generation_time if generation_time > 0 else 0
+
+    print(f"\n{'='*50}")
+    print(f"PERFORMANCE METRICS")
+    print(f"{'='*50}")
+    print(f"Latency:          {latency:.2f}s (model ready -> generation start)")
+    print(f"Clips generated:  {actual_clips}")
+    print(f"Frames generated: {actual_frames} ({actual_clips} clips x {args.infer_frames} frames)")
+    print(f"Generation time:  {generation_time:.2f}s")
+    print(f"Throughput:       {throughput:.2f} fps")
+    print(f"{'='*50}\n")
 
     # Save video
     logger.info(f"Saving video to {args.output}...")

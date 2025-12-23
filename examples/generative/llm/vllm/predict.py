@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import List
 
+from cvlization.paths import resolve_input_path, resolve_output_path
 from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
 from vllm import LLM, SamplingParams
 import torch
@@ -108,7 +109,7 @@ def main():
         text = run_local_chat(args, messages)
         print("Response:\n")
         print(text.strip())
-        save_output(text.strip(), args.output)
+        save_output(text.strip(), Path(resolve_output_path(str(args.output))))
     elif args.mode == "embed":
         # Simple embedding pipeline: mean pooling on last hidden states (CLS if available)
         tok = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
@@ -130,7 +131,7 @@ def main():
         vec = emb[0].cpu().tolist()
         text = f"embedding_dim={len(vec)} sample={vec[:8]}"
         print("Embedding:", text)
-        save_output(text, args.output)
+        save_output(text, Path(resolve_output_path(str(args.output))))
     elif args.mode == "rerank":
         # Minimal cross-encoder scoring: score query (text_a/prompt) against one or more documents
         query = args.text_a or args.prompt
@@ -138,7 +139,8 @@ def main():
         if args.docs:
             docs.extend(args.docs)
         if args.docs_file:
-            file_docs = [line.strip() for line in args.docs_file.read_text().splitlines() if line.strip()]
+            docs_file_path = Path(resolve_input_path(str(args.docs_file)))
+            file_docs = [line.strip() for line in docs_file_path.read_text().splitlines() if line.strip()]
             docs.extend(file_docs)
         if not docs and args.text_b:
             docs.append(args.text_b)
@@ -158,7 +160,7 @@ def main():
             lines.append(f"{idx}\t{score:.4f}\t{preview}")
         text = "rerank_scores:\n" + "\n".join(lines)
         print("Rerank:\n", text)
-        save_output(text, args.output)
+        save_output(text, Path(resolve_output_path(str(args.output))))
     else:
         raise SystemExit(f"Unknown mode: {args.mode}")
 

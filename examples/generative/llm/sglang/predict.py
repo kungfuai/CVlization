@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import List
 
 import requests
+from cvlization.paths import resolve_output_path
 from openai import OpenAI
 
 
@@ -144,7 +145,7 @@ def main():
         text = resp.choices[0].message.content
         print("Response:\n")
         print(text.strip())
-        save_output(text.strip(), args.output)
+        save_output(text.strip(), Path(resolve_output_path(str(args.output))))
     finally:
         stop_server(proc)
 

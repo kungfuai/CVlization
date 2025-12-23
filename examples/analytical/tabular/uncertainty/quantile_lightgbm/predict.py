@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import lightgbm as lgb
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_DIR = Path("artifacts/models")
 SCALER_MEAN_PATH = MODEL_DIR / "scaler_mean.npy"
 SCALER_SCALE_PATH = MODEL_DIR / "scaler_scale.npy"
@@ -43,7 +45,7 @@ def main():
     parser.add_argument("--output", required=True, help="Path to output CSV file")
     args = parser.parse_args()
 
-    df = pd.read_csv(args.input)
+    df = pd.read_csv(resolve_input_path(args.input))
     result = predict(df)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)

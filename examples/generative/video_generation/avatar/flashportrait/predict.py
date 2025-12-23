@@ -10,6 +10,8 @@ import argparse
 import os
 import sys
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add vendor to path
 VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor")
 sys.path.insert(0, VENDOR_DIR)
@@ -509,12 +511,8 @@ def main():
     # Remove first frame (it's the reference)
     sample = sample[:, :, 1:]
 
-    # Save output (use path relative to script directory for container compatibility)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    if not os.path.isabs(args.output):
-        output_path = os.path.join(script_dir, args.output)
-    else:
-        output_path = args.output
+    # Save output
+    output_path = resolve_output_path(args.output)
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     save_videos_grid(sample, output_path, fps=fps)
 

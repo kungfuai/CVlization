@@ -6,6 +6,9 @@ set -e
 
 IMAGE_NAME="mast3r"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
+# Find repo root for cvlization package
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 
 # Default to demo data inside container (NLE_tower from MASt3R repo)
 INPUT_PATH="${SCRIPT_DIR}/data/images"
@@ -43,7 +46,7 @@ fi
 CONTAINER_OUTPUT="/workspace/output"
 
 # Prepare docker run command
-DOCKER_RUN="docker run --rm --gpus all"
+DOCKER_RUN="docker run --rm --gpus all -v ${WORK_DIR}:/mnt/cvl/workspace -e CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace} -e CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}"
 
 # Mount input directory (unless using demo data)
 if [ "$USE_DEMO_DATA" = false ]; then
