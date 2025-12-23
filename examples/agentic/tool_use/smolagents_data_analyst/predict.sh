@@ -17,8 +17,8 @@ docker run --rm ${CVL_RUN_GPU:+--gpus="${CVL_RUN_GPU}"} \
 	--env "PYTHONPATH=/cvlization_repo" \
 	--env "PYTHONUNBUFFERED=1" \
   --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
-  --env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
-  --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+	--env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
+	--env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
 	${ANALYST_LLM_PROVIDER:+--env ANALYST_LLM_PROVIDER=${ANALYST_LLM_PROVIDER}} \
 	${ANALYST_LLM_MODEL:+--env ANALYST_LLM_MODEL=${ANALYST_LLM_MODEL}} \
 	${ANALYST_LLM_TEMPERATURE:+--env ANALYST_LLM_TEMPERATURE=${ANALYST_LLM_TEMPERATURE}} \

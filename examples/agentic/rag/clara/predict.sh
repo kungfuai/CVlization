@@ -22,6 +22,6 @@ docker run --rm --gpus all --ipc=host --shm-size 16g \
   -e HF_TOKEN="${HF_TOKEN:-}" \
   -v "${WORK_DIR}:/mnt/cvl/workspace" \
   -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
-    -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+  -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
   "${IMAGE}" \
   python3 predict.py "$@"

@@ -39,7 +39,7 @@ docker run --rm \
     -v "${OUTPUT_DIR}":/workspace/outputs \
     -v "${WORK_DIR}:/mnt/cvl/workspace" \
     -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
-    -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+  -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     "${IMAGE_NAME}" \
     python3 predict.py \
         --prompt "${PROMPT}" \

@@ -27,7 +27,7 @@ docker run --rm --gpus=all \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     -v "$WORK_DIR:/mnt/cvl/workspace" \
     -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
-    -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+  -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     "$IMAGE_NAME" \
     python3 generate_scene.py \
         --prompt "$PROMPT" \

@@ -52,7 +52,7 @@ docker run --rm --gpus=all \
 	--env "PYTHONUNBUFFERED=1" \
 	${CVL_WORK_DIR:+-e CVL_WORK_DIR=/mnt/cvl/workspace} \
 	-e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
-    -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+  -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
 	${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
 	"$IMG" \
 	python predict.py "${ARGS[@]}"

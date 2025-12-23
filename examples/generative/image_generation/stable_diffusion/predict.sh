@@ -23,7 +23,7 @@ docker run --rm --gpus=all --shm-size 16G \
 	--env "CUDA_VISIBLE_DEVICES=0" \
 	--mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
 	--env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
-  --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+	--env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     --env "PYTHONPATH=/cvlization_repo" \
 	"$IMG" \
 	python generate.py "$@"
