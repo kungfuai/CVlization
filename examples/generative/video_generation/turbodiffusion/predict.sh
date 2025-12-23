@@ -59,7 +59,7 @@ docker run --rm --gpus all \
     -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
     -v "${WORK_DIR}:/mnt/cvl/workspace" \
     -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
-    -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+  -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     turbodiffusion \
     python /workspace/predict.py \
         --prompt "${PROMPT}" \

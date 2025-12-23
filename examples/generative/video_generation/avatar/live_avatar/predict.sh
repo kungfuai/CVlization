@@ -20,6 +20,6 @@ docker run --rm \
     -e PYTHONPATH=/cvlization_repo \
     -e CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
     -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
-    -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+  -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     live_avatar \
     python3 /workspace/example/predict.py "$@"
