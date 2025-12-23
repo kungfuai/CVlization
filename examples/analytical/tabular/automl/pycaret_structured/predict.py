@@ -4,6 +4,8 @@ from pathlib import Path
 import pandas as pd
 from pycaret.classification import load_model, predict_model
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 DEFAULT_MODEL_PATH = "artifacts/model/pycaret_best_model"
 DEFAULT_INPUT = "artifacts/sample_input.csv"
 DEFAULT_OUTPUT = "artifacts/predictions.csv"
@@ -20,8 +22,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    model = load_model(args.model)
-    df = pd.read_csv(args.input)
+    model = load_model(resolve_input_path(args.model))
+    df = pd.read_csv(resolve_input_path(args.input))
     preds = predict_model(model, data=df)
 
     output_path = Path(args.output)

@@ -16,6 +16,8 @@ from PIL import Image
 import torch
 from transformers import AutoModelForCausalLM
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 
 # OCR prompts
 OCR_PROMPTS = {
@@ -226,8 +228,9 @@ def main():
     model = load_model(args.model_id, args.device, compile_model=not args.no_compile)
 
     # Load image
-    print(f"Loading image from {args.image}...")
-    image = load_image(args.image)
+    image_path = resolve_input_path(args.image)
+    print(f"Loading image from {image_path}...")
+    image = load_image(image_path)
     print(f"Image loaded: {image.size}")
 
     # Run task

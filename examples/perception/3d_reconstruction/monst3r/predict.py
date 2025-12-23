@@ -14,6 +14,8 @@ from pathlib import Path
 import torch
 import subprocess
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add monst3r to path
 sys.path.insert(0, '/opt/monst3r')
 
@@ -187,7 +189,7 @@ def main():
     args = parser.parse_args()
 
     # Validate input path
-    input_path = Path(args.input)
+    input_path = Path(resolve_input_path(args.input))
     if not input_path.exists():
         print(f"Error: Input path does not exist: {input_path}")
         sys.exit(1)

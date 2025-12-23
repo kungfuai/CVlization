@@ -16,6 +16,8 @@ from pathlib import Path
 import gdown
 import zipfile
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
@@ -130,6 +132,9 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Resolve input path (handles workspace mount for user files)
+    args.image = resolve_input_path(args.image)
 
     # Validation
     if not Path(args.image).exists():

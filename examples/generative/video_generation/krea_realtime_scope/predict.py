@@ -9,6 +9,7 @@ import argparse
 import logging
 import warnings
 from pathlib import Path
+from cvlization.paths import resolve_output_path
 
 # Suppress verbose logging by default
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -172,7 +173,7 @@ def main():
             logging.getLogger(logger_name).setLevel(logging.INFO)
 
     # Set up paths
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_dir = output_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 

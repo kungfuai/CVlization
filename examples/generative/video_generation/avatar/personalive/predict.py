@@ -31,6 +31,7 @@ for logger_name in ["transformers", "diffusers", "torch", "huggingface_hub"]:
 
 import argparse
 import gc
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -56,6 +57,7 @@ from src.liveportrait.motion_extractor import MotionExtractor
 from src.pipelines.pipeline_pose2vid import Pose2VideoPipeline
 from src.scheduler.scheduler_ddim import DDIMScheduler
 from src.utils.util import save_videos_grid, crop_face
+from cvlization.paths import resolve_input_path, resolve_output_path
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +252,7 @@ def run_inference(
     num_inference_steps: int = 4,
     seed: int = 42,
     device: str = "cuda",
+    t_pipeline_ready: float = None,
 ):
     """Run portrait animation inference."""
 
@@ -319,8 +322,9 @@ def run_inference(
     ori_pose_tensor = torch.stack(ori_pose_tensor_list, dim=0)
     ori_pose_tensor = ori_pose_tensor.transpose(0, 1).unsqueeze(0)
 
-    # Run pipeline
+    # Run pipeline with timing
     print(f"Running diffusion ({num_inference_steps} steps)...")
+    t_gen_start = time.perf_counter()
     gen_video = pipe(
         ori_pose_images,
         ref_image_pil,
@@ -335,6 +339,22 @@ def run_inference(
         temporal_window_size=4,
         temporal_adaptive_step=4,
     ).videos
+    t_gen_end = time.perf_counter()
+
+    # Calculate and report performance metrics
+    generation_time = t_gen_end - t_gen_start
+    throughput = video_length / generation_time
+    latency = t_gen_start - t_pipeline_ready if t_pipeline_ready else None
+
+    print(f"\n{'='*50}")
+    print(f"PERFORMANCE METRICS")
+    print(f"{'='*50}")
+    if latency is not None:
+        print(f"Latency:          {latency:.2f}s (pipeline ready -> generation start)")
+    print(f"Frames generated: {video_length}")
+    print(f"Generation time:  {generation_time:.2f}s")
+    print(f"Throughput:       {throughput:.2f} fps")
+    print(f"{'='*50}\n")
 
     # Save output
     output_dir = Path(output_path).parent
@@ -425,6 +445,10 @@ Examples:
 
     args = parser.parse_args()
 
+    # Resolve input paths (check workspace mount first for user files)
+    args.ref_image = resolve_input_path(args.ref_image)
+    args.driving_video = resolve_input_path(args.driving_video)
+
     # Re-enable verbose output if requested
     if args.verbose:
         logging.basicConfig(level=logging.INFO, force=True)
@@ -437,7 +461,8 @@ Examples:
     # Set output path
     if args.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        args.output = f"outputs/output_{timestamp}.mp4"
+        args.output = f"output_{timestamp}.mp4"
+    args.output = resolve_output_path(args.output)
 
     # Validate inputs
     if not Path(args.ref_image).exists():
@@ -453,6 +478,7 @@ Examples:
     # Load pipeline
     try:
         pipe = load_pipeline(args.config, device, dtype)
+        t_pipeline_ready = time.perf_counter()
     except Exception as e:
         print(f"Error loading pipeline: {e}")
         import traceback
@@ -472,6 +498,7 @@ Examples:
             num_inference_steps=args.steps,
             seed=args.seed,
             device=device,
+            t_pipeline_ready=t_pipeline_ready,
         )
         print(f"\nDone! Output: {output_path}")
     except Exception as e:

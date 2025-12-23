@@ -5,11 +5,17 @@ RealVideo Batch Inference Script
 Generates lip-synced video from audio and reference image using Self-Forcing diffusion.
 Based on the RealVideo architecture but simplified for batch (non-realtime) inference.
 
-Architecture:
+Architecture (multi-GPU mode):
 - Rank 0: VAE + Audio Encoder + Text Encoder (encoding/decoding)
 - Rank 1: DiT model (video latent generation)
 
+Single GPU mode runs both components on the same device.
+
 Usage:
+    # Single GPU
+    python predict.py --audio input.wav --image reference.jpg --output output.mp4
+
+    # Multi-GPU (2 GPUs)
     torchrun --standalone --nproc_per_node=2 predict.py \
         --audio input.wav --image reference.jpg --output output.mp4
 """
@@ -21,6 +27,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional
+
+from cvlization.paths import resolve_input_path, resolve_output_path
 
 import torch
 import torch.distributed as dist
@@ -449,14 +457,150 @@ class DiTPipeline:
         return output
 
 
+def run_single_gpu(args, device, checkpoint):
+    """Run inference on a single GPU with both VAE and DiT."""
+    import gc
+
+    logger.info("Running in single GPU mode...")
+
+    # Initialize VAE encoder
+    encoder = VAEEncoder(device=device, wan_model_path=args.wan_model_path)
+
+    # Read and encode inputs
+    logger.info("Encoding inputs...")
+    image, sp_dim = read_image(args.image, args.height, args.width)
+    audio = read_audio(args.audio)
+
+    ref_latent = encoder.encode_image(image)
+    prompt_embeds = encoder.encode_text(args.prompt)
+    audio_embed, num_audio_blocks = encoder.encode_audio(audio, fps=args.fps)
+
+    logger.info(f"ref_latent shape: {ref_latent.shape}")
+    logger.info(f"prompt_embeds shape: {prompt_embeds.shape}")
+    logger.info(f"audio_embed shape: {audio_embed.shape}")
+    logger.info(f"num_audio_blocks: {num_audio_blocks}")
+
+    conditional_dict = {
+        "ref_latents": ref_latent,
+        "prompt_embeds": prompt_embeds,
+        "audio_input": audio_embed,
+        "motion_latents": None,
+        "motion_frames": [73, 19],
+    }
+
+    # Free encoder memory before loading DiT (except VAE which we need for decoding)
+    del encoder.text_encoder
+    del encoder.audio_encoder
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    # Initialize DiT pipeline
+    logger.info("Loading DiT model...")
+    pipeline = DiTPipeline(
+        device=device,
+        wan_model_path=args.wan_model_path,
+        checkpoint_path=checkpoint,
+        num_denoising_steps=args.num_denoising_steps,
+        compile_model=args.compile,
+    )
+    t_model_ready = time.perf_counter()
+
+    # Initialize KV cache
+    height, width = ref_latent.shape[-2:]
+    pipeline._initialize_kv_cache(batch_size=1, height=height, width=width)
+    pipeline.prefill_reference(conditional_dict, sp_dim)
+
+    # Generate blocks
+    total_blocks = max(1, num_audio_blocks)
+    all_latents = []
+
+    t_gen_start = time.perf_counter()
+
+    for block_idx in range(total_blocks):
+        logger.info(f"Generating block {block_idx + 1}/{total_blocks}...")
+        start_time = time.time()
+
+        audio_ptr = min(block_idx * pipeline.num_frame_per_block,
+                       audio_embed.shape[1] - pipeline.num_frame_per_block)
+
+        latent_block = pipeline.generate_block(
+            conditional_dict=conditional_dict,
+            sp_dim=sp_dim,
+            audio_ptr=audio_ptr,
+        )
+
+        elapsed = time.time() - start_time
+        logger.info(f"Block {block_idx + 1} generated in {elapsed:.2f}s")
+        all_latents.append(latent_block)
+
+    t_gen_end = time.perf_counter()
+    frames_per_block = pipeline.num_frame_per_block
+
+    # Free DiT memory before decoding
+    del pipeline
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    # Decode latents to frames
+    logger.info("Decoding latents to video frames...")
+    all_frames = []
+    for latent_block in all_latents:
+        frames = encoder.decode_latent(latent_block)
+        all_frames.append(frames)
+
+    all_frames = torch.cat(all_frames, dim=0)
+    total_frames = all_frames.shape[0]
+    logger.info(f"Total frames generated: {total_frames}")
+
+    # Calculate and report performance metrics
+    latency = t_gen_start - t_model_ready
+    generation_time = t_gen_end - t_gen_start
+    throughput = total_frames / generation_time if generation_time > 0 else 0
+
+    print(f"\n{'='*50}")
+    print(f"PERFORMANCE METRICS")
+    print(f"{'='*50}")
+    print(f"Latency:          {latency:.2f}s (model ready -> generation start)")
+    print(f"Blocks generated: {total_blocks}")
+    print(f"Frames generated: {total_frames} ({total_blocks} blocks x {frames_per_block} frames)")
+    print(f"Generation time:  {generation_time:.2f}s")
+    print(f"Throughput:       {throughput:.2f} fps")
+    print(f"{'='*50}\n")
+
+    # Ensure output directory exists
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    save_video(all_frames, str(output_path), fps=args.fps)
+    logger.info("Inference complete!")
+
+
 def main():
     args = parse_args()
 
-    # Initialize distributed
-    dist.init_process_group(backend="nccl")
-    rank = dist.get_rank()
-    world_size = dist.get_world_size()
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    # Resolve input paths (check workspace mount first for user files)
+    args.audio = resolve_input_path(args.audio)
+    args.image = resolve_input_path(args.image)
+
+    # Check if running with torchrun (multi-GPU mode)
+    is_multi_gpu = "WORLD_SIZE" in os.environ and int(os.environ.get("WORLD_SIZE", 1)) > 1
+
+    if is_multi_gpu:
+        dist.init_process_group(backend="nccl")
+        rank = dist.get_rank()
+        world_size = dist.get_world_size()
+        local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    else:
+        # Single GPU mode - initialize minimal distributed for RealVideo compatibility
+        os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
+        os.environ.setdefault("MASTER_PORT", "29500")
+        os.environ.setdefault("RANK", "0")
+        os.environ.setdefault("WORLD_SIZE", "1")
+        os.environ.setdefault("LOCAL_RANK", "0")
+        dist.init_process_group(backend="nccl", rank=0, world_size=1)
+        rank = 0
+        world_size = 1
+        local_rank = 0
 
     torch.cuda.set_device(local_rank)
     device = torch.cuda.current_device()
@@ -466,9 +610,9 @@ def main():
 
     print(f"{get_rank_prefix()} Initialized rank {rank}/{world_size} on device {device}")
 
-    if world_size != 2:
+    if is_multi_gpu and world_size != 2:
         if rank == 0:
-            logger.error("This script requires exactly 2 GPUs (rank 0: VAE, rank 1: DiT)")
+            logger.error("Multi-GPU mode requires exactly 2 GPUs (rank 0: VAE, rank 1: DiT)")
         dist.destroy_process_group()
         sys.exit(1)
 
@@ -476,24 +620,28 @@ def main():
     # This avoids barrier timeout issues during long downloads (~50GB)
     checkpoint = download_models_if_needed(args.checkpoint, args.wan_model_path)
 
-    dist.barrier()
+    if is_multi_gpu:
+        dist.barrier()
 
-    # Initialize sequence parallel groups for RealVideo
+    # Initialize sequence parallel groups for RealVideo (required for DiT model)
     from self_forcing.utils.parallel_state import initialize_parallel_states
     initialize_parallel_states()
 
-    if rank == 0:
-        print("=" * 60)
-        print("RealVideo - Batch Inference")
-        print("=" * 60)
-        print(f"Audio:    {args.audio}")
-        print(f"Image:    {args.image}")
-        print(f"Output:   {args.output}")
-        print(f"Resolution: {args.width}x{args.height} @ {args.fps}fps")
-        print(f"Denoising steps: {args.num_denoising_steps}")
-        print("=" * 60)
+    print("=" * 60)
+    print("RealVideo - Batch Inference")
+    print("=" * 60)
+    print(f"Audio:    {args.audio}")
+    print(f"Image:    {args.image}")
+    print(f"Output:   {args.output}")
+    print(f"Resolution: {args.width}x{args.height} @ {args.fps}fps")
+    print(f"Denoising steps: {args.num_denoising_steps}")
+    print(f"Mode:     {'Multi-GPU' if is_multi_gpu else 'Single GPU'}")
+    print("=" * 60)
 
-    if rank == 0:
+    if world_size == 1:
+        # Single GPU mode - run everything on one device
+        run_single_gpu(args, device, checkpoint)
+    elif rank == 0:
         # VAE Encoder rank
         encoder = VAEEncoder(device=device, wan_model_path=args.wan_model_path)
 
@@ -558,7 +706,28 @@ def main():
 
         # Combine and save
         all_frames = torch.cat(all_frames, dim=0)
-        logger.info(f"Total frames generated: {all_frames.shape[0]}")
+        total_frames = all_frames.shape[0]
+        logger.info(f"Total frames generated: {total_frames}")
+
+        # Receive timing info from rank 1
+        timing_tensor = torch.zeros(5, dtype=torch.float64, device=device)
+        dist.broadcast(timing_tensor, src=1)
+        t_model_ready, t_gen_start, t_gen_end, num_blocks, frames_per_block = timing_tensor.tolist()
+
+        # Calculate and report performance metrics
+        latency = t_gen_start - t_model_ready
+        generation_time = t_gen_end - t_gen_start
+        throughput = total_frames / generation_time if generation_time > 0 else 0
+
+        print(f"\n{'='*50}")
+        print(f"PERFORMANCE METRICS")
+        print(f"{'='*50}")
+        print(f"Latency:          {latency:.2f}s (model ready -> generation start)")
+        print(f"Blocks generated: {int(num_blocks)}")
+        print(f"Frames generated: {total_frames} ({int(num_blocks)} blocks x {int(frames_per_block)} frames)")
+        print(f"Generation time:  {generation_time:.2f}s")
+        print(f"Throughput:       {throughput:.2f} fps")
+        print(f"{'='*50}\n")
 
         # Ensure output directory exists
         output_path = Path(args.output)
@@ -605,6 +774,7 @@ def main():
             num_denoising_steps=args.num_denoising_steps,
             compile_model=args.compile,
         )
+        t_model_ready = time.perf_counter()
 
         logger.info(f"Received conditional dict, generating {num_audio_blocks} blocks...")
 
@@ -613,8 +783,10 @@ def main():
         pipeline._initialize_kv_cache(batch_size=1, height=height, width=width)
         pipeline.prefill_reference(conditional_dict, sp_dim)
 
-        # Generate blocks
+        # Generate blocks with timing
         total_blocks = max(1, num_audio_blocks)
+        t_gen_start = time.perf_counter()
+
         for block_idx in range(total_blocks):
             logger.info(f"Generating block {block_idx + 1}/{total_blocks}...")
             start_time = time.time()
@@ -636,7 +808,18 @@ def main():
             dist.broadcast(shape_tensor, src=1)
             dist.broadcast(latent_block.contiguous(), src=1)
 
-    dist.barrier()
+        t_gen_end = time.perf_counter()
+
+        # Send timing info to rank 0
+        timing_tensor = torch.tensor([
+            t_model_ready, t_gen_start, t_gen_end,
+            float(total_blocks), float(pipeline.num_frame_per_block)
+        ], dtype=torch.float64, device=device)
+        dist.broadcast(timing_tensor, src=1)
+
+    # Cleanup
+    if is_multi_gpu:
+        dist.barrier()
     dist.destroy_process_group()
 
     if rank == 0:

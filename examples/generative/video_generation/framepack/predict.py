@@ -9,6 +9,8 @@ import einops
 import numpy as np
 from PIL import Image
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Set HF cache directory relative to script location
 os.environ['HF_HOME'] = os.path.abspath(os.path.realpath(os.path.join(os.path.dirname(__file__), './hf_download')))
 
@@ -86,11 +88,17 @@ def parse_args():
                         help='Maximum number of recent frames to use as context for extension (default: 9)')
     
     args = parser.parse_args()
-    
+
     # Handle teacache flags
     if args.no_teacache:
         args.use_teacache = False
-    
+
+    # Resolve input paths
+    if args.input_image:
+        args.input_image = resolve_input_path(args.input_image)
+    if args.input_video:
+        args.input_video = resolve_input_path(args.input_video)
+
     # Validate mode-specific arguments
     if args.mode == 'i2v':
         if not args.input_image:

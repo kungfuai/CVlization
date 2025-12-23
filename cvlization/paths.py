@@ -8,8 +8,9 @@ Examples can import these utilities to handle input/output path resolution
 and parameter loading across both execution modes.
 """
 
-import os
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Optional, Dict
 
@@ -87,7 +88,7 @@ def resolve_output_path(
         Resolved absolute path
 
     Examples:
-        # Absolute paths pass through
+        # Absolute paths pass through (with warning in container mode)
         resolve_output_path("/tmp/output.txt")  # → /tmp/output.txt
 
         # Relative paths resolve against output_dir
@@ -103,8 +104,28 @@ def resolve_output_path(
     # Use default filename if path not provided
     path = path or default_filename
 
+    # Warn about absolute paths when CVL env vars are set - indicates we're
+    # running via cvl run where absolute paths write to container filesystem
+    # (not mounted to host), so files will be lost on exit
+    if path.startswith("/") and _has_cvl_path_env():
+        print(
+            f"WARNING: Output path '{path}' is absolute and writes to container "
+            f"filesystem. File may not be accessible on host. Use a relative path "
+            f"to write to the mounted workspace instead.",
+            file=sys.stderr
+        )
+
     # Absolute paths stay absolute; relative paths resolve under output_dir
     return path if path.startswith("/") else str((output_dir / path).resolve())
+
+
+def _has_cvl_path_env() -> bool:
+    """Check if CVL path environment variables are set.
+
+    Returns True if CVL_INPUTS or CVL_OUTPUTS is set, indicating paths
+    should be resolved relative to CVL-mounted directories.
+    """
+    return bool(os.getenv("CVL_INPUTS") or os.getenv("CVL_OUTPUTS"))
 
 
 def load_cvl_params() -> Dict[str, str]:

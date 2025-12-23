@@ -4,6 +4,8 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 DEFAULT_ALPHA = 0.1
 
 
@@ -38,8 +40,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    model_path = Path(args.model)
-    input_path = Path(args.input)
+    model_path = Path(resolve_input_path(args.model))
+    input_path = Path(resolve_input_path(args.input))
     output_path = Path(args.output)
 
     if not model_path.exists():

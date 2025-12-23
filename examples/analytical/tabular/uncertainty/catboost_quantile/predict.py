@@ -4,6 +4,8 @@ from pathlib import Path
 import pandas as pd
 from catboost import CatBoostRegressor
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_DIR = Path("artifacts/models")
 MODEL_FILES = {
     0.1: "catboost_quantile_10.cbm",
@@ -37,7 +39,7 @@ def main():
     parser.add_argument("--output", required=True, help="Where to write predictions CSV")
     args = parser.parse_args()
 
-    df = pd.read_csv(args.input)
+    df = pd.read_csv(resolve_input_path(args.input))
     result = predict(df)
 
     output_path = Path(args.output)

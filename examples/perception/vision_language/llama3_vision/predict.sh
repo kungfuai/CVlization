@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 IMG="${CVL_IMAGE:-llama3-vision}"
@@ -16,6 +17,9 @@ docker run --rm --gpus=all \
   --env "PYTHONPATH=/cvlization_repo" \
   --env "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" \
   --env "PYTHONUNBUFFERED=1" \
+  --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
+  --env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
+  --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
   --env "HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}" \
   --env "HF_TOKEN=${HF_TOKEN:-}" \
   "$IMG" python3 predict.py "$@"

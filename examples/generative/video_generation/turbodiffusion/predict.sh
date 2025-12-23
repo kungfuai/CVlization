@@ -2,6 +2,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
+# Find repo root for cvlization package
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 
 # Default values
 PROMPT="A cat playing piano in a jazz club, cinematic lighting"
@@ -54,6 +57,9 @@ echo ""
 docker run --rm --gpus all \
     -v "${SCRIPT_DIR}/outputs:/workspace/outputs" \
     -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
+    -v "${WORK_DIR}:/mnt/cvl/workspace" \
+    -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
+    -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     turbodiffusion \
     python /workspace/predict.py \
         --prompt "${PROMPT}" \

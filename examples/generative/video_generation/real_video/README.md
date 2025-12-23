@@ -12,7 +12,7 @@ Generate lip-synced talking head video from audio input using Self-Forcing autor
 ## Requirements
 
 ### Hardware
-- **GPU**: 2x 80GB+ VRAM (H100, H200, A100-80GB, or Blackwell)
+- **GPU**: 1x 80GB+ VRAM for single GPU mode, or 2x for faster multi-GPU mode
 - **RAM**: 64GB+ system memory
 - **Disk**: ~60GB for models
 
@@ -95,12 +95,18 @@ CUDA_VISIBLE_DEVICES=2,3,4,5 cvl run real_video predict --audio input.wav --imag
 
 ## Performance
 
-Generation time per video block (on H100):
+**Measured Metrics (RTX PRO 6000 Blackwell 96GB, 480x640, 4 denoising steps):**
+- Latency: ~0.2s (model ready to generation start)
+- Throughput: ~2.2 fps (~2.2s per block)
 
-| GPUs | 2 Denoising Steps | 4 Denoising Steps |
-|------|-------------------|-------------------|
-| 2    | ~385ms (compiled) | ~527ms (compiled) |
-| 4    | ~306ms (compiled) | ~481ms (compiled) |
+For long-running inference with `--compile`, multi-GPU provides speedup after warmup:
+
+| GPUs | Per Block (compiled, after warmup) |
+|------|-----------------------------------|
+| 2    | ~385ms                            |
+| 4    | ~306ms                            |
+
+Note: `--compile` has significant first-run overhead (~30s) but speeds up subsequent blocks.
 
 ## Architecture
 

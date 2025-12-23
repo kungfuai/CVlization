@@ -9,6 +9,8 @@ from pathlib import Path
 import requests
 from loguru import logger
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 REPO_DIR = Path(__file__).resolve().parent
 sys.path.append(str(REPO_DIR))
 from lite_avatar import liteAvatar  # noqa: E402
@@ -112,7 +114,7 @@ def main() -> None:
     ensure_sample_archive(sample_zip)
     ensure_sample_data(default_data_dir, sample_zip)
 
-    data_dir = Path(args.data_dir) if args.data_dir else default_data_dir
+    data_dir = Path(resolve_input_path(args.data_dir)) if args.data_dir else default_data_dir
 
     default_audio = (
         repo_root
@@ -121,7 +123,7 @@ def main() -> None:
         / "example"
         / "asr_example.wav"
     )
-    audio_file = Path(args.audio_file) if args.audio_file else default_audio
+    audio_file = Path(resolve_input_path(args.audio_file)) if args.audio_file else default_audio
 
     if not data_dir.exists():
         raise FileNotFoundError(f"Avatar data directory not found: {data_dir}")

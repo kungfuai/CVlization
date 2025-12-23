@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 DEFAULT_MODEL_DIR = "artifacts/model"
 DEFAULT_INPUT = "artifacts/sample_input.csv"
 DEFAULT_OUTPUT = "artifacts/predictions.csv"
@@ -56,8 +58,8 @@ def ensure_encoded(
 
 def main() -> None:
     args = parse_args()
-    model_dir = Path(args.model_dir)
-    input_path = Path(args.input)
+    model_dir = Path(resolve_input_path(args.model_dir))
+    input_path = Path(resolve_input_path(args.input))
     output_path = Path(args.output)
 
     config = json.loads((model_dir / "config.json").read_text())

@@ -6,6 +6,7 @@ import sys
 import argparse
 from typing import Sequence, Mapping, Any, Union
 import torch
+from cvlization.paths import resolve_input_path, resolve_output_path
 from nodes_wan import WanImageToVideo
 from nodes_images import SaveAnimatedWEBP
 from nodes_model_advanced import ModelSamplingSD3
@@ -152,6 +153,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+    # Resolve input/output paths for CVL mode
+    args.reference_image = resolve_input_path(args.reference_image)
+    args.output_dir = resolve_output_path(args.output_dir.rstrip('/') + '/').rstrip('/')
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
     

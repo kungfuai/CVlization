@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import torch
+from cvlization.paths import resolve_input_path, resolve_output_path
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from transformers.image_utils import load_image
 
@@ -26,8 +27,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Validate input file
-    input_path = Path(args.input_file)
+    # Validate input file (resolve against CVL_INPUTS for container mode)
+    input_path = Path(resolve_input_path(args.input_file))
     if not input_path.exists():
         print(f"Error: Input file '{args.input_file}' not found")
         return 1
@@ -121,7 +122,7 @@ def main():
             output_text = json.dumps(output_data, indent=2, ensure_ascii=False)
 
     # Save output to file
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(output_text, encoding='utf-8')
 

@@ -12,6 +12,8 @@ import os
 import sys
 from pathlib import Path
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add vendored IMTalker to path
 sys.path.insert(0, "/workspace/local/vendor")
 
@@ -155,21 +157,6 @@ def run_inference(
     logging.info(f"Video saved to: {output_path}")
 
 
-def resolve_path(path: str) -> str:
-    """Resolve path - prepend /workspace/local/ for relative paths if they exist there."""
-    if os.path.isabs(path):
-        return path
-    # Check if exists relative to /workspace/local/
-    local_path = os.path.join("/workspace/local", path)
-    if os.path.exists(local_path):
-        return local_path
-    # Check if exists as-is
-    if os.path.exists(path):
-        return path
-    # Default to local path
-    return local_path
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate talking head video with IMTalker")
     parser.add_argument("--image", type=str, default="examples/images/1p-0.png", help="Path to input image (face)")
@@ -183,10 +170,10 @@ def main():
 
     args = parser.parse_args()
 
-    # Resolve paths
-    image_path = resolve_path(args.image)
-    audio_path = resolve_path(args.audio)
-    output_path = resolve_path(args.output)
+    # Resolve input paths
+    image_path = resolve_input_path(args.image)
+    audio_path = resolve_input_path(args.audio)
+    output_path = resolve_output_path(args.output)
 
     logging.info(f"Image: {image_path}")
     logging.info(f"Audio: {audio_path}")

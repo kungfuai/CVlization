@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_PATH = Path("artifacts/models/econml_linear_dr.joblib")
 METADATA_PATH = Path("artifacts/metadata.json")
 
@@ -53,7 +55,7 @@ def main() -> None:
     metadata = load_metadata()
     feature_columns: List[str] = metadata["feature_columns"]
 
-    df = pd.read_csv(args.input)
+    df = pd.read_csv(resolve_input_path(args.input))
     features = ensure_features(df, feature_columns)
 
     if not MODEL_PATH.exists():

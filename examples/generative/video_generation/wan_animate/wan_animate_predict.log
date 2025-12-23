@@ -1,0 +1,43 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.8.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+/opt/conda/bin/python /opt/Wan2.2/generate.py --task animate-14B --ckpt_dir /models/Wan2.2-Animate-14B --src_root_path /mnt/cvl/workspace/examples/generative/video_generation/wan_animate/sample_outputs/animate/process_results --refert_num 1
+[2025-12-21 05:38:01,723] INFO: offload_model is not specified, set to True.
+[2025-12-21 05:38:01,723] INFO: Generation job args: Namespace(task='animate-14B', size='1280*720', frame_num=77, ckpt_dir='/models/Wan2.2-Animate-14B', offload_model=True, ulysses_size=1, t5_fsdp=False, t5_cpu=False, dit_fsdp=False, save_file=None, prompt='视频中的人在做动作', use_prompt_extend=False, prompt_extend_method='local_qwen', prompt_extend_model=None, prompt_extend_target_lang='zh', base_seed=8565280166622657225, image=None, sample_solver='unipc', sample_steps=20, sample_shift=5.0, sample_guide_scale=1.0, convert_model_dtype=False, src_root_path='/mnt/cvl/workspace/examples/generative/video_generation/wan_animate/sample_outputs/animate/process_results', refert_num=1, replace_flag=False, use_relighting_lora=False, num_clip=None, audio=None, enable_tts=False, tts_prompt_audio=None, tts_prompt_text=None, tts_text=None, pose_video=None, start_from_ref=False, infer_frames=80)
+[2025-12-21 05:38:01,723] INFO: Generation model config: {'__name__': 'Config: Wan animate 14B', 't5_model': 'umt5_xxl', 't5_dtype': torch.bfloat16, 'text_len': 512, 'param_dtype': torch.bfloat16, 'num_train_timesteps': 1000, 'sample_fps': 30, 'sample_neg_prompt': '色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走', 'frame_num': 77, 't5_checkpoint': 'models_t5_umt5-xxl-enc-bf16.pth', 't5_tokenizer': 'google/umt5-xxl', 'clip_checkpoint': 'models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth', 'clip_tokenizer': 'xlm-roberta-large', 'lora_checkpoint': 'relighting_lora.ckpt', 'vae_checkpoint': 'Wan2.1_VAE.pth', 'vae_stride': (4, 8, 8), 'patch_size': (1, 2, 2), 'dim': 5120, 'ffn_dim': 13824, 'freq_dim': 256, 'num_heads': 40, 'num_layers': 40, 'window_size': (-1, -1), 'qk_norm': True, 'cross_attn_norm': True, 'eps': 1e-06, 'use_face_encoder': True, 'motion_encoder_dim': 512, 'sample_shift': 5.0, 'sample_steps': 20, 'sample_guide_scale': 1.0, 'prompt': '视频中的人在做动作'}
+[2025-12-21 05:38:01,723] INFO: Input prompt: 视频中的人在做动作
+[2025-12-21 05:38:01,723] INFO: Creating Wan-Animate pipeline.
+[2025-12-21 05:38:24,475] INFO: loading /models/Wan2.2-Animate-14B/models_t5_umt5-xxl-enc-bf16.pth
+[2025-12-21 05:38:29,314] INFO: loading /models/Wan2.2-Animate-14B/models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth
+[2025-12-21 05:38:31,902] INFO: loading /models/Wan2.2-Animate-14B/Wan2.1_VAE.pth
+[2025-12-21 05:38:32,117] INFO: Creating WanAnimate from /models/Wan2.2-Animate-14B
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:08,  2.71s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:05<00:05,  2.59s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:07<00:02,  2.59s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:09<00:00,  2.04s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:09<00:00,  2.25s/it]
+[2025-12-21 05:38:41,451] INFO: Generating video ...
+[2025-12-21 05:38:45,329] INFO: real frames: 105 target frames: 153
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:30<09:42, 30.64s/it] 10%|█         | 2/20 [01:00<09:05, 30.32s/it] 15%|█▌        | 3/20 [01:31<08:36, 30.39s/it] 20%|██        | 4/20 [02:01<08:07, 30.50s/it] 25%|██▌       | 5/20 [02:32<07:39, 30.62s/it] 30%|███       | 6/20 [03:03<07:09, 30.71s/it] 35%|███▌      | 7/20 [03:34<06:39, 30.76s/it] 40%|████      | 8/20 [04:05<06:09, 30.79s/it] 45%|████▌     | 9/20 [04:36<05:38, 30.79s/it] 50%|█████     | 10/20 [05:06<05:07, 30.80s/it] 55%|█████▌    | 11/20 [05:37<04:37, 30.79s/it] 60%|██████    | 12/20 [06:08<04:06, 30.79s/it] 65%|██████▌   | 13/20 [06:39<03:35, 30.78s/it] 70%|███████   | 14/20 [07:10<03:04, 30.79s/it] 75%|███████▌  | 15/20 [07:40<02:33, 30.79s/it] 80%|████████  | 16/20 [08:11<02:03, 30.79s/it] 85%|████████▌ | 17/20 [08:42<01:32, 30.79s/it] 90%|█████████ | 18/20 [09:13<01:01, 30.79s/it] 95%|█████████▌| 19/20 [09:43<00:30, 30.78s/it]100%|██████████| 20/20 [10:14<00:00, 30.78s/it]100%|██████████| 20/20 [10:14<00:00, 30.74s/it]
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:31<10:00, 31.60s/it] 10%|█         | 2/20 [01:02<09:21, 31.18s/it] 15%|█▌        | 3/20 [01:33<08:47, 31.04s/it] 20%|██        | 4/20 [02:04<08:15, 30.97s/it] 25%|██▌       | 5/20 [02:35<07:43, 30.92s/it] 30%|███       | 6/20 [03:05<07:12, 30.89s/it] 35%|███▌      | 7/20 [03:36<06:41, 30.86s/it] 40%|████      | 8/20 [04:07<06:10, 30.84s/it] 45%|████▌     | 9/20 [04:38<05:39, 30.82s/it] 50%|█████     | 10/20 [05:09<05:08, 30.81s/it] 55%|█████▌    | 11/20 [05:39<04:37, 30.81s/it] 60%|██████    | 12/20 [06:10<04:06, 30.80s/it] 65%|██████▌   | 13/20 [06:41<03:35, 30.80s/it] 70%|███████   | 14/20 [07:12<03:04, 30.80s/it] 75%|███████▌  | 15/20 [07:43<02:34, 30.80s/it] 80%|████████  | 16/20 [08:13<02:03, 30.80s/it] 85%|████████▌ | 17/20 [08:44<01:32, 30.80s/it] 90%|█████████ | 18/20 [09:15<01:01, 30.80s/it] 95%|█████████▌| 19/20 [09:46<00:30, 30.79s/it]100%|██████████| 20/20 [10:16<00:00, 30.78s/it]100%|██████████| 20/20 [10:16<00:00, 30.85s/it]
+[2025-12-21 06:00:12,065] INFO: Saving generated video to animate-14B_1280*720_1_视频中的人在做动作_20251221_060012.mp4
+[out#0/mp4 @ 0x1c234a00] Error opening output /workspace/animate-14B_1280*720_1_视频中的人在做动作_20251221_060012.mp4: Read-only file system
+Error opening output file /workspace/animate-14B_1280*720_1_视频中的人在做动作_20251221_060012.mp4.
+Error opening output files: Read-only file system
+[2025-12-21 06:00:12,874] INFO: save_video failed, error: [Errno 32] Broken pipe
+
+FFMPEG COMMAND:
+/opt/conda/lib/python3.11/site-packages/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2 -y -f rawvideo -vcodec rawvideo -s 1280x720 -pix_fmt rgb24 -r 30.00 -i - -an -vcodec libx264 -pix_fmt yuv420p -crf 10 -v warning /workspace/animate-14B_1280*720_1_视频中的人在做动作_20251221_060012.mp4
+
+FFMPEG STDERR OUTPUT:
+
+[2025-12-21 06:00:12,901] INFO: Finished.
+Outputs written under: /mnt/cvl/workspace/examples/generative/video_generation/wan_animate/sample_outputs/animate

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 IMG="${CVL_IMAGE:-smolagents_data_analyst}"
@@ -15,6 +16,9 @@ docker run --rm ${CVL_RUN_GPU:+--gpus="${CVL_RUN_GPU}"} \
 	--mount "type=bind,src=${HOME}/.cache/cvlization,dst=/root/.cache/cvlization" \
 	--env "PYTHONPATH=/cvlization_repo" \
 	--env "PYTHONUNBUFFERED=1" \
+  --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
+  --env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
+  --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
 	${ANALYST_LLM_PROVIDER:+--env ANALYST_LLM_PROVIDER=${ANALYST_LLM_PROVIDER}} \
 	${ANALYST_LLM_MODEL:+--env ANALYST_LLM_MODEL=${ANALYST_LLM_MODEL}} \
 	${ANALYST_LLM_TEMPERATURE:+--env ANALYST_LLM_TEMPERATURE=${ANALYST_LLM_TEMPERATURE}} \
