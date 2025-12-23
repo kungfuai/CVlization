@@ -11,6 +11,8 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add egstalker to path
 egstalker_path = '/workspace/egstalker'
 if os.path.exists(egstalker_path):
@@ -353,7 +355,11 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args()
-    
+
+    # Resolve input paths for workspace mount
+    args.audio_path = resolve_input_path(args.audio_path)
+    args.reference_path = resolve_input_path(args.reference_path)
+
     # Set up logging
     log_file = Path(args.output_dir) / f"egstalker_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)

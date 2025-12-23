@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from PIL import Image
 import numpy as np
+from cvlization.paths import get_output_dir
 from dwpose_lib.pose import get_image_pose, get_video_pose
 
 
@@ -40,7 +41,7 @@ def main():
     download_weights()
 
     # Create output directory
-    output_dir = Path("outputs")
+    output_dir = get_output_dir()
     output_dir.mkdir(exist_ok=True)
 
     ## Test on a video

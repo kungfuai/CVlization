@@ -14,6 +14,8 @@ import torch
 import numpy as np
 from PIL import Image
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add mast3r to path
 sys.path.insert(0, '/opt/mast3r')
 sys.path.insert(0, '/opt/mast3r/dust3r')
@@ -101,7 +103,7 @@ def main():
     args = parser.parse_args()
 
     # Validate input path
-    input_path = Path(args.input)
+    input_path = Path(resolve_input_path(args.input))
     if not input_path.exists():
         print(f"Error: Input path does not exist: {input_path}")
         sys.exit(1)

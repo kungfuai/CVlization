@@ -1,0 +1,26 @@
+name: wan_animate
+capability: generative/video_generation
+modalities:
+- vision
+datasets: []
+stability: beta
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 60
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- wan-animate
+- video-generation
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
+description: Wan2.2 Animate (character animation + replacement)

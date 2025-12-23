@@ -6,6 +6,8 @@ import sys
 import argparse
 from typing import Sequence, Mapping, Any, Union
 import torch
+
+from cvlization.paths import resolve_input_path, resolve_output_path
 from nodes_wan import WanVaceToVideo, CreateFadeMaskAdvanced
 from nodes_images import SaveAnimatedWEBP
 from nodes_model_advanced import ModelSamplingSD3, CFGZeroStar, UNetTemporalAttentionMultiply, SkipLayerGuidanceDiT
@@ -200,10 +202,11 @@ def main():
         loadimage = NODE_CLASS_MAPPINGS["LoadImage"]()
         input_images = []
         for img_path in args.input_images:
-            if os.path.exists(img_path):
-                loaded_img = loadimage.load_image(image=img_path)
+            resolved_path = resolve_input_path(img_path)
+            if os.path.exists(resolved_path):
+                loaded_img = loadimage.load_image(image=resolved_path)
                 input_images.append(get_value_at_index(loaded_img, 0))
-                print(f"Loaded image: {img_path}")
+                print(f"Loaded image: {resolved_path}")
             else:
                 print(f"Warning: Image not found: {img_path}")
 

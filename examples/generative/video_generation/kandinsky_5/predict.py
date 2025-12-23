@@ -16,6 +16,8 @@ import logging
 
 import torch
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Suppress warnings
 warnings.filterwarnings("ignore")
 logging.getLogger("torch").setLevel(logging.ERROR)
@@ -64,6 +66,10 @@ def main():
                         help="Enable MagCache for faster inference")
 
     args = parser.parse_args()
+
+    # Resolve input paths
+    if args.image:
+        args.image = resolve_input_path(args.image)
 
     # Determine config path
     if args.mode == "t2i":

@@ -7,6 +7,8 @@ import pandas as pd
 from pyod.models.iforest import IForest
 from sklearn.preprocessing import StandardScaler
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 DEFAULT_MODEL_DIR = "artifacts/model"
 DEFAULT_INPUT = "artifacts/sample_input.csv"
 DEFAULT_OUTPUT = "artifacts/predictions.csv"
@@ -52,8 +54,8 @@ def load_artifacts(model_dir: Path) -> tuple[IForest, StandardScaler]:
 def main() -> None:
     args = parse_args()
 
-    model_dir = Path(args.model_dir)
-    input_path = Path(args.input)
+    model_dir = Path(resolve_input_path(args.model_dir))
+    input_path = Path(resolve_input_path(args.input))
     output_path = Path(args.output)
 
     detector, scaler = load_artifacts(model_dir)

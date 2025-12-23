@@ -117,6 +117,59 @@ python -m json.tool outputs/output.json  # For JSON outputs
 - Output contains expected content structure
 - Output is non-empty and valid
 
+### 4a. Host Filesystem Persistence (CRITICAL)
+
+**IMPORTANT**: When running via `cvl run`, outputs MUST be saved to the HOST filesystem (user's current working directory), not just inside the container. This is critical for usability.
+
+**How it works:**
+- User's cwd is mounted at `/mnt/cvl/workspace` inside the container
+- `CVL_INPUTS` and `CVL_OUTPUTS` environment variables point to `/mnt/cvl/workspace`
+- `predict.py` must use `resolve_output_path()` to resolve output paths
+- `predict.py` must use `resolve_input_path()` to resolve input paths
+
+**Verify host persistence:**
+```bash
+# Run from a test directory (NOT the example directory)
+cd /tmp
+mkdir -p cvl_test && cd cvl_test
+
+# Run inference
+cvl run <example-name> predict
+
+# Check that outputs appear in current directory (NOT in example's outputs/ folder)
+ls -la
+# Expected: Output files appear here (e.g., output.mp4, result.json)
+
+# Verify outputs are NOT ONLY in the container
+ls -la /path/to/example/outputs/
+# The container's outputs/ may also have files, but host cwd MUST have them
+```
+
+**What to verify:**
+- Output files appear in user's current working directory when using `cvl run`
+- `predict.py` imports and uses `resolve_output_path` from `cvlization.paths`
+- `predict.py` imports and uses `resolve_input_path` for input file arguments
+- Default output paths are resolved correctly (not hardcoded absolute container paths)
+
+**Common issues:**
+- **Outputs only in container**: Missing `resolve_output_path()` - outputs go to `/workspace/` or container's `outputs/`
+- **Input files not found**: Missing `resolve_input_path()` - can't find files from user's cwd
+- **Hardcoded paths**: Using `/workspace/output.mp4` instead of `resolve_output_path("output.mp4")`
+
+**Required code patterns in predict.py:**
+```python
+from cvlization.paths import resolve_input_path, resolve_output_path
+
+# For input files
+input_path = resolve_input_path(args.input)  # Resolves against CVL_INPUTS
+
+# For output files
+output_path = resolve_output_path(args.output)  # Resolves against CVL_OUTPUTS
+
+# For output directories
+args.output_dir = resolve_output_path(args.output_dir.rstrip('/') + '/').rstrip('/')
+```
+
 ### 5. Model Caching Verification
 
 Verify that pretrained models are cached properly:
@@ -326,10 +379,12 @@ An inference example passes verification when:
 2. ✅ **Build**: Docker image builds without errors (both `./build.sh` and `cvl run <name> build`)
 3. ✅ **Inference**: Runs successfully on sample inputs (both `./predict.sh` and `cvl run <name> predict`)
 4. ✅ **Outputs**: Valid output files generated in expected format
-5. ✅ **Model Caching**: Models cached to `~/.cache/` (typically `~/.cache/huggingface/`), avoiding repeated downloads
-6. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and predict presets work
-7. ✅ **Documentation**: README explains how to use the example
-8. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
+5. ✅ **Host Persistence**: Outputs saved to HOST filesystem (user's cwd) when using `cvl run`, not just container
+6. ✅ **Input Resolution**: Input files from user's cwd are correctly found via `resolve_input_path()`
+7. ✅ **Model Caching**: Models cached to `~/.cache/` (typically `~/.cache/huggingface/`), avoiding repeated downloads
+8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and predict presets work
+9. ✅ **Documentation**: README explains how to use the example
+10. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
 
 ## Related Files
 
