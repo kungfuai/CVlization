@@ -89,7 +89,9 @@ def main():
         ext = "png" if args.mode == "t2i" else "mp4"
         args.output = f"outputs/output.{ext}"
 
-    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+    # Resolve output path for CVL mode
+    output_path = resolve_output_path(args.output)
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
     # Print info
     print("=" * 60)
@@ -98,7 +100,7 @@ def main():
     print(f"Mode: {args.mode.upper()}")
     print(f"Config: {config_key}")
     print(f"Prompt: {args.prompt[:60]}...")
-    print(f"Output: {args.output}")
+    print(f"Output: {output_path}")
     if args.offload:
         print("Offloading: Enabled")
     if args.qwen_quantization:
@@ -133,7 +135,7 @@ def main():
             args.prompt,
             width=args.width,
             height=args.height,
-            save_path=args.output,
+            save_path=output_path,
             seed=args.seed,
         )
     elif args.mode == "i2v":
@@ -152,7 +154,7 @@ def main():
             args.prompt,
             image=args.image,
             time_length=args.duration,
-            save_path=args.output,
+            save_path=output_path,
             seed=args.seed,
         )
     else:  # t2v
@@ -169,13 +171,13 @@ def main():
             time_length=args.duration,
             width=args.width,
             height=args.height,
-            save_path=args.output,
+            save_path=output_path,
             seed=args.seed,
         )
 
     elapsed = time.perf_counter() - start_time
     print(f"\nGeneration complete in {elapsed:.1f}s")
-    print(f"Output saved to: {args.output}")
+    print(f"Output saved to: {output_path}")
 
 
 if __name__ == "__main__":

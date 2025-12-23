@@ -87,7 +87,7 @@ def main() -> None:
     pivot = pivot.rename(columns={"female": "rate_female", "male": "rate_male"})
     pivot["rate_diff_female_minus_male"] = pivot["rate_female"] - pivot["rate_male"]
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     pivot.reset_index().to_csv(output_path, index=False)
     print(f"Per-department summary written to {output_path}")

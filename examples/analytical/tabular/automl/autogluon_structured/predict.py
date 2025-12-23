@@ -23,7 +23,7 @@ def main() -> None:
     args = parse_args()
     model_dir = Path(resolve_input_path(args.model_dir))
     input_path = Path(resolve_input_path(args.input))
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
 
     predictor = TabularPredictor.load(str(model_dir))
 

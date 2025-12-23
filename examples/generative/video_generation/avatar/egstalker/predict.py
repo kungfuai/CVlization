@@ -125,7 +125,7 @@ def main(args):
     logger.info("=" * 60)
     
     # Set up output directory
-    output_dir = Path(args.output_dir)
+    output_dir = Path(resolve_output_path(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Find model checkpoint

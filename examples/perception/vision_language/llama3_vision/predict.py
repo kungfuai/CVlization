@@ -141,9 +141,10 @@ def main():
     print("\nGenerated:\n", text)
 
     if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(text, encoding="utf-8")
-        print(f"\nSaved to {args.output}")
+        output_path = Path(resolve_output_path(str(args.output)))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(text, encoding="utf-8")
+        print(f"\nSaved to {output_path}")
 
 
 if __name__ == "__main__":

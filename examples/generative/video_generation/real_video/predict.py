@@ -568,7 +568,7 @@ def run_single_gpu(args, device, checkpoint):
     print(f"{'='*50}\n")
 
     # Ensure output directory exists
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     save_video(all_frames, str(output_path), fps=args.fps)
@@ -730,7 +730,7 @@ def main():
         print(f"{'='*50}\n")
 
         # Ensure output directory exists
-        output_path = Path(args.output)
+        output_path = Path(resolve_output_path(args.output))
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         save_video(all_frames, str(output_path), fps=args.fps)

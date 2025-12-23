@@ -90,7 +90,7 @@ def main() -> None:
     args = parse_args()
 
     image_path = Path(resolve_input_path(args.image))
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     if args.image == "examples/sample.jpg":
         print(f"No --image provided, using default sample: {image_path}")
     if args.text == "text":

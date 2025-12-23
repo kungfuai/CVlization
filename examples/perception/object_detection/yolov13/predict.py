@@ -33,7 +33,7 @@ def run_inference(args):
     labels = boxes.cls.int().cpu().tolist()
     names = r.names
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(resolve_output_path(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Save annotated image (convert BGR to RGB)

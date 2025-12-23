@@ -298,7 +298,7 @@ def main():
 
     # Save video
     logger.info(f"Saving video to {args.output}...")
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     save_video(
