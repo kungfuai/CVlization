@@ -56,7 +56,7 @@ def main() -> None:
 
     model_dir = Path(resolve_input_path(args.model_dir))
     input_path = Path(resolve_input_path(args.input))
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
 
     detector, scaler = load_artifacts(model_dir)
 

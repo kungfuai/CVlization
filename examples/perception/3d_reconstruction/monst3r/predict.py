@@ -195,7 +195,7 @@ def main():
         sys.exit(1)
 
     # Create output directory
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.mkdir(parents=True, exist_ok=True)
 
     print(f"MonST3R 4D Reconstruction")

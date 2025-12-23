@@ -74,7 +74,7 @@ def main() -> int:
 
     video_path = Path(resolve_input_path(args.video))
     ref_path = Path(resolve_input_path(args.reference_image))
-    output_dir = Path(args.output_dir)  # Output path doesn't need resolution
+    output_dir = Path(resolve_output_path(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
     process_dir = output_dir / "process_results"
     process_dir.mkdir(parents=True, exist_ok=True)

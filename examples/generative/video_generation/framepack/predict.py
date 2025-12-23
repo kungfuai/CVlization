@@ -522,9 +522,12 @@ def extend_video(input_video_path, prompt, n_prompt, seed, extend_seconds,
 
 def main():
     args = parse_args()
-    
+
+    # Resolve output directory for CVL mode
+    output_dir = resolve_output_path(args.output_dir.rstrip('/') + '/').rstrip('/')
+
     # Create output directory
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     
     print("=== FramePack CLI ===")
     print(f"Mode: {args.mode}")
@@ -545,7 +548,7 @@ def main():
         print()
     
     print(f"Prompt: '{args.prompt}'")
-    print(f"Output directory: {args.output_dir}")
+    print(f"Output directory: {output_dir}")
     print(f"Seed: {args.seed}")
     print(f"Steps: {args.steps}")
     print(f"Use TeaCache: {args.use_teacache}")
@@ -571,7 +574,7 @@ def main():
                 gpu_memory_preservation=args.gpu_memory_preservation,
                 use_teacache=args.use_teacache,
                 mp4_crf=args.mp4_crf,
-                output_dir=args.output_dir,
+                output_dir=output_dir,
                 models=models
             )
         elif args.mode == 'extend':
@@ -589,7 +592,7 @@ def main():
                 gpu_memory_preservation=args.gpu_memory_preservation,
                 use_teacache=args.use_teacache,
                 mp4_crf=args.mp4_crf,
-                output_dir=args.output_dir,
+                output_dir=output_dir,
                 models=models,
                 max_context_frames=args.max_context_frames
             )

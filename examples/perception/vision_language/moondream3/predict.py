@@ -272,7 +272,8 @@ def main():
     print("="*80 + "\n")
 
     # Save output
-    save_output(output, args.output, args.format, metadata)
+    output_path = resolve_output_path(args.output)
+    save_output(output, output_path, args.format, metadata)
     print("Done!")
 
 
