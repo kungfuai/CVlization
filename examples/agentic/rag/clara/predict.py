@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
                         help="Which generation path to use: text (stage1_2), paraphrase (stage1), or questions (stage3).")
     parser.add_argument("--max-tokens", type=int, default=64,
                         help="Max new tokens to generate.")
-    parser.add_argument("--prompt", default="What does CLaRa do?",
+    parser.add_argument("--prompt", default="What family does Alsobia belong to?",
                         help="User question.")
     parser.add_argument("--docs", nargs="*", default=[],
                         help="Optional documents (space-separated). If empty, uses the upstream plant QA toy set.")
