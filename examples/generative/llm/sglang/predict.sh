@@ -16,13 +16,16 @@ echo "Running SGLang inference in container (${IMAGE}) with model ${MODEL_ID}"
 docker run --rm --gpus all --ipc=host --shm-size 16g \
   -v "${HF_CACHE}:/root/.cache/huggingface" \
   -v "${SCRIPT_DIR}:/workspace" \
+  -v "${REPO_ROOT}:/cvlization_repo:ro" \
   -w /workspace \
+  -e PYTHONPATH="/cvlization_repo" \
   -e MODEL_ID="${MODEL_ID}" \
   -e HF_TOKEN="${HF_TOKEN:-}" \
   -e SGLANG_TP_SIZE="${SGLANG_TP_SIZE:-1}" \
   -e SGLANG_CONTEXT_LENGTH="${SGLANG_CONTEXT_LENGTH:-4096}" \
   -e SGLANG_DTYPE="${SGLANG_DTYPE:-bfloat16}" \
   -e SGLANG_MEM_FRACTION_STATIC="${SGLANG_MEM_FRACTION_STATIC:-0.9}" \
+  ${SGLANG_EXTRA_ARGS:+-e SGLANG_EXTRA_ARGS="$SGLANG_EXTRA_ARGS"} \
   -e TRUST_REMOTE_CODE="${TRUST_REMOTE_CODE:-1}" \
   -v "${WORK_DIR}:/mnt/cvl/workspace" \
   -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \

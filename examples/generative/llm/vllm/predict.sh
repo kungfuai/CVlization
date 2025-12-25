@@ -16,7 +16,9 @@ echo "Running local vLLM inference in container (${IMAGE}) with model ${MODEL_ID
 docker run --rm --gpus all --ipc=host --shm-size 16g \
   -v "${HF_CACHE}:/root/.cache/huggingface" \
   -v "${SCRIPT_DIR}:/workspace" \
+  -v "${REPO_ROOT}:/cvlization_repo:ro" \
   -w /workspace \
+  -e PYTHONPATH="/cvlization_repo" \
   -e MODEL_ID="${MODEL_ID}" \
   -e HF_TOKEN="${HF_TOKEN:-}" \
   -e VLLM_MODE="${VLLM_MODE:-chat}" \
@@ -24,7 +26,7 @@ docker run --rm --gpus all --ipc=host --shm-size 16g \
   -e VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-4096}" \
   -e VLLM_DTYPE="${VLLM_DTYPE:-bfloat16}" \
   -e VLLM_GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.9}" \
-  -e VLLM_ENFORCE_EAGER="${VLLM_ENFORCE_EAGER:-1}" \
+  -e VLLM_ENFORCE_EAGER="${VLLM_ENFORCE_EAGER:-0}" \
   -v "${WORK_DIR}:/mnt/cvl/workspace" \
   -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
   -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
