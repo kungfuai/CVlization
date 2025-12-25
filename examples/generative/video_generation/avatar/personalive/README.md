@@ -94,6 +94,10 @@ On RTX 4090 (24GB):
 - 4 inference steps (default): fast, good quality
 - 8 inference steps: slower, better quality
 
+**Measured Metrics (RTX PRO 6000 Blackwell 96GB, 4 steps, 512x512):**
+- Latency: ~0.15s (pipeline ready to generation start)
+- Throughput: ~3.3 fps
+
 ## Troubleshooting
 
 ### Out of Memory (OOM)

@@ -6,6 +6,8 @@ from typing import Dict, List
 import torch
 from PIL import Image
 from ultralytics import YOLO
+
+from cvlization.paths import resolve_input_path, resolve_output_path
 from ultralytics.utils import ASSETS
 
 _DEFAULT_BUS = ASSETS / "bus.jpg"
@@ -17,7 +19,7 @@ def run_inference(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = YOLO(args.weights)
     results = model.predict(
-        source=args.image,
+        source=resolve_input_path(args.image),
         imgsz=args.imgsz,
         conf=args.conf,
         iou=args.iou,
@@ -31,7 +33,7 @@ def run_inference(args):
     labels = boxes.cls.int().cpu().tolist()
     names = r.names
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(resolve_output_path(args.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Save annotated image (convert BGR to RGB)

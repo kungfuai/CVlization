@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
 from gbt import load as gbt_load
 
 def parse_args():
@@ -28,9 +29,9 @@ def parse_args():
 def main():
     args = parse_args()
 
-    model_dir = Path(args.model_dir)
-    input_path = Path(args.input)
-    output_path = Path(args.output)
+    model_dir = Path(resolve_input_path(args.model_dir))
+    input_path = Path(resolve_input_path(args.input))
+    output_path = Path(resolve_output_path(args.output))
 
     if not model_dir.exists():
         raise FileNotFoundError(f"Model directory not found: {model_dir}")

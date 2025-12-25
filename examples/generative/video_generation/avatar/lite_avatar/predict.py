@@ -9,6 +9,8 @@ from pathlib import Path
 import requests
 from loguru import logger
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 REPO_DIR = Path(__file__).resolve().parent
 sys.path.append(str(REPO_DIR))
 from lite_avatar import liteAvatar  # noqa: E402
@@ -112,7 +114,7 @@ def main() -> None:
     ensure_sample_archive(sample_zip)
     ensure_sample_data(default_data_dir, sample_zip)
 
-    data_dir = Path(args.data_dir) if args.data_dir else default_data_dir
+    data_dir = Path(resolve_input_path(args.data_dir)) if args.data_dir else default_data_dir
 
     default_audio = (
         repo_root
@@ -121,19 +123,21 @@ def main() -> None:
         / "example"
         / "asr_example.wav"
     )
-    audio_file = Path(args.audio_file) if args.audio_file else default_audio
+    audio_file = Path(resolve_input_path(args.audio_file)) if args.audio_file else default_audio
 
     if not data_dir.exists():
         raise FileNotFoundError(f"Avatar data directory not found: {data_dir}")
     if not audio_file.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_file}")
 
-    args.result_dir.mkdir(parents=True, exist_ok=True)
+    # Resolve output path for CVL mode
+    result_dir = Path(resolve_output_path(str(args.result_dir)))
+    result_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Running LiteAvatar inference")
     logger.info("Data directory: {}", data_dir)
     logger.info("Audio input: {}", audio_file)
-    logger.info("Output directory: {}", args.result_dir)
+    logger.info("Output directory: {}", result_dir)
 
     avatar = liteAvatar(
         data_dir=str(data_dir),
@@ -142,9 +146,9 @@ def main() -> None:
         use_gpu=args.use_gpu,
         fps=args.fps,
     )
-    avatar.handle(str(audio_file), str(args.result_dir))
+    avatar.handle(str(audio_file), str(result_dir))
 
-    logger.info("Finished! Rendered video: {}", args.result_dir / "test_demo.mp4")
+    logger.info("Finished! Rendered video: {}", result_dir / "test_demo.mp4")
 
 
 if __name__ == "__main__":

@@ -15,9 +15,15 @@ import os
 from pathlib import Path
 from typing import List
 
+from cvlization.paths import resolve_input_path, resolve_output_path
 from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
-from vllm import LLM, SamplingParams
 import torch
+
+# Configure Flash Attention before importing vLLM
+from gpu_utils import configure_flash_attn_for_gpu
+configure_flash_attn_for_gpu()
+
+from vllm import LLM, SamplingParams
 
 
 def build_messages(user_prompt: str, system_prompt: str) -> List[dict]:
@@ -66,7 +72,7 @@ def parse_args():
                         help="User message to send.")
     parser.add_argument("--system", default=os.getenv("SYSTEM_PROMPT", ""),
                         help="Optional system prompt.")
-    parser.add_argument("--model", default=os.getenv("MODEL_ID", "Qwen/Qwen2.5-1.5B-Instruct"),
+    parser.add_argument("--model", default=os.getenv("MODEL_ID", "allenai/Olmo-3-7B-Instruct"),
                         help="Model ID / served model name.")
     parser.add_argument("--mode", choices=["chat", "embed", "rerank"],
                         default=os.getenv("VLLM_MODE", "chat"),
@@ -108,7 +114,7 @@ def main():
         text = run_local_chat(args, messages)
         print("Response:\n")
         print(text.strip())
-        save_output(text.strip(), args.output)
+        save_output(text.strip(), Path(resolve_output_path(str(args.output))))
     elif args.mode == "embed":
         # Simple embedding pipeline: mean pooling on last hidden states (CLS if available)
         tok = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
@@ -130,7 +136,7 @@ def main():
         vec = emb[0].cpu().tolist()
         text = f"embedding_dim={len(vec)} sample={vec[:8]}"
         print("Embedding:", text)
-        save_output(text, args.output)
+        save_output(text, Path(resolve_output_path(str(args.output))))
     elif args.mode == "rerank":
         # Minimal cross-encoder scoring: score query (text_a/prompt) against one or more documents
         query = args.text_a or args.prompt
@@ -138,7 +144,8 @@ def main():
         if args.docs:
             docs.extend(args.docs)
         if args.docs_file:
-            file_docs = [line.strip() for line in args.docs_file.read_text().splitlines() if line.strip()]
+            docs_file_path = Path(resolve_input_path(str(args.docs_file)))
+            file_docs = [line.strip() for line in docs_file_path.read_text().splitlines() if line.strip()]
             docs.extend(file_docs)
         if not docs and args.text_b:
             docs.append(args.text_b)
@@ -158,7 +165,7 @@ def main():
             lines.append(f"{idx}\t{score:.4f}\t{preview}")
         text = "rerank_scores:\n" + "\n".join(lines)
         print("Rerank:\n", text)
-        save_output(text, args.output)
+        save_output(text, Path(resolve_output_path(str(args.output))))
     else:
         raise SystemExit(f"Unknown mode: {args.mode}")
 

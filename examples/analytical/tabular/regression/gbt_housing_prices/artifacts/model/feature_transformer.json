@@ -1,0 +1,430 @@
+{
+  "target": "SalePrice",
+  "categorical_features": [
+    "MSZoning",
+    "Street",
+    "Alley",
+    "LotShape",
+    "LandContour",
+    "Utilities",
+    "LotConfig",
+    "LandSlope",
+    "Neighborhood",
+    "Condition1",
+    "Condition2",
+    "BldgType",
+    "HouseStyle",
+    "RoofStyle",
+    "RoofMatl",
+    "Exterior1st",
+    "Exterior2nd",
+    "MasVnrType",
+    "ExterQual",
+    "ExterCond",
+    "Foundation",
+    "BsmtQual",
+    "BsmtCond",
+    "BsmtExposure",
+    "BsmtFinType1",
+    "BsmtFinType2",
+    "Heating",
+    "HeatingQC",
+    "CentralAir",
+    "Electrical",
+    "KitchenQual",
+    "Functional",
+    "FireplaceQu",
+    "GarageType",
+    "GarageFinish",
+    "GarageQual",
+    "GarageCond",
+    "PavedDrive",
+    "PoolQC",
+    "Fence",
+    "MiscFeature",
+    "SaleType",
+    "SaleCondition"
+  ],
+  "numerical_features": [
+    "MSSubClass",
+    "LotFrontage",
+    "LotArea",
+    "OverallQual",
+    "OverallCond",
+    "YearBuilt",
+    "YearRemodAdd",
+    "MasVnrArea",
+    "BsmtFinSF1",
+    "BsmtFinSF2",
+    "BsmtUnfSF",
+    "TotalBsmtSF",
+    "1stFlrSF",
+    "2ndFlrSF",
+    "LowQualFinSF",
+    "GrLivArea",
+    "BsmtFullBath",
+    "BsmtHalfBath",
+    "FullBath",
+    "HalfBath",
+    "BedroomAbvGr",
+    "KitchenAbvGr",
+    "TotRmsAbvGrd",
+    "Fireplaces",
+    "GarageYrBlt",
+    "GarageCars",
+    "GarageArea",
+    "WoodDeckSF",
+    "OpenPorchSF",
+    "EnclosedPorch",
+    "3SsnPorch",
+    "ScreenPorch",
+    "PoolArea",
+    "MiscVal",
+    "MoSold",
+    "YrSold"
+  ],
+  "cats": {
+    "MSZoning": [
+      "C (all)",
+      "FV",
+      "RH",
+      "RL",
+      "RM"
+    ],
+    "Street": [
+      "Grvl",
+      "Pave"
+    ],
+    "Alley": [
+      "Grvl",
+      "Pave",
+      "unknown"
+    ],
+    "LotShape": [
+      "IR1",
+      "IR2",
+      "IR3",
+      "Reg"
+    ],
+    "LandContour": [
+      "Bnk",
+      "HLS",
+      "Low",
+      "Lvl"
+    ],
+    "Utilities": [
+      "AllPub",
+      "NoSeWa"
+    ],
+    "LotConfig": [
+      "Corner",
+      "CulDSac",
+      "FR2",
+      "FR3",
+      "Inside"
+    ],
+    "LandSlope": [
+      "Gtl",
+      "Mod",
+      "Sev"
+    ],
+    "Neighborhood": [
+      "Blmngtn",
+      "Blueste",
+      "BrDale",
+      "BrkSide",
+      "ClearCr",
+      "CollgCr",
+      "Crawfor",
+      "Edwards",
+      "Gilbert",
+      "IDOTRR",
+      "MeadowV",
+      "Mitchel",
+      "NAmes",
+      "NPkVill",
+      "NWAmes",
+      "NoRidge",
+      "NridgHt",
+      "OldTown",
+      "SWISU",
+      "Sawyer",
+      "SawyerW",
+      "Somerst",
+      "StoneBr",
+      "Timber",
+      "Veenker"
+    ],
+    "Condition1": [
+      "Artery",
+      "Feedr",
+      "Norm",
+      "PosA",
+      "PosN",
+      "RRAe",
+      "RRAn",
+      "RRNe",
+      "RRNn"
+    ],
+    "Condition2": [
+      "Artery",
+      "Feedr",
+      "Norm",
+      "RRAn"
+    ],
+    "BldgType": [
+      "1Fam",
+      "2fmCon",
+      "Duplex",
+      "Twnhs",
+      "TwnhsE"
+    ],
+    "HouseStyle": [
+      "1.5Fin",
+      "1.5Unf",
+      "1Story",
+      "2.5Fin",
+      "2.5Unf",
+      "2Story",
+      "SFoyer",
+      "SLvl"
+    ],
+    "RoofStyle": [
+      "Flat",
+      "Gable",
+      "Gambrel",
+      "Hip",
+      "Mansard",
+      "Shed"
+    ],
+    "RoofMatl": [
+      "ClyTile",
+      "CompShg",
+      "Membran",
+      "Roll",
+      "Tar&Grv",
+      "WdShake",
+      "WdShngl"
+    ],
+    "Exterior1st": [
+      "AsbShng",
+      "BrkComm",
+      "BrkFace",
+      "CBlock",
+      "CemntBd",
+      "HdBoard",
+      "MetalSd",
+      "Plywood",
+      "Stone",
+      "Stucco",
+      "VinylSd",
+      "Wd Sdng",
+      "WdShing"
+    ],
+    "Exterior2nd": [
+      "AsbShng",
+      "AsphShn",
+      "Brk Cmn",
+      "BrkFace",
+      "CBlock",
+      "CmentBd",
+      "HdBoard",
+      "ImStucc",
+      "MetalSd",
+      "Plywood",
+      "Stone",
+      "Stucco",
+      "VinylSd",
+      "Wd Sdng",
+      "Wd Shng"
+    ],
+    "MasVnrType": [
+      "BrkCmn",
+      "BrkFace",
+      "Stone",
+      "unknown"
+    ],
+    "ExterQual": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "TA"
+    ],
+    "ExterCond": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "Po",
+      "TA"
+    ],
+    "Foundation": [
+      "BrkTil",
+      "CBlock",
+      "PConc",
+      "Slab",
+      "Stone",
+      "Wood"
+    ],
+    "BsmtQual": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "TA",
+      "unknown"
+    ],
+    "BsmtCond": [
+      "Fa",
+      "Gd",
+      "TA",
+      "unknown"
+    ],
+    "BsmtExposure": [
+      "Av",
+      "Gd",
+      "Mn",
+      "No",
+      "unknown"
+    ],
+    "BsmtFinType1": [
+      "ALQ",
+      "BLQ",
+      "GLQ",
+      "LwQ",
+      "Rec",
+      "Unf",
+      "unknown"
+    ],
+    "BsmtFinType2": [
+      "ALQ",
+      "BLQ",
+      "GLQ",
+      "LwQ",
+      "Rec",
+      "Unf",
+      "unknown"
+    ],
+    "Heating": [
+      "Floor",
+      "GasA",
+      "GasW",
+      "Grav",
+      "OthW",
+      "Wall"
+    ],
+    "HeatingQC": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "Po",
+      "TA"
+    ],
+    "CentralAir": [
+      "N",
+      "Y"
+    ],
+    "Electrical": [
+      "FuseA",
+      "FuseF",
+      "FuseP",
+      "SBrkr",
+      "unknown"
+    ],
+    "KitchenQual": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "TA"
+    ],
+    "Functional": [
+      "Maj1",
+      "Maj2",
+      "Min1",
+      "Min2",
+      "Mod",
+      "Typ"
+    ],
+    "FireplaceQu": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "Po",
+      "TA",
+      "unknown"
+    ],
+    "GarageType": [
+      "2Types",
+      "Attchd",
+      "Basment",
+      "BuiltIn",
+      "CarPort",
+      "Detchd",
+      "unknown"
+    ],
+    "GarageFinish": [
+      "Fin",
+      "RFn",
+      "Unf",
+      "unknown"
+    ],
+    "GarageQual": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "Po",
+      "TA",
+      "unknown"
+    ],
+    "GarageCond": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "Po",
+      "TA",
+      "unknown"
+    ],
+    "PavedDrive": [
+      "N",
+      "P",
+      "Y"
+    ],
+    "PoolQC": [
+      "Ex",
+      "Fa",
+      "Gd",
+      "unknown"
+    ],
+    "Fence": [
+      "GdPrv",
+      "GdWo",
+      "MnPrv",
+      "MnWw",
+      "unknown"
+    ],
+    "MiscFeature": [
+      "Gar2",
+      "Shed",
+      "unknown"
+    ],
+    "SaleType": [
+      "COD",
+      "CWD",
+      "Con",
+      "ConLD",
+      "ConLI",
+      "ConLw",
+      "New",
+      "Oth",
+      "WD"
+    ],
+    "SaleCondition": [
+      "Abnorml",
+      "Alloca",
+      "Family",
+      "Normal",
+      "Partial"
+    ]
+  },
+  "aggs": {},
+  "add_categorical_stats": false,
+  "drop_categoricals": false
+}
