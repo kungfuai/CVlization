@@ -13,6 +13,10 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Fix SGLang SM100 detection bug: should be >= 10 not == 10 for Blackwell (SM 120)
+RUN sed -i 's/get_device_capability(device)\[0\] == 10/get_device_capability(device)[0] >= 10/' \
+    /opt/conda/lib/python3.11/site-packages/sglang/srt/utils/common.py
+
 COPY . .
 
 CMD ["python3", "serve.py"]

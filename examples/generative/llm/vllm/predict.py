@@ -17,8 +17,13 @@ from typing import List
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
-from vllm import LLM, SamplingParams
 import torch
+
+# Configure Flash Attention before importing vLLM
+from gpu_utils import configure_flash_attn_for_gpu
+configure_flash_attn_for_gpu()
+
+from vllm import LLM, SamplingParams
 
 
 def build_messages(user_prompt: str, system_prompt: str) -> List[dict]:
@@ -67,7 +72,7 @@ def parse_args():
                         help="User message to send.")
     parser.add_argument("--system", default=os.getenv("SYSTEM_PROMPT", ""),
                         help="Optional system prompt.")
-    parser.add_argument("--model", default=os.getenv("MODEL_ID", "Qwen/Qwen2.5-1.5B-Instruct"),
+    parser.add_argument("--model", default=os.getenv("MODEL_ID", "allenai/Olmo-3-7B-Instruct"),
                         help="Model ID / served model name.")
     parser.add_argument("--mode", choices=["chat", "embed", "rerank"],
                         default=os.getenv("VLLM_MODE", "chat"),
