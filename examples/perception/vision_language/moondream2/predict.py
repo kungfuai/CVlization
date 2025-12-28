@@ -27,6 +27,8 @@ from cvlization.paths import (
 
 # Model configuration
 MODEL_ID = "vikhyatk/moondream2"
+DEFAULT_IMAGE = "examples/sample.jpg"
+DEFAULT_OUTPUT = "outputs/result.txt"
 REVISION = "2024-08-26"  # Stable revision with best OCR quality
 
 # OCR prompts
@@ -210,7 +212,7 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/sample.jpg",
+        default=DEFAULT_IMAGE,
         help="Path to input image or URL (default: examples/sample.jpg)"
     )
     parser.add_argument(
