@@ -59,6 +59,10 @@ from src.scheduler.scheduler_ddim import DDIMScheduler
 from src.utils.util import save_videos_grid, crop_face
 from cvlization.paths import resolve_input_path, resolve_output_path
 
+# Default sample inputs (bundled with example)
+DEFAULT_REF_IMAGE = "demo/ref_image.png"
+DEFAULT_DRIVING_VIDEO = "demo/driving_video.mp4"
+
 logger = logging.getLogger(__name__)
 
 # HuggingFace model IDs for centralized caching
@@ -386,14 +390,14 @@ Examples:
     parser.add_argument(
         "--ref_image",
         type=str,
-        default="demo/ref_image.png",
-        help="Path to reference image (portrait to animate)"
+        default=None,
+        help="Path to reference image (default: bundled demo sample)"
     )
     parser.add_argument(
         "--driving_video",
         type=str,
-        default="demo/driving_video.mp4",
-        help="Path to driving video (motion source)"
+        default=None,
+        help="Path to driving video (default: bundled demo sample)"
     )
     parser.add_argument(
         "--output", "-o",
@@ -445,9 +449,17 @@ Examples:
 
     args = parser.parse_args()
 
-    # Resolve input paths (check workspace mount first for user files)
-    args.ref_image = resolve_input_path(args.ref_image)
-    args.driving_video = resolve_input_path(args.driving_video)
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.ref_image is None:
+        args.ref_image = DEFAULT_REF_IMAGE
+        print(f"No --ref_image provided, using bundled sample: {args.ref_image}")
+    else:
+        args.ref_image = resolve_input_path(args.ref_image)
+    if args.driving_video is None:
+        args.driving_video = DEFAULT_DRIVING_VIDEO
+        print(f"No --driving_video provided, using bundled sample: {args.driving_video}")
+    else:
+        args.driving_video = resolve_input_path(args.driving_video)
 
     # Re-enable verbose output if requested
     if args.verbose:
