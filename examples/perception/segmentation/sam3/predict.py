@@ -15,6 +15,9 @@ from PIL import Image
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
+DEFAULT_IMAGE = "examples/ref1.png"
+DEFAULT_OUTPUT = "outputs/sam3/prediction.png"
+
 TRANSFORMERS_AVAILABLE = True
 try:
     from transformers import Sam3Model, Sam3Processor  # type: ignore
@@ -29,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--image",
-        default="examples/ref1.png",
+        default=DEFAULT_IMAGE,
         help="Path to the input image (default: bundled ref1.png camera sample)",
     )
     parser.add_argument(
@@ -44,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        default="outputs/sam3/prediction.png",
+        default=DEFAULT_OUTPUT,
         help="Path to save the RGBA overlay with masks",
     )
     parser.add_argument(
@@ -89,9 +92,11 @@ def overlay_masks(image: Image.Image, masks: torch.Tensor) -> Image.Image:
 def main() -> None:
     args = parse_args()
 
-    image_path = Path(resolve_input_path(args.image))
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    image_path = Path(args.image) if args.image == DEFAULT_IMAGE else Path(resolve_input_path(args.image))
+    # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
-    if args.image == "examples/sample.jpg":
+    if args.image == DEFAULT_IMAGE:
         print(f"No --image provided, using default sample: {image_path}")
     if args.text == "text":
         print("No --text provided, using default prompt: 'text'")

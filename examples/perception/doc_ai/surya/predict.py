@@ -25,6 +25,8 @@ from cvlization.paths import (
     resolve_output_path,
 )
 
+DEFAULT_IMAGE = "examples/sample.jpg"
+
 
 def load_image(image_path: str):
     """Load an image from file path or URL."""
@@ -154,7 +156,7 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/sample.jpg",
+        default=DEFAULT_IMAGE,
         help="Path to input image or URL (default: examples/sample.jpg)"
     )
     parser.add_argument(
@@ -181,7 +183,6 @@ def main():
     args = parser.parse_args()
 
     # Resolve paths for CVL dual-mode support
-    INP = get_input_dir()
     OUT = get_output_dir()
 
     # Smart default for output path
@@ -189,8 +190,14 @@ def main():
         ext = {"json": "json", "txt": "txt"}[args.format]
         args.output = f"result.{ext}"
 
-    # Resolve paths using cvlization utilities
-    input_path = resolve_input_path(args.image, INP) if not args.image.startswith("http") else args.image
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    if args.image.startswith("http"):
+        input_path = args.image
+    elif args.image == DEFAULT_IMAGE:
+        input_path = args.image
+    else:
+        input_path = resolve_input_path(args.image)
+    # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output, OUT))
 
     # Validate input file (if not URL)

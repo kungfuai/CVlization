@@ -39,6 +39,8 @@ VARIANTS = {
 }
 DEFAULT_VARIANT = "base"
 DEFAULT_MODEL_ID = VARIANTS[DEFAULT_VARIANT]["model_id"]
+DEFAULT_IMAGE = "test_images/sample.jpg"
+DEFAULT_OUTPUT = "outputs/result.txt"
 
 # Task prompts
 TASK_PROMPTS = {
@@ -287,7 +289,7 @@ Examples:
     parser.add_argument(
         "--image",
         type=str,
-        default="test_images/sample.jpg",
+        default=DEFAULT_IMAGE,
         help="Path to input image or URL"
     )
     parser.add_argument(
@@ -319,7 +321,7 @@ Examples:
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default=DEFAULT_OUTPUT,
         help="Output file path"
     )
     parser.add_argument(
@@ -340,13 +342,10 @@ Examples:
     args = parser.parse_args()
 
     # Resolve paths for CVL compatibility
-    try:
-        image_path = resolve_input_path(args.image)
-        output_path = resolve_output_path(args.output)
-    except:
-        # Fallback to direct paths if CVL not available
-        image_path = args.image
-        output_path = args.output
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    image_path = args.image if args.image == DEFAULT_IMAGE else resolve_input_path(args.image)
+    # Output always resolves to user's cwd
+    output_path = resolve_output_path(args.output)
 
     # Get task prompt
     task_prompt = TASK_PROMPTS[args.task]

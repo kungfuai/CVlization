@@ -27,6 +27,8 @@ from cvlization.paths import (
 
 # Model configuration
 DEFAULT_MODEL_ID = "unsloth/gemma-3-4b-it"
+DEFAULT_IMAGE = "examples/sample.jpg"
+DEFAULT_OUTPUT = "outputs/result.txt"
 
 # Task prompts
 TASK_PROMPTS = {
@@ -187,7 +189,7 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/sample.jpg",
+        default=DEFAULT_IMAGE,
         help="Path to input image or URL"
     )
     parser.add_argument(

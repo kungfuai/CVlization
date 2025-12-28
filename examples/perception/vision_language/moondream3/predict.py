@@ -15,8 +15,33 @@ from pathlib import Path
 from PIL import Image
 import torch
 from transformers import AutoModelForCausalLM
+from huggingface_hub import hf_hub_download
 
 from cvlization.paths import resolve_input_path, resolve_output_path
+
+
+def ensure_sample_image():
+    """Download sample image from HuggingFace if not present."""
+    cache_dir = Path.home() / ".cache" / "cvlization" / "moondream3"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    sample_path = cache_dir / "sample.jpg"
+
+    if not sample_path.exists():
+        print("Downloading sample image from HuggingFace...")
+        hf_hub_download(
+            repo_id="zzsi/cvl",
+            filename="moondream3/sample.jpg",
+            repo_type="dataset",
+            local_dir=cache_dir,
+        )
+        # Move from subdirectory to cache root
+        src = cache_dir / "moondream3" / "sample.jpg"
+        if src.exists():
+            src.rename(sample_path)
+            # Clean up subdirectory
+            (cache_dir / "moondream3").rmdir()
+
+    return str(sample_path)
 
 
 # OCR prompts
@@ -154,7 +179,7 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/sample.jpg",
+        default=DEFAULT_IMAGE,
         help="Path to input image or URL"
     )
     parser.add_argument(
@@ -199,7 +224,7 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default=DEFAULT_OUTPUT,
         help="Output file path"
     )
     parser.add_argument(
@@ -227,8 +252,12 @@ def main():
     # Load model
     model = load_model(args.model_id, args.device, compile_model=not args.no_compile)
 
-    # Load image
-    image_path = resolve_input_path(args.image)
+    # Load image - use lazy download if default sample or specified image not found
+    if args.image == "examples/sample.jpg":
+        # Use lazy download from HuggingFace for default sample
+        image_path = ensure_sample_image()
+    else:
+        image_path = resolve_input_path(args.image)
     print(f"Loading image from {image_path}...")
     image = load_image(image_path)
     print(f"Image loaded: {image.size}")

@@ -10,6 +10,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
+DEFAULT_IMAGE = "examples/ref1.png"
+DEFAULT_OUTPUT_DIR = "outputs/rtdetr"
+
 COCO_CLASSES = [
     "person",
     "bicycle",
@@ -146,9 +149,9 @@ def draw_boxes(
     return image
 
 
-def run_torchhub(args, device: torch.device, output_dir: Path):
+def run_torchhub(args, device: torch.device, output_dir: Path, image_path: Path):
     image, tensor, orig_sizes = prepare_image(
-        Path(resolve_input_path(args.image)), device, resize_to=args.input_size
+        image_path, device, resize_to=args.input_size
     )
     model = load_torchhub_model(device, model_name=args.model_name)
     with torch.no_grad():
@@ -177,11 +180,11 @@ def run_torchhub(args, device: torch.device, output_dir: Path):
     save_outputs(output_dir, annotated, boxes, scores, labels, id2label, args)
 
 
-def run_transformers(args, device: torch.device, output_dir: Path):
+def run_transformers(args, device: torch.device, output_dir: Path, image_path: Path):
     from transformers import AutoImageProcessor
 
     processor, model = load_transformers_model(args.model_id, device)
-    image = Image.open(resolve_input_path(args.image)).convert("RGB")
+    image = Image.open(image_path).convert("RGB")
     inputs = processor(images=image, return_tensors="pt").to(device)
     try:
         with torch.no_grad():
@@ -253,7 +256,7 @@ def parse_args():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/ref1.png",
+        default=DEFAULT_IMAGE,
         help="Path to the input image.",
     )
     parser.add_argument(
@@ -289,7 +292,7 @@ def parse_args():
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="outputs/rtdetr",
+        default=DEFAULT_OUTPUT_DIR,
         help="Where to write annotated image and JSON.",
     )
     return parser.parse_args()
@@ -299,14 +302,18 @@ def main():
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Running on device: {device}")
+
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    image_path = Path(args.image) if args.image == DEFAULT_IMAGE else Path(resolve_input_path(args.image))
+    # Output always resolves to user's cwd
     output_dir = Path(resolve_output_path(args.output_dir))
 
     if args.backend == "torchhub":
         print(f"Backend: torchhub (model: {args.model_name})")
-        run_torchhub(args, device, output_dir)
+        run_torchhub(args, device, output_dir, image_path)
     else:
         print(f"Backend: transformers (model: {args.model_id})")
-        run_transformers(args, device, output_dir)
+        run_transformers(args, device, output_dir, image_path)
 
 
 if __name__ == "__main__":
