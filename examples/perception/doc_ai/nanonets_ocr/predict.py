@@ -20,6 +20,9 @@ from cvlization.paths import (
     resolve_output_path,
 )
 
+# Default sample input (bundled with example)
+DEFAULT_INPUT = "examples/sample.jpg"
+
 
 def load_image(image_path):
     """Load image from file path, handling PDFs."""
@@ -97,8 +100,8 @@ Examples:
   python predict.py --input form.jpg --format json --output result.json
         """
     )
-    parser.add_argument("--input", type=str, default="examples/sample.jpg",
-                       help="Path to input image file (default: examples/sample.jpg)")
+    parser.add_argument("--input", type=str, default=None,
+                       help="Path to input image file (default: bundled sample)")
     parser.add_argument("--output", type=str, default=None,
                        help="Output file path (default: outputs/result.{format})")
     parser.add_argument("--format", type=str, choices=["markdown", "json"], default="markdown",
@@ -116,7 +119,6 @@ Examples:
     args = parser.parse_args()
 
     # Resolve paths for CVL dual-mode support
-    INP = get_input_dir()
     OUT = get_output_dir()
 
     # Smart default for output path
@@ -124,8 +126,13 @@ Examples:
         ext = {"json": "json", "markdown": "md"}[args.format]
         args.output = f"result.{ext}"
 
-    # Resolve paths using cvlization utilities
-    input_path = Path(resolve_input_path(args.input, INP))
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.input is None:
+        input_path = Path(DEFAULT_INPUT)
+        print(f"No --input provided, using bundled sample: {input_path}")
+    else:
+        input_path = Path(resolve_input_path(args.input))
+    # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output, OUT))
 
     # Validate input file
