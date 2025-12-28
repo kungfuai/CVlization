@@ -18,13 +18,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default=DEFAULT_MODEL,
-        help="Path to the serialized MAPIE regressor (default: artifacts/model/mapie_regressor.pkl)",
+        default=None,
+        help="Path to the serialized MAPIE regressor (default: bundled sample)",
     )
     parser.add_argument(
         "--input",
-        default=DEFAULT_INPUT,
-        help="CSV file with feature rows to score (default: artifacts/sample_input.csv)",
+        default=None,
+        help="CSV file with feature rows to score (default: bundled sample)",
     )
     parser.add_argument(
         "--output",
@@ -43,9 +43,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # Defaults are local to example dir; user-provided paths resolve to cwd
-    model_path = Path(args.model) if args.model == DEFAULT_MODEL else Path(resolve_input_path(args.model))
-    input_path = Path(args.input) if args.input == DEFAULT_INPUT else Path(resolve_input_path(args.input))
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.model is None:
+        model_path = Path(DEFAULT_MODEL)
+        print(f"No --model provided, using bundled sample: {model_path}")
+    else:
+        model_path = Path(resolve_input_path(args.model))
+    if args.input is None:
+        input_path = Path(DEFAULT_INPUT)
+        print(f"No --input provided, using bundled sample: {input_path}")
+    else:
+        input_path = Path(resolve_input_path(args.input))
     # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
 

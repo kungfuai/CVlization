@@ -19,13 +19,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model-dir",
-        default=DEFAULT_MODEL_DIR,
-        help="Directory containing saved model artifacts (default: artifacts/model)",
+        default=None,
+        help="Directory containing saved model artifacts (default: bundled sample)",
     )
     parser.add_argument(
         "--input",
-        default=DEFAULT_INPUT,
-        help="CSV file with rows to score (default: artifacts/sample_input.csv)",
+        default=None,
+        help="CSV file with rows to score (default: bundled sample)",
     )
     parser.add_argument(
         "--output",
@@ -34,8 +34,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--calibrator",
-        default=DEFAULT_CALIBRATOR,
-        help="Path to isotonic calibrator pickle (default: artifacts/model/isotonic_calibrator.pkl)",
+        default=None,
+        help="Path to isotonic calibrator pickle (default: bundled sample)",
     )
     return parser.parse_args()
 
@@ -43,10 +43,21 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # Defaults are local to example dir; user-provided paths resolve to cwd
-    model_dir = Path(args.model_dir) if args.model_dir == DEFAULT_MODEL_DIR else Path(resolve_input_path(args.model_dir))
-    input_path = Path(args.input) if args.input == DEFAULT_INPUT else Path(resolve_input_path(args.input))
-    calibrator_path = Path(args.calibrator) if args.calibrator == DEFAULT_CALIBRATOR else Path(resolve_input_path(args.calibrator))
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.model_dir is None:
+        model_dir = Path(DEFAULT_MODEL_DIR)
+        print(f"No --model-dir provided, using bundled sample: {model_dir}")
+    else:
+        model_dir = Path(resolve_input_path(args.model_dir))
+    if args.input is None:
+        input_path = Path(DEFAULT_INPUT)
+        print(f"No --input provided, using bundled sample: {input_path}")
+    else:
+        input_path = Path(resolve_input_path(args.input))
+    if args.calibrator is None:
+        calibrator_path = Path(DEFAULT_CALIBRATOR)
+    else:
+        calibrator_path = Path(resolve_input_path(args.calibrator))
     # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
 

@@ -189,8 +189,8 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default=DEFAULT_IMAGE,
-        help="Path to input image or URL"
+        default=None,
+        help="Path to input image or URL (default: bundled sample)"
     )
     parser.add_argument(
         "--model-id",
@@ -251,7 +251,14 @@ def main():
     if args.output is None:
         args.output = "result.txt"
 
-    image_path = resolve_input_path(args.image, INP)
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.image is None:
+        image_path = DEFAULT_IMAGE
+        print(f"No --image provided, using bundled sample: {image_path}")
+    elif args.image.startswith("http"):
+        image_path = args.image
+    else:
+        image_path = resolve_input_path(args.image, INP)
     output_path = resolve_output_path(args.output, OUT)
 
     # Load model

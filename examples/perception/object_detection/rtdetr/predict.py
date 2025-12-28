@@ -256,8 +256,8 @@ def parse_args():
     parser.add_argument(
         "--image",
         type=str,
-        default=DEFAULT_IMAGE,
-        help="Path to the input image.",
+        default=None,
+        help="Path to the input image (default: bundled sample).",
     )
     parser.add_argument(
         "--backend",
@@ -304,7 +304,11 @@ def main():
     print(f"Running on device: {device}")
 
     # Defaults are local to example dir; user-provided paths resolve to cwd
-    image_path = Path(args.image) if args.image == DEFAULT_IMAGE else Path(resolve_input_path(args.image))
+    if args.image is None:
+        image_path = Path(DEFAULT_IMAGE)
+        print(f"No --image provided, using bundled sample: {image_path}")
+    else:
+        image_path = Path(resolve_input_path(args.image))
     # Output always resolves to user's cwd
     output_dir = Path(resolve_output_path(args.output_dir))
 

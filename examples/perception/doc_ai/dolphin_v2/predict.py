@@ -49,8 +49,8 @@ def main() -> int:
     parser.add_argument(
         "--image",
         type=str,
-        default=DEFAULT_IMAGE,
-        help="Path to an input image.",
+        default=None,
+        help="Path to an input image (default: bundled sample).",
     )
     parser.add_argument(
         "--prompt",
@@ -93,9 +93,13 @@ def main() -> int:
     input_dir = get_input_dir()
     output_dir = get_output_dir()
 
-    used_default = args.image == DEFAULT_IMAGE
-    image_path = Path(resolve_input_path(args.image, input_dir))
-    if not image_path.exists() and used_default:
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.image is None:
+        image_path = Path(DEFAULT_IMAGE)
+        print(f"No --image provided, using bundled sample: {image_path}")
+    else:
+        image_path = Path(resolve_input_path(args.image, input_dir))
+    if not image_path.exists() and args.image is None:
         fallbacks = [
             Path("/cvlization_repo/examples/perception/doc_ai/leaderboard/test_data/sample.jpg"),
             Path(__file__).resolve().parent.parent / "leaderboard" / "test_data" / "sample.jpg",

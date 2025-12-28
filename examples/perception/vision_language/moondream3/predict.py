@@ -179,8 +179,8 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default=DEFAULT_IMAGE,
-        help="Path to input image or URL"
+        default=None,
+        help="Path to input image or URL (default: bundled sample)"
     )
     parser.add_argument(
         "--model-id",
@@ -253,9 +253,12 @@ def main():
     model = load_model(args.model_id, args.device, compile_model=not args.no_compile)
 
     # Load image - use lazy download if default sample or specified image not found
-    if args.image == "examples/sample.jpg":
+    if args.image is None:
         # Use lazy download from HuggingFace for default sample
         image_path = ensure_sample_image()
+        print(f"No --image provided, using bundled sample: {image_path}")
+    elif args.image.startswith("http"):
+        image_path = args.image
     else:
         image_path = resolve_input_path(args.image)
     print(f"Loading image from {image_path}...")
