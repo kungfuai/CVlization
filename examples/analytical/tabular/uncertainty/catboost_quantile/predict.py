@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--output", required=True, help="Where to write predictions CSV")
     args = parser.parse_args()
 
+    # User-provided paths resolve to cwd
     df = pd.read_csv(resolve_input_path(args.input))
     result = predict(df)
 

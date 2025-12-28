@@ -6,6 +6,9 @@ import pandas as pd
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
+DEFAULT_MODEL = "artifacts/model/mapie_regressor.pkl"
+DEFAULT_INPUT = "artifacts/sample_input.csv"
+DEFAULT_OUTPUT = "artifacts/predictions.csv"
 DEFAULT_ALPHA = 0.1
 
 
@@ -15,17 +18,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default="artifacts/model/mapie_regressor.pkl",
+        default=DEFAULT_MODEL,
         help="Path to the serialized MAPIE regressor (default: artifacts/model/mapie_regressor.pkl)",
     )
     parser.add_argument(
         "--input",
-        default="artifacts/sample_input.csv",
+        default=DEFAULT_INPUT,
         help="CSV file with feature rows to score (default: artifacts/sample_input.csv)",
     )
     parser.add_argument(
         "--output",
-        default="artifacts/predictions.csv",
+        default=DEFAULT_OUTPUT,
         help="Where to write the predictions CSV (default: artifacts/predictions.csv)",
     )
     parser.add_argument(
@@ -40,8 +43,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    model_path = Path(resolve_input_path(args.model))
-    input_path = Path(resolve_input_path(args.input))
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    model_path = Path(args.model) if args.model == DEFAULT_MODEL else Path(resolve_input_path(args.model))
+    input_path = Path(args.input) if args.input == DEFAULT_INPUT else Path(resolve_input_path(args.input))
+    # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
 
     if not model_path.exists():

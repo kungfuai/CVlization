@@ -71,6 +71,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # User-provided paths resolve to cwd
     raw_input = pd.read_csv(resolve_input_path(args.input))
 
     preprocessor = load_json(PREPROCESSOR_PATH)

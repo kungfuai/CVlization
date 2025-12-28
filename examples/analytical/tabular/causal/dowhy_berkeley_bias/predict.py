@@ -71,6 +71,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # User-provided paths resolve to cwd
     raw = pd.read_csv(resolve_input_path(args.input))
     expanded = expand_input(raw)
 

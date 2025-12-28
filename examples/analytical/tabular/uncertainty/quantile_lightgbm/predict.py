@@ -45,6 +45,7 @@ def main():
     parser.add_argument("--output", required=True, help="Path to output CSV file")
     args = parser.parse_args()
 
+    # User-provided paths resolve to cwd
     df = pd.read_csv(resolve_input_path(args.input))
     result = predict(df)
     output_path = Path(resolve_output_path(args.output))

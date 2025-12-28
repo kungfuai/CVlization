@@ -45,6 +45,7 @@ def main() -> None:
     args = parser.parse_args()
 
     feature_names = load_feature_names()
+    # User-provided paths resolve to cwd
     df = pd.read_csv(resolve_input_path(args.input))
 
     missing = [name for name in feature_names if name not in df.columns]

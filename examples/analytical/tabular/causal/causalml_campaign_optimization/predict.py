@@ -66,6 +66,7 @@ def main() -> None:
         raise FileNotFoundError(f"Trained models not found at {MODEL_PATH}. Run train.py first.")
     models = joblib.load(MODEL_PATH)
 
+    # User-provided paths resolve to cwd
     df = pd.read_csv(resolve_input_path(args.input))
     X = ensure_features(df, features)
 

@@ -55,6 +55,7 @@ def main() -> None:
     metadata = load_metadata()
     feature_columns: List[str] = metadata["feature_columns"]
 
+    # User-provided paths resolve to cwd
     df = pd.read_csv(resolve_input_path(args.input))
     features = ensure_features(df, feature_columns)
 

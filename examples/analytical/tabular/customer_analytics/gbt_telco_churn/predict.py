@@ -3,24 +3,29 @@ from pathlib import Path
 
 import pandas as pd
 
-from cvlization.paths import resolve_input_path, resolve_output_path
 from gbt import load as gbt_load
+from cvlization.paths import resolve_input_path, resolve_output_path
+
+DEFAULT_MODEL_DIR = "artifacts/model"
+DEFAULT_INPUT = "artifacts/sample_input.csv"
+DEFAULT_OUTPUT = "artifacts/predictions.csv"
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run churn probability predictions using trained gbt model.")
     parser.add_argument(
         "--model-dir",
-        default="artifacts/model",
+        default=DEFAULT_MODEL_DIR,
         help="Path to directory containing saved model artifacts (default: artifacts/model)",
     )
     parser.add_argument(
         "--input",
-        default="artifacts/sample_input.csv",
+        default=DEFAULT_INPUT,
         help="CSV file with customer records to score (default: artifacts/sample_input.csv)",
     )
     parser.add_argument(
         "--output",
-        default="artifacts/predictions.csv",
+        default=DEFAULT_OUTPUT,
         help="Where to write predictions CSV (default: artifacts/predictions.csv)",
     )
     return parser.parse_args()
@@ -29,8 +34,10 @@ def parse_args():
 def main():
     args = parse_args()
 
-    model_dir = Path(resolve_input_path(args.model_dir))
-    input_path = Path(resolve_input_path(args.input))
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    model_dir = Path(args.model_dir) if args.model_dir == DEFAULT_MODEL_DIR else Path(resolve_input_path(args.model_dir))
+    input_path = Path(args.input) if args.input == DEFAULT_INPUT else Path(resolve_input_path(args.input))
+    # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
 
     if not model_dir.exists():
