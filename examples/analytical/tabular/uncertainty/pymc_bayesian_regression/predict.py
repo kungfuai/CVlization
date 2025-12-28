@@ -91,6 +91,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # User-provided paths resolve to cwd
     df = pd.read_csv(resolve_input_path(args.input))
     metadata = load_metadata()
     feature_names: List[str] = metadata["feature_names"]

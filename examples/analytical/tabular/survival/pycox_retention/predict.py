@@ -60,8 +60,10 @@ def build_model(input_dim: int, config: dict) -> CoxPH:
 
 def main() -> None:
     args = parse_args()
-    model_dir = Path(resolve_input_path(args.model_dir))
-    input_path = Path(resolve_input_path(args.input))
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    model_dir = Path(args.model_dir) if args.model_dir == DEFAULT_MODEL_DIR else Path(resolve_input_path(args.model_dir))
+    input_path = Path(args.input) if args.input == DEFAULT_INPUT else Path(resolve_input_path(args.input))
+    # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
 
     config = json.loads((model_dir / "config.json").read_text())

@@ -21,12 +21,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-
-    model = load_model(resolve_input_path(args.model))
-    df = pd.read_csv(resolve_input_path(args.input))
-    preds = predict_model(model, data=df)
-
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    model_path = args.model if args.model == DEFAULT_MODEL_PATH else resolve_input_path(args.model)
+    input_path = args.input if args.input == DEFAULT_INPUT else resolve_input_path(args.input)
+    # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
+
+    model = load_model(model_path)
+    df = pd.read_csv(input_path)
+    preds = predict_model(model, data=df)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     preds.to_csv(output_path, index=False)
     print(f"Predictions written to {output_path}")

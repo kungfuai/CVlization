@@ -18,6 +18,7 @@ METRICS_PATH = ARTIFACTS_DIR / "metrics.json"
 PREDICTIONS_PATH = ARTIFACTS_DIR / "predictions.csv"
 LEADERBOARD_PATH = ARTIFACTS_DIR / "leaderboard.csv"
 SAMPLE_INPUT_PATH = ARTIFACTS_DIR / "sample_input.csv"
+CONFIG_PATH = ARTIFACTS_DIR / "config.json"
 
 TARGET = "Churn"
 ID_COL = "customerID"
@@ -85,7 +86,7 @@ def evaluate(predictor: TabularPredictor, X_test: pd.DataFrame, y_test: pd.Serie
         "precision": report.get("1", {}).get("precision", float("nan")),
         "recall": report.get("1", {}).get("recall", float("nan")),
         "f1": report.get("1", {}).get("f1-score", float("nan")),
-        "best_model": predictor.get_model_best(),
+        "best_model": predictor.model_best,
     }
     return metrics
 
@@ -96,8 +97,14 @@ def save_artifacts(predictor: TabularPredictor, metrics: Dict[str, float], X_tes
     with METRICS_PATH.open("w") as f:
         json.dump(metrics, f, indent=2)
 
+    try:
+        ag_version = predictor.info()["version"]
+    except (AttributeError, KeyError):
+        import autogluon.tabular
+        ag_version = getattr(autogluon.tabular, "__version__", "unknown")
+
     config = {
-        "autogluon_version": predictor.get_info()["version"],
+        "autogluon_version": ag_version,
         "time_limit": TIME_LIMIT,
         "label": TARGET,
         "best_model": metrics["best_model"],
