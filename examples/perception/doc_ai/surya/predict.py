@@ -156,8 +156,8 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default=DEFAULT_IMAGE,
-        help="Path to input image or URL (default: examples/sample.jpg)"
+        default=None,
+        help="Path to input image or URL (default: bundled sample)"
     )
     parser.add_argument(
         "--task",
@@ -190,10 +190,11 @@ def main():
         ext = {"json": "json", "txt": "txt"}[args.format]
         args.output = f"result.{ext}"
 
-    # Defaults are local to example dir; user-provided paths resolve to cwd
-    if args.image.startswith("http"):
-        input_path = args.image
-    elif args.image == DEFAULT_IMAGE:
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.image is None:
+        input_path = DEFAULT_IMAGE
+        print(f"No --image provided, using bundled sample: {input_path}")
+    elif args.image.startswith("http"):
         input_path = args.image
     else:
         input_path = resolve_input_path(args.image)

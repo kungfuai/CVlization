@@ -13,17 +13,25 @@ DEFAULT_OUTPUT = "artifacts/predictions.csv"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run PyCaret predictor on new data.")
-    parser.add_argument("--model", default=DEFAULT_MODEL_PATH, help="Path to saved PyCaret model")
-    parser.add_argument("--input", default=DEFAULT_INPUT, help="CSV with records to score")
+    parser.add_argument("--model", default=None, help="Path to saved PyCaret model (default: bundled sample)")
+    parser.add_argument("--input", default=None, help="CSV with records to score (default: bundled sample)")
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Where to write predictions")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    # Defaults are local to example dir; user-provided paths resolve to cwd
-    model_path = args.model if args.model == DEFAULT_MODEL_PATH else resolve_input_path(args.model)
-    input_path = args.input if args.input == DEFAULT_INPUT else resolve_input_path(args.input)
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.model is None:
+        model_path = DEFAULT_MODEL_PATH
+        print(f"No --model provided, using bundled sample: {model_path}")
+    else:
+        model_path = resolve_input_path(args.model)
+    if args.input is None:
+        input_path = DEFAULT_INPUT
+        print(f"No --input provided, using bundled sample: {input_path}")
+    else:
+        input_path = resolve_input_path(args.input)
     # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
 

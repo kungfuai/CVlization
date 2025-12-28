@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--image",
-        default=DEFAULT_IMAGE,
+        default=None,
         help="Path to the input image (default: bundled ref1.png camera sample)",
     )
     parser.add_argument(
@@ -93,11 +93,13 @@ def main() -> None:
     args = parse_args()
 
     # Defaults are local to example dir; user-provided paths resolve to cwd
-    image_path = Path(args.image) if args.image == DEFAULT_IMAGE else Path(resolve_input_path(args.image))
+    if args.image is None:
+        image_path = Path(DEFAULT_IMAGE)
+        print(f"No --image provided, using bundled sample: {image_path}")
+    else:
+        image_path = Path(resolve_input_path(args.image))
     # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
-    if args.image == DEFAULT_IMAGE:
-        print(f"No --image provided, using default sample: {image_path}")
     if args.text == "text":
         print("No --text provided, using default prompt: 'text'")
     output_path.parent.mkdir(parents=True, exist_ok=True)
