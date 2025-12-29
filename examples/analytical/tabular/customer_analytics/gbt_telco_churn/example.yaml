@@ -1,4 +1,5 @@
 name: churn-gbt
+docker: analytical_gbt_telco
 capability: analytical/tabular/customer_analytics
 modalities:
   - tabular
