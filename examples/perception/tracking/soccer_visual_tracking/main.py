@@ -1,5 +1,6 @@
 import argparse
 from enum import Enum
+from pathlib import Path
 from typing import Iterator, List
 
 import os
@@ -15,10 +16,57 @@ from sports.common.team import TeamClassifier
 from sports.common.view import ViewTransformer
 from sports.configs.soccer import SoccerPitchConfiguration
 
-PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PLAYER_DETECTION_MODEL_PATH = os.path.join(PARENT_DIR, 'data/football-player-detection.pt')
-PITCH_DETECTION_MODEL_PATH = os.path.join(PARENT_DIR, 'data/football-pitch-detection.pt')
-BALL_DETECTION_MODEL_PATH = os.path.join(PARENT_DIR, 'data/football-ball-detection.pt')
+# Google Drive file IDs for lazy download
+GDRIVE_FILES = {
+    "football-player-detection.pt": "17PXFNlx-jI7VjVo_vQnB1sONjRyvoB-q",
+    "football-pitch-detection.pt": "1Ma5Kt86tgpdjCTKfum79YMgNnSjcoOyf",
+    "football-ball-detection.pt": "1isw4wx-MK9h9LMr36VvIWlJD6ppUvw7V",
+    "0bfacc_0.mp4": "12TqauVZ9tLAv8kWxTTBFWtgt2hNQ4_ZF",
+}
+
+def get_cache_dir() -> Path:
+    """Get centralized cache directory for soccer tracking models."""
+    cache_root = Path(os.environ.get("CVL_CACHE", Path.home() / ".cache" / "cvlization"))
+    cache_dir = cache_root / "soccer_tracking"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+def ensure_file(filename: str) -> Path:
+    """Download file from Google Drive if not cached, return path."""
+    cache_dir = get_cache_dir()
+    local_path = cache_dir / filename
+
+    if not local_path.exists():
+        file_id = GDRIVE_FILES.get(filename)
+        if not file_id:
+            raise ValueError(f"Unknown file: {filename}")
+
+        import gdown
+        url = f"https://drive.google.com/uc?id={file_id}"
+        print(f"Downloading {filename} to {local_path}...")
+        gdown.download(url, str(local_path), quiet=False)
+
+    return local_path
+
+def get_model_path(model_name: str) -> str:
+    """Get path to model, downloading if necessary."""
+    return str(ensure_file(model_name))
+
+def get_sample_video() -> str:
+    """Get path to sample video, downloading if necessary."""
+    return str(ensure_file("0bfacc_0.mp4"))
+
+# Model paths (lazy loaded)
+PLAYER_DETECTION_MODEL_PATH = None
+PITCH_DETECTION_MODEL_PATH = None
+BALL_DETECTION_MODEL_PATH = None
+
+def init_model_paths():
+    """Initialize model paths with lazy download."""
+    global PLAYER_DETECTION_MODEL_PATH, PITCH_DETECTION_MODEL_PATH, BALL_DETECTION_MODEL_PATH
+    PLAYER_DETECTION_MODEL_PATH = get_model_path("football-player-detection.pt")
+    PITCH_DETECTION_MODEL_PATH = get_model_path("football-pitch-detection.pt")
+    BALL_DETECTION_MODEL_PATH = get_model_path("football-ball-detection.pt")
 
 BALL_CLASS_ID = 0
 GOALKEEPER_CLASS_ID = 1
@@ -437,15 +485,30 @@ def main(source_video_path: str, target_video_path: str, device: str, mode: Mode
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--source_video_path', type=str, required=True)
-    parser.add_argument('--target_video_path', type=str, required=True)
-    parser.add_argument('--device', type=str, default='cpu')
+    parser = argparse.ArgumentParser(description='Soccer visual tracking with player/ball detection and team classification')
+    parser.add_argument('--source_video_path', type=str, default=None,
+                        help='Input video path (downloads sample if not provided)')
+    parser.add_argument('--target_video_path', type=str, default=None,
+                        help='Output video path (defaults to output.mp4)')
+    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--mode', type=Mode, default=Mode.PLAYER_DETECTION)
     args = parser.parse_args()
+
+    # Initialize model paths (lazy download from Google Drive)
+    init_model_paths()
+
+    # Resolve paths using cvlization utilities
+    try:
+        from cvlization.paths import resolve_input_path, resolve_output_path
+        source_video_path = resolve_input_path(args.source_video_path) if args.source_video_path else get_sample_video()
+        target_video_path = resolve_output_path(args.target_video_path or "output.mp4")
+    except ImportError:
+        source_video_path = args.source_video_path or get_sample_video()
+        target_video_path = args.target_video_path or "output.mp4"
+
     main(
-        source_video_path=args.source_video_path,
-        target_video_path=args.target_video_path,
+        source_video_path=source_video_path,
+        target_video_path=target_video_path,
         device=args.device,
         mode=args.mode
     )
