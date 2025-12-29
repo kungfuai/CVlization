@@ -4,6 +4,7 @@ set -e
 # Run Krea Realtime video generation via Scope framework
 IMAGE_NAME=${IMAGE_NAME:-"krea_realtime_scope"}
 EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 
 # Configuration
 PROMPT=${PROMPT:-"A serene mountain lake at sunset with reflections"}
@@ -36,6 +37,9 @@ docker run --rm \
     --gpus=all \
     -v ~/.cache/cvlization:/root/.cache \
     -v "${OUTPUT_DIR}":/workspace/outputs \
+    -v "${WORK_DIR}:/mnt/cvl/workspace" \
+    -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
+  -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     "${IMAGE_NAME}" \
     python3 predict.py \
         --prompt "${PROMPT}" \

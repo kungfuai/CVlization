@@ -13,6 +13,7 @@ import os
 import sys
 import logging
 import warnings
+from cvlization.paths import resolve_output_path
 
 # Suppress verbose logging by default
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -216,7 +217,7 @@ def main():
         ext = "json" if args.format == "json" else "txt"
         args.output = f"outputs/result.{ext}"
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
 
     # Load model
     try:

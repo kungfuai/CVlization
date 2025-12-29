@@ -39,6 +39,8 @@ VARIANTS = {
 }
 DEFAULT_VARIANT = "base"
 DEFAULT_MODEL_ID = VARIANTS[DEFAULT_VARIANT]["model_id"]
+DEFAULT_IMAGE = "test_images/sample.jpg"
+DEFAULT_OUTPUT = "outputs/result.txt"
 
 # Task prompts
 TASK_PROMPTS = {
@@ -287,8 +289,8 @@ Examples:
     parser.add_argument(
         "--image",
         type=str,
-        default="test_images/sample.jpg",
-        help="Path to input image or URL"
+        default=None,
+        help="Path to input image or URL (default: bundled sample)"
     )
     parser.add_argument(
         "--variant",
@@ -319,7 +321,7 @@ Examples:
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default=DEFAULT_OUTPUT,
         help="Output file path"
     )
     parser.add_argument(
@@ -340,13 +342,16 @@ Examples:
     args = parser.parse_args()
 
     # Resolve paths for CVL compatibility
-    try:
-        image_path = resolve_input_path(args.image)
-        output_path = resolve_output_path(args.output)
-    except:
-        # Fallback to direct paths if CVL not available
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    if args.image is None:
+        image_path = DEFAULT_IMAGE
+        print(f"No --image provided, using bundled sample: {image_path}")
+    elif args.image.startswith("http"):
         image_path = args.image
-        output_path = args.output
+    else:
+        image_path = resolve_input_path(args.image)
+    # Output always resolves to user's cwd
+    output_path = resolve_output_path(args.output)
 
     # Get task prompt
     task_prompt = TASK_PROMPTS[args.task]

@@ -4,6 +4,8 @@ from pathlib import Path
 import pandas as pd
 from catboost import CatBoostRegressor
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_DIR = Path("artifacts/models")
 MODEL_FILES = {
     0.1: "catboost_quantile_10.cbm",
@@ -37,10 +39,11 @@ def main():
     parser.add_argument("--output", required=True, help="Where to write predictions CSV")
     args = parser.parse_args()
 
-    df = pd.read_csv(args.input)
+    # User-provided paths resolve to cwd
+    df = pd.read_csv(resolve_input_path(args.input))
     result = predict(df)
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output_path, index=False)
     print(f"Predictions saved to {output_path}")

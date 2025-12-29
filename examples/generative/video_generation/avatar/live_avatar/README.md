@@ -78,15 +78,20 @@ cvl run live_avatar predict \
 | `--prompt` | "A person talking..." | Text prompt describing scene |
 | `--size` | 704*384 | Output video size (width*height) |
 | `--sample_steps` | 4 | Number of denoising steps |
+| `--infer_frames` | 48 | Frames per clip |
 | `--num_clips` | 100 | Max number of clips to generate |
 | `--seed` | 42 | Random seed |
 | `--offload` | True | Offload model to CPU when not in use |
 
 ## Performance
 
-Single GPU (H100 80GB) with offloading:
+Single GPU (80GB+ VRAM) with offloading:
 - ~5-10 seconds per video block
 - Quality may degrade for very long videos without online decode
+
+**Measured Metrics (RTX PRO 6000 Blackwell 96GB, 4 steps, 704x384, 48 frames/clip):**
+- Latency: <0.01s (model ready to generation start)
+- Throughput: ~0.8 fps
 
 For real-time 20 FPS generation, use 5x H800 GPUs (see upstream repo).
 

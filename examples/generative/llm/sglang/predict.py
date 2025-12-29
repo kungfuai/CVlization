@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import List
 
 import requests
+from cvlization.paths import resolve_output_path
+from gpu_utils import get_optimal_attention_backend
 from openai import OpenAI
 
 
@@ -69,6 +71,11 @@ def launch_server(args) -> subprocess.Popen:
         cmd.append("--trust-remote-code")
     if args.extra_args:
         cmd.extend(args.extra_args.split())
+    # Auto-detect attention backend if not explicitly specified
+    if "--attention-backend" not in " ".join(cmd):
+        backend = get_optimal_attention_backend()
+        cmd.extend(["--attention-backend", backend])
+        print(f"Auto-selected attention backend: {backend}")
     print("Starting SGLang server:", " ".join(cmd))
     return subprocess.Popen(cmd, env=os.environ.copy())
 
@@ -144,7 +151,7 @@ def main():
         text = resp.choices[0].message.content
         print("Response:\n")
         print(text.strip())
-        save_output(text.strip(), args.output)
+        save_output(text.strip(), Path(resolve_output_path(str(args.output))))
     finally:
         stop_server(proc)
 

@@ -22,6 +22,9 @@ from cvlization.paths import (
     resolve_output_path,
 )
 
+# Default sample input (bundled with example)
+DEFAULT_IMAGE = "examples/sample.jpg"
+
 
 def load_image(image_path: str):
     """Load an image from file path or URL."""
@@ -97,8 +100,8 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/sample.jpg",
-        help="Path to input image or URL (default: examples/sample.jpg)"
+        default=None,
+        help="Path to input image or URL (default: bundled sample)"
     )
     parser.add_argument(
         "--output",
@@ -134,7 +137,6 @@ def main():
     args = parser.parse_args()
 
     # Resolve paths for CVL dual-mode support
-    INP = get_input_dir()
     OUT = get_output_dir()
 
     # Smart default for output path
@@ -142,12 +144,20 @@ def main():
         ext = {"json": "json", "txt": "txt"}[args.format]
         args.output = f"result.{ext}"
 
-    # Resolve paths using cvlization utilities
-    input_path = resolve_input_path(args.image, INP) if not args.image.startswith("http") else args.image
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.image is None:
+        input_path = DEFAULT_IMAGE
+        print(f"No --image provided, using bundled sample: {input_path}")
+    elif args.image.startswith("http"):
+        input_path = args.image
+    else:
+        input_path = resolve_input_path(args.image)
+    # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output, OUT))
 
     # Validate input file (if not URL)
-    if not args.image.startswith("http") and not Path(input_path).exists():
+    is_url = args.image is not None and args.image.startswith("http")
+    if not is_url and not Path(input_path).exists():
         print(f"Error: Input file '{input_path}' not found")
         return 1
 

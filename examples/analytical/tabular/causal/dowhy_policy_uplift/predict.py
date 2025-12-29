@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 DEFAULT_MODEL_DIR = "artifacts/model"
 DEFAULT_INPUT = "artifacts/sample_input.csv"
 DEFAULT_OUTPUT = "artifacts/predictions.csv"
@@ -18,13 +20,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model-dir",
-        default=DEFAULT_MODEL_DIR,
-        help="Directory containing saved models (default: artifacts/model)",
+        default=None,
+        help="Directory containing saved models (default: bundled sample)",
     )
     parser.add_argument(
         "--input",
-        default=DEFAULT_INPUT,
-        help="CSV file with cohort features to score (default: artifacts/sample_input.csv)",
+        default=None,
+        help="CSV file with cohort features to score (default: bundled sample)",
     )
     parser.add_argument(
         "--output",
@@ -56,9 +58,19 @@ def ensure_encoded(
 
 def main() -> None:
     args = parse_args()
-    model_dir = Path(args.model_dir)
-    input_path = Path(args.input)
-    output_path = Path(args.output)
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.model_dir is None:
+        model_dir = Path(DEFAULT_MODEL_DIR)
+        print(f"No --model-dir provided, using bundled sample: {model_dir}")
+    else:
+        model_dir = Path(resolve_input_path(args.model_dir))
+    if args.input is None:
+        input_path = Path(DEFAULT_INPUT)
+        print(f"No --input provided, using bundled sample: {input_path}")
+    else:
+        input_path = Path(resolve_input_path(args.input))
+    # Output always resolves to user's cwd
+    output_path = Path(resolve_output_path(args.output))
 
     config = json.loads((model_dir / "config.json").read_text())
     feature_cols: List[str] = config["feature_columns"]

@@ -14,6 +14,8 @@ import torch
 from PIL import Image
 from transformers import MllamaForConditionalGeneration, MllamaProcessor
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 DEFAULT_MODEL = "unsloth/Llama-3.2-11B-Vision-Instruct-bnb-4bit"
 
 
@@ -129,7 +131,7 @@ def main():
     args = parse_args()
     device = None if args.device == "auto" else args.device
 
-    image = Image.open(args.image).convert("RGB")
+    image = Image.open(resolve_input_path(args.image)).convert("RGB")
     model, processor, device = load_model(args.model, device)
     inputs = build_inputs(processor, image, args.prompt, device)
     text = generate(model, processor, inputs, max_new_tokens=args.max_tokens)
@@ -139,9 +141,10 @@ def main():
     print("\nGenerated:\n", text)
 
     if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(text, encoding="utf-8")
-        print(f"\nSaved to {args.output}")
+        output_path = Path(resolve_output_path(str(args.output)))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(text, encoding="utf-8")
+        print(f"\nSaved to {output_path}")
 
 
 if __name__ == "__main__":

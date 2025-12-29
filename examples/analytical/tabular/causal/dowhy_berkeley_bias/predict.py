@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from dowhy import CausalModel
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 GRAPH = r"""
 digraph {
     gender_binary -> department;
@@ -69,7 +71,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    raw = pd.read_csv(args.input)
+    # User-provided paths resolve to cwd
+    raw = pd.read_csv(resolve_input_path(args.input))
     expanded = expand_input(raw)
 
     naive_gap = compute_naive_gap(expanded)
@@ -85,7 +88,7 @@ def main() -> None:
     pivot = pivot.rename(columns={"female": "rate_female", "male": "rate_male"})
     pivot["rate_diff_female_minus_male"] = pivot["rate_female"] - pivot["rate_male"]
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     pivot.reset_index().to_csv(output_path, index=False)
     print(f"Per-department summary written to {output_path}")

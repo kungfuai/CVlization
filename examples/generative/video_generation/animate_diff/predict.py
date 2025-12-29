@@ -30,6 +30,7 @@ from safetensors import safe_open
 import math
 from pathlib import Path
 import shutil
+from cvlization.paths import resolve_output_path
 
 
 def main(args):
@@ -37,7 +38,7 @@ def main(args):
     func_args = dict(func_args)
 
     time_str = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    savedir = f"samples/{Path(args.config).stem}-{time_str}"
+    savedir = resolve_output_path(f"samples/{Path(args.config).stem}-{time_str}/").rstrip('/')
     os.makedirs(savedir)
     inference_config = OmegaConf.load(args.inference_config)
 

@@ -29,6 +29,8 @@ from cvlization.paths import (
 
 # Model configuration
 MODEL_ID = "OpenGVLab/InternVL3-8B"
+DEFAULT_IMAGE = "test_images/sample.jpg"
+DEFAULT_OUTPUT = "outputs/result.txt"
 
 
 def detect_device():
@@ -221,8 +223,8 @@ Examples:
     parser.add_argument(
         "--image",
         type=str,
-        default="test_images/sample.jpg",
-        help="Path to input image or URL"
+        default=None,
+        help="Path to input image or URL (default: bundled sample)"
     )
     parser.add_argument(
         "--model-id",
@@ -239,7 +241,7 @@ Examples:
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default=DEFAULT_OUTPUT,
         help="Output file path"
     )
     parser.add_argument(
@@ -260,13 +262,16 @@ Examples:
     args = parser.parse_args()
 
     # Resolve paths for CVL compatibility
-    try:
-        image_path = resolve_input_path(args.image)
-        output_path = resolve_output_path(args.output)
-    except:
-        # Fallback to direct paths if CVL not available
+    # Defaults are local to example dir; user-provided paths resolve to cwd
+    if args.image is None:
+        image_path = DEFAULT_IMAGE
+        print(f"No --image provided, using bundled sample: {image_path}")
+    elif args.image.startswith("http"):
         image_path = args.image
-        output_path = args.output
+    else:
+        image_path = resolve_input_path(args.image)
+    # Output always resolves to user's cwd
+    output_path = resolve_output_path(args.output)
 
     print("=" * 60)
     print(f"InternVL3-8B - OpenGVLab")

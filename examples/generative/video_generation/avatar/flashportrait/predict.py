@@ -10,6 +10,8 @@ import argparse
 import os
 import sys
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add vendor to path
 VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor")
 sys.path.insert(0, VENDOR_DIR)
@@ -35,6 +37,62 @@ def download_models_if_needed(cache_dir):
     wan_path = snapshot_download("Wan-AI/Wan2.1-I2V-14B-720P", cache_dir=cache_dir)
 
     return fp_path, wan_path
+
+
+def download_sample_inputs_if_needed(image_path, video_path):
+    """Download sample inputs from HuggingFace if they don't exist locally."""
+    from huggingface_hub import hf_hub_download
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    test_inputs_dir = os.path.join(script_dir, "test_inputs")
+
+    # Check if using default sample paths
+    default_image = os.path.join(test_inputs_dir, "reference.png")
+    default_video = os.path.join(test_inputs_dir, "driven_video.mp4")
+
+    needs_download = False
+    if image_path == default_image and not os.path.exists(image_path):
+        needs_download = True
+    if video_path == default_video and not os.path.exists(video_path):
+        needs_download = True
+
+    if needs_download:
+        print("Downloading sample inputs from HuggingFace...")
+        os.makedirs(test_inputs_dir, exist_ok=True)
+
+        if not os.path.exists(default_image):
+            print("  Downloading reference.png...")
+            hf_hub_download(
+                repo_id="zzsi/cvl",
+                filename="flashportrait/reference.png",
+                repo_type="dataset",
+                local_dir=test_inputs_dir,
+            )
+            # Move from subdirectory to test_inputs root
+            src = os.path.join(test_inputs_dir, "flashportrait", "reference.png")
+            if os.path.exists(src):
+                os.rename(src, default_image)
+
+        if not os.path.exists(default_video):
+            print("  Downloading driven_video.mp4...")
+            hf_hub_download(
+                repo_id="zzsi/cvl",
+                filename="flashportrait/driven_video.mp4",
+                repo_type="dataset",
+                local_dir=test_inputs_dir,
+            )
+            # Move from subdirectory to test_inputs root
+            src = os.path.join(test_inputs_dir, "flashportrait", "driven_video.mp4")
+            if os.path.exists(src):
+                os.rename(src, default_video)
+
+        # Clean up subdirectory
+        subdir = os.path.join(test_inputs_dir, "flashportrait")
+        if os.path.exists(subdir):
+            import shutil
+            shutil.rmtree(subdir, ignore_errors=True)
+
+        print("  Sample inputs downloaded!")
 
 
 def get_emo_feature(video_path, face_aligner, pd_fpg_motion, device):
@@ -124,6 +182,38 @@ def main():
     # Set default steps based on mode
     if args.steps is None:
         args.steps = 4 if args.fast else 30
+
+    # Early path validation (fail fast before loading models)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    workspace_dir = "/mnt/cvl/workspace"  # Current working directory mount
+
+    def resolve_input_path(path, name):
+        """Resolve input path: check workspace first, then script dir, then absolute."""
+        if os.path.isabs(path):
+            return path
+        # Try workspace (current directory) first
+        workspace_path = os.path.join(workspace_dir, path)
+        if os.path.exists(workspace_path):
+            return workspace_path
+        # Then try script directory (for test_inputs/)
+        script_path = os.path.join(script_dir, path)
+        return script_path  # Return script_path even if doesn't exist (for download check)
+
+    args.image = resolve_input_path(args.image, "image")
+    args.video = resolve_input_path(args.video, "video")
+
+    # Download sample inputs if needed (only for default test_inputs paths)
+    download_sample_inputs_if_needed(args.image, args.video)
+
+    # Validate input files exist
+    if not os.path.exists(args.image):
+        print(f"Error: Image file not found: {args.image}")
+        print("Tip: Place files in current directory or use absolute paths.")
+        sys.exit(1)
+    if not os.path.exists(args.video):
+        print(f"Error: Video file not found: {args.video}")
+        print("Tip: Place files in current directory or use absolute paths.")
+        sys.exit(1)
 
     # Imports (after argparse to speed up --help)
     import numpy as np
@@ -421,12 +511,8 @@ def main():
     # Remove first frame (it's the reference)
     sample = sample[:, :, 1:]
 
-    # Save output (use path relative to script directory for container compatibility)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    if not os.path.isabs(args.output):
-        output_path = os.path.join(script_dir, args.output)
-    else:
-        output_path = args.output
+    # Save output
+    output_path = resolve_output_path(args.output)
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     save_videos_grid(sample, output_path, fps=fps)
 

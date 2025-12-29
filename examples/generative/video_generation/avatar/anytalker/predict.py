@@ -12,6 +12,13 @@ import os
 import sys
 from pathlib import Path
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
+# Default sample inputs (bundled with example)
+DEFAULT_IMAGE = "examples/images/1p-0.png"
+DEFAULT_AUDIO = "examples/audios/1p-0.wav"
+DEFAULT_OUTPUT = "outputs/output.mp4"
+
 # Add vendored AnyTalker to path
 sys.path.insert(0, "/workspace/local/vendor")
 
@@ -179,26 +186,11 @@ def run_inference(
     logging.info(f"Video saved to: {output_path}")
 
 
-def resolve_path(path: str) -> str:
-    """Resolve path - prepend /workspace/local/ for relative paths if they exist there."""
-    if os.path.isabs(path):
-        return path
-    # Check if exists relative to /workspace/local/
-    local_path = os.path.join("/workspace/local", path)
-    if os.path.exists(local_path):
-        return local_path
-    # Check if exists as-is
-    if os.path.exists(path):
-        return path
-    # Default to local path
-    return local_path
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate talking head video with AnyTalker")
-    parser.add_argument("--image", type=str, default="examples/images/1p-0.png", help="Path to input image")
-    parser.add_argument("--audio", type=str, default="examples/audios/1p-0.wav", help="Path to input audio (WAV)")
-    parser.add_argument("--output", type=str, default="/workspace/local/outputs/output.mp4", help="Output video path")
+    parser.add_argument("--image", type=str, default=None, help="Path to input image (default: bundled sample)")
+    parser.add_argument("--audio", type=str, default=None, help="Path to input audio WAV (default: bundled sample)")
+    parser.add_argument("--output", type=str, default=DEFAULT_OUTPUT, help="Output video path")
     parser.add_argument("--caption", type=str, default="A person is talking.", help="Scene description")
     parser.add_argument("--steps", type=int, default=40, help="Sampling steps")
     parser.add_argument("--guidance", type=float, default=4.5, help="Guidance scale")
@@ -207,10 +199,19 @@ def main():
 
     args = parser.parse_args()
 
-    # Resolve paths
-    image_path = resolve_path(args.image)
-    audio_path = resolve_path(args.audio)
-    output_path = resolve_path(args.output)
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.image is None:
+        image_path = DEFAULT_IMAGE
+        print(f"No --image provided, using bundled sample: {image_path}")
+    else:
+        image_path = resolve_input_path(args.image)
+    if args.audio is None:
+        audio_path = DEFAULT_AUDIO
+        print(f"No --audio provided, using bundled sample: {audio_path}")
+    else:
+        audio_path = resolve_input_path(args.audio)
+    # Output always resolves to user's cwd
+    output_path = resolve_output_path(args.output)
 
     logging.info(f"Image: {image_path}")
     logging.info(f"Audio: {audio_path}")
