@@ -99,13 +99,19 @@ def parse_args():
     if args.input_video:
         args.input_video = resolve_input_path(args.input_video)
 
-    # Validate mode-specific arguments
+    # Handle bundled samples as defaults
+    DEFAULT_IMAGE = "data/1.jpg"
+    DEFAULT_VIDEO = "data/1.mp4"
+
+    # Validate mode-specific arguments and use bundled samples if needed
     if args.mode == 'i2v':
         if not args.input_image:
-            parser.error("--input_image is required for i2v mode")
+            args.input_image = DEFAULT_IMAGE
+            print(f"No --input_image provided, using bundled sample: {DEFAULT_IMAGE}")
     elif args.mode == 'extend':
         if not args.input_video:
-            parser.error("--input_video is required for extend mode")
+            args.input_video = DEFAULT_VIDEO
+            print(f"No --input_video provided, using bundled sample: {DEFAULT_VIDEO}")
     
     return args
 

@@ -14,10 +14,10 @@ from transformers.image_utils import load_image
 
 def main():
     parser = argparse.ArgumentParser(description="Extract content from document images using Granite-Docling-258M")
-    parser.add_argument("input_file", type=str, nargs='?', default="examples/sample.jpg",
-                       help="Path to input image file (PNG, JPG, etc.) (default: examples/sample.jpg)")
-    parser.add_argument("--output", type=str, default="outputs/output.md",
-                       help="Output file path (default: outputs/output.md)")
+    parser.add_argument("input_file", type=str, nargs='?', default=None,
+                       help="Path to input image file (PNG, JPG, etc.) (default: uses bundled sample)")
+    parser.add_argument("--output", type=str, default="output.md",
+                       help="Output file path (default: output.md)")
     parser.add_argument("--format", type=str, choices=["markdown", "json", "docling"], default="markdown",
                        help="Output format: markdown (default), json, or docling")
     parser.add_argument("--model", type=str, default="ibm-granite/granite-docling-258M",
@@ -27,10 +27,16 @@ def main():
 
     args = parser.parse_args()
 
-    # Validate input file (resolve against CVL_INPUTS for container mode)
-    input_path = Path(resolve_input_path(args.input_file))
+    # Handle bundled sample vs user-provided input
+    DEFAULT_SAMPLE = "examples/sample.jpg"
+    if args.input_file is None:
+        input_path = Path(DEFAULT_SAMPLE)
+        print(f"No input provided, using bundled sample: {DEFAULT_SAMPLE}")
+    else:
+        # Resolve user-provided path against CVL_INPUTS
+        input_path = Path(resolve_input_path(args.input_file))
     if not input_path.exists():
-        print(f"Error: Input file '{args.input_file}' not found")
+        print(f"Error: Input file '{input_path}' not found")
         return 1
 
     DEVICE = args.device

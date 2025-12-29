@@ -6,21 +6,36 @@ datasets: []
 stability: stable
 resources:
   gpu: 1
-  vram_gb: 16
-  disk_gb: 20
+  vram_gb: 35
+  disk_gb: 50
+image: framepack
 presets:
   build:
     script: build.sh
     description: Build the Docker image
   predict:
     script: predict.sh
-    description: Run predict
+    description: Run image-to-video generation (uses bundled sample if no --input_image)
+    path_args:
+      - flag: "--input_image"
+        type: file
+      - flag: "--input_video"
+        type: file
+      - flag: "--output_dir"
+        type: dir
 tags:
 - framepack
 - video-generation
 - pytorch
+- hunyuanvideo
+- i2v
 tasks:
 - video_generation
+- image_to_video
 frameworks:
 - pytorch
-description: FramePack video generation with frame packing techniques
+description: FramePack video generation with frame packing techniques (HunyuanVideo-based)
+
+verification:
+  last_verified: "2025-12-29"
+  last_verification_note: "Verified build and i2v mode on Blackwell RTX PRO 6000 (96GB). Uses ~35GB VRAM in low-VRAM mode. Upgraded to PyTorch 2.8 + CUDA 12.8. Downloads ~15GB models on first run."

@@ -10,13 +10,20 @@ resources:
   gpu: 1
   vram_gb: 8
   disk_gb: 5
+image: granite_docling
 presets:
   build:
     script: build.sh
     description: Build the Docker image
   predict:
     script: predict.sh
-    description: Run predict
+    description: Run document extraction (uses bundled sample if no input provided)
+    path_args:
+      - flag: "input_file"
+        type: file
+        positional: true
+      - flag: "--output"
+        type: file
   batch_predict:
     script: batch_predict.py
     description: "Batch inference from JSONL (requires: --batch-input, --output-dir)"
@@ -33,3 +40,7 @@ tasks:
 frameworks:
 - pytorch
 description: End-to-end document extraction using Granite-Docling-258M VLM
+
+verification:
+  last_verified: "2025-12-29"
+  last_verification_note: "Verified build and predict on Blackwell RTX PRO 6000 (96GB). Fixed bundled sample handling. CUDA 12.8 base image. Model downloads on first run (~500MB)."
