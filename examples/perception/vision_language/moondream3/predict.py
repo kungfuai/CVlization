@@ -44,6 +44,9 @@ def ensure_sample_image():
     return str(sample_path)
 
 
+# Default output path
+DEFAULT_OUTPUT = "outputs/result.txt"
+
 # OCR prompts
 OCR_PROMPTS = {
     "default": "Transcribe the text",
