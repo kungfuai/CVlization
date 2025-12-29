@@ -14,6 +14,7 @@ fi
 
 ENV_FILE="$REPO_ROOT/.env"
 if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC2046
   export $(grep -v '^#' "$ENV_FILE" | xargs)
 fi
 

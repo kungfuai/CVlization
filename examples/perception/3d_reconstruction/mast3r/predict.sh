@@ -7,8 +7,6 @@ set -e
 IMAGE_NAME="mast3r"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
-# Find repo root for cvlization package
-REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 
 # Default to demo data inside container (NLE_tower from MASt3R repo)
 INPUT_PATH="${SCRIPT_DIR}/data/images"
@@ -75,7 +73,7 @@ ${DOCKER_RUN} ${IMAGE_NAME} \
     python3 /workspace/predict.py \
     --input ${CONTAINER_INPUT} \
     --output ${CONTAINER_OUTPUT} \
-    ${EXTRA_ARGS}
+    ${EXTRA_ARGS:+$EXTRA_ARGS}
 
 echo ""
 echo "✅ Inference complete!"

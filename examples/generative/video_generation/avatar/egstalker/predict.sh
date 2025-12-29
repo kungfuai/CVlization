@@ -55,7 +55,6 @@ resolve_container_path() {
 }
 
 MODEL_HOST=$(resolve_host_path "$MODEL_PATH")
-REF_HOST=$(resolve_host_path "$REFERENCE_PATH")
 OUT_HOST=$(resolve_host_path "$OUTPUT_DIR")
 
 if [[ ! -d "$MODEL_HOST" ]]; then

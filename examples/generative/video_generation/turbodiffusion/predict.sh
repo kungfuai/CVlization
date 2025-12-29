@@ -3,8 +3,6 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
-# Find repo root for cvlization package
-REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 
 # Default values
 PROMPT="A cat playing piano in a jazz club, cinematic lighting"

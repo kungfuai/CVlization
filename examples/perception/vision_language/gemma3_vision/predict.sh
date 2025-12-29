@@ -11,6 +11,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 # Load .env from main repo if it exists
 MAIN_REPO="${HOME}/projects/CVlization"
 if [ -f "${MAIN_REPO}/.env" ]; then
+    # shellcheck disable=SC2046
     export $(grep -v '^#' "${MAIN_REPO}/.env" | xargs)
 fi
 
