@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_PATH = Path("artifacts/models/econml_linear_dr.joblib")
 METADATA_PATH = Path("artifacts/metadata.json")
 
@@ -53,7 +55,8 @@ def main() -> None:
     metadata = load_metadata()
     feature_columns: List[str] = metadata["feature_columns"]
 
-    df = pd.read_csv(args.input)
+    # User-provided paths resolve to cwd
+    df = pd.read_csv(resolve_input_path(args.input))
     features = ensure_features(df, feature_columns)
 
     if not MODEL_PATH.exists():
@@ -78,7 +81,7 @@ def main() -> None:
     else:
         output_df = summary
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     print(f"Predictions written to {output_path}")

@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Always run from this folder
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 
 # Find repo root for cvlization package (go up 4 levels from example dir)
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
@@ -22,4 +23,7 @@ docker run --rm --gpus=all \
   --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
   --env "PYTHONPATH=/cvlization_repo" \
   --env "PYTHONUNBUFFERED=1" \
+  --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
+  --env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
+  --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
   "$IMG" python3 predict.py "$@"

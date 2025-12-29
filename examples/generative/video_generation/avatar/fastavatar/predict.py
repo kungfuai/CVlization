@@ -16,6 +16,8 @@ from pathlib import Path
 import gdown
 import zipfile
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 
@@ -131,6 +133,9 @@ def main():
 
     args = parser.parse_args()
 
+    # Resolve input path (handles workspace mount for user files)
+    args.image = resolve_input_path(args.image)
+
     # Validation
     if not Path(args.image).exists():
         raise FileNotFoundError(f"Input image not found: {args.image}")
@@ -157,13 +162,16 @@ def main():
             raise FileNotFoundError(f"{name} checkpoint not found: {path}")
 
     print("\n" + "=" * 60)
+    # Resolve output path for CVL mode
+    output_dir = resolve_output_path(args.output_dir)
+
     print("FASTAVATAR INFERENCE")
     print("=" * 60)
     print(f"Input image: {args.image}")
     print(f"Encoder: {args.encoder_checkpoint}")
     print(f"Decoder: {args.decoder_checkpoint}")
     print(f"DINO: {args.dino_checkpoint}")
-    print(f"Output: {args.output_dir}")
+    print(f"Output: {output_dir}")
     print(f"Device: {args.device}")
     print("=" * 60)
 
@@ -182,10 +190,10 @@ def main():
     results = engine.predict_from_image(args.image)
 
     # Save results
-    print(f"\nSaving results to: {args.output_dir}")
+    print(f"\nSaving results to: {output_dir}")
     engine.save_results(
         results,
-        args.output_dir,
+        output_dir,
         save=not args.no_save_ply
     )
 
@@ -196,12 +204,12 @@ def main():
     print(f"W vector shape: {results['w_vector'].shape}")
     print(f"DINO points: {results['dino_points'].shape}")
     print(f"Gaussians: {results['splats']['means'].shape[0]}")
-    print(f"Results saved to: {args.output_dir}")
+    print(f"Results saved to: {output_dir}")
     print("=" * 60)
 
     if not args.no_save_ply:
         print(f"\nVisualize the 3D reconstruction at: https://superspl.at/editor")
-        print(f"Upload file: {Path(args.output_dir) / 'splats.ply'}")
+        print(f"Upload file: {Path(output_dir) / 'splats.ply'}")
 
 
 if __name__ == "__main__":

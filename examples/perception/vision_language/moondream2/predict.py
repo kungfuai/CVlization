@@ -27,6 +27,8 @@ from cvlization.paths import (
 
 # Model configuration
 MODEL_ID = "vikhyatk/moondream2"
+DEFAULT_IMAGE = "examples/sample.jpg"
+DEFAULT_OUTPUT = "outputs/result.txt"
 REVISION = "2024-08-26"  # Stable revision with best OCR quality
 
 # OCR prompts
@@ -210,8 +212,8 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/sample.jpg",
-        help="Path to input image or URL (default: examples/sample.jpg)"
+        default=None,
+        help="Path to input image or URL (default: bundled sample)"
     )
     parser.add_argument(
         "--model-id",
@@ -284,8 +286,14 @@ def main():
         # Use simple filename - resolve_output_path will add directory
         args.output = "result.txt"
 
-    # Resolve paths using cvlization utilities
-    image_path = resolve_input_path(args.image, INP)
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.image is None:
+        image_path = DEFAULT_IMAGE
+        print(f"No --image provided, using bundled sample: {image_path}")
+    elif args.image.startswith("http"):
+        image_path = args.image
+    else:
+        image_path = resolve_input_path(args.image, INP)
     output_path = resolve_output_path(args.output, OUT)
 
     # Load model

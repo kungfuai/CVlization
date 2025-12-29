@@ -4,6 +4,11 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
+DEFAULT_MODEL = "artifacts/model/mapie_regressor.pkl"
+DEFAULT_INPUT = "artifacts/sample_input.csv"
+DEFAULT_OUTPUT = "artifacts/predictions.csv"
 DEFAULT_ALPHA = 0.1
 
 
@@ -13,17 +18,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default="artifacts/model/mapie_regressor.pkl",
-        help="Path to the serialized MAPIE regressor (default: artifacts/model/mapie_regressor.pkl)",
+        default=None,
+        help="Path to the serialized MAPIE regressor (default: bundled sample)",
     )
     parser.add_argument(
         "--input",
-        default="artifacts/sample_input.csv",
-        help="CSV file with feature rows to score (default: artifacts/sample_input.csv)",
+        default=None,
+        help="CSV file with feature rows to score (default: bundled sample)",
     )
     parser.add_argument(
         "--output",
-        default="artifacts/predictions.csv",
+        default=DEFAULT_OUTPUT,
         help="Where to write the predictions CSV (default: artifacts/predictions.csv)",
     )
     parser.add_argument(
@@ -38,9 +43,19 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    model_path = Path(args.model)
-    input_path = Path(args.input)
-    output_path = Path(args.output)
+    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    if args.model is None:
+        model_path = Path(DEFAULT_MODEL)
+        print(f"No --model provided, using bundled sample: {model_path}")
+    else:
+        model_path = Path(resolve_input_path(args.model))
+    if args.input is None:
+        input_path = Path(DEFAULT_INPUT)
+        print(f"No --input provided, using bundled sample: {input_path}")
+    else:
+        input_path = Path(resolve_input_path(args.input))
+    # Output always resolves to user's cwd
+    output_path = Path(resolve_output_path(args.output))
 
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")

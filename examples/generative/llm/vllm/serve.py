@@ -19,8 +19,11 @@ from typing import List, Optional
 
 import torch
 
+from gpu_utils import configure_flash_attn_for_gpu
+configure_flash_attn_for_gpu()
 
-DEFAULT_MODEL = os.getenv("MODEL_ID", "Qwen/Qwen2.5-1.5B-Instruct")
+
+DEFAULT_MODEL = os.getenv("MODEL_ID", "allenai/Olmo-3-7B-Instruct")
 
 
 @dataclass

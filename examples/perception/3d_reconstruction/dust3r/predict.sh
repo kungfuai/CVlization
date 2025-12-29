@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 IMG="${CVL_IMAGE:-dust3r}"
 
@@ -56,5 +57,8 @@ docker run --rm --gpus=all --shm-size 16G \
     --mount "type=bind,src=${HOME}/.cache/torch,dst=/root/.cache/torch" \
     --env "PYTHONPATH=/cvlization_repo:/opt/dust3r" \
     --env "PYTHONUNBUFFERED=1" \
+  --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
+  --env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
+  --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     "$IMG" \
     python predict.py --input /workspace/data/images --output /workspace/outputs "${EXTRA_ARGS[@]}"

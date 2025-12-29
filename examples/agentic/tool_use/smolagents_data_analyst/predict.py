@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import duckdb
 import pandas as pd
+from cvlization.paths import resolve_input_path
 
 from smolagents import CodeAgent, PythonInterpreterTool
 from smolagents.tools import Tool
@@ -84,7 +85,11 @@ def detect_provider(args: argparse.Namespace) -> ProviderConfig:
 
 
 def load_dataset(path: str) -> pd.DataFrame:
-    resolved = os.path.join(os.path.dirname(__file__), path) if not os.path.isabs(path) else path
+    # First try to resolve against CVL_INPUTS (for user-provided files)
+    resolved = resolve_input_path(path)
+    # If not found and path is relative, fall back to script directory
+    if not os.path.exists(resolved) and not os.path.isabs(path):
+        resolved = os.path.join(os.path.dirname(__file__), path)
     if not os.path.exists(resolved):
         raise FileNotFoundError(f"Dataset not found at {resolved}")
     df = pd.read_csv(resolved)

@@ -12,9 +12,11 @@ resources:
   disk_gb: 20
 presets:
   build:
-    - build.sh
+    script: build.sh
+    description: Build the DUSt3R inference image
   predict:
-    - predict.sh
+    script: predict.sh
+    description: Run DUSt3R 3D reconstruction on images
 tags:
   - 3d-reconstruction
   - multi-view

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import List
 
 import torch
+from cvlization.paths import resolve_output_path
 from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer
 
@@ -33,7 +34,7 @@ def parse_args() -> argparse.Namespace:
                         help="Which generation path to use: text (stage1_2), paraphrase (stage1), or questions (stage3).")
     parser.add_argument("--max-tokens", type=int, default=64,
                         help="Max new tokens to generate.")
-    parser.add_argument("--prompt", default="What does CLaRa do?",
+    parser.add_argument("--prompt", default="What family does Alsobia belong to?",
                         help="User question.")
     parser.add_argument("--docs", nargs="*", default=[],
                         help="Optional documents (space-separated). If empty, uses the upstream plant QA toy set.")
@@ -162,7 +163,7 @@ def main():
         # topk indices come back as tensor; keep only text output
         answer = generations[0] if isinstance(generations, list) else str(generations)
 
-    out_path = Path(args.output)
+    out_path = Path(resolve_output_path(args.output))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(answer.strip(), encoding="utf-8")
     print(f"\nAnswer:\n{answer.strip()}")

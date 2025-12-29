@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 IMG="${CVL_IMAGE:-egstalker-infer}"
@@ -54,7 +55,6 @@ resolve_container_path() {
 }
 
 MODEL_HOST=$(resolve_host_path "$MODEL_PATH")
-REF_HOST=$(resolve_host_path "$REFERENCE_PATH")
 OUT_HOST=$(resolve_host_path "$OUTPUT_DIR")
 
 if [[ ! -d "$MODEL_HOST" ]]; then
@@ -86,7 +86,10 @@ docker run --rm --gpus=all \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${HOME}/.cache/modelscope,dst=/root/.cache/modelscope" \
     --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
+    --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
     --env "PYTHONPATH=/workspace/host:/cvlization_repo" \
     --env "PYTHONUNBUFFERED=1" \
+  --env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
+  --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     "$IMG" \
     python /workspace/host/predict.py "$@"

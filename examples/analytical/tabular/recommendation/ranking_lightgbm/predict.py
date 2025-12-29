@@ -7,6 +7,8 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_PATH = Path("artifacts/ranking_lightgbm.txt")
 FEATURE_NAMES_PATH = Path("artifacts/feature_names.json")
 
@@ -43,7 +45,8 @@ def main() -> None:
     args = parser.parse_args()
 
     feature_names = load_feature_names()
-    df = pd.read_csv(args.input)
+    # User-provided paths resolve to cwd
+    df = pd.read_csv(resolve_input_path(args.input))
 
     missing = [name for name in feature_names if name not in df.columns]
     if missing:
@@ -68,7 +71,7 @@ def main() -> None:
         if args.top_k:
             result = result.head(args.top_k)
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output_path, index=False)
     print(f"Ranked predictions saved to {output_path}")

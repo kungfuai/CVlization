@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import torch
+from cvlization.paths import resolve_output_path
 from einops import rearrange, repeat
 from tqdm import tqdm
 from huggingface_hub import hf_hub_download
@@ -83,7 +84,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=str,
-        default="/workspace/outputs/generated_video.mp4",
+        default="outputs/generated_video.mp4",
         help="Output video path",
     )
     parser.add_argument(
@@ -158,7 +159,7 @@ def main():
     text_encoder_path = str(CHECKPOINT_DIR / CHECKPOINTS["text_encoder"])
 
     # Create output directory
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Create args namespace for model creation

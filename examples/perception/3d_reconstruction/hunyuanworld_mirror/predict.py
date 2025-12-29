@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -77,10 +79,13 @@ def main():
     args = parser.parse_args()
 
     # Validate input path
-    input_path = Path(args.input)
+    input_path = Path(resolve_input_path(args.input))
     if not input_path.exists():
         print(f"Error: Input path does not exist: {input_path}")
         sys.exit(1)
+
+    # Resolve output path for CVL mode
+    output_path = resolve_output_path(args.output)
 
     # Build command for repo's infer.py
     cmd = [
@@ -89,7 +94,7 @@ def main():
         "--input_path",
         str(input_path),
         "--output_path",
-        args.output,
+        output_path,
         "--target_size",
         str(args.target_size),
     ]
@@ -112,15 +117,15 @@ def main():
 
     print(f"Running HunyuanWorld-Mirror inference...")
     print(f"  Input: {input_path}")
-    print(f"  Output: {args.output}")
+    print(f"  Output: {output_path}")
     print(f"  Target size: {args.target_size}px")
     print()
 
     # Run the inference script
     try:
         result = subprocess.run(cmd, check=True)
-        print("\n✅ Inference completed successfully!")
-        print(f"📁 Results saved to: {args.output}")
+        print("\nInference completed successfully!")
+        print(f"Results saved to: {output_path}")
         return result.returncode
     except subprocess.CalledProcessError as e:
         print(f"\n❌ Inference failed with error code {e.returncode}")

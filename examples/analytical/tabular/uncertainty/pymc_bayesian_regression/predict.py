@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 MODEL_DIR = Path("artifacts/models")
 POSTERIOR_SAMPLES_FILE = MODEL_DIR / "posterior_samples.npz"
 FEATURE_SCALER_PATH = MODEL_DIR / "feature_scaler.joblib"
@@ -89,7 +91,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    df = pd.read_csv(args.input)
+    # User-provided paths resolve to cwd
+    df = pd.read_csv(resolve_input_path(args.input))
     metadata = load_metadata()
     feature_names: List[str] = metadata["feature_names"]
 
@@ -130,7 +133,7 @@ def main() -> None:
     else:
         output_df = results
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     print(f"Predictions saved to {output_path}")

@@ -14,9 +14,10 @@
 
 ## Requirements
 
-- **GPU**: 60-80GB VRAM for model_full_load mode
+- **GPU**: 60-80GB VRAM for model_full_load, ~18GB for sequential_cpu_offload
 - **Disk**: ~70GB for model weights (Wan2.1-14B + FlashPortrait)
 - **RAM**: ~100GB+ for model loading
+- **Flash Attention**: Required for stable execution (installed via pre-built wheel)
 
 ## Quick Start
 
@@ -24,21 +25,30 @@
 # Build
 cvl run flashportrait build
 
-# Fast mode (4-step inference) - RECOMMENDED
+# Run with sample inputs (auto-downloaded from HuggingFace)
 cvl run flashportrait predict \
-    --image reference.jpg \
-    --video driving.mp4 \
+    --image test_inputs/reference.png \
+    --video test_inputs/driven_video.mp4 \
+    --output outputs/result.mp4 \
+    --fast
+
+# Run with your own inputs
+cvl run flashportrait predict \
+    --image your_portrait.jpg \
+    --video your_driving.mp4 \
     --output output.mp4 \
     --fast
 
 # Higher resolution (slower)
 cvl run flashportrait predict \
-    --image reference.jpg \
-    --video driving.mp4 \
-    --output output.mp4 \
+    --image test_inputs/reference.png \
+    --video test_inputs/driven_video.mp4 \
+    --output outputs/result_720.mp4 \
     --fast \
     --max_size 720
 ```
+
+Sample inputs are automatically downloaded from [zzsi/cvl](https://huggingface.co/datasets/zzsi/cvl/tree/main/flashportrait) on first run.
 
 ## Performance
 
@@ -51,12 +61,12 @@ Tested on NVIDIA RTX PRO 6000 (98GB VRAM), 297 frames (~12s video):
 
 ## GPU Memory Modes
 
-| Mode | VRAM | Speed |
-|------|------|-------|
-| `model_full_load` | ~60-80GB | Fastest |
-| `model_cpu_offload` | ~30-40GB | Medium |
-| `sequential_cpu_offload` | ~10-15GB | Slowest |
-| `model_cpu_offload_and_qfloat8` | ~20-30GB | Medium (FP8) |
+| Mode | VRAM | Speed | Notes |
+|------|------|-------|-------|
+| `model_full_load` | ~60-80GB | Fastest | |
+| `model_cpu_offload` | ~30-40GB | Medium | |
+| `sequential_cpu_offload` | ~18GB | Slowest | Tested on A100, works on RTX 3090 |
+| `model_cpu_offload_and_qfloat8` | ~20-30GB | Medium | FP8 quantization |
 
 ## Parameters
 

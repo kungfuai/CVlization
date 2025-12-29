@@ -1,5 +1,6 @@
 name: catboost-quantile
 capability: analytical/tabular/uncertainty
+image: analytical_catboost_quantile
 modalities:
   - tabular
 datasets:

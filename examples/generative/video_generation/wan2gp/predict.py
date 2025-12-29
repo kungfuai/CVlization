@@ -14,6 +14,8 @@ import torch
 import torchvision
 from PIL import Image
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -85,7 +87,8 @@ def text_to_video(args):
     )
 
     if video is not None:
-        save_video(video, args.output, fps=args.fps)
+        output_path = resolve_output_path(args.output)
+        save_video(video, output_path, fps=args.fps)
     else:
         print("Generation was interrupted or failed")
 
@@ -107,8 +110,9 @@ def image_to_video(args):
     )
 
     # Load input image
-    print(f"Loading image: {args.image}")
-    image = Image.open(args.image).convert("RGB")
+    image_path = resolve_input_path(args.image)
+    print(f"Loading image: {image_path}")
+    image = Image.open(image_path).convert("RGB")
 
     print(f"Generating video from image with prompt: {args.prompt}")
 
@@ -134,7 +138,8 @@ def image_to_video(args):
     )
 
     if video is not None:
-        save_video(video, args.output, fps=args.fps)
+        output_path = resolve_output_path(args.output)
+        save_video(video, output_path, fps=args.fps)
     else:
         print("Generation was interrupted or failed")
 

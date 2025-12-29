@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import imageio
 from pathlib import Path
+from cvlization.paths import resolve_input_path, resolve_output_path
 
 # import some common detectron2 utilities
 import detectron2
@@ -86,5 +87,7 @@ if __name__ == "__main__":
     setup_logger()
     predictor = Predictor()
     predictor.setup()
-    output_path = predictor.predict(Path(sys.argv[1]), output_dir=Path(sys.argv[2]))
+    video_path = Path(resolve_input_path(sys.argv[1]))
+    output_dir = Path(resolve_output_path(sys.argv[2]))
+    output_path = predictor.predict(video_path, output_dir=output_dir)
     print(f"Output video saved at {output_path}")

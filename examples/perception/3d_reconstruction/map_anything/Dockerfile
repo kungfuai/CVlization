@@ -13,9 +13,10 @@ ENV PATH="/root/.local/bin:${PATH}"
 # Set working directory
 WORKDIR /workspace
 
-# Clone and install map-anything
+# Clone and install map-anything (pinned to v1.1 release)
 RUN git clone https://github.com/facebookresearch/map-anything.git /opt/map-anything && \
     cd /opt/map-anything && \
+    git checkout ece461117701c786187f09da1bcf152de5c76f5d && \
     uv pip install --system -e .
 
 # Copy requirements for additional dependencies

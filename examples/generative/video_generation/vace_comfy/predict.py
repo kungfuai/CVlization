@@ -6,6 +6,8 @@ import sys
 import argparse
 from typing import Sequence, Mapping, Any, Union
 import torch
+
+from cvlization.paths import resolve_input_path, resolve_output_path
 from nodes_wan import WanVaceToVideo, CreateFadeMaskAdvanced
 from nodes_images import SaveAnimatedWEBP
 from nodes_model_advanced import ModelSamplingSD3, CFGZeroStar, UNetTemporalAttentionMultiply, SkipLayerGuidanceDiT
@@ -161,8 +163,9 @@ def parse_args():
 
 def main():
     args = parse_args()
-    # Create output directory if it doesn't exist
-    os.makedirs(args.output_dir, exist_ok=True)
+    # Resolve and create output directory
+    output_dir = resolve_output_path(args.output_dir)
+    os.makedirs(output_dir, exist_ok=True)
     
     # Set random seed
     if args.seed is None:
@@ -200,10 +203,11 @@ def main():
         loadimage = NODE_CLASS_MAPPINGS["LoadImage"]()
         input_images = []
         for img_path in args.input_images:
-            if os.path.exists(img_path):
-                loaded_img = loadimage.load_image(image=img_path)
+            resolved_path = resolve_input_path(img_path)
+            if os.path.exists(resolved_path):
+                loaded_img = loadimage.load_image(image=resolved_path)
                 input_images.append(get_value_at_index(loaded_img, 0))
-                print(f"Loaded image: {img_path}")
+                print(f"Loaded image: {resolved_path}")
             else:
                 print(f"Warning: Image not found: {img_path}")
 
@@ -346,7 +350,7 @@ def main():
             images=get_value_at_index(decoded_images, 0),
             frame_rate=args.fps,
             loop_count=0,
-            filename_prefix=os.path.join(args.output_dir, "Wan2.1_VACE"),
+            filename_prefix=os.path.join(output_dir, "Wan2.1_VACE"),
             format="video/h264-mp4",
             pix_fmt="yuv420p",
             crf=19,
@@ -356,7 +360,7 @@ def main():
         )
         
         print(f"\nVACE video generation complete!")
-        print(f"Output saved to: {args.output_dir}")
+        print(f"Output saved to: {output_dir}")
         print(f"Seed used: {args.seed}")
 
 

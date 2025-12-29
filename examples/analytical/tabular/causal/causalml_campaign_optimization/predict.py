@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from cvlization.paths import resolve_input_path, resolve_output_path
+
 ARTIFACTS_DIR = Path("artifacts")
 MODEL_PATH = ARTIFACTS_DIR / "models/uplift_models.joblib"
 METADATA_PATH = ARTIFACTS_DIR / "metadata.json"
@@ -64,7 +66,8 @@ def main() -> None:
         raise FileNotFoundError(f"Trained models not found at {MODEL_PATH}. Run train.py first.")
     models = joblib.load(MODEL_PATH)
 
-    df = pd.read_csv(args.input)
+    # User-provided paths resolve to cwd
+    df = pd.read_csv(resolve_input_path(args.input))
     X = ensure_features(df, features)
 
     uplift_df = predict_uplift(models, treatments, X)
@@ -74,7 +77,7 @@ def main() -> None:
     else:
         output_df = uplift_df
 
-    output_path = Path(args.output)
+    output_path = Path(resolve_output_path(args.output))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
     print(f"Predictions saved to {output_path}")
