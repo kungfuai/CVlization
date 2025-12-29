@@ -16,6 +16,7 @@ fi
 # Load HF_TOKEN from repo .env if present (used for gated checkpoint download)
 ENV_FILE="$REPO_ROOT/.env"
 if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC2046
   export $(grep -v '^#' "$ENV_FILE" | xargs)
 fi
 

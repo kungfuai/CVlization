@@ -30,12 +30,6 @@ elif [ "$GPU_COUNT" -ge 2 ]; then
     echo "Running in multi-GPU mode with $GPU_COUNT GPUs"
 fi
 
-# Build CUDA environment passthrough
-CUDA_ENV=""
-if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
-    CUDA_ENV="--env CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
-fi
-
 # Container name from CVL or generate one
 CONTAINER_NAME="${CVL_CONTAINER_NAME:-real-video-$(date +%s)}"
 
