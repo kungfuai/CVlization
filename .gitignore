@@ -77,3 +77,13 @@ results/
 
 # Temporary result files
 /result.json
+
+# Example artifacts (model files, predictions, metrics from training/inference runs)
+**/artifacts/
+examples/**/data/*.csv
+
+# Sample outputs from inference runs
+**/sample_outputs/
+
+# Log files
+**/*.log
