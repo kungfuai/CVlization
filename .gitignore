@@ -77,6 +77,9 @@ results/
 
 # Temporary result files
 /result.json
+*_test.md
+result.txt
+result.md
 
 # Example artifacts (model files, predictions, metrics from training/inference runs)
 **/artifacts/
