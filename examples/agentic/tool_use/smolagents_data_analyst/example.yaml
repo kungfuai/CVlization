@@ -34,3 +34,6 @@ frameworks:
 - duckdb
 - pandas
 description: Smolagents-driven analytics example that combines DuckDB SQL and Python tools to answer marketing KPI questions.
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on CPU. Agentic tool use with DuckDB SQL and Python code execution. Supports multiple LLM providers via LiteLLM (OpenAI, Groq, Ollama). No GPU required."
