@@ -303,6 +303,10 @@ verification:
 # Issue: Dockerfile can't find files
 # Fix: Check COPY paths are relative to Dockerfile location
 
+# Issue: flash-attn build from source
+# Fix: Never compile flash-attn in verification; use a prebuilt wheel that matches the image's
+#      torch and CUDA versions (e.g., install via a direct wheel URL).
+
 # Issue: Dependency conflicts
 # Fix: Check requirements.txt versions, update base image
 
