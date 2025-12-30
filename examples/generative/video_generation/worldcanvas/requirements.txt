@@ -1,0 +1,17 @@
+accelerate
+einops
+ftfy
+huggingface_hub
+imageio
+imageio[ffmpeg]
+modelscope
+numpy
+opencv-python
+pandas
+protobuf
+pycocotools
+pynvml
+safetensors
+sentencepiece
+torchvision
+transformers

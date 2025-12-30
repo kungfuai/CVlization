@@ -69,6 +69,13 @@ results/
 **/CIFAR*/
 **/ImageNet*/
 
+# WorldCanvas tokenizer configs (downloaded from HF dataset)
+/examples/generative/video_generation/worldcanvas/vendor/WorldCanvas/diffsynth/tokenizer_configs/**/preprocessor_config.json
+/examples/generative/video_generation/worldcanvas/vendor/WorldCanvas/diffsynth/tokenizer_configs/**/special_tokens_map.json
+/examples/generative/video_generation/worldcanvas/vendor/WorldCanvas/diffsynth/tokenizer_configs/**/tokenizer.json
+/examples/generative/video_generation/worldcanvas/vendor/WorldCanvas/diffsynth/tokenizer_configs/**/tokenizer_config.json
+/examples/generative/video_generation/worldcanvas/vendor/WorldCanvas/models/Wan-AI/**/tokenizer.json
+
 .env
 
 # Temporary reports and skill outputs
