@@ -34,3 +34,7 @@ tasks:
 frameworks:
 - pytorch
 description: Multilingual OCR and layout detection using Surya
+image: surya
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1+CUDA 12.8 runtime, fixed bundled sample validation bug. VRAM: ~4GB."
