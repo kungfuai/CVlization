@@ -1,0 +1,42 @@
+name: hunyuanvideo_avatar
+capability: generative/video_generation
+modalities:
+  - vision
+  - audio
+  - video
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 24
+  disk_gb: 80
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate avatar video from image and audio
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+tasks:
+  - audio_to_video
+  - talking_head_generation
+frameworks:
+  - pytorch
+  - diffusers
+tags:
+  - hunyuan
+  - avatar
+  - audio-driven
+  - video-generation
+  - diffusion
+description: >
+  HunyuanVideo-Avatar generates audio-driven avatar videos from a reference
+  image and driving audio. Uses Tencent's MM-DiT model with optional FP8
+  inference and CPU offload.
