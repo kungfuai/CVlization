@@ -1,23 +1,17 @@
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
     curl \
-    build-essential \
-    ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for fast package installation
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Install flash-attention from pre-built wheel
+RUN pip install --no-cache-dir https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.0/flash_attn-2.8.3+cu128torch2.9-cp311-cp311-linux_x86_64.whl
 
 # Install Python dependencies
-# Install torch first (flash-attn needs it during build)
-RUN /root/.local/bin/uv pip install --system torch torchvision
-
-# Now install other dependencies including flash-attn
 COPY requirements.txt .
-RUN /root/.local/bin/uv pip install --system --no-build-isolation -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Set working directory
 WORKDIR /workspace

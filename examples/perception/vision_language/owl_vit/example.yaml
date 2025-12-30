@@ -29,3 +29,6 @@ tags: [owl-vit, owlv2, zero-shot, object-detection, open-vocabulary, vision-tran
 tasks: [object_detection, zero_shot_object_detection, open_vocabulary_detection]
 frameworks: [pytorch, transformers]
 description: Open-vocabulary object detection using OWL-ViT/OWLv2 - detect any object with text queries
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. PyTorch 2.9.0 + CUDA 12.8 runtime. Fixed bundled sample handling. Detects person, necklace, shirt in sample image."

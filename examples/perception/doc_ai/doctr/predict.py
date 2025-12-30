@@ -16,8 +16,6 @@ from PIL import Image
 
 # CVL dual-mode execution support
 from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
     resolve_input_path,
     resolve_output_path,
 )
@@ -136,9 +134,6 @@ def main():
 
     args = parser.parse_args()
 
-    # Resolve paths for CVL dual-mode support
-    OUT = get_output_dir()
-
     # Smart default for output path
     if args.output is None:
         ext = {"json": "json", "txt": "txt"}[args.format]
@@ -152,8 +147,9 @@ def main():
         input_path = args.image
     else:
         input_path = resolve_input_path(args.image)
+
     # Output always resolves to user's cwd
-    output_path = Path(resolve_output_path(args.output, OUT))
+    output_path = Path(resolve_output_path(args.output))
 
     # Validate input file (if not URL)
     is_url = args.image is not None and args.image.startswith("http")

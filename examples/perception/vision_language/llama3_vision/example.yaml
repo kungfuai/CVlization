@@ -33,5 +33,5 @@ tasks:
   - visual_question_answering
 description: Self-contained Dockerized example for the Llama 3.2 Vision Instruct model using vLLM.
 verification:
-  last_verified: 2025-11-18
-  last_verification_note: "Verified build, inference with image inputs, model caching (6.8GB model downloads once), and text outputs on NVIDIA L4 (23GB VRAM). Uses 9.64GB VRAM (40%) with 4-bit quantization."
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1 + CUDA 12.8 runtime. Fixed bundled sample handling. VRAM: ~10GB with 4-bit quantization."

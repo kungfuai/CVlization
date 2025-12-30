@@ -17,6 +17,7 @@ from transformers import MllamaForConditionalGeneration, MllamaProcessor
 from cvlization.paths import resolve_input_path, resolve_output_path
 
 DEFAULT_MODEL = "unsloth/Llama-3.2-11B-Vision-Instruct-bnb-4bit"
+DEFAULT_SAMPLE = "examples/sample.jpg"
 
 
 def detect_device() -> str:
@@ -104,8 +105,8 @@ def parse_args():
     parser.add_argument("--model", default=DEFAULT_MODEL, help="HF model ID to load.")
     parser.add_argument(
         "--image",
-        default="shared_test_images/sample.jpg",
-        help="Path to an image.",
+        default=None,
+        help="Path to an image (default: bundled sample)",
     )
     parser.add_argument(
         "--prompt",
@@ -131,7 +132,14 @@ def main():
     args = parse_args()
     device = None if args.device == "auto" else args.device
 
-    image = Image.open(resolve_input_path(args.image)).convert("RGB")
+    # Handle bundled sample vs user-provided input
+    if args.image is None:
+        image_path = DEFAULT_SAMPLE
+        print(f"No --image provided, using bundled sample: {DEFAULT_SAMPLE}")
+    else:
+        image_path = resolve_input_path(args.image)
+
+    image = Image.open(image_path).convert("RGB")
     model, processor, device = load_model(args.model, device)
     inputs = build_inputs(processor, image, args.prompt, device)
     text = generate(model, processor, inputs, max_new_tokens=args.max_tokens)

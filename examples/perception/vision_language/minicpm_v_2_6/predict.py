@@ -20,8 +20,6 @@ from transformers import AutoModel, AutoTokenizer
 
 # CVL dual-mode execution support
 from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
     resolve_input_path,
     resolve_output_path,
 )
@@ -29,8 +27,7 @@ from cvlization.paths import (
 
 # Model configuration
 MODEL_ID = "openbmb/MiniCPM-V-2_6"
-DEFAULT_IMAGE = "test_images/sample.jpg"
-DEFAULT_OUTPUT = "outputs/result.txt"
+DEFAULT_SAMPLE = "examples/sample.jpg"
 
 # Task prompts
 TASK_PROMPTS = {
@@ -236,7 +233,7 @@ Examples:
     parser.add_argument(
         "--output",
         type=str,
-        default=DEFAULT_OUTPUT,
+        default="result.txt",
         help="Output file path"
     )
     parser.add_argument(
@@ -256,36 +253,20 @@ Examples:
 
     args = parser.parse_args()
 
-    # If no image provided, just download the model
-    if args.image == "test_images/sample.jpg" and not Path(args.image).exists():
-        print("=" * 60)
-        print(f"Downloading model: {args.model_id}")
-        print("=" * 60)
-        # Use from_pretrained to ensure all custom code files are fetched
-        # (important for trust_remote_code=True models)
-        _ = AutoTokenizer.from_pretrained(args.model_id, trust_remote_code=True)
-        _ = AutoModel.from_pretrained(
-            args.model_id,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16
-        )
-        print("Model downloaded successfully!")
-        return
-
     # Validate inputs
     if args.task == "vqa" and args.prompt is None:
         parser.error("--prompt is required for VQA task")
 
-    # Resolve paths for CVL compatibility
-    # Defaults are local to example dir; user-provided paths resolve to cwd
+    # Handle bundled sample vs user-provided input
     if args.image is None:
-        image_path = DEFAULT_IMAGE
+        image_path = DEFAULT_SAMPLE
         print(f"No --image provided, using bundled sample: {image_path}")
     elif args.image.startswith("http"):
         image_path = args.image
     else:
         image_path = resolve_input_path(args.image)
-    # Output always resolves to user's cwd
+
+    # Resolve output path
     output_path = resolve_output_path(args.output)
 
     # Determine prompt
