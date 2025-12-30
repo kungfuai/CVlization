@@ -34,3 +34,7 @@ frameworks:
 - pytorch
 description: Advanced 9B MoE vision-language model with structured output and object
   detection
+image: moondream3
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Uses PyTorch 2.9.1+CUDA 12.8 devel image. Downloads sample from HuggingFace. Structured JSON OCR output. VRAM: ~10GB."
