@@ -1,0 +1,28 @@
+name: worldcanvas
+capability: generative/video_generation
+modalities:
+- vision
+- text
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 48
+  disk_gb: 80
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run inference on sample trajectory
+tags:
+- worldcanvas
+- image-to-video
+- trajectory
+- wan
+tasks:
+- image_to_video
+frameworks:
+- pytorch
+description: WorldCanvas promptable event generation using trajectories and text
