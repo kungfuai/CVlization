@@ -17,12 +17,7 @@ from transformers import AutoModelForCausalLM, AutoProcessor
 from qwen_vl_utils import process_vision_info
 
 # CVL dual-mode execution support
-from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
-    resolve_input_path,
-    resolve_output_path,
-)
+from cvlization.paths import resolve_input_path, resolve_output_path
 
 
 # Default prompt for document layout parsing
@@ -170,8 +165,8 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/sample.jpg",
-        help="Path to input image or URL (default: examples/sample.jpg)"
+        default=None,
+        help="Path to input image or URL (default: uses bundled sample)"
     )
     parser.add_argument(
         "--model-path",
@@ -218,21 +213,30 @@ def main():
 
     args = parser.parse_args()
 
-    # Resolve paths for CVL dual-mode support
-    INP = get_input_dir()
-    OUT = get_output_dir()
-
     # Smart default for output path
     if args.output is None:
         ext = {"json": "json", "txt": "txt"}[args.format]
         args.output = f"result.{ext}"
 
-    # Resolve paths using cvlization utilities
-    input_path = resolve_input_path(args.image, INP) if not args.image.startswith("http") else args.image
-    output_path = Path(resolve_output_path(args.output, OUT))
+    # Handle bundled sample vs user-provided input
+    DEFAULT_SAMPLE = "examples/sample.jpg"
+    if args.image is None:
+        # Use bundled sample directly (don't resolve through CVL_INPUTS)
+        input_path = DEFAULT_SAMPLE
+        print(f"No input provided, using bundled sample: {DEFAULT_SAMPLE}")
+    elif args.image.startswith("http://") or args.image.startswith("https://"):
+        # URL input - use directly
+        input_path = args.image
+    else:
+        # User-provided file - resolve through CVL_INPUTS
+        input_path = resolve_input_path(args.image)
+
+    # Resolve output path through CVL_OUTPUTS
+    output_path = Path(resolve_output_path(args.output))
 
     # Validate input file (if not URL)
-    if not args.image.startswith("http") and not Path(input_path).exists():
+    is_url = input_path.startswith("http://") or input_path.startswith("https://")
+    if not is_url and not Path(input_path).exists():
         print(f"Error: Input file '{input_path}' not found")
         return 1
 
