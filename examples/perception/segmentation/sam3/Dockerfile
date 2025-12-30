@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.9.0-cuda12.8-cudnn9-runtime
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -16,6 +16,7 @@ ENV HF_HUB_CACHE=/root/.cache/huggingface
 WORKDIR /workspace
 
 # Install python dependencies (inference only)
+# Note: SAM3 requires transformers from git; PyPI 4.57.3 (latest as of 2025-12-30) doesn't include Sam3Model yet
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

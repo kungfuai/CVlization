@@ -1,9 +1,7 @@
 # Outputs
 outputs/
 *.json
-# Ignore txt outputs but not requirements.txt
 *.txt
-!requirements.txt
 
 # Python
 __pycache__/
