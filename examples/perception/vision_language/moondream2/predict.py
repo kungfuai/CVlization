@@ -17,18 +17,13 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # CVL dual-mode execution support
-from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
-    resolve_input_path,
-    resolve_output_path,
-)
+from cvlization.paths import resolve_input_path, resolve_output_path
 
 
 # Model configuration
 MODEL_ID = "vikhyatk/moondream2"
 DEFAULT_IMAGE = "examples/sample.jpg"
-DEFAULT_OUTPUT = "outputs/result.txt"
+DEFAULT_OUTPUT = "result.txt"
 REVISION = "2024-08-26"  # Stable revision with best OCR quality
 
 # OCR prompts
@@ -277,24 +272,24 @@ def main():
 
     args = parser.parse_args()
 
-    # Resolve paths for CVL dual-mode support
-    INP = get_input_dir()
-    OUT = get_output_dir()
-
     # Smart default for output path
     if args.output is None:
-        # Use simple filename - resolve_output_path will add directory
         args.output = "result.txt"
 
-    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    # Handle bundled sample vs user-provided input
     if args.image is None:
+        # Use bundled sample directly (don't resolve through CVL_INPUTS)
         image_path = DEFAULT_IMAGE
         print(f"No --image provided, using bundled sample: {image_path}")
     elif args.image.startswith("http"):
+        # URL input - use directly
         image_path = args.image
     else:
-        image_path = resolve_input_path(args.image, INP)
-    output_path = resolve_output_path(args.output, OUT)
+        # User-provided file - resolve through CVL_INPUTS
+        image_path = resolve_input_path(args.image)
+
+    # Resolve output path through CVL_OUTPUTS
+    output_path = resolve_output_path(args.output)
 
     # Load model
     model, tokenizer = load_model(args.model_id, args.revision, args.device)

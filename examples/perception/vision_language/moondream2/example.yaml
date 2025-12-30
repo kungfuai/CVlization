@@ -37,3 +37,6 @@ tags: [moondream, vlm, ocr, vqa, captioning, pytorch]
 tasks: [ocr, image_captioning, visual_question_answering]
 frameworks: [pytorch]
 description: Compact 1.93B vision-language model for OCR, captioning, and visual QA
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. PyTorch 2.9.1 + CUDA 12.8. OCR task works correctly with bundled sample."

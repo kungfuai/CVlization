@@ -36,3 +36,6 @@ tasks:
 frameworks:
 - pytorch
 description: Document conversion and OCR server using Docling
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1 + CUDA 12.8 runtime. Processes PDF with 4 pages in ~12s."
