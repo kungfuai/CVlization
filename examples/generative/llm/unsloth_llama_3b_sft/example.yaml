@@ -29,3 +29,6 @@ frameworks:
 - pytorch
 - unsloth
 description: Fine-tune Llama 3.2 3B with Unsloth (2x faster than standard fine-tuning)
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Uses unsloth/unsloth Docker image with git upgrade for psutil fix (PR #3780). Requires average_tokens_across_devices=False workaround. VRAM: ~8GB."

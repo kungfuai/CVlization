@@ -4,4 +4,4 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Build from the script's directory, works from anywhere
-docker build -t llama_3b_finetune "$SCRIPT_DIR"
+docker build -t unsloth_llama_3b_sft "$SCRIPT_DIR"
