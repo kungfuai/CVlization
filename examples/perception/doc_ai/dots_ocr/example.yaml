@@ -33,3 +33,6 @@ tasks:
 frameworks:
 - pytorch
 description: Document OCR using DOTS (Document-Oriented Text Spotting)
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified build and predict with bundled sample (invoice image) on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1 + CUDA 12.8. Fixed bundled sample handling. Outputs structured JSON with bounding boxes, categories, and extracted text/tables."
