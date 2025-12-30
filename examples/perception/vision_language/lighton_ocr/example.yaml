@@ -36,5 +36,5 @@ frameworks:
   - vllm
 description: Dockerized vLLM server + client for LightOnOCR-1B-1025 (OpenAI-compatible).
 verification:
-  last_verified: 2025-11-19
-  last_verification_note: "Verified build (23.1GB, PyPI vLLM 0.11.1), local inference, OCR output quality, and model caching (6.8GB model) on NVIDIA L4 (23GB VRAM). Updated predict.py to use vLLM 0.11+ multimodal API. Peak VRAM: ~2.4GB (model + KV cache)."
+  last_verified: 2025-12-30
+  last_verification_note: "Verified build with PyTorch 2.9.1 CUDA 12.8 + vLLM 0.11.2 (pre-built wheel). Inference ~66s (includes 28s JIT compile warmup). Model: lightonai/LightOnOCR-1B-1025, cached to HF hub. Peak VRAM ~12GB KV cache + 1.9GB model. Use --gpu-memory-utilization 0.7 on A10 24GB."
