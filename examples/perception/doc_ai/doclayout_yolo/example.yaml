@@ -37,5 +37,5 @@ frameworks:
 - yolov10
 description: Document layout detection using DocLayout-YOLO (YOLOv10-based). Detects 11 layout elements including text, titles, tables, figures, formulas, headers, footers, captions, lists, and footnotes.
 verification:
-  last_verified: 2025-12-15
-  last_verification_note: "Verified build + predict via script and CVL CLI on NVIDIA A10 (24GB). Peak VRAM ~0.6GB, inference ~82ms/image at 1024px. Model cached to HF hub (39MB)."
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1+CUDA 12.8 runtime. Inference ~33ms at 1024px. VRAM: ~1GB."

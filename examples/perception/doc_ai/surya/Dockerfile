@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -7,13 +7,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-# Surya requires torch>=2.7.0, which will upgrade to 2.8.0
-# We need to also upgrade torchvision to match
+# surya-ocr 0.17.0 requires pillow<11.0.0
 RUN pip install --no-cache-dir \
     surya-ocr==0.17.0 \
-    pillow \
-    requests && \
-    pip install --no-cache-dir --upgrade torchvision
+    pillow==10.4.0 \
+    requests==2.32.3
 
 # Set working directory
 WORKDIR /workspace
