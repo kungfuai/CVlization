@@ -20,8 +20,6 @@ from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig
 
 # CVL dual-mode execution support
 from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
     resolve_input_path,
     resolve_output_path,
 )
@@ -29,6 +27,7 @@ from cvlization.paths import (
 
 # Model configuration
 MODEL_ID = "microsoft/Phi-4-multimodal-instruct"
+DEFAULT_SAMPLE = "examples/sample.jpg"
 
 
 def detect_device():
@@ -283,7 +282,7 @@ Examples:
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default="result.txt",
         help="Output file path"
     )
     parser.add_argument(
@@ -303,25 +302,23 @@ Examples:
 
     args = parser.parse_args()
 
-    # Handle default: if neither --image nor --images is provided, use default single image
+    # Handle bundled sample vs user-provided input
     if args.image is None and args.images is None:
-        args.image = "test_images/sample.jpg"
-
-    # Determine if single or multi-image mode
-    if args.images:
-        image_paths = args.images
+        # Use bundled sample directly
+        image_paths = [DEFAULT_SAMPLE]
+        multi_image = False
+        print(f"No --image provided, using bundled sample: {DEFAULT_SAMPLE}")
+    elif args.images:
+        # Multiple user-provided images - resolve through CVL_INPUTS
+        image_paths = [resolve_input_path(p) for p in args.images]
         multi_image = True
     else:
-        image_paths = [args.image]
+        # Single user-provided image - resolve through CVL_INPUTS
+        image_paths = [resolve_input_path(args.image)]
         multi_image = False
 
-    # Resolve paths for CVL compatibility
-    try:
-        image_paths = [resolve_input_path(p) for p in image_paths]
-        output_path = resolve_output_path(args.output)
-    except:
-        # Fallback to direct paths if CVL not available
-        output_path = args.output
+    # Resolve output path
+    output_path = resolve_output_path(args.output)
 
     print("=" * 60)
     print(f"Phi-4-multimodal-instruct - Microsoft")

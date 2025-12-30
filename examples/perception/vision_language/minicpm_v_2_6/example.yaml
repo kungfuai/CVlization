@@ -26,6 +26,5 @@ tags: [minicpm, vlm, openbmb, ocr, vqa, captioning, best-ocr, pytorch, multi-ima
 tasks: [ocr, image_captioning, visual_question_answering, document_understanding, multi_image]
 
 verification:
-  last_verified: 2025-11-12
-  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). Gated model requires HuggingFace authentication (HF_TOKEN loaded from .env). Excellent OCR and captioning quality - 100% accurate on invoice test image. VRAM usage ~16GB with bfloat16."
-  status: VERIFIED
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1 + CUDA 12.8 runtime. Added requirements.txt, fixed bundled sample. Excellent invoice OCR quality."

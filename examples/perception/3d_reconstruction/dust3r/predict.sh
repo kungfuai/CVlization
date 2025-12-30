@@ -6,8 +6,8 @@ WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 IMG="${CVL_IMAGE:-dust3r}"
 
-# Default arguments - use hunyuanworld_mirror images to avoid duplication
-INPUT_DIR="${SCRIPT_DIR}/../hunyuanworld_mirror/data/images"
+# Default arguments - use bundled sample images
+INPUT_DIR="${SCRIPT_DIR}/data/images"
 OUTPUT_DIR="${SCRIPT_DIR}/outputs"
 
 # Parse command line arguments

@@ -20,8 +20,6 @@ from transformers import AutoModelForCausalLM, AutoProcessor
 
 # CVL dual-mode execution support
 from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
     resolve_input_path,
     resolve_output_path,
 )
@@ -29,6 +27,7 @@ from cvlization.paths import (
 
 # Model configuration
 MODEL_ID = "microsoft/Phi-3.5-vision-instruct"
+DEFAULT_SAMPLE = "examples/sample.jpg"
 
 # Task prompts
 TASK_PROMPTS = {
@@ -281,7 +280,7 @@ Examples:
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default="result.txt",
         help="Output file path"
     )
     parser.add_argument(
@@ -308,24 +307,21 @@ Examples:
     # Validate image arguments
     if args.image and args.images:
         parser.error("Cannot specify both --image and --images")
-    if not args.image and not args.images:
-        # Default to single test image for backward compatibility
-        args.image = "test_images/sample.jpg"
 
-    # Resolve paths for CVL compatibility
-    try:
-        if args.image:
-            image_paths = [resolve_input_path(args.image)]
-        else:
-            image_paths = [resolve_input_path(img) for img in args.images]
-        output_path = resolve_output_path(args.output)
-    except:
-        # Fallback to direct paths if CVL not available
-        if args.image:
-            image_paths = [args.image]
-        else:
-            image_paths = args.images
-        output_path = args.output
+    # Handle bundled sample vs user-provided input
+    if not args.image and not args.images:
+        # Use bundled sample directly
+        image_paths = [DEFAULT_SAMPLE]
+        print(f"No --image provided, using bundled sample: {DEFAULT_SAMPLE}")
+    elif args.images:
+        # Multiple user-provided images
+        image_paths = [resolve_input_path(img) for img in args.images]
+    else:
+        # Single user-provided image
+        image_paths = [resolve_input_path(args.image)]
+
+    # Resolve output path
+    output_path = resolve_output_path(args.output)
 
     # Determine prompt
     if args.prompt:

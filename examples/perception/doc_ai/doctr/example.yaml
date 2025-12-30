@@ -35,3 +35,6 @@ tasks:
 frameworks:
 - pytorch
 description: End-to-end document OCR using docTR (Document Text Recognition)
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1 + CUDA 12.8 runtime. OCR extracts text from sample invoice correctly."
