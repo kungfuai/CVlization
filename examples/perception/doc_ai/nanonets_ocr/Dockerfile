@@ -1,35 +1,22 @@
-FROM python:3.11-slim
-
-WORKDIR /app
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    libgomp1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
     poppler-utils \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch (GPU version)
-RUN pip install --no-cache-dir \
-    torch torchvision --index-url https://download.pytorch.org/whl/cu124
-
 # Install transformers and required packages
+# Nanonets-OCR2-3B uses qwen2_5_vl architecture (model created with transformers 4.55.4)
 RUN pip install --no-cache-dir \
-    transformers>=4.40.0 \
-    accelerate \
-    pillow \
-    pdf2image \
-    qwen-vl-utils
+    transformers==4.55.4 \
+    accelerate==1.2.1 \
+    pillow==11.1.0 \
+    pdf2image==1.17.0 \
+    qwen-vl-utils==0.0.8
 
-# Create directories
-RUN mkdir -p /app/inputs /app/outputs /app/examples
+# Set working directory
+WORKDIR /workspace
 
-# Copy prediction script
-COPY predict.py /app/
-
-# Default command runs the predict script
-CMD ["python", "predict.py", "--help"]
+# Default command
+CMD ["python3", "predict.py"]

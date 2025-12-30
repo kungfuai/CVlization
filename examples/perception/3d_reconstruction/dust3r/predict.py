@@ -16,6 +16,51 @@ from PIL import Image
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
+# Default bundled sample (downloaded from HuggingFace on first run)
+DEFAULT_INPUT = "data/images"
+HF_REPO_ID = "zzsi/cvl"
+HF_SAMPLE_FILES = [
+    "dust3r/desk_view1.jpg",
+    "dust3r/desk_view2.jpg",
+]
+
+
+def download_sample_inputs_if_needed(input_dir: Path) -> None:
+    """Download sample inputs from HuggingFace if they don't exist locally."""
+    # Check if we have at least 2 images (minimum for 3D reconstruction)
+    existing_images = list(input_dir.glob("*.jpg")) + list(input_dir.glob("*.png"))
+    if len(existing_images) >= 2:
+        return
+
+    print("Downloading sample inputs from HuggingFace...")
+    from huggingface_hub import hf_hub_download
+
+    input_dir.mkdir(parents=True, exist_ok=True)
+
+    for hf_path in HF_SAMPLE_FILES:
+        filename = hf_path.split("/")[-1]
+        local_path = input_dir / filename
+        if not local_path.exists():
+            print(f"  Downloading {filename}...")
+            downloaded = hf_hub_download(
+                repo_id=HF_REPO_ID,
+                filename=hf_path,
+                repo_type="dataset",
+                local_dir=input_dir.parent,
+            )
+            # hf_hub_download puts file in subfolder, move to target
+            src = input_dir.parent / hf_path
+            if src.exists() and src != local_path:
+                src.rename(local_path)
+
+    # Clean up HuggingFace subfolder
+    hf_subdir = input_dir.parent / "dust3r"
+    if hf_subdir.exists() and hf_subdir != input_dir:
+        import shutil
+        shutil.rmtree(hf_subdir, ignore_errors=True)
+
+    print("  Sample inputs downloaded!")
+
 # DUSt3R imports
 from dust3r.inference import inference
 from dust3r.model import AsymmetricCroCo3DStereo
@@ -33,8 +78,8 @@ def main():
     parser.add_argument(
         "--input",
         type=str,
-        default="data/images",
-        help="Input directory of images (default: data/images)",
+        default=None,
+        help="Input directory of images (default: bundled sample)",
     )
     parser.add_argument(
         "--output",
@@ -96,8 +141,15 @@ def main():
 
     args = parser.parse_args()
 
-    # Validate input path
-    input_path = Path(resolve_input_path(args.input))
+    # Handle bundled sample vs user-provided input
+    if args.input is None:
+        input_path = Path(DEFAULT_INPUT)
+        print(f"No --input provided, using bundled sample: {DEFAULT_INPUT}")
+        # Download sample from HuggingFace if not present
+        download_sample_inputs_if_needed(input_path)
+    else:
+        input_path = Path(resolve_input_path(args.input))
+
     if not input_path.exists():
         print(f"Error: Input path does not exist: {input_path}")
         sys.exit(1)

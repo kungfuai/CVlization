@@ -18,6 +18,5 @@ tags: [internvl, vlm, opengvlab, ocr, vqa, captioning, reasoning, pytorch, multi
 tasks: [ocr, image_captioning, visual_question_answering, visual_reasoning, document_understanding]
 
 verification:
-  last_verified: 2025-11-13
-  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). Build + caption/OCR inference succeed for InternVL3-8B (bfloat16, ~16GB VRAM)."
-  status: VERIFIED
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1 + CUDA 12.8. Fixed bundled sample handling, added examples/sample.jpg. Image description works correctly."

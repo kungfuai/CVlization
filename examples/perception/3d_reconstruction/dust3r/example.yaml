@@ -38,5 +38,5 @@ model_source: naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt
 license: CC-BY-NC-SA-4.0
 repository: https://github.com/naver/dust3r
 verification:
-  last_verified: 2025-11-24
-  last_verification_note: "Verified build, inference (2 images), model caching (2.2GB), output file generation (GLB with 387k vertices, depth/confidence PNGs+NPYs) on RTX PRO 6000 Blackwell (96GB VRAM). Technical verification only - 3D geometry quality not inspected. RoPE CUDA compilation fails gracefully (PyTorch fallback works). Images mounted from hunyuanworld_mirror."
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1. Sample images downloaded from HuggingFace (zzsi/cvl) on first run (Desk scene, 2 views). GLB output with 387k vertices. RoPE CUDA compilation falls back to PyTorch (works). VRAM: ~8GB."

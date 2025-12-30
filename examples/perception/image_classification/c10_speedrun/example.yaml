@@ -34,3 +34,7 @@ tasks:
 frameworks:
 - pytorch
 description: CIFAR10 speed-run benchmarks that dispatch to HyperLightBench or DavidNet recipes.
+image: cifar10_speedrun
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1+CUDA 12.8 runtime. Fixed train.py imports for docker execution. HLB training works (1 epoch in ~14s). VRAM: ~3GB."

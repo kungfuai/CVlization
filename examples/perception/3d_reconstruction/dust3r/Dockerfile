@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.9.0-cuda12.8-cudnn9-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \

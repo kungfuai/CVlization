@@ -15,8 +15,8 @@ from PIL import Image
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
-DEFAULT_IMAGE = "examples/ref1.png"
-DEFAULT_OUTPUT = "outputs/sam3/prediction.png"
+DEFAULT_IMAGE = "examples/sample.jpg"
+DEFAULT_OUTPUT = "prediction.png"
 
 TRANSFORMERS_AVAILABLE = True
 try:
@@ -33,12 +33,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--image",
         default=None,
-        help="Path to the input image (default: bundled ref1.png camera sample)",
+        help="Path to the input image (default: bundled invoice sample)",
     )
     parser.add_argument(
         "--text",
-        default="camera",
-        help="Text prompt to segment (default: 'camera' for the sample image)",
+        default="text",
+        help="Text prompt to segment (default: 'text' for the invoice sample)",
     )
     parser.add_argument(
         "--checkpoint",
@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--score-threshold",
         type=float,
-        default=0.5,
+        default=0.1,
         help="Instance score threshold for mask filtering (transformers backend)",
     )
     return parser.parse_args()
@@ -100,8 +100,8 @@ def main() -> None:
         image_path = Path(resolve_input_path(args.image))
     # Output always resolves to user's cwd
     output_path = Path(resolve_output_path(args.output))
-    if args.text == "text":
-        print("No --text provided, using default prompt: 'text'")
+    if args.text == "text" and args.image is None:
+        print("Using default prompt 'text' for invoice sample")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

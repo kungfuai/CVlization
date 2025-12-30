@@ -30,4 +30,8 @@ tasks:
 - ocr
 frameworks:
 - api
-description: Document OCR using Nanonets API
+description: Document OCR using Nanonets-OCR2-3B VLM model (qwen2_5_vl architecture)
+
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1 + CUDA 12.8 runtime. Pinned transformers==4.55.4 (model's original version). Fixed bundled sample handling. VRAM: ~8GB."

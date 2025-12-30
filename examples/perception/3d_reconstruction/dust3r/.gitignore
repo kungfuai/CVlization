@@ -1,6 +1,10 @@
 # Outputs
 outputs/
 
+# Downloaded sample images (fetched from HuggingFace at runtime)
+data/images/*.jpg
+data/images/*.png
+
 # Python cache
 __pycache__/
 *.pyc

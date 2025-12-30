@@ -20,8 +20,8 @@ except Exception:
     resolve_output_path = None  # type: ignore
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_IMAGE = SCRIPT_DIR.parent / "test_images" / "sample.jpg"
+# Default bundled sample
+DEFAULT_IMAGE = "examples/sample.jpg"
 DEFAULT_MODEL = os.environ.get("JOYCAPTION_MODEL_ID", "fancyfeast/llama-joycaption-beta-one-hf-llava")
 
 
@@ -128,20 +128,20 @@ def parse_args():
     parser.add_argument("--max-new-tokens", type=int, default=256, help="Generation cap.")
     parser.add_argument("--temperature", type=float, default=0.6, help="Sampling temperature.")
     parser.add_argument("--top-p", type=float, default=0.9, help="Top-p sampling.")
-    parser.add_argument("--output", default="outputs/joycaption.txt", help="Save path.")
+    parser.add_argument("--output", default="joycaption.txt", help="Save path.")
     parser.add_argument("--format", choices=["txt", "json"], default="txt")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    if not args.image:
-        args.image = str(DEFAULT_IMAGE)
 
-    try:
+    # Handle bundled sample vs user-provided input
+    if not args.image:
+        img_path = DEFAULT_IMAGE
+        print(f"No --image provided, using bundled sample: {img_path}")
+    else:
         img_path = resolve_in(args.image)
-    except Exception:
-        img_path = args.image
 
     img = load_image(img_path)
 
