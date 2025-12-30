@@ -9,9 +9,10 @@ echo "Building dots.ocr container..."
 docker build -t dots_ocr "$SCRIPT_DIR"
 
 # Download required model (idempotent - skips if already exists)
+# This is optional - the model will be downloaded on first predict.sh run if not cached
 echo ""
 echo "Downloading required model..."
-python3 "$SCRIPT_DIR/download_model.py"
+python3 "$SCRIPT_DIR/download_model.py" || echo "Model pre-download skipped (will download on first run)"
 
 echo "Build complete! Image: dots_ocr"
 echo ""
