@@ -11,22 +11,7 @@ WORKDIR /workspace
 RUN git clone https://github.com/Tencent-Hunyuan/HunyuanVideo-Avatar /workspace/HunyuanVideo-Avatar
 
 WORKDIR /workspace/HunyuanVideo-Avatar
-RUN python - <<'PY'
-from pathlib import Path
-
-path = Path('/workspace/HunyuanVideo-Avatar/hymm_sp/text_encoder/__init__.py')
-text = path.read_text()
-old = '        text_encoder.final_layer_norm = text_encoder.language_model.model.norm\n'
-new = (
-    '        if hasattr(text_encoder.language_model, "model"):\n'
-    '            text_encoder.final_layer_norm = text_encoder.language_model.model.norm\n'
-    '        else:\n'
-    '            text_encoder.final_layer_norm = text_encoder.language_model.norm\n'
-)
-if old not in text:
-    raise SystemExit('Expected text_encoder.final_layer_norm line not found')
-path.write_text(text.replace(old, new, 1))
-PY
+RUN python -c 'from pathlib import Path; path=Path("/workspace/HunyuanVideo-Avatar/hymm_sp/text_encoder/__init__.py"); text=path.read_text(); old="        text_encoder.final_layer_norm = text_encoder.language_model.model.norm\\n"; new=("        if hasattr(text_encoder.language_model, \\"model\\"):\\n" "            text_encoder.final_layer_norm = text_encoder.language_model.model.norm\\n" "        else:\\n" "            text_encoder.final_layer_norm = text_encoder.language_model.norm\\n"); assert old in text, "Expected text_encoder.final_layer_norm line not found"; path.write_text(text.replace(old, new, 1))'
 COPY requirements.txt /workspace/HunyuanVideo-Avatar/requirements.txt
 RUN python -m pip install --no-cache-dir -r requirements.txt
 RUN python -m pip uninstall -y flash-attn flash_attn || true
