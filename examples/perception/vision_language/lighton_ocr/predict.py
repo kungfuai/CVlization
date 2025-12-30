@@ -23,7 +23,7 @@ except Exception:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_IMAGE = SCRIPT_DIR.parent / "test_images" / "sample.jpg"
+DEFAULT_IMAGE = "/cvlization_repo/examples/perception/doc_ai/leaderboard/test_data/sample.jpg"
 DEFAULT_MODEL_ID = os.environ.get("LIGHTON_OCR_MODEL_ID", "lightonai/LightOnOCR-1B-1025")
 MAX_LONG_SIDE = 1540
 
@@ -103,6 +103,7 @@ def parse_args():
     parser.add_argument("--model-id", default=DEFAULT_MODEL_ID, help="Model to load.")
     parser.add_argument("--tp-size", type=int, default=int(os.environ.get("TENSOR_PARALLEL_SIZE", 1)), help="Tensor parallel shards.")
     parser.add_argument("--max-model-len", type=int, default=None, help="Override max model length.")
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.7, help="GPU memory utilization (0.0-1.0).")
     parser.add_argument("--max-new-tokens", type=int, default=4096, help="Generation cap.")
     parser.add_argument("--temperature", type=float, default=0.2, help="Sampling temperature.")
     parser.add_argument("--top-p", type=float, default=0.9, help="Top-p nucleus sampling.")
@@ -129,13 +130,14 @@ def resolve_out(path: str) -> Path:
     return Path(path)
 
 
-def run_request_local(img: Image.Image, prompt: str, model_id: str, tp_size: int, max_model_len: Optional[int], max_tokens: int, temperature: float, top_p: float) -> str:
+def run_request_local(img: Image.Image, prompt: str, model_id: str, tp_size: int, max_model_len: Optional[int], gpu_memory_utilization: float, max_tokens: int, temperature: float, top_p: float) -> str:
     processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
     llm = LLM(
         model=model_id,
         tensor_parallel_size=tp_size,
         trust_remote_code=True,
         max_model_len=max_model_len,
+        gpu_memory_utilization=gpu_memory_utilization,
     )
 
     messages = [{
@@ -193,6 +195,7 @@ def main():
         args.model_id,
         args.tp_size,
         args.max_model_len,
+        args.gpu_memory_utilization,
         args.max_new_tokens,
         args.temperature,
         args.top_p,
