@@ -10,5 +10,5 @@ einops==0.8.1
 decord==0.6.0
 av==16.0.1
 pycocotools==2.0.10
-huggingface_hub>=1.0.0,<2.0
+huggingface_hub>=0.27.0
 git+https://github.com/huggingface/transformers.git@bdee0889714e9cb3e53d3b1b2a626919479d356c#egg=transformers

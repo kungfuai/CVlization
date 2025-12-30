@@ -18,12 +18,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoProcessor
 
 # CVL dual-mode execution support
-from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
-    resolve_input_path,
-    resolve_output_path,
-)
+from cvlization.paths import resolve_input_path, resolve_output_path
 
 
 # Model configuration
@@ -39,8 +34,8 @@ VARIANTS = {
 }
 DEFAULT_VARIANT = "base"
 DEFAULT_MODEL_ID = VARIANTS[DEFAULT_VARIANT]["model_id"]
-DEFAULT_IMAGE = "test_images/sample.jpg"
-DEFAULT_OUTPUT = "outputs/result.txt"
+DEFAULT_IMAGE = "examples/sample.jpg"
+DEFAULT_OUTPUT = "result.txt"
 
 # Task prompts
 TASK_PROMPTS = {

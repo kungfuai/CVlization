@@ -2,7 +2,7 @@ name: pixtral-12b
 capability: perception/vision_language
 modalities: [vision, text]
 datasets: [custom]
-stability: under_construction
+stability: stable
 resources:
   gpu: 1
   vram_gb: 8
@@ -29,6 +29,5 @@ frameworks: [pytorch]
 description: Pixtral 12B vision-language model from Mistral AI with 4-bit quantization for efficient inference
 
 verification:
-  last_verified: 2025-11-18
-  last_verification_note: "UNDER CONSTRUCTION: Initial setup with 4-bit quantization support. Pending verification of model loading and inference."
-  status: UNDER_CONSTRUCTION
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. PyTorch 2.8.0 + CUDA 12.8 with Unsloth 4-bit quantization. Added bundled sample. Caption task works correctly."

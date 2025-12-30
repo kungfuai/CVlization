@@ -14,8 +14,6 @@ from pdf2image import convert_from_path
 
 # CVL dual-mode execution support
 from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
     resolve_input_path,
     resolve_output_path,
 )
@@ -118,22 +116,20 @@ Examples:
 
     args = parser.parse_args()
 
-    # Resolve paths for CVL dual-mode support
-    OUT = get_output_dir()
-
     # Smart default for output path
     if args.output is None:
         ext = {"json": "json", "markdown": "md"}[args.format]
         args.output = f"result.{ext}"
 
-    # Resolve paths: None means use bundled sample, otherwise resolve to user's cwd
+    # Handle bundled sample vs user-provided input
     if args.input is None:
         input_path = Path(DEFAULT_INPUT)
         print(f"No --input provided, using bundled sample: {input_path}")
     else:
         input_path = Path(resolve_input_path(args.input))
-    # Output always resolves to user's cwd
-    output_path = Path(resolve_output_path(args.output, OUT))
+
+    # Resolve output path
+    output_path = Path(resolve_output_path(args.output))
 
     # Validate input file
     if not input_path.exists():

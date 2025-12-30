@@ -20,8 +20,6 @@ from transformers import AutoTokenizer, AutoModel
 
 # CVL dual-mode execution support
 from cvlization.paths import (
-    get_input_dir,
-    get_output_dir,
     resolve_input_path,
     resolve_output_path,
 )
@@ -29,8 +27,7 @@ from cvlization.paths import (
 
 # Model configuration
 MODEL_ID = "OpenGVLab/InternVL3-8B"
-DEFAULT_IMAGE = "test_images/sample.jpg"
-DEFAULT_OUTPUT = "outputs/result.txt"
+DEFAULT_SAMPLE = "examples/sample.jpg"
 
 
 def detect_device():
@@ -241,7 +238,7 @@ Examples:
     parser.add_argument(
         "--output",
         type=str,
-        default=DEFAULT_OUTPUT,
+        default="result.txt",
         help="Output file path"
     )
     parser.add_argument(
@@ -261,16 +258,16 @@ Examples:
 
     args = parser.parse_args()
 
-    # Resolve paths for CVL compatibility
-    # Defaults are local to example dir; user-provided paths resolve to cwd
+    # Handle bundled sample vs user-provided input
     if args.image is None:
-        image_path = DEFAULT_IMAGE
+        image_path = DEFAULT_SAMPLE
         print(f"No --image provided, using bundled sample: {image_path}")
     elif args.image.startswith("http"):
         image_path = args.image
     else:
         image_path = resolve_input_path(args.image)
-    # Output always resolves to user's cwd
+
+    # Resolve output path
     output_path = resolve_output_path(args.output)
 
     print("=" * 60)

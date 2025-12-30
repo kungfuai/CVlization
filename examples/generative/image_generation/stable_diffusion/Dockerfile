@@ -1,8 +1,11 @@
-FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 WORKDIR /workspace
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install uv for fast package installation
+RUN pip install --no-cache-dir uv
 
-COPY . .
+COPY requirements.txt .
+RUN uv pip install --system --no-cache -r requirements.txt
+
+COPY generate.py .

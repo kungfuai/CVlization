@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 WORKDIR /app
 
@@ -11,10 +11,6 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
-
-# Install PyTorch with CUDA support (matching granite_docling pattern)
-RUN pip install --no-cache-dir \
-    torch torchvision --index-url https://download.pytorch.org/whl/cu124
 
 # Install docling and docling-serve
 RUN pip install --no-cache-dir \

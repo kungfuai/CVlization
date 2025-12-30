@@ -26,6 +26,7 @@ from cvlization.paths import (
 
 # Model configuration
 MODEL_ID = "unsloth/Pixtral-12B-2409"
+DEFAULT_SAMPLE = "examples/sample.png"
 
 # Task prompts
 TASK_PROMPTS = {
@@ -167,7 +168,7 @@ Examples:
         "--image",
         type=str,
         default=None,
-        help="Path to input image"
+        help="Path to input image (default: uses bundled sample)"
     )
     parser.add_argument(
         "--images",
@@ -198,7 +199,7 @@ Examples:
     parser.add_argument(
         "--output",
         type=str,
-        default="outputs/result.txt",
+        default="result.txt",
         help="Output file path"
     )
     parser.add_argument(
@@ -221,22 +222,20 @@ Examples:
     if args.task == "vqa" and args.prompt is None:
         parser.error("--prompt is required for VQA task")
 
-    if args.image is None and args.images is None:
-        parser.error("Either --image or --images must be provided")
-
-    # Collect image paths
+    # Handle bundled sample vs user-provided input
     if args.images is not None:
-        image_paths = args.images
+        # Multiple images provided by user
+        image_paths = [resolve_input_path(p) for p in args.images]
+    elif args.image is not None:
+        # Single image provided by user
+        image_paths = [resolve_input_path(args.image)]
     else:
-        image_paths = [args.image]
+        # No input provided - use bundled sample directly
+        image_paths = [DEFAULT_SAMPLE]
+        print(f"No --image provided, using bundled sample: {DEFAULT_SAMPLE}")
 
-    # Resolve paths for CVL compatibility
-    try:
-        image_paths = [resolve_input_path(p) for p in image_paths]
-        output_path = resolve_output_path(args.output)
-    except:
-        # Fallback to direct paths if CVL not available
-        output_path = args.output
+    # Resolve output path
+    output_path = resolve_output_path(args.output)
 
     # Determine prompt
     if args.prompt:

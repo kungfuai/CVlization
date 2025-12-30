@@ -24,6 +24,5 @@ tags: [florence, vlm, microsoft, ocr, vqa, captioning, object-detection, segment
 tasks: [ocr, image_captioning, visual_question_answering, object_detection, image_segmentation, document_understanding, region_captioning]
 
 verification:
-  last_verified: 2025-11-12
-  last_verification_note: "VERIFIED working on NVIDIA A10 (23GB VRAM). Base (0.23B) and Large (0.77B) checkpoints both build and run caption/OCR tasks. VRAM usage ~1GB (base) and ~2GB (large) with float16."
-  status: VERIFIED
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1 + CUDA 12.8 runtime. Added bundled sample image. Caption task works correctly."

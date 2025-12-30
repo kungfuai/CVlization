@@ -31,3 +31,6 @@ frameworks:
   - pytorch
   - transformers
 description: Dockerized transformers runner for llava-hf/LLaVA-NeXT-Video-7B-hf (video+text -> text).
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1+CUDA 12.8 runtime, added requirements.txt with sentencepiece/protobuf. Downloads sample video from HuggingFace. VRAM: ~15GB."

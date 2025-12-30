@@ -58,3 +58,7 @@ tasks:
 frameworks:
   - pytorch
 description: Unified Dockerized runner for Qwen3-VL 2B/4B/8B Instruct checkpoints.
+
+verification:
+  last_verified: "2025-12-29"
+  last_verification_note: "Verified build and predict with 2b variant on Blackwell RTX PRO 6000 (96GB). Fixed bundled sample path resolution and default output path. CUDA 12.8 base image."

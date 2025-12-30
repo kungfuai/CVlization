@@ -212,7 +212,7 @@ Examples:
     parser.add_argument("--prompt", help="Custom prompt (required for VQA).")
     parser.add_argument("--max-new-tokens", type=int, default=None,
                         help="Override max tokens when generating.")
-    parser.add_argument("--output", default="outputs/result.txt", help="Output path.")
+    parser.add_argument("--output", default="result.txt", help="Output path.")
     parser.add_argument("--format", choices=["txt", "json"], default="txt")
     parser.add_argument(
         "--device",
@@ -267,8 +267,14 @@ def main():
         raise SystemExit("--prompt is required for VQA tasks.")
     if args.image and args.images:
         raise SystemExit("Specify either --image or --images, not both.")
+
+    # Handle default sample image (bundled with example)
+    DEFAULT_IMAGE = "test_images/sample.jpg"
+    using_bundled_sample = False
     if not args.image and not args.images:
-        args.image = "test_images/sample.jpg"
+        args.image = DEFAULT_IMAGE
+        using_bundled_sample = True
+        print(f"No --image provided, using bundled sample: {DEFAULT_IMAGE}")
 
     variant = MODEL_VARIANTS[args.variant]
     model_id = args.model_id or variant["model_id"]
@@ -281,15 +287,14 @@ def main():
     print(f"Task: {args.task}")
     print("=" * 60)
 
-    try:
-        if args.image:
-            image_paths = [resolve_input_path(args.image)]
-        else:
-            image_paths = [resolve_input_path(path) for path in args.images]
-        output_path = Path(resolve_output_path(args.output))
-    except Exception:
-        image_paths = [args.image] if args.image else args.images
-        output_path = Path(args.output)
+    # Resolve paths - bundled samples are used directly, user inputs are resolved
+    if using_bundled_sample:
+        image_paths = [args.image]
+    elif args.image:
+        image_paths = [resolve_input_path(args.image)]
+    else:
+        image_paths = [resolve_input_path(path) for path in args.images]
+    output_path = Path(resolve_output_path(args.output))
 
     prompt = args.prompt or TASK_PROMPTS[args.task]
 

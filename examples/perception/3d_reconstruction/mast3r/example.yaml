@@ -39,3 +39,7 @@ image: mast3r
 model_source: naver/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric
 license: CC-BY-NC-SA-4.0
 repository: https://github.com/naver/maSt3R
+
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified build and predict with demo data (NLE_tower, 7 images) on Blackwell RTX PRO 6000 (96GB). Fixed cvlization mount in predict.sh. 3D reconstruction outputs scene.glb, depth maps, and confidence maps."

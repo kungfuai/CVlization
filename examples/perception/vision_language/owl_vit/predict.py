@@ -246,8 +246,8 @@ Examples:
     parser.add_argument(
         "--image",
         type=str,
-        default="examples/human.png",
-        help="Path to input image (default: examples/human.png)"
+        default=None,
+        help="Path to input image (default: uses bundled sample)"
     )
     parser.add_argument(
         "--output",
@@ -308,12 +308,23 @@ Examples:
 
     args = parser.parse_args()
 
-    # Resolve paths using CVL path helpers
-    image_path = resolve_input_path(args.image)
+    # Handle bundled sample vs user-provided input
+    DEFAULT_SAMPLE = "examples/human.png"
+    if args.image is None:
+        # Use bundled sample directly (don't resolve through CVL_INPUTS)
+        image_path = DEFAULT_SAMPLE
+        print(f"No --image provided, using bundled sample: {DEFAULT_SAMPLE}")
+    else:
+        # User-provided file - resolve through CVL_INPUTS
+        image_path = resolve_input_path(args.image)
+
+    # Resolve output path
     output_path = resolve_output_path(args.output)
 
-    # Create output directory
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # Create output directory if needed
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
     # Setup device
     if args.device == "auto":

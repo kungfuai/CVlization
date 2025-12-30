@@ -29,5 +29,5 @@ tasks:
   - instance_segmentation
   - semantic_segmentation
 verification:
-  last_verified: 2025-11-21
-  last_verification_note: "Initial inference-only example; GPU recommended for performance."
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1+CUDA 12.8 runtime. Uses transformers from git (PyPI 4.57.3 doesn't include Sam3Model). Lowered default score-threshold to 0.1. Requires HF authentication for gated model. VRAM: ~10GB."
