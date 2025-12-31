@@ -40,3 +40,7 @@ frameworks:
   - chronos
   - pytorch
 description: Zero-shot time series forecasting with Amazon Chronos foundation models (Chronos-Bolt/Chronos-2/Chronos-T5). Fast and accurate probabilistic forecasting without training.
+
+verification:
+  last_verified: "2025-12-31"
+  last_verification_note: "CPU-only forecasting with chronos-bolt-small. Auto-downloads M4 dataset. Fast inference ~50 series/sec. No GPU required."
