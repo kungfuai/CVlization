@@ -41,5 +41,5 @@ frameworks:
 description: Chandra OCR for high-accuracy document OCR with layout preservation (83.1 OmniDocBench score)
 
 verification:
-  last_verified: "2025-11-07"
-  last_verification_note: "Tested successfully with invoice sample image. OCR output correctly recognized tables and layout preservation."
+  last_verified: "2025-12-31"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8. Fixed default sample path. Table OCR with layout preservation. VRAM: ~16GB."
