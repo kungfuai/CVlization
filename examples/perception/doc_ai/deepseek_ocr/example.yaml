@@ -38,5 +38,5 @@ frameworks:
 description: DeepSeek-OCR for document OCR with 7-20x context compression
 
 verification:
-  last_verified: 2025-11-07
-  last_verification_note: "Verified build, inference with transformers backend, model caching (6.3GB models), OCR output capture via stdout, and file saving on NVIDIA A10 (23GB VRAM). Successfully extracts text from invoices with tables. Model uses custom .infer() API that prints to stdout."
+  last_verified: "2025-12-30"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8 for Blackwell. OCR with grounding coordinates. VRAM: ~12GB."
