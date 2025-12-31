@@ -36,3 +36,7 @@ references:
   paper: https://jt-zhang.github.io/files/TurboDiffusion_Technical_Report.pdf
   github: https://github.com/thu-ml/TurboDiffusion
   huggingface: https://huggingface.co/TurboDiffusion
+
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Fixed cvlization mount in predict.sh. 1-step generation ~2.3s for 77 frames. VRAM: ~24GB."

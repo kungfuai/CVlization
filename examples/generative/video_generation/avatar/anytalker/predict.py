@@ -14,9 +14,9 @@ from pathlib import Path
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
-# Default sample inputs (bundled with example)
-DEFAULT_IMAGE = "examples/images/1p-0.png"
-DEFAULT_AUDIO = "examples/audios/1p-0.wav"
+# Default sample inputs (bundled with example - use absolute paths in container)
+DEFAULT_IMAGE = "/workspace/local/examples/images/1p-0.png"
+DEFAULT_AUDIO = "/workspace/local/examples/audios/1p-0.wav"
 DEFAULT_OUTPUT = "outputs/output.mp4"
 
 # Add vendored AnyTalker to path
