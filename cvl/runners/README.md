@@ -154,6 +154,35 @@ runner.run(
 4. Streams CloudWatch logs in real-time
 5. Downloads outputs from S3 on completion
 
+### Kubernetes Runner (Any K8s Cluster)
+
+Run jobs on any Kubernetes cluster (EKS, GKE, AKS, local).
+
+```python
+from cvl.runners import K8sRunner
+
+runner = K8sRunner(namespace="ml-training")
+
+runner.run(
+    image="my-registry/nanogpt:latest",
+    command=["python", "train.py", "--max_iters=1000"],
+    gpu=1,
+    memory="8Gi",
+    timeout_minutes=60,
+)
+```
+
+**Prerequisites:**
+1. Valid kubeconfig (`~/.kube/config`) or in-cluster config
+2. Container image accessible from cluster
+3. `pip install kubernetes`
+
+**How it works:**
+1. Creates Kubernetes Job with specified resources
+2. Waits for pod to be scheduled
+3. Streams logs in real-time
+4. Cleans up job on completion/interrupt
+
 ## Configuration
 
 ### SSH Authentication
@@ -255,18 +284,13 @@ runner.run("nanogpt", "train", ["--max_iters=100"], timeout_minutes=10)
 ## Architecture
 
 ```
-┌─────────────────┐  ┌───────────────────┐  ┌──────────────────┐
-│ LambdaLabsRunner│  │DockerContextRunner│  │  SageMakerRunner │
-│ (create→run→    │  │ (rsync→ssh→run→   │  │ (build→push→     │
-│  terminate)     │  │  rsync outputs)   │  │  train→download) │
-└────────┬────────┘  └─────────┬─────────┘  └──────────────────┘
-         │                     │                  │ uses
-         │ uses                │ uses             ▼
-         ▼                     ▼            ┌──────────────────┐
-┌─────────────────┐     ┌───────────┐       │   AWS APIs       │
-│   SSHRunner     │     │ rsync+SSH │       │ (ECR, SageMaker, │
-│ (SSH execution) │     └───────────┘       │  CloudWatch, S3) │
-└─────────────────┘                         └──────────────────┘
+Runner                 Workflow                          Backend
+─────────────────────────────────────────────────────────────────────
+SSHRunner              ssh → run → stream               paramiko
+LambdaLabsRunner       create → ssh → run → terminate   Lambda API
+DockerContextRunner    rsync → ssh → run → rsync back   rsync + SSH
+SageMakerRunner        build → push → train → download  AWS APIs
+K8sRunner              create job → stream → cleanup    Kubernetes API
 ```
 
 **Lambda Labs Runner:**
@@ -294,6 +318,12 @@ runner.run("nanogpt", "train", ["--max_iters=100"], timeout_minutes=10)
 - Streams CloudWatch logs
 - Downloads artifacts from S3
 - Spot instance support for cost savings
+
+**K8s Runner:**
+- Creates Kubernetes Job with specified resources
+- Streams pod logs in real-time
+- Automatic cleanup on completion/interrupt
+- Works with any k8s cluster (EKS, GKE, AKS, local)
 
 ## Troubleshooting
 

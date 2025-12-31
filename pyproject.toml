@@ -42,6 +42,9 @@ remote = [
 aws = [
     "boto3>=1.28.0",  # For AWS SageMaker, ECR, CloudWatch
 ]
+k8s = [
+    "kubernetes>=28.0.0",  # For Kubernetes Job runner
+]
 
 [project.scripts]
 cvl = "cvl.__main__:main"
