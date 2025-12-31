@@ -46,8 +46,5 @@ frameworks:
   - transformers
 description: Zero-shot multilingual TTS with voice cloning using Fun-CosyVoice3-0.5B
 verification:
-  last_verified: 2024-12-16
-  last_verification_note: |
-    Build successful (11.1GB image). Inference verified on A10 GPU.
-    Model downloads lazily to ~/.cache/modelscope (~10GB).
-    Output: 24kHz WAV audio generated successfully.
+  last_verified: "2025-12-30"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8 for Blackwell. Added torchcodec for audio loading. VRAM: ~8GB."

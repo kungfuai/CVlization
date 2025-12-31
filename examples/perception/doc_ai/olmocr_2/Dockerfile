@@ -1,4 +1,5 @@
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+# PyTorch 2.9.1 with CUDA 12.8 for Blackwell GPU support
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 # Install system dependencies including poppler and fonts required by olmOCR
 # Pre-accept Microsoft fonts EULA to avoid interactive prompt
@@ -17,12 +18,11 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
     && rm -rf /var/lib/apt/lists/*
 
 # Install olmOCR with GPU support and qwen-vl-utils for direct model inference
-# Using torch 2.5.1 which is compatible with cu124
 RUN pip install --no-cache-dir \
     "olmocr[gpu]" \
     qwen-vl-utils \
     accelerate \
-    --extra-index-url https://download.pytorch.org/whl/cu124
+    --extra-index-url https://download.pytorch.org/whl/cu128
 
 # Set working directory
 WORKDIR /workspace

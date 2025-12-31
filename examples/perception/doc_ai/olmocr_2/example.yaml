@@ -43,5 +43,5 @@ frameworks:
 description: olmOCR-2 from AllenAI - Production-ready 7B parameter OCR model with GRPO RL training, specialized for math equations and tables (82.4 olmOCR-Bench score)
 
 verification:
-  last_verified: "2025-11-07"
-  last_verification_note: "Initial setup complete. Requires testing with sample images."
+  last_verified: "2025-12-30"
+  last_verification_note: "Upgraded to PyTorch 2.9.0+CUDA 12.8 for Blackwell. 7B param FP8 model. VRAM: ~15GB."

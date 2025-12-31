@@ -29,3 +29,6 @@ tags: [gemma, google, vlm, multimodal, vision, pytorch]
 tasks: [image_captioning, visual_question_answering, ocr, image_understanding]
 frameworks: [pytorch, transformers]
 description: Google's Gemma-3 multimodal model for vision-language tasks (4B/12B/27B)
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified on Blackwell. Uses unsloth for fast inference. VRAM: ~8GB with 4-bit quantization."
