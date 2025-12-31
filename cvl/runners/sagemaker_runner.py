@@ -563,3 +563,152 @@ ENTRYPOINT ["python", "/opt/ml/code/sagemaker_entry.py"]
             print(f"Warning: Failed to stop job: {e}")
         finally:
             self.current_job_name = None
+
+    # =========================================================================
+    # Job Management Methods (for cvl jobs/logs/kill commands)
+    # =========================================================================
+
+    def list_jobs(self, max_results: int = 20, status_filter: Optional[str] = None) -> List[dict]:
+        """
+        List recent SageMaker training jobs.
+
+        Args:
+            max_results: Maximum number of jobs to return
+            status_filter: Filter by status (InProgress, Completed, Failed, Stopped)
+
+        Returns:
+            List of job info dicts with keys: job_id, status, created, duration
+        """
+        kwargs = {
+            "MaxResults": max_results,
+            "SortBy": "CreationTime",
+            "SortOrder": "Descending",
+        }
+        if status_filter:
+            kwargs["StatusEquals"] = status_filter
+
+        response = self.sagemaker.list_training_jobs(**kwargs)
+        jobs = []
+        for job in response.get("TrainingJobSummaries", []):
+            jobs.append({
+                "job_id": job["TrainingJobName"],
+                "status": job["TrainingJobStatus"],
+                "created": job["CreationTime"].isoformat(),
+                "duration": job.get("TrainingEndTime", job["CreationTime"]) - job["CreationTime"],
+            })
+        return jobs
+
+    def get_job_status(self, job_id: str) -> dict:
+        """
+        Get detailed status of a training job.
+
+        Args:
+            job_id: SageMaker training job name
+
+        Returns:
+            Dict with status details
+        """
+        response = self.sagemaker.describe_training_job(TrainingJobName=job_id)
+        return {
+            "job_id": job_id,
+            "status": response["TrainingJobStatus"],
+            "secondary_status": response.get("SecondaryStatus"),
+            "failure_reason": response.get("FailureReason"),
+            "created": response["CreationTime"].isoformat(),
+            "duration_seconds": response.get("TrainingTimeInSeconds"),
+            "instance_type": response["ResourceConfig"]["InstanceType"],
+            "output_path": response.get("OutputDataConfig", {}).get("S3OutputPath"),
+        }
+
+    def tail_logs(self, job_id: str, follow: bool = True):
+        """
+        Tail CloudWatch logs for a training job.
+
+        Args:
+            job_id: SageMaker training job name
+            follow: If True, continuously poll for new logs
+        """
+        log_group = "/aws/sagemaker/TrainingJobs"
+
+        # Find log stream
+        try:
+            streams = self.logs.describe_log_streams(
+                logGroupName=log_group,
+                logStreamNamePrefix=job_id,
+                orderBy="LogStreamName",
+                descending=True,
+                limit=1,
+            )
+            if not streams.get("logStreams"):
+                print(f"No logs found for job: {job_id}")
+                return
+            log_stream = streams["logStreams"][0]["logStreamName"]
+        except Exception as e:
+            print(f"Error finding log stream: {e}")
+            return
+
+        print(f"Tailing logs for: {job_id}")
+        print("-" * 50)
+
+        next_token = None
+        while True:
+            try:
+                kwargs = {
+                    "logGroupName": log_group,
+                    "logStreamName": log_stream,
+                    "startFromHead": True,
+                }
+                if next_token:
+                    kwargs["nextToken"] = next_token
+
+                response = self.logs.get_log_events(**kwargs)
+
+                for event in response.get("events", []):
+                    print(event["message"])
+
+                new_token = response.get("nextForwardToken")
+
+                if not follow:
+                    break
+
+                # Check if job is still running
+                status = self.get_job_status(job_id)
+                if status["status"] not in ("InProgress", "Stopping"):
+                    # Print any remaining logs
+                    if new_token != next_token:
+                        next_token = new_token
+                        continue
+                    print("-" * 50)
+                    print(f"Job {status['status']}")
+                    break
+
+                next_token = new_token
+                time.sleep(5)
+
+            except KeyboardInterrupt:
+                print("\nStopped tailing logs")
+                break
+            except Exception as e:
+                print(f"Error reading logs: {e}")
+                break
+
+    def stop_job(self, job_id: str) -> bool:
+        """
+        Stop a running training job.
+
+        Args:
+            job_id: SageMaker training job name
+
+        Returns:
+            True if stop request was sent successfully
+        """
+        try:
+            self.sagemaker.stop_training_job(TrainingJobName=job_id)
+            print(f"Stop request sent for: {job_id}")
+            return True
+        except self.sagemaker.exceptions.ClientError as e:
+            if "ValidationException" in str(e):
+                print(f"Job not running or already stopped: {job_id}")
+            else:
+                print(f"Error stopping job: {e}")
+            return False
