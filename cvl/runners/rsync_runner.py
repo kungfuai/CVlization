@@ -1,20 +1,17 @@
-"""Docker Context runner for CVL examples.
+"""Rsync runner for CVL examples.
 
-Runs CVL examples on a remote machine with Docker installed.
+Runs CVL examples on a remote machine via rsync + SSH.
 
 This runner:
 1. Syncs the example directory and CVL code to the remote machine via rsync
-2. SSHs to the remote and runs the CVL script there
-3. Docker commands run on the remote machine (where files exist)
-4. Syncs outputs back to local machine
+2. SSHs to the remote and runs the script there
+3. Syncs outputs back to local machine
 
-This is similar to SSHRunner but:
+Compared to SSHRunner:
 - Uses rsync for efficient file sync (delta transfer)
 - Doesn't require CVL to be installed on remote (we sync it)
+- Uses system ssh command (reads ~/.ssh/config)
 - Better suited for "bring your own GPU VM" workflows
-
-The name "DockerContext" refers to the use case: you have a Docker-capable
-machine accessible via SSH, similar to setting up a Docker context.
 """
 
 import os
@@ -24,30 +21,27 @@ from pathlib import Path
 from typing import Optional, List
 
 
-class DockerContextRunner:
+class RsyncRunner:
     """
-    Run CVL examples on a remote Docker daemon.
+    Run CVL examples on a remote machine via rsync + SSH.
 
     This runner:
-    1. Syncs the example directory to the remote machine
-    2. Sets up Docker to use the remote daemon (via SSH)
-    3. Runs the CVL script (docker commands go to remote)
-    4. Syncs outputs back to local machine
+    1. Syncs the example directory to the remote machine via rsync
+    2. SSHs to the remote and runs the script there
+    3. Syncs outputs back to local machine
 
     Compared to SSHRunner:
-    - SSHRunner: SSH to remote, run script there
-    - DockerContextRunner: Run script locally, docker commands go to remote
-
-    The main advantage is that you can use your local CVL installation and scripts,
-    but execution happens on the remote GPU machine.
+    - Uses rsync for efficient delta file transfer
+    - Uses system ssh command (reads ~/.ssh/config, ssh-agent)
+    - Doesn't require CVL to be installed on remote
 
     Requirements:
     - SSH access to remote machine (key-based auth recommended)
-    - Docker installed on remote machine
     - rsync installed locally and on remote
+    - Docker installed on remote (for examples that use Docker)
 
     Example:
-        runner = DockerContextRunner()
+        runner = RsyncRunner()
         runner.run(
             example="nanogpt",
             preset="train",
