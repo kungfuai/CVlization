@@ -1,5 +1,6 @@
 """SSH-based remote execution for CVL examples."""
 
+import os
 import shlex
 import socket
 import sys
@@ -74,10 +75,58 @@ class SSHRunner:
         Initialize SSH runner.
 
         Args:
-            ssh_key_path: Path to SSH private key (optional)
+            ssh_key_path: Path to SSH private key (optional, reads ~/.ssh/config if not provided)
         """
         self.ssh_key_path = ssh_key_path
         self._ssh = None
+
+    def _load_ssh_config(self):
+        """Load SSH config from ~/.ssh/config if it exists."""
+        try:
+            import paramiko
+            config_path = os.path.expanduser("~/.ssh/config")
+            if os.path.exists(config_path):
+                ssh_config = paramiko.SSHConfig()
+                with open(config_path) as f:
+                    ssh_config.parse(f)
+                return ssh_config
+        except Exception:
+            pass
+        return None
+
+    def _resolve_host(self, host: str, ssh_config) -> tuple:
+        """
+        Resolve host using SSH config.
+
+        Returns:
+            (hostname, user, port, identity_file)
+        """
+        # Parse user@host format
+        if "@" in host:
+            user, hostname = host.split("@", 1)
+        else:
+            user = None
+            hostname = host
+
+        port = 22
+        identity_file = None
+
+        # Look up in SSH config
+        if ssh_config:
+            config = ssh_config.lookup(hostname)
+            hostname = config.get("hostname", hostname)
+            if user is None:
+                user = config.get("user")
+            port = int(config.get("port", 22))
+            identity_files = config.get("identityfile", [])
+            if identity_files:
+                identity_file = identity_files[0]
+
+        # Default user if still not set
+        if user is None:
+            user = "ubuntu"
+
+        return hostname, user, port, identity_file
 
     def run_remote(
         self,
@@ -115,12 +164,12 @@ class SSHRunner:
             print("❌ paramiko not installed. Install with: pip install paramiko")
             sys.exit(1)
 
-        # Parse host
-        if "@" in host:
-            user, hostname = host.split("@", 1)
-        else:
-            user = "ubuntu"
-            hostname = host
+        # Parse host and resolve via SSH config
+        ssh_config = self._load_ssh_config()
+        hostname, user, port, identity_file = self._resolve_host(host, ssh_config)
+
+        # Use explicit ssh_key_path if provided, else use config's IdentityFile
+        key_file = self.ssh_key_path or identity_file
 
         # Connect via SSH
         print(f"🔌 Connecting to {user}@{hostname}...")
@@ -134,7 +183,8 @@ class SSHRunner:
             ssh.connect(
                 hostname,
                 username=user,
-                key_filename=self.ssh_key_path,
+                port=port,
+                key_filename=key_file,
                 timeout=30
             )
             print(f"✅ Connected to {hostname}")
