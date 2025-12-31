@@ -1,6 +1,5 @@
-# torch from base image (2.9.1+cu128)
+# torch and torchvision from base image (2.9.1+cu128)
 # flash_attn from pre-built wheel
-torchvision==0.22.1
 opencv-python==4.10.0.84
 diffusers==0.31.0
 transformers==4.49.0
