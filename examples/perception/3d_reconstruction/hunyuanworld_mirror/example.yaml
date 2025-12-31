@@ -48,12 +48,5 @@ model_source: tencent/HunyuanWorld-Mirror
 license: Apache-2.0
 repository: https://github.com/Tencent-Hunyuan/HunyuanWorld-Mirror
 verification:
-  last_verified: 2025-11-23
-  last_verification_note: |
-    Verified build (PyTorch 2.9.0 runtime), inference with Desk example (2 images),
-    model caching (~3GB HuggingFace), and core outputs on NVIDIA RTX PRO 6000 Blackwell (97.9GB VRAM).
-    Outputs: 357,765-point cloud (5.2MB PLY), 2 depth maps (PNG+NPY), 2 normal maps (PNG).
-    Requires PyTorch 2.9.0+ for Blackwell GPU compatibility.
-    Note: Advanced features (3D Gaussians, rendered videos, COLMAP) disabled by default
-    in runtime image due to missing CUDA toolkit. Enable with --save-gs, --save-rendered,
-    --save-colmap flags (requires switching to devel base image).
+  last_verified: "2025-12-31"
+  last_verification_note: "PyTorch 2.9.0+CUDA 12.8. Feed-forward 3D reconstruction. 357K-point cloud, depth maps, normal maps. Inference ~1s. VRAM: ~20GB."

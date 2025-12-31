@@ -42,5 +42,5 @@ description: >
   Creates natural visual transitions with camera dynamics, environmental
   progression, and narrative continuity for sequential storytelling.
 verification:
-  last_verified: "2025-11-21"
-  last_verification_note: "Verified structure, Docker build (19.8GB), CVL integration, and successful inference generation on A10 GPU (23GB VRAM). Generated 512x384 PNG in ~1s using SDXL base + Next-Scene LoRA. Includes PEFT LoRA support."
+  last_verified: "2025-12-31"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8. SDXL + Next-Scene LoRA. Generates 1024x768 in ~2.5s with 30 steps. VRAM: ~10GB."
