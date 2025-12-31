@@ -1,13 +1,73 @@
 """SSH-based remote execution for CVL examples."""
 
 import shlex
+import socket
 import sys
+import threading
+import time
 from typing import Optional, List
 from pathlib import Path
 
 
+class ChannelWatchdog:
+    """
+    Monitors SSH channel activity and closes it if idle too long.
+
+    This handles the case where the remote process is alive but not producing
+    output (e.g., stuck in a loop, waiting on I/O). The socket timeout only
+    catches network-level issues, not application-level hangs.
+    """
+
+    def __init__(self, channel, timeout_seconds: int):
+        self.channel = channel
+        self.timeout = timeout_seconds
+        self.last_activity = time.time()
+        self.stopped = False
+        self.timed_out = False
+        self._thread = threading.Thread(target=self._watch, daemon=True)
+
+    def start(self):
+        """Start the watchdog thread."""
+        self._thread.start()
+
+    def stop(self):
+        """Stop the watchdog thread."""
+        self.stopped = True
+
+    def ping(self):
+        """Call this when activity occurs to reset the timeout."""
+        self.last_activity = time.time()
+
+    def _watch(self):
+        """Background thread that monitors for inactivity."""
+        while not self.stopped and not self.channel.closed:
+            idle_time = time.time() - self.last_activity
+            if idle_time > self.timeout:
+                self.timed_out = True
+                self.channel.close()
+                break
+            # Check every 10 seconds or 1/10th of timeout, whichever is smaller
+            time.sleep(min(10, self.timeout / 10))
+
+
 class SSHRunner:
-    """Execute CVL examples on remote hosts via SSH."""
+    """
+    Execute CVL examples on remote hosts via SSH.
+
+    Limitations:
+    - No artifact retrieval: Training outputs (checkpoints, logs, models) remain
+      on the remote instance. Configure your training script to upload artifacts
+      to cloud storage (S3, GCS, W&B, etc.) before completion.
+
+    Security Notes:
+    - Uses AutoAddPolicy for host key verification (vulnerable to MITM).
+      For production use, consider verifying host keys via cloud provider API.
+    - The timeout_action parameter is not escaped; only use trusted values.
+    """
+
+    # Socket-level timeout for SSH operations (seconds).
+    # Prevents indefinite hangs if network dies mid-command.
+    CHANNEL_TIMEOUT = 300  # 5 minutes without data = assume dead
 
     def __init__(self, ssh_key_path: Optional[str] = None):
         """
@@ -87,15 +147,36 @@ class SSHRunner:
             cmd = self._build_command(example, preset, args, timeout_minutes, timeout_action)
             print(f"🏃 Running: cvl run {example} {preset}")
 
-            # Execute command
+            # Execute command with watchdog to prevent indefinite hangs
             stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
+            channel = stdout.channel
+
+            # Socket timeout for network-level issues
+            channel.settimeout(self.CHANNEL_TIMEOUT)
+
+            # Watchdog for application-level hangs (no output but connection alive)
+            watchdog = ChannelWatchdog(channel, self.CHANNEL_TIMEOUT)
+            watchdog.start()
 
             # Stream output in real-time
-            for line in stdout:
-                print(line, end='')
+            try:
+                for line in stdout:
+                    watchdog.ping()  # Reset timeout on each line
+                    print(line, end='')
+            except socket.timeout:
+                print(f"\n⚠️ No output received for {self.CHANNEL_TIMEOUT}s, assuming connection lost")
+                return 1
+            except OSError as e:
+                # Channel closed by watchdog or network error
+                if watchdog.timed_out:
+                    print(f"\n⚠️ No output received for {self.CHANNEL_TIMEOUT}s, assuming process hung")
+                    return 1
+                raise
+            finally:
+                watchdog.stop()
 
             # Get exit code
-            exit_code = stdout.channel.recv_exit_status()
+            exit_code = channel.recv_exit_status()
 
             if exit_code == 0:
                 print(f"\n✅ Command completed successfully")
@@ -187,11 +268,12 @@ class SSHRunner:
 
         if timeout_minutes:
             # Wrap with timeout that only triggers action on timeout (exit code 124)
+            # Note: We use `|| true` to capture the exit code without triggering set -e
             full_cmd = f"""
-                set -euo pipefail
+                set -uo pipefail
 
-                timeout {timeout_minutes}m {cvl_cmd}
-                exit_code=$?
+                timeout {timeout_minutes}m {cvl_cmd} || exit_code=$?
+                exit_code=${{exit_code:-0}}
 
                 if [ $exit_code -eq 124 ]; then
                     echo "⏱️ Timeout reached after {timeout_minutes} minutes"
