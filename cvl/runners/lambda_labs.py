@@ -21,6 +21,12 @@ class LambdaLabsRunner:
     - Cleanup on exit, Ctrl+C, or errors
     - Cost estimation before launch
     - Timeout support via remote shutdown
+
+    Limitations:
+    - No artifact retrieval: Training outputs (checkpoints, logs, models) remain
+      on the remote instance and are LOST when the instance terminates. For
+      production use, configure your training script to upload artifacts to
+      cloud storage (S3, GCS, W&B, etc.) before completion.
     """
 
     API_BASE = "https://cloud.lambdalabs.com/api/v1"
@@ -181,6 +187,12 @@ class LambdaLabsRunner:
 
             if status == "active" and ip:
                 return ip
+
+            elif status in ["terminated", "terminating"]:
+                raise RuntimeError(f"Instance was terminated unexpectedly (status: {status})")
+
+            elif status in ["failed", "error"]:
+                raise RuntimeError(f"Instance failed to start (status: {status})")
 
             elif status in ["booting", "unhealthy"]:
                 print(f"   Status: {status}...")
