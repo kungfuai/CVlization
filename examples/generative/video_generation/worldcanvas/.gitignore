@@ -1,0 +1,5 @@
+vendor/WorldCanvas/diffsynth/tokenizer_configs/**/preprocessor_config.json
+vendor/WorldCanvas/diffsynth/tokenizer_configs/**/special_tokens_map.json
+vendor/WorldCanvas/diffsynth/tokenizer_configs/**/tokenizer.json
+vendor/WorldCanvas/diffsynth/tokenizer_configs/**/tokenizer_config.json
+vendor/WorldCanvas/models/Wan-AI/**/tokenizer.json
