@@ -2,5 +2,7 @@
 
 from .ssh_runner import SSHRunner
 from .lambda_labs import LambdaLabsRunner
+from .sagemaker_runner import SageMakerRunner
+from .docker_context import DockerContextRunner
 
-__all__ = ["SSHRunner", "LambdaLabsRunner"]
+__all__ = ["SSHRunner", "LambdaLabsRunner", "SageMakerRunner", "DockerContextRunner"]
