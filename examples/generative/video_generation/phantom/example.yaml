@@ -26,5 +26,5 @@ frameworks:
 description: Phantom video generation model (experimental)
 
 verification:
-  last_verified: "2025-12-30"
-  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8. Build verified. Requires Wan2.1-T2V-1.3B and bytedance-research/Phantom checkpoints. VRAM: ~24GB."
+  last_verified: "2025-12-31"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8 for Blackwell. Auto-downloads Wan2.1 and Phantom models on first run. Subject-to-video generation 17 frames in ~38s. VRAM: ~24GB."
