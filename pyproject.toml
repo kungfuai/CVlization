@@ -39,6 +39,9 @@ dev = [
 remote = [
     "paramiko>=3.0.0",  # For SSH-based remote execution
 ]
+aws = [
+    "boto3>=1.28.0",  # For AWS SageMaker, ECR, CloudWatch
+]
 
 [project.scripts]
 cvl = "cvl.__main__:main"
