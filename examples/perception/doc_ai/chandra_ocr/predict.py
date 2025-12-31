@@ -171,7 +171,7 @@ def main():
     parser.add_argument(
         "--image",
         type=str,
-        default="/cvlization_repo/examples/doc_ai/leaderboard/test_data/sample.jpg",
+        default="/cvlization_repo/examples/perception/doc_ai/leaderboard/test_data/sample.jpg",
         help="Path to input image (default: shared test image)"
     )
     parser.add_argument(

@@ -10,8 +10,32 @@ from PIL import Image, ImageDraw, ImageFont
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
-DEFAULT_IMAGE = "examples/ref1.png"
+DEFAULT_IMAGE = "examples/sample.jpg"
 DEFAULT_OUTPUT_DIR = "outputs/rtdetr"
+
+# HuggingFace sample download config
+HF_REPO_ID = "zzsi/cvl"
+HF_SAMPLE_FILE = "dust3r/desk_view1.jpg"
+
+
+def download_sample_if_needed(sample_path: Path) -> None:
+    """Download sample image from HuggingFace if not present."""
+    if sample_path.exists():
+        return
+
+    print("Downloading sample image from HuggingFace...")
+    from huggingface_hub import hf_hub_download
+
+    sample_path.parent.mkdir(parents=True, exist_ok=True)
+    downloaded = hf_hub_download(
+        repo_id=HF_REPO_ID,
+        filename=HF_SAMPLE_FILE,
+        repo_type="dataset",
+    )
+    # Copy to expected location
+    import shutil
+    shutil.copy(downloaded, sample_path)
+    print(f"  Sample downloaded to {sample_path}")
 
 COCO_CLASSES = [
     "person",
@@ -307,6 +331,7 @@ def main():
     if args.image is None:
         image_path = Path(DEFAULT_IMAGE)
         print(f"No --image provided, using bundled sample: {image_path}")
+        download_sample_if_needed(image_path)
     else:
         image_path = Path(resolve_input_path(args.image))
     # Output always resolves to user's cwd
