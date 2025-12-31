@@ -4,8 +4,10 @@ Execute CVL examples on remote machines with automatic setup and cleanup.
 
 ## Features
 
-- **SSH Runner**: Run on any remote host via SSH
+- **SSH Runner**: Run on any remote host via SSH (requires CVL installed on remote)
+- **Docker Context Runner**: Rsync files + SSH execution (no remote CVL needed)
 - **Lambda Labs Runner**: Automated instance lifecycle management
+- **SageMaker Runner**: AWS managed training with spot instances and S3 artifacts
 - **Automatic cleanup**: Guaranteed instance termination on exit/error/Ctrl+C
 - **Timeout support**: Kill runaway jobs with remote shutdown
 - **Cost estimation**: See pricing before launching
@@ -14,11 +16,14 @@ Execute CVL examples on remote machines with automatic setup and cleanup.
 ## Installation
 
 ```bash
-# Install CVL with remote execution support
+# Install CVL with SSH remote execution
 pip install -e .[remote]
 
-# Or install dependencies manually
-pip install paramiko requests
+# Install CVL with AWS SageMaker support
+pip install -e .[aws]
+
+# Install all remote execution options
+pip install -e .[remote,aws]
 ```
 
 ## Usage
@@ -74,6 +79,80 @@ runner.run(
 # Coming soon: cvl run --remote lambda command
 python -m cvl.runners.example_usage lambda
 ```
+
+### Docker Context Runner (Rsync + SSH)
+
+Best for "I have a GPU VM somewhere" - syncs files via rsync, runs on remote.
+
+```python
+from cvl.runners import DockerContextRunner
+
+runner = DockerContextRunner()
+
+runner.run(
+    example="nanogpt",
+    preset="train",
+    args=["--max_iters=1000"],
+    host="ubuntu@gpu-server",  # SSH host or config alias
+
+    # Optional
+    remote_workdir="/tmp/cvl-remote",  # Where to sync files
+    sync_outputs=True,                  # Rsync outputs back
+    timeout_minutes=120,
+)
+```
+
+**How it works:**
+1. Rsyncs example directory to remote machine
+2. SSHs to remote and runs the script there
+3. Docker commands run on remote (where files exist)
+4. Rsyncs outputs back to local machine
+
+**Difference from SSHRunner:**
+- Uses rsync for efficient delta file transfer
+- Doesn't require CVL to be installed on remote
+- Better for iterative development (fast re-sync)
+
+### SageMaker Runner (AWS Managed Training)
+
+Best for production ML training with artifact management and spot instances.
+
+```python
+from cvl.runners import SageMakerRunner
+
+runner = SageMakerRunner(
+    role_arn="arn:aws:iam::123456789:role/SageMakerExecutionRole",
+    region="us-east-1"  # Optional, defaults to AWS_DEFAULT_REGION
+)
+
+runner.run(
+    example="nanogpt",
+    preset="train",
+    args=["--max_iters=1000"],
+    instance_type="ml.g5.xlarge",
+    output_path="s3://my-bucket/training-outputs/",
+
+    # Optional parameters
+    spot=True,                    # Use spot instances (up to 70% cheaper)
+    max_wait_minutes=60,          # Max wait for spot capacity
+    max_run_minutes=120,          # Job timeout
+    entry_command="python train.py",  # Override default command
+    download_outputs=True,        # Download artifacts after training
+)
+```
+
+**Prerequisites:**
+1. AWS credentials configured (`aws configure` or environment variables)
+2. IAM role with SageMaker, ECR, S3, and CloudWatch permissions
+3. Docker installed locally (for building images)
+4. S3 bucket for outputs
+
+**How it works:**
+1. Builds Docker image from example's Dockerfile
+2. Pushes to ECR (creates repository if needed)
+3. Starts SageMaker training job
+4. Streams CloudWatch logs in real-time
+5. Downloads outputs from S3 on completion
 
 ## Configuration
 
@@ -176,14 +255,18 @@ runner.run("nanogpt", "train", ["--max_iters=100"], timeout_minutes=10)
 ## Architecture
 
 ```
-┌─────────────────┐
-│ LambdaLabsRunner│  (Lifecycle: create → wait → run → terminate)
-└────────┬────────┘
-         │ uses
-         ▼
-┌─────────────────┐
-│   SSHRunner     │  (Execution: connect → setup → command → stream)
-└─────────────────┘
+┌─────────────────┐  ┌───────────────────┐  ┌──────────────────┐
+│ LambdaLabsRunner│  │DockerContextRunner│  │  SageMakerRunner │
+│ (create→run→    │  │ (rsync→ssh→run→   │  │ (build→push→     │
+│  terminate)     │  │  rsync outputs)   │  │  train→download) │
+└────────┬────────┘  └─────────┬─────────┘  └──────────────────┘
+         │                     │                  │ uses
+         │ uses                │ uses             ▼
+         ▼                     ▼            ┌──────────────────┐
+┌─────────────────┐     ┌───────────┐       │   AWS APIs       │
+│   SSHRunner     │     │ rsync+SSH │       │ (ECR, SageMaker, │
+│ (SSH execution) │     └───────────┘       │  CloudWatch, S3) │
+└─────────────────┘                         └──────────────────┘
 ```
 
 **Lambda Labs Runner:**
@@ -198,6 +281,19 @@ runner.run("nanogpt", "train", ["--max_iters=100"], timeout_minutes=10)
 - Proper argument escaping (prevents shell injection)
 - Timeout with remote actions
 - Real-time output streaming
+
+**Docker Context Runner:**
+- Rsyncs files to remote (efficient delta transfer)
+- Doesn't require CVL installed on remote
+- Better for iterative development
+- Syncs outputs back automatically
+
+**SageMaker Runner:**
+- Builds and pushes Docker image to ECR
+- Creates managed training job
+- Streams CloudWatch logs
+- Downloads artifacts from S3
+- Spot instance support for cost savings
 
 ## Troubleshooting
 
@@ -224,15 +320,34 @@ export LAMBDA_API_KEY=your_key
 - Manually terminate if needed
 - Check for orphaned instances regularly
 
+**"boto3 not installed"**
+```bash
+pip install boto3
+# Or: pip install -e .[aws]
+```
+
+**"ECR push failed"**
+- Check AWS credentials: `aws sts get-caller-identity`
+- Ensure IAM permissions for ECR (ecr:GetAuthorizationToken, ecr:CreateRepository, etc.)
+
+**"SageMaker training job failed"**
+- Check CloudWatch logs in AWS Console
+- Verify IAM role has S3 and ECR access
+- Check S3 bucket exists and is accessible
+
 ## Future Enhancements
 
 - [ ] CLI integration: `cvl run --ssh host example preset`
 - [ ] CLI integration: `cvl run --remote lambda example preset`
+- [ ] CLI integration: `cvl run --sagemaker example preset`
 - [ ] State file for orphaned instance cleanup
-- [ ] Support for other cloud providers (AWS, GCP, RunPod)
+- [ ] EC2 Runner (thin wrapper around SSHRunner with EC2 lifecycle)
+- [ ] Modal Runner (serverless GPU)
+- [ ] RunPod Runner (similar to Lambda Labs)
+- [ ] GCP Vertex AI Runner
 - [ ] Heartbeat pattern for bulletproof cleanup
-- [ ] Artifact download (save checkpoints locally)
-- [ ] Multi-instance support (parallel runs)
+- [ ] Multi-instance support (distributed training)
+- [x] ~~Artifact download (save checkpoints locally)~~ - Implemented in SageMaker runner
 
 ## Development
 
