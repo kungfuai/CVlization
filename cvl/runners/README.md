@@ -183,6 +183,33 @@ runner.run(
 3. Streams logs in real-time
 4. Cleans up job on completion/interrupt
 
+### SkyPilot Runner (Multi-Cloud)
+
+Run on any cloud with automatic cost optimization.
+
+```python
+from cvl.runners import SkyPilotRunner
+
+runner = SkyPilotRunner()
+
+runner.run(
+    command="python train.py --max_iters=1000",
+    workdir="./examples/nanogpt",
+    gpu="A100:1",
+    use_spot=True,  # Use spot instances
+)
+```
+
+**Prerequisites:**
+1. SkyPilot installed: `pip install "skypilot[aws]"` (or gcp, azure)
+2. Cloud credentials configured
+
+**How it works:**
+1. Provisions instance on cheapest available cloud
+2. Syncs workdir to remote
+3. Runs command with streaming logs
+4. Tears down on completion/interrupt
+
 ## Configuration
 
 ### SSH Authentication
@@ -291,6 +318,7 @@ LambdaLabsRunner       create → ssh → run → terminate   Lambda API
 DockerContextRunner    rsync → ssh → run → rsync back   rsync + SSH
 SageMakerRunner        build → push → train → download  AWS APIs
 K8sRunner              create job → stream → cleanup    Kubernetes API
+SkyPilotRunner         launch → sync → run → down       SkyPilot
 ```
 
 **Lambda Labs Runner:**
@@ -324,6 +352,12 @@ K8sRunner              create job → stream → cleanup    Kubernetes API
 - Streams pod logs in real-time
 - Automatic cleanup on completion/interrupt
 - Works with any k8s cluster (EKS, GKE, AKS, local)
+
+**SkyPilot Runner:**
+- Multi-cloud abstraction (AWS, GCP, Azure, Lambda Labs)
+- Automatic spot instance management
+- File syncing and setup
+- Cost optimization across providers
 
 ## Troubleshooting
 

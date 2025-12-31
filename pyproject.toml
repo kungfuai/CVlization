@@ -45,6 +45,9 @@ aws = [
 k8s = [
     "kubernetes>=28.0.0",  # For Kubernetes Job runner
 ]
+skypilot = [
+    "skypilot>=0.4.0",  # For multi-cloud runner
+]
 
 [project.scripts]
 cvl = "cvl.__main__:main"
