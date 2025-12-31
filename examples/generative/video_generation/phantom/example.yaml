@@ -24,3 +24,7 @@ tasks:
 frameworks:
 - pytorch
 description: Phantom video generation model (experimental)
+
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8. Build verified. Requires Wan2.1-T2V-1.3B and bytedance-research/Phantom checkpoints. VRAM: ~24GB."
