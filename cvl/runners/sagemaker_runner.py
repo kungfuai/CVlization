@@ -271,6 +271,10 @@ class SageMakerRunner:
         if not entry_script.exists():
             raise FileNotFoundError(f"Entry script not found: {entry_script}")
 
+        # Get cvlization package path (relative to this file)
+        cvl_root = Path(__file__).parent.parent.parent
+        cvlization_pkg = cvl_root / "cvlization"
+
         # Create temp directory for wrapper build
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -282,8 +286,29 @@ class SageMakerRunner:
             example_copy = tmpdir / "example"
             shutil.copytree(example_dir, example_copy, dirs_exist_ok=True)
 
+            # Copy cvlization package if it exists (needed for examples that import it)
+            # Filter out unnecessary files to keep image small
+            cvlization_copy = tmpdir / "cvlization"
+            if cvlization_pkg.exists():
+                def ignore_patterns(directory, files):
+                    """Ignore pycache, tests, and other non-essential files."""
+                    ignored = []
+                    for f in files:
+                        # Ignore pycache and compiled files
+                        if f == "__pycache__" or f.endswith(".pyc") or f.endswith(".pyo"):
+                            ignored.append(f)
+                        # Ignore test files
+                        elif f.startswith("test_") or f == "tests":
+                            ignored.append(f)
+                        # Ignore large data files
+                        elif f.endswith((".pkl", ".bin", ".pt", ".pth", ".ckpt")):
+                            ignored.append(f)
+                    return ignored
+                shutil.copytree(cvlization_pkg, cvlization_copy, ignore=ignore_patterns, dirs_exist_ok=True)
+
             # Create wrapper Dockerfile
             wrapper_dockerfile = tmpdir / "Dockerfile"
+            has_cvlization = cvlization_pkg.exists()
             wrapper_dockerfile.write_text(f"""\
 FROM {base_tag}
 
@@ -292,6 +317,12 @@ COPY sagemaker_entry.py /opt/ml/code/sagemaker_entry.py
 
 # Copy example files to workspace (in case not already there)
 COPY example/ /workspace/
+
+{"# Copy cvlization package for imports" if has_cvlization else ""}
+{"COPY cvlization/ /workspace/cvlization/" if has_cvlization else ""}
+
+# Add cvlization to Python path
+ENV PYTHONPATH="/workspace:$PYTHONPATH"
 
 # Set working directory
 WORKDIR /workspace
