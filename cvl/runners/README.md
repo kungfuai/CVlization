@@ -85,9 +85,9 @@ python -m cvl.runners.example_usage lambda
 Best for "I have a GPU VM somewhere" - syncs files via rsync, runs on remote.
 
 ```python
-from cvl.runners import DockerContextRunner
+from cvl.runners import RsyncRunner
 
-runner = DockerContextRunner()
+runner = RsyncRunner()
 
 runner.run(
     example="nanogpt",
@@ -315,7 +315,7 @@ Runner                 Workflow                          Backend
 ─────────────────────────────────────────────────────────────────────
 SSHRunner              ssh → run → stream               paramiko
 LambdaLabsRunner       create → ssh → run → terminate   Lambda API
-DockerContextRunner    rsync → ssh → run → rsync back   rsync + SSH
+RsyncRunner    rsync → ssh → run → rsync back   rsync + SSH
 SageMakerRunner        build → push → train → download  AWS APIs
 K8sRunner              create job → stream → cleanup    Kubernetes API
 SkyPilotRunner         launch → sync → run → down       SkyPilot
