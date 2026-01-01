@@ -38,10 +38,5 @@ frameworks:
 - langchain
 description: LangGraph-based helpdesk RAG agent with Chroma vector store, mock/remote LLM support, and heuristic evaluation.
 verification:
-  last_verified: 2025-11-04
-  commands:
-  - cvl run agentic-rag-langgraph-helpdesk build
-  - cvl run agentic-rag-langgraph-helpdesk ingest
-  - cvl run agentic-rag-langgraph-helpdesk predict -- --question "How can I list the available CVlization recipes?"
-  - cvl run agentic-rag-langgraph-helpdesk evaluate
-  notes: Verified with mock LLM using bundled synthetic docs; evaluation uses heuristic hit/coverage metrics.
+  last_verified: "2025-12-31"
+  last_verification_note: "LangGraph RAG agent with Chroma vector store. Ingest and predict working. CPU-only."

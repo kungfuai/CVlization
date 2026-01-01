@@ -29,5 +29,5 @@ frameworks:
 - torchvision
 description: Instance segmentation training with Torchvision (Mask R-CNN)
 verification:
-  last_verified: 2025-10-26
-  last_verification_note: "Build successful (PyTorch 2.4.0, Lightning 2.4.0). Training verified with Mask R-CNN on Penn-Fudan pedestrian dataset. Model quality clearly improving with mAP 0.05% → 99%."
+  last_verified: "2025-12-31"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8. Mask R-CNN training on Penn-Fudan. mAP 70%, mAP@50 99.8% after 5 epochs. VRAM: ~12GB."
