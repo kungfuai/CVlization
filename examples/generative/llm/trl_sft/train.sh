@@ -31,6 +31,6 @@ docker run --rm --gpus=all --shm-size 16G \
     --env "PYTHONPATH=/cvlization_repo" \
     --env "PYTHONUNBUFFERED=1" \
     ${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
-    "$IMG" "$@"
+    "$IMG" python train.py "$@"
 
 echo "✅ Training complete!"

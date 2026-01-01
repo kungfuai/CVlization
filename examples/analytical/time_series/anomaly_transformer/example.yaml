@@ -12,6 +12,7 @@ resources:
   gpu: 1
   cpu_cores: 4
   disk_gb: 5
+image: anomaly_transformer
 presets:
   build:
     script: build.sh
