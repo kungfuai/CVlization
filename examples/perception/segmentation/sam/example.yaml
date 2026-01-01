@@ -1,5 +1,6 @@
 name: sam
 capability: perception/segmentation
+image: sam_is
 modalities:
 - vision
 datasets:
@@ -27,3 +28,6 @@ tasks:
 frameworks:
 - pytorch
 description: Fine-tune Meta's Segment Anything Model (SAM) using MobileSAM for instance segmentation on custom datasets
+verification:
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Build verified, training starts on PennFudan dataset."
