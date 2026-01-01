@@ -1,0 +1,72 @@
+{
+  "image": "/mnt/cvl/workspace/examples/human.png",
+  "image_size": [
+    643,
+    648
+  ],
+  "model": "owlv2-base-patch16",
+  "queries": [
+    "a photo of a person",
+    "a photo of a necklace",
+    "a photo of a shirt"
+  ],
+  "threshold": 0.1,
+  "num_detections": 5,
+  "detections": [
+    {
+      "box": [
+        133.6006622314453,
+        29.25199317932129,
+        617.0047607421875,
+        645.5996704101562
+      ],
+      "score": 0.23948390781879425,
+      "label": "a photo of a person",
+      "label_id": 0
+    },
+    {
+      "box": [
+        279.1107482910156,
+        267.1387939453125,
+        325.9401550292969,
+        372.47222900390625
+      ],
+      "score": 0.13562867045402527,
+      "label": "a photo of a necklace",
+      "label_id": 1
+    },
+    {
+      "box": [
+        282.2790222167969,
+        273.2886657714844,
+        324.4921875,
+        303.65667724609375
+      ],
+      "score": 0.3512042760848999,
+      "label": "a photo of a necklace",
+      "label_id": 1
+    },
+    {
+      "box": [
+        280.425537109375,
+        270.5594482421875,
+        320.9315185546875,
+        375.11297607421875
+      ],
+      "score": 0.4608897268772125,
+      "label": "a photo of a necklace",
+      "label_id": 1
+    },
+    {
+      "box": [
+        138.26910400390625,
+        198.2385711669922,
+        611.9962158203125,
+        649.8833618164062
+      ],
+      "score": 0.403201699256897,
+      "label": "a photo of a shirt",
+      "label_id": 2
+    }
+  ]
+}
