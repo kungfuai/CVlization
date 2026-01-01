@@ -33,4 +33,7 @@ frameworks:
   - catboost
   - scikit-learn
 description: CatBoost quantile regression on California Housing to produce asymmetric prediction intervals.
-last_verification_note: "2025-11-04: Build/train/predict verified on Apple M4 Pro (CPU). MAE 0.28; coverage ~0.73 for 10-90 quantile band on California Housing."
+
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Verified build and predict with pre-trained models. CPU-only, no GPU required."

@@ -37,5 +37,5 @@ frameworks:
   - dllm
 description: Diffusion Language Models (dLLM) - text generation via iterative denoising. Supports Qwen-BD3LM (0.6B), BERT-Chat (395M), and LLaDA (8B).
 verification:
-  last_verified: 2025-12-13
-  last_verification_note: "Verified build, inference for all 3 models on RTX 3090 (24GB). VRAM: qwen-bd3lm 1.8GB, bert-chat 1.2GB, llada 15.4GB. Model caching via HuggingFace hub."
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Verified qwen-bd3lm inference ('What is 2+2?' -> '2+2 equals 4.') with 128 steps."

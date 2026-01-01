@@ -1,5 +1,6 @@
 name: image-classification-torch
 capability: perception/image_classification
+image: img_classify_torch
 modalities:
 - vision
 datasets:
@@ -29,3 +30,6 @@ frameworks:
 - pytorch
 - torchvision
 description: Image classification training with Torchvision models
+verification:
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Training on CIFAR10 verified on Blackwell (~120 it/s). Multi-GPU DDP working."

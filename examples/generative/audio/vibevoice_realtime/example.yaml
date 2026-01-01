@@ -40,3 +40,7 @@ frameworks:
   - pytorch
   - transformers
 description: Real-time text-to-speech with ~300ms latency using Microsoft VibeVoice-Realtime-0.5B
+
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8 for Blackwell. Uses eager attention (flash-attn fails on runtime image). VRAM: ~8GB."

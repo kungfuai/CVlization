@@ -25,4 +25,4 @@ docker run --rm --gpus=all \
 	--env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
 	${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
 	"$IMG" \
-	python predict.py "$@"
+	python generate.py "$@"

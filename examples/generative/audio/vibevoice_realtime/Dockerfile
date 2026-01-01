@@ -1,6 +1,6 @@
 # VibeVoice-Realtime-0.5B: Real-time TTS inference
-# Based on Microsoft's recommended NVIDIA PyTorch container
-FROM nvcr.io/nvidia/pytorch:24.07-py3
+# PyTorch 2.9.1 with CUDA 12.8 for Blackwell GPU support
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 # Set working directory
 WORKDIR /workspace

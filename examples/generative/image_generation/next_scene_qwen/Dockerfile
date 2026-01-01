@@ -1,13 +1,9 @@
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
-ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-dev \
-    python3-pip \
     git \
     wget \
     libsm6 \
@@ -15,24 +11,14 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python 3.11 as default
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
-
-# Upgrade pip
-RUN python3 -m pip install --upgrade pip
-
-# Install PyTorch with CUDA support
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
 # Install diffusers and transformers
 RUN pip install \
-    diffusers>=0.30.0 \
-    transformers>=4.44.0 \
-    accelerate>=0.33.0 \
-    huggingface-hub>=0.24.0 \
-    safetensors>=0.4.4 \
-    peft>=0.12.0 \
+    "diffusers>=0.30.0" \
+    "transformers>=4.44.0" \
+    "accelerate>=0.33.0" \
+    "huggingface-hub>=0.24.0" \
+    "safetensors>=0.4.4" \
+    "peft>=0.12.0" \
     sentencepiece \
     protobuf
 

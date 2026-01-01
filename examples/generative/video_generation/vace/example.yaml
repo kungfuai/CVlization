@@ -34,5 +34,5 @@ frameworks:
 - pytorch
 description: VACE (Video Animation Control Extension) for video generation
 verification:
-  last_verified: 2025-10-26
-  last_verification_note: "Build successful (30.5GB image). End-to-end inference verified with frameref task using --sample_steps 2, successfully generated video output in 2m42s. Models pre-downloaded (18GB). Script supports --base {ltx,wan}, --sample_steps, and --num_inference_steps. Tested on NVIDIA A10 (24GB VRAM)."
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 (runtime). Pre-built flash-attn 2.8.3 wheel. Lazy HF model download for VACE-Annotators (~19GB) and LTX inference models. Verified image_depth task with LTX base: depth preprocessing + 40-step video generation at ~23 it/s."

@@ -27,5 +27,5 @@ frameworks:
 - pytorch
 description: Flux Schnell text-to-image generation (via Replicate/Cog)
 verification:
-  last_verified: 2025-10-25
-  last_verification_note: "Build successful (both ./build.sh and cvl run). Inference execution verified with both methods (./predict.sh and cvl run flux predict). Output generation: 1024x1024 PNG, 1.4MB. Model caching to HuggingFace hub (~/.cache/huggingface/). All Python packages pinned in requirements.txt. CPU offloading optimizations allow inference to run with ~14GB VRAM instead of the full 24GB requirement."
+  last_verified: "2025-12-30"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8 for Blackwell. Pinned dependencies. VRAM: ~14GB with CPU offloading."

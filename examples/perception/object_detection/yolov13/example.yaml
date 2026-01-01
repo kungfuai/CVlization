@@ -25,5 +25,5 @@ description: YOLOv13 object detection inference using ultralytics weights.
 tasks:
   - object_detection
 verification:
-  last_verified: 2025-11-23
-  last_verification_note: "Initial YOLOv13 inference preset; GPU recommended for speed."
+  last_verified: "2025-12-31"
+  last_verification_note: "Verified on Blackwell. PyTorch 2.9.0+CUDA 12.8. Fast object detection. VRAM: ~6GB."

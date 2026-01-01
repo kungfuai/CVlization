@@ -1,9 +1,6 @@
-torch==2.2.0
-torchvision==0.17.0
-diffusers==0.30.0
-transformers==4.43.3
+# torch and torchvision from base image (2.9.1+cu128)
+diffusers==0.32.2
+transformers==4.48.2
 accelerate==0.33.0
 sentencepiece==0.2.0
-protobuf==5.27.3
-numpy==1.26.4
-pillow==10.4.0
+protobuf==5.29.3

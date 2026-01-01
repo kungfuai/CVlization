@@ -26,5 +26,5 @@ description: RT-DETRv2 single-image object detection with TorchHub or Transforme
 tasks:
   - object_detection
 verification:
-  last_verified: 2025-11-23
-  last_verification_note: "Initial inference-only example using RT-DETRv2 torchhub/transformers backends."
+  last_verified: "2025-12-31"
+  last_verification_note: "Fixed bundled sample (broken symlink). Downloads from HuggingFace on first run. PyTorch 2.9.0+CUDA 12.8. VRAM: ~2GB."

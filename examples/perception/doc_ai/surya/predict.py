@@ -202,7 +202,7 @@ def main():
     output_path = Path(resolve_output_path(args.output, OUT))
 
     # Validate input file (if not URL)
-    if not args.image.startswith("http") and not Path(input_path).exists():
+    if args.image is not None and not args.image.startswith("http") and not Path(input_path).exists():
         print(f"Error: Input file '{input_path}' not found")
         return 1
 
