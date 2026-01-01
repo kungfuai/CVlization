@@ -13,12 +13,12 @@ RUN apt-get update && apt-get install -y \
 
 # Install diffusers and transformers
 RUN pip install \
-    diffusers>=0.30.0 \
-    transformers>=4.44.0 \
-    accelerate>=0.33.0 \
-    huggingface-hub>=0.24.0 \
-    safetensors>=0.4.4 \
-    peft>=0.12.0 \
+    "diffusers>=0.30.0" \
+    "transformers>=4.44.0" \
+    "accelerate>=0.33.0" \
+    "huggingface-hub>=0.24.0" \
+    "safetensors>=0.4.4" \
+    "peft>=0.12.0" \
     sentencepiece \
     protobuf
 
