@@ -9,6 +9,6 @@ RUN apt-get update && \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-ADD requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
