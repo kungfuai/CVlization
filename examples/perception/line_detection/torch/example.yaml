@@ -1,5 +1,6 @@
 name: line-detection-torch
 capability: perception/line_detection
+image: line_detection_torch
 modalities:
 - vision
 datasets:
@@ -25,5 +26,5 @@ frameworks:
 - pytorch
 description: Line detection in images using PyTorch
 verification:
-  last_verified: 2025-10-25
-  last_verification_note: "Build successful (8.18GB image). Training initialization and dataset loading verified (York Lines, 27MB). Dataset downloads to ~/.cache/cvlization/data/york_lines/. Pretrained weights cached to ~/.cache/torch/ (ResNet50, DETR). Lazy downloading verified. Training metrics not fully verified due to GPU memory constraints (CUDA OOM on shared A10 GPU)."
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Training verified on Blackwell (loss ~30→22 over 2 epochs)."
