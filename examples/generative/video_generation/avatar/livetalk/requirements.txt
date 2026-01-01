@@ -1,0 +1,40 @@
+# Core ML/DL (torch 2.9.1 + torchvision 0.24.1 already in base image)
+diffusers==0.31.0
+transformers==4.47.0
+accelerate==1.2.1
+peft==0.14.0
+safetensors==0.4.5
+huggingface_hub==0.27.0
+
+# Audio processing
+librosa==0.10.2.post1
+av==13.1.0
+
+# Image/Video processing
+opencv-python==4.9.0.80
+imageio==2.36.0
+imageio-ffmpeg==0.5.1
+scikit-image==0.24.0
+
+# Data/Config
+numpy==1.26.4
+scipy==1.14.0
+omegaconf==2.3.0
+pydantic==2.10.6
+einops==0.8.0
+easydict==1.13
+
+# Text processing
+tokenizers==0.21.0
+sentencepiece==0.2.0
+ftfy==6.3.1
+
+# CLIP
+open_clip_torch==2.29.0
+
+# Utilities
+tqdm==4.67.1
+matplotlib==3.9.2
+
+# xfuser for distributed inference
+xfuser==0.4.1
