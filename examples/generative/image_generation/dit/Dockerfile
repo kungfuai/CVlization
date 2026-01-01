@@ -1,7 +1,10 @@
-FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-runtime
-# FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 WORKDIR /workspace
-RUN pip install accelerate==0.27.2 transformers==4.37.2 datasets==2.17.* timm==0.9.16 diffusers==0.26.3
-# RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
-# RUN pip install flash-attn==2.5.5 # requires git, cuda source
+
+RUN pip install --no-cache-dir \
+    accelerate==1.7.0 \
+    transformers==4.48.3 \
+    datasets==3.6.0 \
+    timm==1.0.15 \
+    diffusers==0.36.0
