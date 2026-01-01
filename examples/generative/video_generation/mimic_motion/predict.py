@@ -22,6 +22,21 @@ from mimicmotion.utils.loader import create_pipeline
 from mimicmotion.utils.utils import save_to_mp4
 from mimicmotion.dwpose.preprocess import get_video_pose, get_image_pose
 
+# Sample data URLs (GitHub raw links for bundled test files)
+SAMPLE_VIDEO_URL = "https://github.com/Tencent/MimicMotion/raw/main/assets/example_data/videos/pose1.mp4"
+SAMPLE_VIDEO_PATH = "/workspace/example_data/videos/pose1.mp4"
+
+
+def ensure_sample_video():
+    """Download sample video if missing (for bundled test case)."""
+    import urllib.request
+    if not os.path.exists(SAMPLE_VIDEO_PATH):
+        os.makedirs(os.path.dirname(SAMPLE_VIDEO_PATH), exist_ok=True)
+        print(f"Downloading sample video to {SAMPLE_VIDEO_PATH}...")
+        urllib.request.urlretrieve(SAMPLE_VIDEO_URL, SAMPLE_VIDEO_PATH)
+        print(f"Downloaded sample video ({os.path.getsize(SAMPLE_VIDEO_PATH) / 1e6:.1f} MB)")
+
+
 ASPECT_RATIO = 9 / 16
 logging.basicConfig(level=logging.INFO, format="%(asctime)s: [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -138,6 +153,9 @@ def run_pipeline(pipeline: MimicMotionPipeline, image_pixels, pose_pixels, devic
 
 @torch.no_grad()
 def main(args):
+    # Download sample video if using default config and video is missing
+    ensure_sample_video()
+
     if not args.no_use_float16 :
         torch.set_default_dtype(torch.float16)
 

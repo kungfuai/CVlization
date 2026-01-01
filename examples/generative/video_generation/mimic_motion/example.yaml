@@ -28,4 +28,4 @@ frameworks:
 description: MimicMotion from Tencent for motion transfer and character animation
 verification:
   last_verified: "2026-01-01"
-  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Build and predict --help verified."
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Predict verified (DWPose ~62fps, diffusion ~6min for 530 frames). VRAM: ~24GB."

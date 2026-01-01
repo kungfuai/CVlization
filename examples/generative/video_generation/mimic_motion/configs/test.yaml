@@ -14,8 +14,8 @@ memory_optimization:
   vae_slicing: true
 
 test_case:
-  - ref_video_path: example_data/videos/pose1.mp4  # path to your reference video
-    ref_image_path: example_data/images/demo1.jpg  # path to your reference image
+  - ref_video_path: /workspace/example_data/videos/pose1.mp4  # path to your reference video
+    ref_image_path: /workspace/example_data/images/demo1.jpg  # path to your reference image
     num_frames: 48  # number of frames in the reference video
     resolution: 512  # resolution of the reference video
     frames_overlap: 4  # number of frames to overlap between tiles
