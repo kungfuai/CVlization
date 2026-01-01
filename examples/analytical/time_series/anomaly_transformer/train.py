@@ -18,8 +18,8 @@ def parse_args():
 
     # Dataset
     parser.add_argument('--dataset', type=str, default='SMAP',
-                       choices=['SMAP', 'MSL', 'SMD', 'PSM'],
-                       help='Dataset name')
+                       choices=['SMAP', 'MSL'],
+                       help='Dataset name (NASA spacecraft telemetry)')
     parser.add_argument('--data-dir', type=str,
                        default='/root/.cache/cvlization/anomaly_data',
                        help='Data directory')
@@ -61,34 +61,9 @@ def parse_args():
     return parser.parse_args()
 
 
-def association_discrepancy(series, prior):
+def train_epoch(model, train_loader, optimizer, criterion, device):
     """
-    Compute association discrepancy between series-association and prior-association.
-
-    Args:
-        series: (B, H, L, L) series-association (learned attention)
-        prior: (B, L, L) prior-association (Gaussian kernel)
-
-    Returns:
-        discrepancy: Scalar loss value
-    """
-    # Average over heads
-    series = series.mean(dim=1)  # (B, L, L)
-
-    # Compute KL divergence
-    # Add small epsilon for numerical stability
-    series = torch.clamp(series, min=1e-8, max=1.0)
-    prior = torch.clamp(prior, min=1e-8, max=1.0)
-
-    # KL(series || prior)
-    kl = (series * (torch.log(series) - torch.log(prior))).sum(dim=-1).mean()
-
-    return kl
-
-
-def train_epoch(model, train_loader, optimizer, criterion, device, k=3):
-    """
-    Train for one epoch with minimax strategy.
+    Train for one epoch using reconstruction loss only.
 
     Args:
         model: AnomalyTransformer model
@@ -96,7 +71,6 @@ def train_epoch(model, train_loader, optimizer, criterion, device, k=3):
         optimizer: Optimizer
         criterion: Loss criterion (MSE for reconstruction)
         device: Device
-        k: Number of minimax iterations
 
     Returns:
         avg_loss: Average loss for the epoch
@@ -109,37 +83,22 @@ def train_epoch(model, train_loader, optimizer, criterion, device, k=3):
         for batch_x, _ in pbar:
             batch_x = batch_x.float().to(device)
 
-            # Minimax strategy
-            for i in range(k):
-                # Forward pass
-                reconstruction, series_list, prior_list = model(batch_x)
+            # Forward pass
+            reconstruction, _, _ = model(batch_x)
 
-                # Reconstruction loss
-                rec_loss = criterion(reconstruction, batch_x)
+            # Reconstruction loss
+            loss = criterion(reconstruction, batch_x)
 
-                # Association discrepancy (across all layers)
-                disc_loss = 0
-                for series, prior in zip(series_list, prior_list):
-                    if series is not None and prior is not None:
-                        disc_loss += association_discrepancy(series, prior)
+            optimizer.zero_grad()
+            loss.backward()
+            # Gradient clipping for stability
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
 
-                disc_loss = disc_loss / len(series_list)
-
-                # Minimax: Phase 1 - Maximize discrepancy (update model)
-                if i < k - 1:
-                    loss = -disc_loss
-                # Phase 2 - Minimize reconstruction + discrepancy (final update)
-                else:
-                    loss = rec_loss - disc_loss
-
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-            total_loss += rec_loss.item()
+            total_loss += loss.item()
             count += 1
 
-            pbar.set_postfix({'loss': rec_loss.item()})
+            pbar.set_postfix({'loss': f'{loss.item():.4f}'})
 
     return total_loss / count
 
