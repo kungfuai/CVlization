@@ -26,5 +26,5 @@ frameworks:
 - pytorch
 description: Conditional Flow Matching for image generation
 verification:
-  last_verified: 2025-10-25
-  last_verification_note: "Build successful. Training initialization verified with CIFAR10 dataset lazy downloading (170MB), loss decreasing (1.20→1.16 over 100 steps). Model: 34.09M params, ~4 it/s. Tested on NVIDIA A10 (24GB VRAM)."
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Training verified with CIFAR10 (170MB download). Loss 1.20→1.16 over 100 steps. 34.09M params, ~8 it/s."

@@ -5,14 +5,11 @@
 # You should have received a copy of the license along with this
 # work. If not, see http://creativecommons.org/licenses/by-nc-sa/4.0/
 
-FROM nvcr.io/nvidia/pytorch:24.02-py3
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-RUN pip install diffusers==0.26.3 accelerate==0.27.2
+RUN pip install diffusers==0.36.0 accelerate==1.12.0
 
 WORKDIR /workspace
-
-RUN (printf '#!/bin/bash\nexec \"$@\"\n' >> /entry.sh) && chmod a+x /entry.sh
-ENTRYPOINT ["/entry.sh"]
