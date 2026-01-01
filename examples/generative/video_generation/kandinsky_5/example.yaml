@@ -31,4 +31,4 @@ description: Kandinsky 5.0 - 2B parameter video/image generation model with T2V,
 
 verification:
   last_verified: "2026-01-01"
-  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Build verified. Inference OOM on 96GB (needs ~86GB)."
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. T2V verified at 512x512 with --offload --qwen_quantization (~6.5min for 5s). 768x512 OOM on 96GB."
