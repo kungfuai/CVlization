@@ -1,0 +1,53 @@
+{
+  "image": "/cvlization_repo/examples/perception/doc_ai/leaderboard/test_data/sample.jpg",
+  "model": "juliozhao/DocLayout-YOLO-DocStructBench",
+  "confidence_threshold": 0.2,
+  "image_size": 1024,
+  "num_detections": 4,
+  "detections": [
+    {
+      "class": "plain text",
+      "class_id": 1,
+      "confidence": 0.8219,
+      "bbox": {
+        "x1": 48.47,
+        "y1": 266.51,
+        "x2": 208.5,
+        "y2": 294.71
+      }
+    },
+    {
+      "class": "plain text",
+      "class_id": 1,
+      "confidence": 0.7937,
+      "bbox": {
+        "x1": 48.4,
+        "y1": 157.93,
+        "x2": 353.28,
+        "y2": 242.19
+      }
+    },
+    {
+      "class": "plain text",
+      "class_id": 1,
+      "confidence": 0.4897,
+      "bbox": {
+        "x1": 48.98,
+        "y1": 49.37,
+        "x2": 321.39,
+        "y2": 132.34
+      }
+    },
+    {
+      "class": "title",
+      "class_id": 0,
+      "confidence": 0.4108,
+      "bbox": {
+        "x1": 48.98,
+        "y1": 49.37,
+        "x2": 321.39,
+        "y2": 132.34
+      }
+    }
+  ]
+}
