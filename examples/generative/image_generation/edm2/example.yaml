@@ -27,5 +27,5 @@ frameworks:
 - pytorch
 description: EDM2 (Elucidating Diffusion Models 2) from NVIDIA
 verification:
-  last_verified: 2025-10-26
-  last_verification_note: "Build successful (22.2GB image). Train script initialization and --help output verified. Requires external datasets in ImageFolder format (e.g., ImageNet). Tested on NVIDIA A10 (24GB VRAM)."
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Train script --help verified. Requires ImageFolder datasets (e.g., ImageNet)."
