@@ -5,14 +5,15 @@ modalities:
 datasets:
   - smap
   - msl
-  - smd
-  - psm
-stability: alpha
+stability: stable
 resources:
   gpu: 1
   cpu_cores: 4
   disk_gb: 5
 image: anomaly_transformer
+verification:
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Data from HuggingFace (zzsi/cvl). SMAP 54 channels, MSL 27 channels. Training ~60 it/s."
 presets:
   build:
     script: build.sh
