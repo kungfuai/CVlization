@@ -1,12 +1,14 @@
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+# Use official unsloth image with Blackwell GPU support (PyTorch 2.9.0, CUDA 12.8)
+FROM unsloth/unsloth:2025.12.9-pt2.9.0-cu12.8-trans4.57.1-fixes
 
-RUN apt-get update && apt-get install -y git curl build-essential && rm -rf /var/lib/apt/lists/*
+# Upgrade unsloth from git to get psutil fix (PR #3780 merged Dec 29, 2025)
+# Commit 3455f02 includes the fix for missing psutil import
+RUN pip install --no-cache-dir --upgrade --force-reinstall \
+    "unsloth @ git+https://github.com/unslothai/unsloth.git@3455f0244e2dbde8dba8230a34ca401266767e75" \
+    "unsloth_zoo @ git+https://github.com/unslothai/unsloth-zoo.git"
 
-# Install uv for faster dependency resolution
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
-
-COPY requirements.txt .
-RUN uv pip install --system -r requirements.txt
+# Speed up hub downloads
+ENV HF_HUB_ENABLE_HF_TRANSFER=1 \
+    HF_HUB_DOWNLOAD_TIMEOUT=180
 
 WORKDIR /workspace

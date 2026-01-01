@@ -24,3 +24,7 @@ tasks:
 frameworks:
 - pytorch
 description: Phantom video generation model (experimental)
+
+verification:
+  last_verified: "2025-12-31"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8 for Blackwell. Auto-downloads Wan2.1 and Phantom models on first run. Subject-to-video generation 17 frames in ~38s. VRAM: ~24GB."

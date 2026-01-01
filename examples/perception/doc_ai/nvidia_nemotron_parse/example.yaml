@@ -45,5 +45,5 @@ frameworks:
 description: NVIDIA Nemotron Parse v1.1 - Document structure understanding with spatial grounding (<1B params)
 
 verification:
-  last_verified: "2025-11-20"
-  last_verification_note: "Verified with CVL test - model loads and runs successfully. Extracts invoice data with 100% accuracy as LaTeX table with bounding boxes. Post-processing logic needs refinement for cleaner output."
+  last_verified: "2025-12-31"
+  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8. Document parsing with spatial grounding as LaTeX tables. VRAM: ~12GB."

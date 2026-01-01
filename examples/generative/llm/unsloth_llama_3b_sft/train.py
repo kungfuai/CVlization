@@ -144,10 +144,15 @@ training_args = TrainingArguments(
     eval_strategy="steps" if eval_dataset else "no",
     eval_steps=training_config.get("eval_steps", training_config["save_steps"]) if eval_dataset else None,
     do_eval=eval_dataset is not None,
+    report_to="none",  # Disable wandb unless WANDB_API_KEY is set
+    # Workaround for unsloth 'int'.mean() bug with transformers >= 4.57
+    # See: https://github.com/unslothai/unsloth/issues/3716
+    average_tokens_across_devices=False,
 )
 
 # Create trainer
 print("Initializing trainer...")
+import os
 trainer = SFTTrainer(
     model=model,
     tokenizer=tokenizer,
@@ -155,7 +160,7 @@ trainer = SFTTrainer(
     eval_dataset=eval_dataset,
     dataset_text_field="text",
     max_seq_length=model_config["max_seq_length"],
-    data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
+    dataset_num_proc=os.cpu_count(),
     args=training_args,
 )
 

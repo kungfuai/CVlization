@@ -39,3 +39,7 @@ description: >
   AnyTalker generates multi-person talking videos from images and audio.
   Built on Alibaba's Wan2.1 model, it synthesizes lip-synced video with
   natural head movements and expressions.
+
+verification:
+  last_verified: "2025-12-30"
+  last_verification_note: "Fixed bundled sample paths in predict.py. 40-step diffusion ~2.5 min for 3.8s audio. VRAM: ~24GB."

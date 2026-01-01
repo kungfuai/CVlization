@@ -30,6 +30,57 @@ from phantom_wan.configs import WAN_CONFIGS, SIZE_CONFIGS, MAX_AREA_CONFIGS, SUP
 from phantom_wan.utils.prompt_extend import DashScopePromptExpander, QwenPromptExpander
 from phantom_wan.utils.utils import cache_video, cache_image, str2bool
 
+# Model repos for lazy download
+MODEL_REPOS = {
+    "t2v-1.3B": "Wan-AI/Wan2.1-T2V-1.3B",
+    "s2v-1.3B": "Wan-AI/Wan2.1-T2V-1.3B",
+    "t2v-14B": "Wan-AI/Wan2.1-T2V-14B",
+    "s2v-14B": "Wan-AI/Wan2.1-T2V-14B",
+    "i2v-14B": "Wan-AI/Wan2.1-I2V-14B-720P",
+    "t2i-14B": "Wan-AI/Wan2.1-T2V-14B",
+}
+PHANTOM_REPO = "bytedance-research/Phantom"
+
+
+def download_models_if_needed(task: str, cache_dir: str = None):
+    """Download Wan and Phantom models if not present. Returns (ckpt_dir, phantom_ckpt)."""
+    from huggingface_hub import snapshot_download
+
+    if cache_dir is None:
+        cache_dir = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
+
+    # Download base Wan model
+    wan_repo = MODEL_REPOS.get(task, "Wan-AI/Wan2.1-T2V-1.3B")
+    print(f"Ensuring {wan_repo} is downloaded...")
+    ckpt_dir = snapshot_download(repo_id=wan_repo, cache_dir=cache_dir)
+    print(f"Wan model ready: {ckpt_dir}")
+
+    # Download Phantom checkpoint
+    print(f"Ensuring {PHANTOM_REPO} is downloaded...")
+    phantom_dir = snapshot_download(repo_id=PHANTOM_REPO, cache_dir=cache_dir)
+
+    # Find the appropriate checkpoint file based on task
+    # Note: 1.3B uses .pth, 14B uses safetensors
+    if "1.3B" in task:
+        phantom_ckpt = os.path.join(phantom_dir, "Phantom-Wan-1.3B.pth")
+    else:
+        # 14B model uses safetensors format
+        phantom_ckpt = os.path.join(phantom_dir, "Phantom-Wan-14B.safetensors")
+
+    if not os.path.exists(phantom_ckpt):
+        # Fallback: list available checkpoints (.pth, .pt, or .safetensors)
+        available = [f for f in os.listdir(phantom_dir)
+                     if f.endswith(('.pth', '.pt', '.safetensors'))]
+        if available:
+            phantom_ckpt = os.path.join(phantom_dir, available[0])
+            print(f"Using available checkpoint: {phantom_ckpt}")
+        else:
+            raise FileNotFoundError(f"No checkpoint (.pth/.pt/.safetensors) found in {phantom_dir}")
+
+    print(f"Phantom checkpoint ready: {phantom_ckpt}")
+    return ckpt_dir, phantom_ckpt
+
+
 EXAMPLE_PROMPT = {
     "t2v-1.3B": {
         "prompt": "Two anthropomorphic cats in comfy boxing gear and bright gloves fight intensely on a spotlighted stage.",
@@ -50,6 +101,15 @@ EXAMPLE_PROMPT = {
 
 
 def _validate_args(args):
+    # Auto-download models if not specified
+    if args.ckpt_dir is None or args.phantom_ckpt is None:
+        print("Checkpoint paths not specified, downloading models...")
+        ckpt_dir, phantom_ckpt = download_models_if_needed(args.task)
+        if args.ckpt_dir is None:
+            args.ckpt_dir = ckpt_dir
+        if args.phantom_ckpt is None:
+            args.phantom_ckpt = phantom_ckpt
+
     # Basic check
     assert args.ckpt_dir is not None, "Please specify the checkpoint directory."
     assert args.phantom_ckpt is not None, "Please specify the Phantom-Wan checkpoint."

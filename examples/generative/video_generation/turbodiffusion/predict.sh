@@ -45,6 +45,9 @@ done
 # Create output directory
 mkdir -p "${SCRIPT_DIR}/$(dirname "${OUTPUT}")"
 
+# Find repo root for cvlization package (go up 4 levels from example dir)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+
 echo "Running TurboDiffusion inference..."
 echo "Prompt: ${PROMPT}"
 echo "Output: ${OUTPUT}"
@@ -56,8 +59,10 @@ docker run --rm --gpus all \
     -v "${SCRIPT_DIR}/outputs:/workspace/outputs" \
     -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
     -v "${WORK_DIR}:/mnt/cvl/workspace" \
+    -v "${REPO_ROOT}:/cvlization_repo:ro" \
+    -e PYTHONPATH="/cvlization_repo" \
     -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
-  -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
+    -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     turbodiffusion \
     python /workspace/predict.py \
         --prompt "${PROMPT}" \
