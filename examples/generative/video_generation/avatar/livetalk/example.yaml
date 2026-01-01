@@ -1,0 +1,45 @@
+name: livetalk
+docker: livetalk
+capability: generative/video_generation/avatar
+modalities:
+  - image
+  - audio
+  - video
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 15
+image: livetalk:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate talking avatar video from image and audio
+tags:
+  - avatar
+  - video-generation
+  - diffusion
+  - real-time
+  - lip-sync
+tasks:
+  - avatar_generation
+  - audio_to_video
+frameworks:
+  - pytorch
+  - transformers
+  - diffusers
+description: Real-time multimodal avatar video generation with lip-sync (24 FPS, 4-step diffusion)
+license: CC-BY-NC-SA-4.0
+
+verification:
+  last_verified: 2025-12-31
+  last_verification_note: |
+    Build and inference verified on A10 GPU (22GB VRAM).
+    - Full GPU inference requires 24GB+ VRAM (OOMs during VAE decode on 22GB)
+    - Use --vae-cpu flag for 16-22GB GPUs (decodes video on CPU, ~6.5 min total)
+    - Successfully generated 512x512@16fps 5-second video with --vae-cpu
+    - Models: ~10GB (Wan2.1-T2V-1.3B, LiveTalk-1.3B-V0.1, wav2vec2)
+    - Sample inputs available at zzsi/cvl dataset
