@@ -30,3 +30,6 @@ frameworks:
 - pytorch
 - unsloth
 description: Train OpenAI GPT-OSS 20B with GRPO reinforcement learning using Unsloth
+verification:
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 (Blackwell). GPT-OSS-20B GRPO training. 0.02% params trainable (3.98M/20.9B). ~58s/step, 2 GPUs."

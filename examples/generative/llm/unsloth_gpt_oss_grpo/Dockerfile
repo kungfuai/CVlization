@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 # Set cache directories for model downloads
 ENV TORCH_HOME=/root/.cache/torch
@@ -12,8 +12,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 COPY requirements.txt .
-# Upgrade torch and install other dependencies
-RUN uv pip install --system --upgrade torch>=2.8.0 triton>=3.4.0
 RUN uv pip install --system -r requirements.txt
 
 WORKDIR /workspace
