@@ -5,6 +5,7 @@ modalities:
 datasets:
 - fineweb
 stability: stable
+image: modded-nanogpt
 resources:
   gpu: 8
   vram_gb: 80

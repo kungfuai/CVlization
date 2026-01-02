@@ -5,3 +5,4 @@ __pycache__/
 /data/
 /wandb/
 /checkpoints/
+data/fineweb10B/

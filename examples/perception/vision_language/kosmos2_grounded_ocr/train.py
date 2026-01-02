@@ -167,7 +167,7 @@ def main():
         report_to=report_to,
         dataloader_pin_memory=False,
         push_to_hub=args.push_to_hub,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=args.save_steps,
     )
 
