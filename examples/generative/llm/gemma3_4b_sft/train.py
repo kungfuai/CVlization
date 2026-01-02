@@ -181,7 +181,7 @@ print("\nModel saved successfully!")
 print(f"To use: FastModel.from_pretrained('{final_model_dir}')")
 
 # Post-training evaluation metrics
-if eval_dataset:
+if val_dataset:
     print(f"\n{'='*80}")
     print("EVALUATION METRICS")
     print('='*80)
@@ -206,8 +206,8 @@ if eval_dataset:
         scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
 
         # Sample a subset for faster evaluation
-        eval_sample_size = min(100, len(eval_dataset))
-        eval_sample = eval_dataset.select(range(eval_sample_size))
+        eval_sample_size = min(100, len(val_dataset))
+        eval_sample = val_dataset.select(range(eval_sample_size))
 
         rouge_scores = []
         for example in eval_sample:
