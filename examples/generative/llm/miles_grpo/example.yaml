@@ -36,5 +36,5 @@ frameworks:
   - ray
 description: Enterprise-grade GRPO training with Miles framework. Supports Qwen3, Qwen2.5, and other HuggingFace models.
 verification:
-  last_verified: 2025-12-16
-  last_verification_note: Full training verified on RTX 3090 (24GB). 10 rollout steps completed in ~2 min. Requires --fsdp-state-dict-cpu-offload and reduced batch sizes for 24GB GPU.
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.8.0+CUDA 12.9 (Blackwell). Miles GRPO with Ray+SGLang+FSDP. 10 rollouts in ~4min. Qwen3-0.6B base."
