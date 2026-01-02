@@ -29,3 +29,6 @@ frameworks:
 - pytorch
 - unsloth
 description: Fine-tune Qwen 2.5 7B with Unsloth for fast and efficient training
+verification:
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 (Blackwell). Qwen2.5 7B 4-bit LoRA SFT. Loss: 1.82→0.83 in 20 steps (~4.7s/step). 40M trainable params. Unsloth 2025.12.9 with gradient offload. VRAM: ~16GB."
