@@ -5,6 +5,10 @@ modalities:
 datasets:
 - shakespeare
 stability: stable
+image: nanogpt
+verification:
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Shakespeare char-level training. 10.67M params, 5000 iters, final loss ~0.78."
 resources:
   gpu: 1
   vram_gb: 8
