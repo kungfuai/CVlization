@@ -66,8 +66,10 @@ class TrainVQGAN:
             )
 
             def transforms(examples):
+                # CIFAR-10 uses "img" key, others use "image"
+                image_key = "img" if "img" in examples else "image"
                 images = [
-                    torchvision_tf(image.convert("RGB")) for image in examples["image"]
+                    torchvision_tf(image.convert("RGB")) for image in examples[image_key]
                 ]
                 return {"image": images}
 

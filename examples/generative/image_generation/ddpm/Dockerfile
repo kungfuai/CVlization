@@ -1,5 +1,7 @@
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
-
-RUN pip install torchvision>=1.13.0 scipy>=1.7.3
-RUN pip install matplotlib==3.9.2 wandb==0.18.3 clean-fid==0.1.35
+RUN pip install --no-cache-dir \
+    scipy==1.15.1 \
+    matplotlib==3.9.2 \
+    wandb==0.19.1 \
+    clean-fid==0.1.35
