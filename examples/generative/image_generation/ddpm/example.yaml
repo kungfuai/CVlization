@@ -3,12 +3,18 @@ capability: generative/image_generation
 modalities:
 - vision
 datasets:
-- custom
+- cifar10
+- mnist
+- celeba
 stability: stable
+image: ddpm
 resources:
   gpu: 1
   vram_gb: 12
   disk_gb: 10
+verification:
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 (Blackwell). CIFAR-10 training ~10 it/s. Loss: 0.999→0.033 in 13 epochs."
 presets:
   build:
     script: build.sh
