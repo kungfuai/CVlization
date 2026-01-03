@@ -5,26 +5,30 @@ modalities:
 datasets:
 - fineweb
 stability: stable
+image: modded-nanogpt
 resources:
-  gpu: 8
-  vram_gb: 80
+  gpu: 1
+  vram_gb: 24
   disk_gb: 20
+verification:
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 (sm_120 Blackwell). 1 GPU training verified with FP8+FlexAttention. Loss: 10.83→6.92 in 100 steps (~53ms/step)."
 presets:
   build:
     script: build.sh
     description: Build the Docker image
   train:
     script: train.sh
-    description: Run train
+    description: Run training (supports 1-8 GPUs, configurable seq lengths)
 tags:
 - nanogpt
 - speedrun
 - muon
 - flex-attention
+- fp8
 - pytorch
 tasks:
 - text_generation
 frameworks:
 - pytorch
-description: NanoGPT speedrun with advanced optimizations (sub-3 minute training on
-  8xH100)
+description: NanoGPT speedrun with advanced optimizations (FlexAttention, Muon optimizer, FP8). Scales from 1 to 8 GPUs.

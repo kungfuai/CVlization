@@ -22,6 +22,5 @@ tags: [vllm, openai-api, llm, serving, text-generation]
 tasks: [text_generation, serving]
 
 verification:
-  last_verified: 2025-12-16
-  last_verification_note: "Verified build + local predict on NVIDIA A10 (24GB). Default model Qwen/Qwen2.5-1.5B-Instruct with max_model_len=4096, enforce_eager, gpu_memory_utilization=0.9. Peak VRAM ~3GB; output saved to outputs/result.txt."
-  status: VERIFIED
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. vLLM 0.12.0 on Blackwell. Qwen2.5-0.5B verified with enforce_eager=1. FlashAttention v2 auto-detected for SM 120."

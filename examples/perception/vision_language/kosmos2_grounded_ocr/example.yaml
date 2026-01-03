@@ -9,6 +9,9 @@ resources:
   vram_gb: 24
   disk_gb: 25
 image: kosmos2-grounded-ocr
+verification:
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Transformers 4.57.3. DocLayNet training verified. Loss: 6.05→0.12."
 presets:
   build:
     script: build.sh

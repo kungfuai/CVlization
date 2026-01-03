@@ -3,8 +3,11 @@ capability: generative/image_generation
 modalities:
 - vision
 datasets:
+- cifar10
+- mnist
 - custom
 stability: stable
+image: vqgan
 resources:
   gpu: 1
   vram_gb: 16
@@ -27,5 +30,5 @@ frameworks:
 - pytorch
 description: VQGAN (Vector Quantized GAN) for high-quality image generation
 verification:
-  last_verified: 2025-10-25
-  last_verification_note: "Build successful. Training initialization, dataset loading (HuggingFace MNIST), and metrics logging verified on A10 GPU (24GB VRAM)."
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 (Blackwell). CIFAR-10 training ~7.5 it/s. VQ_Loss: 0.466→0.1. Fixed img key for CIFAR-10."

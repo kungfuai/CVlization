@@ -1,5 +1,13 @@
-# FROM huggingface/transformers-pytorch-gpu:4.35.2  # cuda is 11.8 for this one..
-FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
-RUN pip install transformers==4.37.2 bitsandbytes==0.42.0 peft==0.8.2 accelerate==0.26.1 datasets scipy sentencepiece protobuf
+RUN pip install --no-cache-dir \
+    transformers==4.48.2 \
+    bitsandbytes==0.45.5 \
+    peft==0.14.0 \
+    accelerate==1.2.1 \
+    datasets==3.6.0 \
+    scipy==1.15.1 \
+    sentencepiece==0.2.0 \
+    protobuf==5.29.5
+
 WORKDIR /workspace

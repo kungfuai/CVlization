@@ -30,6 +30,7 @@ tasks:
 frameworks:
 - pytorch
 description: Supervised fine-tuning for causal LMs using LoRA (PEFT). Supports Mistral, Llama, Gemma, etc. Default model is Mistral 7B with 4-bit quantization (requires HuggingFace access)
+image: mistral7b
 verification:
-  last_verified: 2025-10-26
-  last_verification_note: "Verified full Mistral 7B training with 4-bit quantization. Build succeeds via CVL CLI. Training shows strong loss decrease (0.5126 → 0.1176 over 30 steps). LoRA adapters saved successfully. GPU usage: 7.4GB VRAM (32%), 100% GPU utilization. Model cached to ~/.cache/huggingface/. Fixed tokenizer compatibility (use_fast=False + sentencepiece). Also smoke-tested with TinyLlama 1.1B (3.2GB VRAM). Tested on NVIDIA A10 GPU (24GB VRAM)."
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 (Blackwell). Mistral 7B 4-bit LoRA SFT. Loss: 2.13→1.61 in 10 steps (~1.5s/step). Transformers 4.48.2, PEFT 0.14.0, bitsandbytes 0.45.5."

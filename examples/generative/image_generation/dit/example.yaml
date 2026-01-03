@@ -9,6 +9,7 @@ resources:
   gpu: 1
   vram_gb: 24
   disk_gb: 50
+image: dit
 presets:
   build:
     script: build.sh
@@ -26,3 +27,6 @@ tasks:
 frameworks:
 - pytorch
 description: DiT-XL/2 Diffusion Transformer for class-conditional image generation
+verification:
+  last_verified: "2026-01-01"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Model import and forward pass verified. Requires ImageNet features for training."
