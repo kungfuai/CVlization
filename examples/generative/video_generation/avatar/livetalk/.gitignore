@@ -1,0 +1,14 @@
+# Test inputs and outputs
+test_inputs/
+outputs/
+
+# Runtime generated config
+inference_config.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Model weights (downloaded at runtime)
+pretrained_checkpoints/
