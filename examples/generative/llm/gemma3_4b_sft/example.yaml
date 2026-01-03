@@ -38,5 +38,5 @@ frameworks:
   - transformers
 description: Fine-tune Gemma-3 4B with Unsloth for 2x faster training. Uses LoRA/PEFT for efficient fine-tuning with train-on-responses-only masking.
 verification:
-  last_verified: "2025-11-21"
-  last_verification_note: "Fully verified. Docker builds and smoke test passes (30 steps, 1000 samples, 4m 12s, 4.4GB VRAM). Requires build-essential for bitsandbytes/triton compilation. Training completes successfully with model checkpointing."
+  last_verified: "2026-01-02"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 (Blackwell). Gemma3 4B 4-bit LoRA SFT. Loss: 0.96→0.54, eval_loss: 0.81→0.80 in 30 steps (~2.7min). VRAM: ~17GB."

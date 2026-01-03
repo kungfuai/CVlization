@@ -465,7 +465,7 @@ class GPT(nn.Module):
         self.blocks = nn.ModuleList([Block(model_dim, num_heads, max_seq_len, i) for i in range(num_layers)])
         # there are only 50257 unique GPT-2 tokens; we extend to nearest multiple of 128 for efficiency.
         # suggested to me by @Grad62304977. this originates from Karpathy's experiments.
-        self.lm_head = CastedLinear(model_dim, vocab_size, use_fp8=FP8_SUPPORTED, x_s=(model_dim**0.5)/448, w_s=24/448, grad_s=1/448)
+        self.lm_head = CastedLinear(model_dim, vocab_size, use_fp8=USE_FP8_OPS, x_s=(model_dim**0.5)/448, w_s=24/448, grad_s=1/448)
         self.lm_head.weight.detach().zero_() # @Grad62304977
         # Add learnable skip connection weights for decoder layers
         assert num_layers % 2 == 0
@@ -634,7 +634,7 @@ class Hyperparameters:
     # data
     train_files = str(SCRIPT_DIR / "data/fineweb10B/fineweb_train_*.bin") # input .bin to train on
     val_files = str(SCRIPT_DIR / "data/fineweb10B/fineweb_val_*.bin") # input .bin to eval validation loss on
-    val_tokens = 10485760 # how many tokens of validation data? it's important to keep this fixed for consistent comparisons
+    val_tokens = int(os.environ.get("VAL_TOKENS", 10485760)) # how many tokens of validation data? it's important to keep this fixed for consistent comparisons
     # FlexAttention sequence lengths - configurable via environment variables for memory optimization
     train_seq_len = int(os.environ.get("TRAIN_SEQ_LEN", 48*1024)) # FlexAttention sequence length
     val_seq_len = int(os.environ.get("VAL_SEQ_LEN", 4*64*1024)) # FlexAttention sequence length for validation
@@ -649,7 +649,7 @@ class Hyperparameters:
     adam_lr = float(os.environ.get("ADAM_LR", 0.008)) # learning rate for DistAdam optimizer
     muon_lr = float(os.environ.get("MUON_LR", 0.05)) # learning rate for Muon optimizer
     # evaluation and logging
-    val_loss_every = 125 # every how many steps to evaluate val loss? 0 for only at the end
+    val_loss_every = int(os.environ.get("VAL_LOSS_EVERY", 125)) # every how many steps to evaluate val loss? 0 for only at the end
     train_loss_every = int(os.environ.get("TRAIN_LOSS_EVERY", 0)) # every how many steps to print train loss? 0 to disable
     save_checkpoint = False
 args = Hyperparameters()

@@ -119,10 +119,12 @@ class AttentionLayer(nn.Module):
         _, S, _ = keys.shape
         H = self.n_heads
 
+        # Compute sigma before reshaping queries
+        sigma = self.sigma_projection(queries).view(B, L, H)
+
         queries = self.query_projection(queries).view(B, L, H, -1)
         keys = self.key_projection(keys).view(B, S, H, -1)
         values = self.value_projection(values).view(B, S, H, -1)
-        sigma = self.sigma_projection(queries).view(B, L, H)
 
         out, series, prior = self.inner_attention(
             queries,

@@ -2,6 +2,6 @@ fineweb10B/
 pylog124M/
 __pycache__/
 /logs/
-/data/
 /wandb/
 /checkpoints/
+data/fineweb10B/

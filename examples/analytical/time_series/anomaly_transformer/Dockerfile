@@ -1,6 +1,4 @@
-# Note: Using CPU-only PyTorch base for smaller image size
-# For GPU training, replace with: FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
-FROM python:3.11-slim
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
 
 WORKDIR /workspace
 
