@@ -1,0 +1,49 @@
+name: wan_s2v
+capability: generative/video_generation
+modalities:
+  - vision
+  - audio
+  - video
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 48
+  disk_gb: 60
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate audio-driven talking head video
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+tasks:
+  - audio_to_video
+  - talking_head_generation
+  - speech_to_video
+frameworks:
+  - pytorch
+tags:
+  - talking-head
+  - audio-driven
+  - video-generation
+  - diffusion
+  - wan2.2
+  - speech-to-video
+description: >
+  Wan2.2-S2V-14B is an audio-driven cinematic video generation model from Alibaba.
+  It generates high-quality talking head videos from a reference image and audio input.
+  The model uses Flow Matching with a 14B parameter DiT backbone, supporting 480P and 720P
+  output. Features include natural lip sync, head movements, and expressive gestures.
+  Optionally supports TTS via CosyVoice for text-to-speech-to-video generation.
+
+verification:
+  last_verified: "2026-01-03"
+  last_verification_note: "Verified build and inference on RTX PRO 6000 Blackwell (96GB). 10 steps ~25min for 2 clips. VRAM ~40GB. Model download ~30GB."
