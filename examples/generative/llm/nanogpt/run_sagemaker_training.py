@@ -5,27 +5,29 @@ Run nanogpt training on SageMaker.
 This script demonstrates running the nanogpt example on AWS SageMaker using the
 SageMakerRunner. The training uses the Shakespeare character-level dataset.
 
-Environment variables (from setup):
-- AWS_PROFILE: default
-- AWS_DEFAULT_REGION: us-east-1
-- SAGEMAKER_ROLE_ARN: arn:aws:iam::595425361112:role/CVLSageMakerExecutionRole
-- SAGEMAKER_OUTPUT_BUCKET: cvl-training-outputs-1767711732
+Required environment variables:
+- SAGEMAKER_ROLE_ARN: IAM role ARN for SageMaker execution
+- SAGEMAKER_OUTPUT_BUCKET: S3 bucket for training outputs
+
+Optional environment variables:
+- AWS_PROFILE: AWS CLI profile (default: default)
+- AWS_DEFAULT_REGION: AWS region (default: us-east-1)
 """
 
 import os
 from cvl.runners import SageMakerRunner
 
 def main():
-    # Get configuration from environment or use defaults
-    role_arn = os.getenv(
-        "SAGEMAKER_ROLE_ARN",
-        "arn:aws:iam::595425361112:role/CVLSageMakerExecutionRole"
-    )
+    # Get configuration from environment variables
+    role_arn = os.getenv("SAGEMAKER_ROLE_ARN")
+    output_bucket = os.getenv("SAGEMAKER_OUTPUT_BUCKET")
     region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
-    output_bucket = os.getenv(
-        "SAGEMAKER_OUTPUT_BUCKET",
-        "cvl-training-outputs-1767711732"
-    )
+
+    # Validate required environment variables
+    if not role_arn:
+        raise ValueError("SAGEMAKER_ROLE_ARN environment variable is required")
+    if not output_bucket:
+        raise ValueError("SAGEMAKER_OUTPUT_BUCKET environment variable is required")
 
     # Initialize SageMaker runner
     runner = SageMakerRunner(
