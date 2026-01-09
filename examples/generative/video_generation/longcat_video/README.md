@@ -120,6 +120,7 @@ For long_video mode, each additional segment adds ~80 new frames (minus overlap)
 - **Components**: UMT5 text encoder, WAN VAE, Flow Match scheduler
 - **Output**: 480P or 720P video at 15 FPS
 - **Source**: [meituan-longcat/LongCat-Video](https://huggingface.co/meituan-longcat/LongCat-Video)
+- **Code**: Vendored from [LongCat-Video GitHub](https://github.com/meituan-longcat/LongCat-Video)
 
 ## Links
 

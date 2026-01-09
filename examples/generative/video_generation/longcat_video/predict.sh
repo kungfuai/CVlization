@@ -34,7 +34,7 @@ docker run --rm --gpus=all --shm-size 16G \
     --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
     ${CVL_WORK_DIR:+--mount "type=bind,src=${CVL_WORK_DIR},dst=/mnt/cvl/workspace"} \
     ${USER_CWD:+--mount "type=bind,src=${USER_CWD},dst=/user_data,readonly"} \
-    --env "PYTHONPATH=/cvlization_repo:/opt/LongCat-Video" \
+    --env "PYTHONPATH=/cvlization_repo:/workspace/local/vendor" \
     --env "PYTHONUNBUFFERED=1" \
     --env "HF_HOME=/root/.cache/huggingface" \
     ${CVL_WORK_DIR:+-e CVL_WORK_DIR=/mnt/cvl/workspace} \
