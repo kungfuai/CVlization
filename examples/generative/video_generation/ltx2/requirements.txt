@@ -1,0 +1,18 @@
+# LTX-2 dependencies (vendored ltx-core and ltx-pipelines)
+# Torch is handled separately in Dockerfile
+
+# Core ML (versions from ltx-core)
+einops==0.8.0
+numpy==1.26.4
+transformers==4.56.2
+safetensors==0.4.5
+accelerate==1.2.1
+scipy==1.14.1
+
+# Pipeline dependencies (versions from ltx-pipelines)
+av==12.3.0
+tqdm==4.67.0
+pillow==10.4.0
+
+# HuggingFace Hub for model downloads
+huggingface_hub==0.34.0
