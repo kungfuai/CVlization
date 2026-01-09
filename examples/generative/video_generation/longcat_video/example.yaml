@@ -1,0 +1,49 @@
+name: longcat_video
+capability: generative/video_generation
+modalities:
+  - vision
+  - text
+  - video
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 48
+  disk_gb: 60
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate video (T2V, I2V, or Long Video)
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--output"
+        type: file
+tasks:
+  - text_to_video
+  - image_to_video
+  - video_generation
+  - long_video_generation
+frameworks:
+  - pytorch
+  - transformers
+tags:
+  - video-generation
+  - diffusion
+  - longcat
+  - text-to-video
+  - image-to-video
+  - long-video
+  - 13b
+description: >
+  LongCat-Video is a 13.6B parameter foundational video generation model from Meituan.
+  Supports Text-to-Video (T2V), Image-to-Video (I2V), and Long Video generation with
+  multi-segment continuation. Uses Flow Matching with DiT backbone, supporting 480P
+  and 720P output at 15 FPS.
+
+verification:
+  last_verified: "2026-01-09"
+  last_verification_note: "Verified build and I2V inference on RTX PRO 6000 Blackwell (96GB). 10 steps, 33 frames ~55s. Model download ~30GB."
