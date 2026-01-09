@@ -46,4 +46,4 @@ description: >
 
 verification:
   last_verified: "2026-01-09"
-  last_verification_note: "Verified build and I2V inference on RTX PRO 6000 Blackwell (96GB). 10 steps, 33 frames ~55s. Model download ~30GB."
+  last_verification_note: "Verified vendored build and I2V inference on RTX PRO 6000 Blackwell (96GB). 10 steps, 33 frames ~55s. Model ~30GB. Host output persistence confirmed."
