@@ -1,0 +1,26 @@
+# Outputs
+outputs/
+*.mp4
+*.avi
+*.mov
+*.webm
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.eggs/
+
+# Audio/Image samples (from HuggingFace)
+examples/*.mp3
+examples/*.wav
+examples/*.png
+examples/*.jpg
+
+# Environment
+.env
+.venv/
+venv/

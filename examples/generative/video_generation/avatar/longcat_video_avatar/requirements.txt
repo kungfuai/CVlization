@@ -1,0 +1,34 @@
+# LongCat-Video-Avatar dependencies (vendored)
+# Excludes torch and flash-attn which are handled separately
+
+# Core dependencies from LongCat-Video
+numpy==1.26.4
+transformers==4.41.0
+loguru==0.7.2
+diffusers==0.35.1
+einops==0.8.0
+ftfy==6.2.0
+psutil==6.0.0
+av==12.0.0
+opencv-python==4.9.0.80
+imageio==2.37.0
+imageio-ffmpeg==0.6.0
+moviepy
+
+# Avatar-specific dependencies (audio processing)
+scikit-learn==1.6.1
+scipy==1.15.3
+soundfile==0.13.1
+soxr==0.5.0.post1
+librosa==0.11.0
+pyloudnorm==0.1.1
+
+# ONNX for audio processing models
+onnx==1.18.0
+onnxruntime==1.16.3
+
+# Regex for text processing
+regex==2024.4.16
+
+# HuggingFace Hub for sample downloads
+huggingface_hub
