@@ -1,0 +1,52 @@
+name: ltx2
+capability: generative/video_generation
+modalities:
+  - vision
+  - text
+  - video
+  - audio
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 40  # FP8 mode uses ~35GB, full precision uses ~48GB
+  disk_gb: 50
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate video with audio from text or image
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run smoke test with minimal settings
+tasks:
+  - text_to_video
+  - image_to_video
+  - audio_generation
+frameworks:
+  - pytorch
+  - transformers
+tags:
+  - video-generation
+  - diffusion
+  - dit
+  - audio-video
+  - ltx
+  - lightricks
+  - 19b
+description: >
+  LTX-2 is a 19B parameter DiT-based audio-video foundation model from Lightricks.
+  Generates video with synchronized audio from text prompts or images. Supports
+  distilled (fast, 8+4 steps) and two_stage (quality, 40 steps) pipelines. FP8
+  mode requires ~35GB VRAM, full precision requires ~48GB.
+
+verification:
+  last_verified: "2026-01-09"
+  last_verification_note: "Verified build, distilled pipeline on RTX PRO 6000 Blackwell (96GB). 768x512, 33 frames. FP8 mode: 35GB peak VRAM. Non-FP8 mode: 48GB peak VRAM. Models: LTX-2 26-38GB + Gemma 23GB + upscaler 1GB. Added --lora support. Output: H.264+AAC MP4 with synchronized audio."
