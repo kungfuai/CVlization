@@ -18,11 +18,11 @@ mkdir -p "${HF_CACHE}"
 mkdir -p "${SCRIPT_DIR}/outputs"
 
 # CVL integration: if CVL_WORK_DIR is set, we're being called by 'cvl run'
-WORKSPACE_RO="${CVL_WORK_DIR:+,readonly}"
-
+# Otherwise, use current directory for inputs/outputs
 if [[ -z "${CVL_WORK_DIR:-}" ]]; then
-    USER_CWD="$(pwd)"
+    CVL_WORK_DIR="$(pwd)"
 fi
+WORKSPACE_RO=""
 
 # LongCat-Video-Avatar requires torchrun for distributed execution
 docker run --rm --gpus=all --shm-size 16G \
@@ -32,12 +32,11 @@ docker run --rm --gpus=all --shm-size 16G \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${MODELS_DIR},dst=/models" \
     --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
-    ${CVL_WORK_DIR:+--mount "type=bind,src=${CVL_WORK_DIR},dst=/mnt/cvl/workspace"} \
-    ${USER_CWD:+--mount "type=bind,src=${USER_CWD},dst=/user_data,readonly"} \
+    --mount "type=bind,src=${CVL_WORK_DIR},dst=/mnt/cvl/workspace" \
     --env "PYTHONPATH=/cvlization_repo:/workspace/local/vendor" \
     --env "PYTHONUNBUFFERED=1" \
     --env "HF_HOME=/root/.cache/huggingface" \
-    ${CVL_WORK_DIR:+-e CVL_WORK_DIR=/mnt/cvl/workspace} \
+    -e CVL_WORK_DIR=/mnt/cvl/workspace \
     -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
     -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
     ${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \

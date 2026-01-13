@@ -34,6 +34,8 @@ for logger_name in ["transformers", "diffusers", "torch", "triton"]:
 
 import argparse
 import json
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Optional, Tuple, List
 
@@ -242,6 +244,7 @@ def run_single_mode(
     output_path: Path,
     resolution: str = "480p",
     num_frames: int = 93,
+    num_segments: int = 1,
     num_steps: int = 50,
     text_guidance: float = 4.0,
     audio_guidance: float = 4.0,
@@ -249,14 +252,19 @@ def run_single_mode(
     device: str = "cuda",
     verbose: bool = False
 ):
-    """Run single-person avatar generation."""
+    """Run single-person avatar generation with optional multi-segment long video support."""
+    import math
+
     print(f"Mode: single")
     print(f"Image: {image_path}")
     print(f"Audio: {audio_path}")
+    if num_segments > 1:
+        print(f"Segments: {num_segments} (long video mode)")
 
     # Constants for audio-video alignment
     save_fps = 16
     audio_stride = 2
+    num_cond_frames = 13  # Overlap frames between segments
 
     # Load inputs
     image = Image.open(image_path).convert("RGB")
@@ -266,32 +274,56 @@ def run_single_mode(
         print(f"Image size: {image.size}")
         print(f"Audio duration: {len(audio)/16000:.2f}s")
 
-    # Calculate required audio duration and pad if necessary
-    import math
-    generate_duration = num_frames / save_fps
+    # Calculate total duration for all segments
+    # First segment: num_frames, subsequent segments add (num_frames - num_cond_frames) each
+    total_new_frames = num_frames + (num_segments - 1) * (num_frames - num_cond_frames)
+    generate_duration = total_new_frames / save_fps
+
     source_duration = len(audio) / 16000
     added_sample_nums = math.ceil((generate_duration - source_duration) * 16000)
     if added_sample_nums > 0:
         audio = np.append(audio, np.zeros(added_sample_nums, dtype=np.float32))
 
-    # Get full audio embedding
+    if verbose:
+        print(f"Total frames to generate: {total_new_frames}")
+        print(f"Total duration: {generate_duration:.2f}s")
+
+    # Get full audio embedding for entire duration
     full_audio_emb = pipeline.get_audio_embedding(
         audio,
-        fps=save_fps * audio_stride,  # 32 fps for audio
+        fps=save_fps * audio_stride,
         device=device,
         sample_rate=16000
     )
 
-    # Prepare audio embedding for DiT
-    audio_emb = prepare_audio_embedding(full_audio_emb, num_frames, audio_stride, device)
-
     # Set seed
     generator = torch.Generator(device=device).manual_seed(seed)
 
-    # Generate video
-    print(f"Generating video with {num_steps} steps, {num_frames} frames...")
+    # === SEGMENT 1: Initial generation with ai2v ===
+    print(f"Generating segment 1/{num_segments}...")
 
-    output_video = pipeline.generate_ai2v(
+    # Prepare audio embedding for first segment
+    audio_emb = prepare_audio_embedding(full_audio_emb, num_frames, audio_stride, device)
+
+    if num_segments == 1:
+        # Simple single-segment generation
+        output_video = pipeline.generate_ai2v(
+            image=image,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            resolution=resolution,
+            num_frames=num_frames,
+            num_inference_steps=num_steps,
+            text_guidance_scale=text_guidance,
+            audio_guidance_scale=audio_guidance,
+            generator=generator,
+            audio_emb=audio_emb,
+            output_type="np"
+        )
+        return output_video
+
+    # Multi-segment: need latent for continuation
+    output_tuple = pipeline.generate_ai2v(
         image=image,
         prompt=prompt,
         negative_prompt=negative_prompt,
@@ -302,8 +334,80 @@ def run_single_mode(
         audio_guidance_scale=audio_guidance,
         generator=generator,
         audio_emb=audio_emb,
-        output_type="np"
+        output_type="both"  # Returns (video, latent)
     )
+    output, latent = output_tuple
+    output = output[0]  # Remove batch dimension
+
+    # Convert to PIL images for continuation
+    video_frames = [(output[i] * 255).astype(np.uint8) for i in range(output.shape[0])]
+    current_video = [Image.fromarray(img) for img in video_frames]
+
+    # Save reference latent from first frame for temporal consistency
+    ref_latent = latent[:, :, :1].clone()
+
+    # Collect all frames
+    all_frames = list(current_video)
+
+    # === SEGMENTS 2+: Continue with avc ===
+    audio_start_idx = 0
+    indices = torch.arange(2 * 2 + 1) - 2  # For audio embedding indexing
+
+    # Get actual video dimensions from generated frames (may differ from requested resolution)
+    width, height = current_video[0].size
+
+    for segment_idx in range(1, num_segments):
+        print(f"Generating segment {segment_idx + 1}/{num_segments}...")
+
+        # Advance audio position (skip overlap frames worth of audio)
+        audio_start_idx = audio_start_idx + audio_stride * (num_frames - num_cond_frames)
+        audio_end_idx = audio_start_idx + audio_stride * num_frames
+
+        # Prepare audio embedding for this segment
+        center_indices = torch.arange(audio_start_idx, audio_end_idx, audio_stride).unsqueeze(1) + indices.unsqueeze(0)
+        center_indices = torch.clamp(center_indices, min=0, max=full_audio_emb.shape[0] - 1)
+        audio_emb = full_audio_emb[center_indices][None, ...].to(device)
+
+        # Generate continuation
+        output_tuple = pipeline.generate_avc(
+            video=current_video,
+            video_latent=latent,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            height=height,
+            width=width,
+            num_frames=num_frames,
+            num_cond_frames=num_cond_frames,
+            num_inference_steps=num_steps,
+            text_guidance_scale=text_guidance,
+            audio_guidance_scale=audio_guidance,
+            generator=generator,
+            output_type="both",
+            use_kv_cache=True,
+            offload_kv_cache=False,
+            enhance_hf=True,
+            audio_emb=audio_emb,
+            ref_latent=ref_latent,
+            ref_img_index=10,
+            mask_frame_range=3
+        )
+        output, latent = output_tuple
+        output = output[0]
+
+        # Convert to PIL and update current_video
+        new_frames = [(output[i] * 255).astype(np.uint8) for i in range(output.shape[0])]
+        current_video = [Image.fromarray(img) for img in new_frames]
+
+        # Append only new frames (skip overlap)
+        all_frames.extend(current_video[num_cond_frames:])
+
+        if verbose:
+            print(f"  Segment {segment_idx + 1}: added {len(current_video) - num_cond_frames} new frames, total: {len(all_frames)}")
+
+    # Convert back to numpy array format
+    output_video = np.stack([np.array(f) for f in all_frames], axis=0)
+
+    print(f"Long video complete: {len(all_frames)} frames ({len(all_frames)/save_fps:.1f}s)")
 
     return output_video
 
@@ -407,8 +511,8 @@ def run_multi_mode(
     return output_video
 
 
-def save_video(video: np.ndarray, output_path: Path, fps: int = 15):
-    """Save video frames to MP4."""
+def save_video(video: np.ndarray, output_path: Path, fps: int = 15, audio_path: Optional[Path] = None):
+    """Save video frames to MP4, optionally muxing with audio."""
     if video.ndim == 5:  # [B, T, H, W, C]
         video = video[0]  # Take first batch
 
@@ -419,7 +523,39 @@ def save_video(video: np.ndarray, output_path: Path, fps: int = 15):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    imageio.mimwrite(str(output_path), video, fps=fps)
+    if audio_path is None:
+        # No audio - just save video
+        imageio.mimwrite(str(output_path), video, fps=fps)
+    else:
+        # Save video to temp file, then mux with audio
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            temp_video = tmp.name
+
+        imageio.mimwrite(temp_video, video, fps=fps)
+
+        # Mux video with audio using ffmpeg
+        print(f"Muxing audio from {audio_path}...")
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", temp_video,
+            "-i", str(audio_path),
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-shortest",
+            "-loglevel", "error",
+            str(output_path)
+        ]
+
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Failed to mux audio: {e}")
+            # Fall back to video-only
+            Path(temp_video).rename(output_path)
+        finally:
+            if Path(temp_video).exists():
+                Path(temp_video).unlink()
+
     print(f"Video saved to: {output_path}")
 
 
@@ -495,6 +631,12 @@ def main():
         type=int,
         default=93,
         help="Number of frames per segment"
+    )
+    parser.add_argument(
+        "--num-segments",
+        type=int,
+        default=1,
+        help="Number of segments for long video generation (each segment adds ~5s, VRAM stays constant)"
     )
     parser.add_argument(
         "--steps",
@@ -607,6 +749,7 @@ def main():
             output_path=output_path,
             resolution=args.resolution,
             num_frames=args.frames,
+            num_segments=args.num_segments,
             num_steps=args.steps,
             text_guidance=args.text_guidance,
             audio_guidance=args.audio_guidance,
@@ -634,8 +777,9 @@ def main():
             verbose=args.verbose
         )
 
-    # Save output
-    save_video(output_video, output_path, fps=15)
+    # Save output with audio
+    # For multi mode, use the first audio track (could mix both in future)
+    save_video(output_video, output_path, fps=16, audio_path=audio_path)
 
     print("Done!")
 
