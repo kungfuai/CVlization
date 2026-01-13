@@ -41,6 +41,22 @@ cvl run ltx2 predict -- --height 512 --width 768 --num-frames 33
 cvl run ltx2 predict -- --no-fp8
 ```
 
+### LoRA Usage
+
+```bash
+# List available LoRA files in a HuggingFace repo
+cvl run ltx2 predict -- --list-lora-files kabachuha/ltx2-inflate-it
+
+# Use a LoRA by repo ID (auto-selects a .safetensors file if only one exists)
+cvl run ltx2 predict -- --prompt "..." --lora kabachuha/ltx2-inflate-it 1.0
+
+# Use a specific file in a repo
+cvl run ltx2 predict -- --prompt "..." --lora kabachuha/ltx2-inflate-it::ltx2-inflate.safetensors 1.0
+
+# Use a local LoRA file
+cvl run ltx2 predict -- --prompt "..." --lora /path/to/lora.safetensors 0.8
+```
+
 ### Arguments
 
 | Argument | Default | Description |
@@ -57,6 +73,7 @@ cvl run ltx2 predict -- --no-fp8
 | `--num-inference-steps` | 40 | Denoising steps (two_stage only) |
 | `--cfg-guidance-scale` | 4.0 | CFG scale (two_stage only) |
 | `--lora` | - | LoRA model path and optional strength (can be repeated) |
+| `--list-lora-files` | - | List .safetensors files in a HuggingFace LoRA repo and exit |
 | `--no-fp8` | false | Disable FP8 mode |
 | `--enhance-prompt` | false | Use model's prompt enhancement |
 

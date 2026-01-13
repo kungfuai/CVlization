@@ -30,7 +30,7 @@ import argparse
 from pathlib import Path
 
 import torch
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import hf_hub_download, list_repo_files, snapshot_download
 
 # LTX imports
 from ltx_pipelines.distilled import DistilledPipeline
@@ -95,6 +95,55 @@ def download_gemma_encoder() -> str:
     return snapshot_download(repo_id=GEMMA_REPO)
 
 
+def resolve_lora_path(path: str) -> str:
+    """Resolve LoRA path, downloading from HuggingFace if needed.
+
+    Supports:
+    - Local file paths: /path/to/lora.safetensors
+    - HuggingFace repo IDs: username/repo-name (auto-downloads .safetensors file)
+    - HuggingFace repo IDs with filename: username/repo-name::file.safetensors
+    - HuggingFace repo/filename: username/repo-name/path/file.safetensors
+    """
+    # If it's an existing local file, use it directly
+    if os.path.exists(path):
+        return path
+
+    repo_id = path
+    filename = None
+
+    if "::" in path:
+        repo_id, filename = path.split("::", 1)
+    elif path.endswith((".safetensors", ".bin", ".pt")) and path.count("/") >= 2:
+        parts = path.split("/")
+        repo_id = "/".join(parts[:2])
+        filename = "/".join(parts[2:])
+
+    # Check if it looks like a HuggingFace repo ID (contains "/")
+    if "/" in repo_id:
+        print(f"Downloading LoRA from HuggingFace: {repo_id}...")
+
+        # Find the .safetensors file in the repo if not specified
+        try:
+            if filename is None:
+                files = list_repo_files(repo_id=repo_id)
+                safetensor_files = [f for f in files if f.endswith(".safetensors")]
+
+                if not safetensor_files:
+                    raise ValueError(f"No .safetensors file found in {repo_id}")
+
+                # Use the first (or only) safetensors file
+                filename = safetensor_files[0]
+                if len(safetensor_files) > 1:
+                    print(f"  Multiple LoRA files found, using: {filename}")
+
+            return hf_hub_download(repo_id=repo_id, filename=filename, cache_dir=get_cache_dir())
+        except Exception as e:
+            print(f"Warning: Failed to download LoRA from {path}: {e}")
+            return path
+
+    return path
+
+
 def parse_loras(lora_args: list) -> list:
     """Parse LoRA arguments into LoraPathStrengthAndSDOps objects."""
     if not lora_args:
@@ -102,7 +151,7 @@ def parse_loras(lora_args: list) -> list:
 
     loras = []
     for lora_spec in lora_args:
-        path = lora_spec[0]
+        path = resolve_lora_path(lora_spec[0])
         strength = float(lora_spec[1]) if len(lora_spec) > 1 else 1.0
         loras.append(LoraPathStrengthAndSDOps(path, strength, LTXV_LORA_COMFY_RENAMING_MAP))
     return loras
@@ -307,6 +356,12 @@ def main():
         default="output.mp4",
         help="Output video path",
     )
+    parser.add_argument(
+        "--list-lora-files",
+        type=str,
+        default=None,
+        help="List available .safetensors files in a HuggingFace LoRA repo and exit",
+    )
 
     # Video parameters
     parser.add_argument(
@@ -390,6 +445,21 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.list_lora_files:
+        try:
+            files = list_repo_files(repo_id=args.list_lora_files)
+        except Exception as exc:
+            print(f"Error: failed to list files for {args.list_lora_files}: {exc}")
+            sys.exit(1)
+
+        safetensor_files = [f for f in files if f.endswith(".safetensors")]
+        if not safetensor_files:
+            print(f"No .safetensors files found in {args.list_lora_files}")
+        else:
+            for filename in safetensor_files:
+                print(filename)
+        sys.exit(0)
 
     # Enable verbose logging if requested
     if args.verbose:
