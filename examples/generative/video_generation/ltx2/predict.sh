@@ -17,6 +17,7 @@ docker run --rm --gpus=all \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
     --mount "type=bind,src=$(pwd),dst=/mnt/cvl/workspace" \
+    ${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"} \
     --env "PYTHONPATH=/cvlization_repo:/workspace/local/vendor" \
     --env "CVL_INPUTS=/mnt/cvl/workspace" \
     --env "CVL_OUTPUTS=/mnt/cvl/workspace" \
