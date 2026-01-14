@@ -27,6 +27,7 @@ for logger_name in ["transformers", "torch", "accelerate", "safetensors"]:
     logging.getLogger(logger_name).setLevel(logging.ERROR)
 
 import argparse
+import math
 from pathlib import Path
 
 import torch
@@ -38,7 +39,11 @@ from ltx_pipelines.distilled import DistilledPipeline
 from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
 from ltx_pipelines.utils.helpers import cleanup_memory
 from ltx_pipelines.utils.media_io import encode_video, load_video_conditioning
-from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE, DEFAULT_NEGATIVE_PROMPT
+from ltx_pipelines.utils.constants import (
+    AUDIO_SAMPLE_RATE,
+    DEFAULT_NEGATIVE_PROMPT,
+    DEFAULT_NUM_FRAMES,
+)
 from ltx_core.conditioning import AudioConditionByLatentSequence, VideoConditionByLatentIndex
 from ltx_core.loader import LTXV_LORA_COMFY_RENAMING_MAP, LoraPathStrengthAndSDOps
 from ltx_core.model.audio_vae import AudioProcessor
@@ -58,16 +63,26 @@ except ImportError:
     CVL_AVAILABLE = False
 
     def get_input_dir():
-        return os.getcwd()
+        return os.getenv("CVL_INPUTS", os.getcwd())
 
     def get_output_dir():
-        return os.getcwd()
+        output_dir = os.getenv("CVL_OUTPUTS", "./outputs")
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
 
     def resolve_input_path(path):
-        return path
+        if path.startswith(("http://", "https://")) or path.startswith("/"):
+            return path
+        base = get_input_dir()
+        return os.path.join(base, path) if os.getenv("CVL_INPUTS") else path
 
     def resolve_output_path(path):
-        return path
+        if path is None:
+            path = "result.txt"
+        if path.startswith("/"):
+            return path
+        base = get_output_dir()
+        return os.path.join(base, path)
 
 
 # Model paths on HuggingFace
@@ -173,6 +188,32 @@ def parse_loras(lora_args: list) -> list:
         strength = float(lora_spec[1]) if len(lora_spec) > 1 else 1.0
         loras.append(LoraPathStrengthAndSDOps(path, strength, LTXV_LORA_COMFY_RENAMING_MAP))
     return loras
+
+
+def get_audio_duration_seconds(audio_path: str) -> float:
+    try:
+        info = torchaudio.info(audio_path)
+        if info.num_frames and info.sample_rate:
+            return info.num_frames / info.sample_rate
+    except Exception:
+        pass
+
+    waveform, waveform_sample_rate = torchaudio.load(audio_path)
+    if waveform.numel() == 0:
+        return 0.0
+    return waveform.shape[-1] / waveform_sample_rate
+
+
+def derive_num_frames_from_audio(audio_path: str, frame_rate: float) -> int | None:
+    if frame_rate <= 0:
+        return None
+
+    duration = get_audio_duration_seconds(audio_path)
+    if duration <= 0:
+        return None
+
+    raw_frames = max(1, int(math.ceil(duration * frame_rate)))
+    return ((raw_frames - 1 + 7) // 8) * 8 + 1
 
 
 def build_audio_conditionings(
@@ -663,8 +704,9 @@ def main():
     parser.add_argument(
         "--num-frames",
         type=int,
-        default=121,
-        help="Number of frames (must satisfy (F-1) %% 8 == 0)",
+        default=None,
+        help="Number of frames (must satisfy (F-1) %% 8 == 0). "
+             "Defaults to audio length when audio is provided.",
     )
     parser.add_argument(
         "--frame-rate",
@@ -777,6 +819,14 @@ def main():
             print(f"Error: Failed to download sample audio: {exc}")
             sys.exit(1)
 
+    num_frames = args.num_frames
+    if num_frames is None and audio_path:
+        num_frames = derive_num_frames_from_audio(audio_path, args.frame_rate)
+        if num_frames is not None:
+            print(f"Derived num_frames={num_frames} from audio length.")
+    if num_frames is None:
+        num_frames = DEFAULT_NUM_FRAMES
+
     prefix_video_path = None
     if args.prefix_video:
         prefix_video_path = resolve_input_path(args.prefix_video)
@@ -786,7 +836,7 @@ def main():
         if args.prefix_frames <= 0:
             print("Error: --prefix-frames must be > 0 when --prefix-video is set.")
             sys.exit(1)
-        if args.prefix_frames > args.num_frames:
+        if args.prefix_frames > num_frames:
             print("Error: --prefix-frames cannot exceed --num-frames.")
             sys.exit(1)
 
@@ -833,7 +883,7 @@ def main():
             seed=args.seed,
             height=args.height,
             width=args.width,
-            num_frames=args.num_frames,
+            num_frames=num_frames,
             frame_rate=args.frame_rate,
             fp8=fp8,
             enhance_prompt=args.enhance_prompt,
@@ -854,7 +904,7 @@ def main():
             seed=args.seed,
             height=args.height,
             width=args.width,
-            num_frames=args.num_frames,
+            num_frames=num_frames,
             frame_rate=args.frame_rate,
             num_inference_steps=args.num_inference_steps,
             cfg_guidance_scale=args.cfg_guidance_scale,

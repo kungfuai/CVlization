@@ -2,7 +2,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
+WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 IMG="cvlization/ltx2:latest"
 
 # HuggingFace cache directory
@@ -16,7 +17,7 @@ docker run --rm --gpus=all \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace/local" \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
-    --mount "type=bind,src=$(pwd),dst=/mnt/cvl/workspace" \
+    --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
     ${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"} \
     --env "PYTHONPATH=/cvlization_repo:/workspace/local/vendor" \
     --env "CVL_INPUTS=/mnt/cvl/workspace" \
