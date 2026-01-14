@@ -33,6 +33,7 @@ docker run --rm --gpus=all --shm-size 16G \
     --mount "type=bind,src=${MODELS_DIR},dst=/models" \
     --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface" \
     --mount "type=bind,src=${CVL_WORK_DIR},dst=/mnt/cvl/workspace" \
+    ${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"} \
     --env "PYTHONPATH=/cvlization_repo:/workspace/local/vendor" \
     --env "PYTHONUNBUFFERED=1" \
     --env "HF_HOME=/root/.cache/huggingface" \
