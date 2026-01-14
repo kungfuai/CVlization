@@ -81,6 +81,8 @@ CHECKPOINT_DEV_FP8 = "ltx-2-19b-dev-fp8.safetensors"
 CHECKPOINT_DEV = "ltx-2-19b-dev.safetensors"
 SPATIAL_UPSAMPLER = "ltx-2-spatial-upscaler-x2-1.0.safetensors"
 DISTILLED_LORA = "ltx-2-19b-distilled-lora-384.safetensors"
+SAMPLE_AUDIO_REPO = "zzsi/cvl"
+SAMPLE_AUDIO_PATH = "ltx2/ltx2_tts_30s.wav"
 
 
 def get_cache_dir():
@@ -147,6 +149,17 @@ def resolve_lora_path(path: str) -> str:
             return path
 
     return path
+
+
+def download_sample_audio() -> str:
+    """Download the bundled sample audio from HuggingFace datasets."""
+    print(f"Downloading sample audio from {SAMPLE_AUDIO_REPO}:{SAMPLE_AUDIO_PATH}...")
+    return hf_hub_download(
+        repo_id=SAMPLE_AUDIO_REPO,
+        filename=SAMPLE_AUDIO_PATH,
+        repo_type="dataset",
+        cache_dir=get_cache_dir(),
+    )
 
 
 def parse_loras(lora_args: list) -> list:
@@ -588,6 +601,11 @@ def main():
         help="Optional input audio for audio-latent conditioning",
     )
     parser.add_argument(
+        "--use-sample-audio",
+        action="store_true",
+        help="Use the bundled sample audio (downloads lazily) for conditioning",
+    )
+    parser.add_argument(
         "--audio-strength",
         type=float,
         default=1.0,
@@ -743,10 +761,20 @@ def main():
             sys.exit(1)
 
     audio_path = None
+    if args.audio and args.use_sample_audio:
+        print("Error: --audio and --use-sample-audio are mutually exclusive.")
+        sys.exit(1)
+
     if args.audio:
         audio_path = resolve_input_path(args.audio)
         if not os.path.exists(audio_path):
             print(f"Error: Audio file not found: {audio_path}")
+            sys.exit(1)
+    elif args.use_sample_audio:
+        try:
+            audio_path = download_sample_audio()
+        except Exception as exc:
+            print(f"Error: Failed to download sample audio: {exc}")
             sys.exit(1)
 
     prefix_video_path = None
