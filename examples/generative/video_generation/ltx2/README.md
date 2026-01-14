@@ -28,8 +28,8 @@ cvl run ltx2 build
 # Text-to-video (distilled pipeline - fast)
 cvl run ltx2 predict -- --prompt "A serene mountain landscape at sunset"
 
-# Text-to-video (two_stage pipeline - higher quality)
-cvl run ltx2 predict -- --pipeline two_stage --prompt "A cat playing with yarn"
+# Text-to-video (full pipeline - higher quality)
+cvl run ltx2 predict -- --pipeline full --prompt "A cat playing with yarn"
 
 # Image-to-video
 cvl run ltx2 predict -- --image portrait.jpg --prompt "The person smiles and waves"
@@ -64,7 +64,7 @@ cvl run ltx2 predict -- --prompt "..." --lora /path/to/lora.safetensors 0.8
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--pipeline` | distilled | Pipeline: `distilled` (fast) or `two_stage` (quality) |
+| `--pipeline` | distilled | Pipeline: `distilled` (fast) or `full` (quality). `two_stage` is deprecated. |
 | `--prompt` | sample | Text prompt describing the video |
 | `--image` | - | Input image for image-to-video |
 | `--audio` | - | Input audio for audio-latent conditioning |
@@ -75,8 +75,8 @@ cvl run ltx2 predict -- --prompt "..." --lora /path/to/lora.safetensors 0.8
 | `--num-frames` | 121 | Number of frames (~5 seconds at 24 FPS) |
 | `--frame-rate` | 24.0 | Frame rate (FPS) |
 | `--seed` | 10 | Random seed |
-| `--num-inference-steps` | 40 | Denoising steps (two_stage only) |
-| `--cfg-guidance-scale` | 4.0 | CFG scale (two_stage only) |
+| `--num-inference-steps` | 40 | Denoising steps (full pipeline only) |
+| `--cfg-guidance-scale` | 4.0 | CFG scale (full pipeline only) |
 | `--lora` | - | LoRA model path and optional strength (can be repeated) |
 | `--list-lora-files` | - | List .safetensors files in a HuggingFace LoRA repo and exit |
 | `--no-fp8` | false | Disable FP8 mode |
@@ -87,9 +87,9 @@ cvl run ltx2 predict -- --prompt "..." --lora /path/to/lora.safetensors 0.8
 | Pipeline | Steps | CFG | Speed | Quality | VRAM (FP8) | VRAM (Full) |
 |----------|-------|-----|-------|---------|------------|-------------|
 | distilled | 8+4 | No | Fast (~16s) | Good | ~35GB | ~48GB |
-| two_stage | 40+4 | Yes | Slow | Best | ~40GB* | ~52GB* |
+| full | 40+4 | Yes | Slow | Best | ~40GB* | ~52GB* |
 
-*Estimated; two_stage uses more memory for CFG.
+*Estimated; full pipeline uses more memory for CFG.
 
 ## Output
 
@@ -111,7 +111,7 @@ cvl run ltx2 predict -- --prompt "..." --lora /path/to/lora.safetensors 0.8
 Downloaded automatically on first run:
 - Main checkpoint: 26GB (FP8) or ~38GB (full precision)
 - Spatial upsampler: ~1GB
-- Distilled LoRA: ~1GB (two_stage only)
+- Distilled LoRA: ~1GB (full pipeline only)
 - Gemma text encoder: 23GB
 
 ## Limitations
