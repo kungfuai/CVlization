@@ -9,7 +9,7 @@ LTX-2 is a 19B parameter DiT-based model that generates video with synchronized 
 ## Requirements
 
 - **GPU**: NVIDIA GPU with 48GB+ VRAM
-  - FP8 mode: ~35GB peak VRAM
+  - FP8 mode: ~35GB peak VRAM (short clips); text-only runs can be ~24GB on some configs
   - Without FP8: ~48GB peak VRAM
 - **Disk**: ~50GB for model weights (FP8 mode, downloaded on first run)
 - **Docker**: With NVIDIA runtime
@@ -72,7 +72,7 @@ cvl run ltx2 predict -- --prompt "..." --lora /path/to/lora.safetensors 0.8
 | `--output` | output.mp4 | Output video path |
 | `--height` | 1024 | Video height (divisible by 64) |
 | `--width` | 1536 | Video width (divisible by 64) |
-| `--num-frames` | 121 | Number of frames (~5 seconds at 24 FPS) |
+| `--num-frames` | auto | Number of frames (~5 seconds at 24 FPS if no audio) |
 | `--frame-rate` | 24.0 | Frame rate (FPS) |
 | `--seed` | 10 | Random seed |
 | `--num-inference-steps` | 40 | Denoising steps (full pipeline only) |
@@ -116,7 +116,7 @@ Downloaded automatically on first run:
 
 ## Limitations
 
-- FP8 mode requires ~35GB VRAM (works on 48GB GPUs, tight fit on 40GB)
+- FP8 mode requires ~35GB VRAM for typical runs (text-only can be ~24GB)
 - Full precision requires ~48GB VRAM
 - First run downloads ~50GB of model weights (FP8 mode)
 - Consumer GPUs (RTX 4090 24GB, etc.) do not have enough VRAM
