@@ -34,6 +34,7 @@ for logger_name in ["transformers", "diffusers", "torch", "triton"]:
 
 import argparse
 import json
+import math
 import subprocess
 import tempfile
 from pathlib import Path
@@ -81,6 +82,7 @@ except ImportError:
 BASE_MODEL_ID = "meituan-longcat/LongCat-Video"
 AVATAR_MODEL_ID = "meituan-longcat/LongCat-Video-Avatar"
 MODEL_CACHE_DIR = Path("/models")
+SAMPLE_RATE = 16000
 
 
 def get_model_paths():
@@ -183,7 +185,7 @@ def load_pipeline(device: str = "cuda", dtype: torch.dtype = torch.bfloat16):
     return pipeline
 
 
-def load_audio(audio_path: Path, sample_rate: int = 16000) -> np.ndarray:
+def load_audio(audio_path: Path, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Load and resample audio to target sample rate."""
     import librosa
 
@@ -244,23 +246,20 @@ def run_single_mode(
     output_path: Path,
     resolution: str = "480p",
     num_frames: int = 93,
-    num_segments: int = 1,
+    num_segments: int | None = None,
     num_steps: int = 50,
     text_guidance: float = 4.0,
     audio_guidance: float = 4.0,
+    offload_kv_cache: bool = False,
     seed: int = 42,
     device: str = "cuda",
     verbose: bool = False
 ):
     """Run single-person avatar generation with optional multi-segment long video support."""
-    import math
 
     print(f"Mode: single")
     print(f"Image: {image_path}")
     print(f"Audio: {audio_path}")
-    if num_segments > 1:
-        print(f"Segments: {num_segments} (long video mode)")
-
     # Constants for audio-video alignment
     save_fps = 16
     audio_stride = 2
@@ -270,17 +269,30 @@ def run_single_mode(
     image = Image.open(image_path).convert("RGB")
     audio = load_audio(audio_path)
 
+    audio_duration = len(audio) / SAMPLE_RATE
+
     if verbose:
         print(f"Image size: {image.size}")
-        print(f"Audio duration: {len(audio)/16000:.2f}s")
+        print(f"Audio duration: {audio_duration:.2f}s")
+
+    if num_segments is None:
+        frames_needed = math.ceil(audio_duration * save_fps)
+        if frames_needed <= num_frames:
+            num_segments = 1
+        else:
+            overlap = num_frames - num_cond_frames
+            num_segments = math.ceil((frames_needed - num_frames) / overlap) + 1
+
+    if num_segments > 1:
+        print(f"Segments: {num_segments} (long video mode)")
 
     # Calculate total duration for all segments
     # First segment: num_frames, subsequent segments add (num_frames - num_cond_frames) each
     total_new_frames = num_frames + (num_segments - 1) * (num_frames - num_cond_frames)
     generate_duration = total_new_frames / save_fps
 
-    source_duration = len(audio) / 16000
-    added_sample_nums = math.ceil((generate_duration - source_duration) * 16000)
+    source_duration = len(audio) / SAMPLE_RATE
+    added_sample_nums = math.ceil((generate_duration - source_duration) * SAMPLE_RATE)
     if added_sample_nums > 0:
         audio = np.append(audio, np.zeros(added_sample_nums, dtype=np.float32))
 
@@ -293,7 +305,7 @@ def run_single_mode(
         audio,
         fps=save_fps * audio_stride,
         device=device,
-        sample_rate=16000
+        sample_rate=SAMPLE_RATE
     )
 
     # Set seed
@@ -307,6 +319,9 @@ def run_single_mode(
 
     if num_segments == 1:
         # Simple single-segment generation
+        if offload_kv_cache:
+            print("Note: --offload-kv-cache only applies to continuation segments.")
+
         output_video = pipeline.generate_ai2v(
             image=image,
             prompt=prompt,
@@ -384,7 +399,7 @@ def run_single_mode(
             generator=generator,
             output_type="both",
             use_kv_cache=True,
-            offload_kv_cache=False,
+            offload_kv_cache=offload_kv_cache,
             enhance_hf=True,
             audio_emb=audio_emb,
             ref_latent=ref_latent,
@@ -635,8 +650,8 @@ def main():
     parser.add_argument(
         "--num-segments",
         type=int,
-        default=1,
-        help="Number of segments for long video generation (each segment adds ~5s, VRAM stays constant)"
+        default=None,
+        help="Number of segments for long video generation (defaults to auto based on audio length)"
     )
     parser.add_argument(
         "--steps",
@@ -655,6 +670,11 @@ def main():
         type=float,
         default=4.0,
         help="Audio guidance scale"
+    )
+    parser.add_argument(
+        "--offload-kv-cache",
+        action="store_true",
+        help="Offload KV cache to CPU to reduce VRAM usage (slower)"
     )
     parser.add_argument(
         "--seed",
@@ -753,6 +773,7 @@ def main():
             num_steps=args.steps,
             text_guidance=args.text_guidance,
             audio_guidance=args.audio_guidance,
+            offload_kv_cache=args.offload_kv_cache,
             seed=args.seed,
             device=device,
             verbose=args.verbose

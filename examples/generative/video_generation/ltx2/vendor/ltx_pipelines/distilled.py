@@ -81,6 +81,7 @@ class DistilledPipeline:
         images: list[tuple[str, int, float]],
         tiling_config: TilingConfig | None = None,
         enhance_prompt: bool = False,
+        audio_conditionings: list | None = None,
     ) -> tuple[Iterator[torch.Tensor], torch.Tensor]:
         assert_resolution(height=height, width=width, is_two_stage=True)
 
@@ -145,6 +146,7 @@ class DistilledPipeline:
             components=self.pipeline_components,
             dtype=dtype,
             device=self.device,
+            audio_conditionings=audio_conditionings,
         )
 
         # Stage 2: Upsample and refine the video at higher resolution with distilled LORA.
@@ -175,6 +177,7 @@ class DistilledPipeline:
             components=self.pipeline_components,
             dtype=dtype,
             device=self.device,
+            audio_conditionings=audio_conditionings,
             noise_scale=stage_2_sigmas[0],
             initial_video_latent=upscaled_video_latent,
             initial_audio_latent=audio_state.latent,

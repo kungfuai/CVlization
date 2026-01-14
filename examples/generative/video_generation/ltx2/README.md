@@ -39,6 +39,9 @@ cvl run ltx2 predict -- --height 512 --width 768 --num-frames 33
 
 # Disable FP8 for higher quality (requires more VRAM)
 cvl run ltx2 predict -- --no-fp8
+
+# Audio-conditioned generation (injects audio latents)
+cvl run ltx2 predict -- --audio speech.wav --audio-strength 0.8 --prompt "A presenter speaks in sync"
 ```
 
 ### LoRA Usage
@@ -64,6 +67,8 @@ cvl run ltx2 predict -- --prompt "..." --lora /path/to/lora.safetensors 0.8
 | `--pipeline` | distilled | Pipeline: `distilled` (fast) or `two_stage` (quality) |
 | `--prompt` | sample | Text prompt describing the video |
 | `--image` | - | Input image for image-to-video |
+| `--audio` | - | Input audio for audio-latent conditioning |
+| `--audio-strength` | 1.0 | Audio conditioning strength (0.0 to 1.0) |
 | `--output` | output.mp4 | Output video path |
 | `--height` | 1024 | Video height (divisible by 64) |
 | `--width` | 1536 | Video width (divisible by 64) |

@@ -30,15 +30,20 @@ import argparse
 from pathlib import Path
 
 import torch
+import torchaudio
 from huggingface_hub import hf_hub_download, list_repo_files, snapshot_download
 
 # LTX imports
 from ltx_pipelines.distilled import DistilledPipeline
 from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
+from ltx_pipelines.utils.helpers import cleanup_memory
 from ltx_pipelines.utils.media_io import encode_video
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE, DEFAULT_NEGATIVE_PROMPT
+from ltx_core.conditioning import AudioConditionByLatentSequence
 from ltx_core.loader import LTXV_LORA_COMFY_RENAMING_MAP, LoraPathStrengthAndSDOps
+from ltx_core.model.audio_vae import AudioProcessor
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
+from ltx_core.types import AudioLatentShape, VideoPixelShape
 
 # CVL dual-mode execution support
 try:
@@ -157,6 +162,102 @@ def parse_loras(lora_args: list) -> list:
     return loras
 
 
+def build_audio_conditionings(
+    audio_path: str | None,
+    audio_strength: float,
+    model_ledger,
+    num_frames: int,
+    frame_rate: float,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> list | None:
+    if not audio_path:
+        return None
+
+    strength = max(0.0, min(1.0, float(audio_strength)))
+    if strength <= 0.0:
+        return None
+
+    waveform, waveform_sample_rate = torchaudio.load(audio_path)
+    if waveform.ndim == 1:
+        waveform = waveform.unsqueeze(0).unsqueeze(0)
+    elif waveform.ndim == 2:
+        waveform = waveform.unsqueeze(0)
+
+    audio_encoder = model_ledger.audio_encoder()
+    target_channels = int(getattr(audio_encoder, "in_channels", waveform.shape[1]))
+    if target_channels <= 0:
+        target_channels = waveform.shape[1]
+
+    if waveform.shape[1] != target_channels:
+        if waveform.shape[1] == 1 and target_channels > 1:
+            waveform = waveform.repeat(1, target_channels, 1)
+        elif target_channels == 1:
+            waveform = waveform.mean(dim=1, keepdim=True)
+        else:
+            waveform = waveform[:, :target_channels, :]
+            if waveform.shape[1] < target_channels:
+                pad_channels = target_channels - waveform.shape[1]
+                pad = torch.zeros(
+                    (waveform.shape[0], pad_channels, waveform.shape[2]),
+                    dtype=waveform.dtype,
+                )
+                waveform = torch.cat([waveform, pad], dim=1)
+
+    audio_processor = AudioProcessor(
+        sample_rate=audio_encoder.sample_rate,
+        mel_bins=audio_encoder.mel_bins,
+        mel_hop_length=audio_encoder.mel_hop_length,
+        n_fft=audio_encoder.n_fft,
+    )
+    waveform = waveform.to(device="cpu", dtype=torch.float32)
+    audio_processor = audio_processor.to(waveform.device)
+    mel = audio_processor.waveform_to_mel(waveform, waveform_sample_rate)
+    audio_params = next(audio_encoder.parameters(), None)
+    audio_device = audio_params.device if audio_params is not None else device
+    audio_dtype = audio_params.dtype if audio_params is not None else dtype
+    mel = mel.to(device=audio_device, dtype=audio_dtype)
+    with torch.inference_mode():
+        audio_latent = audio_encoder(mel)
+
+    audio_downsample = getattr(
+        getattr(audio_encoder, "patchifier", None),
+        "audio_latent_downsample_factor",
+        4,
+    )
+    target_shape = AudioLatentShape.from_video_pixel_shape(
+        VideoPixelShape(
+            batch=audio_latent.shape[0],
+            frames=int(num_frames),
+            width=1,
+            height=1,
+            fps=float(frame_rate),
+        ),
+        channels=audio_latent.shape[1],
+        mel_bins=audio_latent.shape[3],
+        sample_rate=audio_encoder.sample_rate,
+        hop_length=audio_encoder.mel_hop_length,
+        audio_latent_downsample_factor=audio_downsample,
+    )
+    target_frames = target_shape.frames
+    if audio_latent.shape[2] < target_frames:
+        pad_frames = target_frames - audio_latent.shape[2]
+        pad = torch.zeros(
+            (audio_latent.shape[0], audio_latent.shape[1], pad_frames, audio_latent.shape[3]),
+            device=audio_latent.device,
+            dtype=audio_latent.dtype,
+        )
+        audio_latent = torch.cat([audio_latent, pad], dim=2)
+    elif audio_latent.shape[2] > target_frames:
+        audio_latent = audio_latent[:, :, :target_frames, :]
+
+    audio_latent = audio_latent.to(device=device, dtype=dtype)
+    del audio_encoder
+    cleanup_memory()
+
+    return [AudioConditionByLatentSequence(audio_latent, strength)]
+
+
 def get_model_paths(pipeline: str, fp8: bool) -> dict:
     """Get or download required model paths."""
     paths = {}
@@ -183,6 +284,8 @@ def run_distilled_pipeline(
     output_path: str,
     model_paths: dict,
     image_path: str = None,
+    audio_path: str | None = None,
+    audio_strength: float = 1.0,
     seed: int = 10,
     height: int = 1024,
     width: int = 1536,
@@ -210,6 +313,16 @@ def run_distilled_pipeline(
     if image_path:
         images = [(image_path, 0, 1.0)]  # Image at frame 0, strength 1.0
 
+    audio_conditionings = build_audio_conditionings(
+        audio_path=audio_path,
+        audio_strength=audio_strength,
+        model_ledger=pipeline.model_ledger,
+        num_frames=num_frames,
+        frame_rate=frame_rate,
+        device=pipeline.device,
+        dtype=pipeline.dtype,
+    )
+
     print(f"Generating video: {width}x{height}, {num_frames} frames...")
     tiling_config = TilingConfig.default()
     video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
@@ -225,6 +338,7 @@ def run_distilled_pipeline(
             images=images,
             tiling_config=tiling_config,
             enhance_prompt=enhance_prompt,
+            audio_conditionings=audio_conditionings,
         )
 
         print(f"Encoding video to {output_path}...")
@@ -245,6 +359,8 @@ def run_two_stage_pipeline(
     output_path: str,
     model_paths: dict,
     image_path: str = None,
+    audio_path: str | None = None,
+    audio_strength: float = 1.0,
     seed: int = 10,
     height: int = 1024,
     width: int = 1536,
@@ -288,6 +404,16 @@ def run_two_stage_pipeline(
     if image_path:
         images = [(image_path, 0, 1.0)]
 
+    audio_conditionings = build_audio_conditionings(
+        audio_path=audio_path,
+        audio_strength=audio_strength,
+        model_ledger=pipeline.stage_1_model_ledger,
+        num_frames=num_frames,
+        frame_rate=frame_rate,
+        device=pipeline.device,
+        dtype=pipeline.dtype,
+    )
+
     print(f"Generating video: {width}x{height}, {num_frames} frames, {num_inference_steps} steps...")
     tiling_config = TilingConfig.default()
     video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
@@ -306,6 +432,7 @@ def run_two_stage_pipeline(
             images=images,
             tiling_config=tiling_config,
             enhance_prompt=enhance_prompt,
+            audio_conditionings=audio_conditionings,
         )
 
         print(f"Encoding video to {output_path}...")
@@ -349,6 +476,18 @@ def main():
         type=str,
         default=None,
         help="Optional input image for image-to-video generation",
+    )
+    parser.add_argument(
+        "--audio",
+        type=str,
+        default=None,
+        help="Optional input audio for audio-latent conditioning",
+    )
+    parser.add_argument(
+        "--audio-strength",
+        type=float,
+        default=1.0,
+        help="Strength for audio conditioning (0.0 to 1.0)",
     )
     parser.add_argument(
         "--output",
@@ -476,6 +615,13 @@ def main():
             print(f"Error: Image file not found: {image_path}")
             sys.exit(1)
 
+    audio_path = None
+    if args.audio:
+        audio_path = resolve_input_path(args.audio)
+        if not os.path.exists(audio_path):
+            print(f"Error: Audio file not found: {audio_path}")
+            sys.exit(1)
+
     # Ensure output directory exists
     output_dir = os.path.dirname(output_path)
     if output_dir:
@@ -501,6 +647,8 @@ def main():
             output_path=output_path,
             model_paths=model_paths,
             image_path=image_path,
+            audio_path=audio_path,
+            audio_strength=args.audio_strength,
             seed=args.seed,
             height=args.height,
             width=args.width,
@@ -516,6 +664,8 @@ def main():
             output_path=output_path,
             model_paths=model_paths,
             image_path=image_path,
+            audio_path=audio_path,
+            audio_strength=args.audio_strength,
             seed=args.seed,
             height=args.height,
             width=args.width,

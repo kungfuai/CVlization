@@ -76,6 +76,7 @@ class TI2VidOneStagePipeline:
         cfg_guidance_scale: float,
         images: list[tuple[str, int, float]],
         enhance_prompt: bool = False,
+        audio_conditionings: list | None = None,
     ) -> tuple[Iterator[torch.Tensor], torch.Tensor]:
         assert_resolution(height=height, width=width, is_two_stage=False)
 
@@ -141,6 +142,7 @@ class TI2VidOneStagePipeline:
             components=self.pipeline_components,
             dtype=dtype,
             device=self.device,
+            audio_conditionings=audio_conditionings,
         )
 
         torch.cuda.synchronize()

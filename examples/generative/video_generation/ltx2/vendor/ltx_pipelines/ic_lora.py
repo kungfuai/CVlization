@@ -94,6 +94,7 @@ class ICLoraPipeline:
         video_conditioning: list[tuple[str, float]],
         enhance_prompt: bool = False,
         tiling_config: TilingConfig | None = None,
+        audio_conditionings: list | None = None,
     ) -> tuple[Iterator[torch.Tensor], torch.Tensor]:
         assert_resolution(height=height, width=width, is_two_stage=True)
 
@@ -159,6 +160,7 @@ class ICLoraPipeline:
             components=self.pipeline_components,
             dtype=dtype,
             device=self.device,
+            audio_conditionings=audio_conditionings,
         )
 
         torch.cuda.synchronize()
@@ -213,6 +215,7 @@ class ICLoraPipeline:
             components=self.pipeline_components,
             dtype=dtype,
             device=self.device,
+            audio_conditionings=audio_conditionings,
             noise_scale=distilled_sigmas[0],
             initial_video_latent=upscaled_video_latent,
             initial_audio_latent=audio_state.latent,
