@@ -1,4 +1,4 @@
-name: wan2gp
+name: wan2gp_wan
 capability: generative/video_generation
 modalities:
 - vision
@@ -16,11 +16,11 @@ presets:
     script: predict.sh
     description: Run predict
 tags:
-- wan2gp
+- wan2gp_wan
 - video-generation
 - pytorch
 tasks:
 - video_generation
 frameworks:
 - pytorch
-description: Wan2GP video generation model
+description: Wan2GP (Wan-only) video generation model

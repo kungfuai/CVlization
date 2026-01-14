@@ -9,7 +9,7 @@ WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Image name
-IMG="${CVL_IMAGE:-wan2gp}"
+IMG="${CVL_IMAGE:-wan2gp_wan}"
 
 # Mount workspace as writable (predict script writes outputs to /workspace)
 docker run --rm --gpus=all \

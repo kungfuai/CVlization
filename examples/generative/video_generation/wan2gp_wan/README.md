@@ -1,4 +1,4 @@
-# Wan2GP
+# Wan2GP (Wan-only)
 
 This is adapted from [Wan2GP](https://github.com/deepbeepmeep/Wan2GP).
 
@@ -17,7 +17,7 @@ Wan2GP provides state-of-the-art text-to-video (T2V) and image-to-video (I2V) ge
 First, download the pre-trained models:
 
 ```bash
-bash examples/video_gen/wan2gp/download_models.sh
+bash examples/video_gen/wan2gp_wan/download_models.sh
 ```
 
 This will download the model checkpoints to a local directory. The models are quite large (several GB each).
@@ -27,7 +27,7 @@ This will download the model checkpoints to a local directory. The models are qu
 Build the Docker image with all dependencies:
 
 ```bash
-bash examples/video_gen/wan2gp/build.sh
+bash examples/video_gen/wan2gp_wan/build.sh
 ```
 
 ## Usage
@@ -43,8 +43,8 @@ The `predict.py` script provides a CLI for batch generation and scripting.
 Generate a video from a text prompt:
 
 ```bash
-# Navigate to the wan2gp directory
-cd examples/generative/video_generation/wan2gp
+# Navigate to the wan2gp_wan directory
+cd examples/generative/video_generation/wan2gp_wan
 
 # Using 1.3B model (faster, lower VRAM)
 bash predict.sh t2v \
@@ -67,8 +67,8 @@ bash predict.sh t2v \
 Animate an existing image:
 
 ```bash
-# From the wan2gp directory
-cd examples/generative/video_generation/wan2gp
+# From the wan2gp_wan directory
+cd examples/generative/video_generation/wan2gp_wan
 
 bash predict.sh i2v \
   --image /workspace/input.jpg \
@@ -81,8 +81,8 @@ bash predict.sh i2v \
 #### Advanced Options
 
 ```bash
-# From the wan2gp directory
-cd examples/generative/video_generation/wan2gp
+# From the wan2gp_wan directory
+cd examples/generative/video_generation/wan2gp_wan
 
 # Generate with specific parameters
 bash predict.sh t2v \
@@ -107,7 +107,7 @@ bash predict.sh i2v --help
 For interactive experimentation, start the Gradio web UI:
 
 ```bash
-bash examples/video_gen/wan2gp/up.sh
+bash examples/video_gen/wan2gp_wan/up.sh
 ```
 
 The app will be available at [http://localhost:7860](http://localhost:7860).
@@ -159,7 +159,6 @@ The web interface provides:
 ## Citation
 
 Based on the Wan video generation model from Alibaba. For more information, see the [upstream repository](https://github.com/deepbeepmeep/Wan2GP).
-
 
 
 
