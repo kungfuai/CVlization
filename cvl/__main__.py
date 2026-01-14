@@ -8,6 +8,7 @@ from cvl.commands.list import list_examples
 from cvl.commands.info import get_example_info
 from cvl.commands.run import run_example
 from cvl.commands.export import export_example
+from cvl.commands.jobs import list_jobs, tail_logs, kill_job
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -138,6 +139,84 @@ def create_parser() -> argparse.ArgumentParser:
         help="Overwrite destination if it already exists"
     )
 
+    # jobs command with subcommands
+    jobs_parser = subparsers.add_parser(
+        "jobs",
+        help="Manage running and recent jobs"
+    )
+    jobs_subparsers = jobs_parser.add_subparsers(dest="jobs_command", help="Job commands")
+
+    # Common arguments for all jobs subcommands
+    def add_common_args(parser):
+        parser.add_argument(
+            "--runner",
+            choices=["sagemaker", "k8s", "skypilot"],
+            help="Runner type"
+        )
+        parser.add_argument(
+            "--region",
+            help="AWS region for SageMaker"
+        )
+
+    # cvl jobs list (also default when no subcommand)
+    jobs_list_parser = jobs_subparsers.add_parser(
+        "list",
+        help="List running and recent jobs"
+    )
+    add_common_args(jobs_list_parser)
+    jobs_list_parser.add_argument(
+        "--status",
+        choices=["running", "completed", "failed", "stopped"],
+        help="Filter by status"
+    )
+    jobs_list_parser.add_argument(
+        "-n", "--max-results",
+        type=int,
+        default=20,
+        help="Maximum number of jobs to show (default: 20)"
+    )
+
+    # cvl jobs logs <job_id>
+    jobs_logs_parser = jobs_subparsers.add_parser(
+        "logs",
+        help="Tail logs for a job"
+    )
+    jobs_logs_parser.add_argument(
+        "job_id",
+        help="Job ID to tail logs for"
+    )
+    add_common_args(jobs_logs_parser)
+    jobs_logs_parser.add_argument(
+        "--no-follow",
+        action="store_true",
+        help="Don't follow logs, just print current output"
+    )
+
+    # cvl jobs kill <job_id>
+    jobs_kill_parser = jobs_subparsers.add_parser(
+        "kill",
+        help="Stop a running job"
+    )
+    jobs_kill_parser.add_argument(
+        "job_id",
+        help="Job ID to stop"
+    )
+    add_common_args(jobs_kill_parser)
+
+    # Add common args to main jobs parser for "cvl jobs" (defaults to list)
+    add_common_args(jobs_parser)
+    jobs_parser.add_argument(
+        "--status",
+        choices=["running", "completed", "failed", "stopped"],
+        help="Filter by status"
+    )
+    jobs_parser.add_argument(
+        "-n", "--max-results",
+        type=int,
+        default=20,
+        help="Maximum number of jobs to show (default: 20)"
+    )
+
     return parser
 
 
@@ -254,6 +333,36 @@ def cmd_run(args) -> int:
         return 1
 
 
+def cmd_jobs(args) -> int:
+    """Handle the jobs command and subcommands."""
+    jobs_cmd = getattr(args, 'jobs_command', None)
+
+    if jobs_cmd is None or jobs_cmd == "list":
+        # Default: list jobs
+        return list_jobs(
+            runner=getattr(args, 'runner', None),
+            status=getattr(args, 'status', None),
+            max_results=getattr(args, 'max_results', 20),
+            region=getattr(args, 'region', None),
+        )
+    elif jobs_cmd == "logs":
+        return tail_logs(
+            job_id=args.job_id,
+            runner=getattr(args, 'runner', None),
+            follow=not getattr(args, 'no_follow', False),
+            region=getattr(args, 'region', None),
+        )
+    elif jobs_cmd == "kill":
+        return kill_job(
+            job_id=args.job_id,
+            runner=getattr(args, 'runner', None),
+            region=getattr(args, 'region', None),
+        )
+    else:
+        print(f"Unknown jobs subcommand: {jobs_cmd}")
+        return 1
+
+
 def main() -> int:
     """Main entry point."""
     parser = create_parser()
@@ -267,6 +376,8 @@ def main() -> int:
         return cmd_run(args)
     elif args.command == "export":
         return cmd_export(args)
+    elif args.command == "jobs":
+        return cmd_jobs(args)
     else:
         parser.print_help()
         return 1
