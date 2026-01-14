@@ -590,11 +590,16 @@ ENTRYPOINT ["python", "/opt/ml/code/sagemaker_entry.py"]
         response = self.sagemaker.list_training_jobs(**kwargs)
         jobs = []
         for job in response.get("TrainingJobSummaries", []):
+            # Calculate duration in seconds (timedelta -> int)
+            end_time = job.get("TrainingEndTime", job["CreationTime"])
+            duration_td = end_time - job["CreationTime"]
+            duration_seconds = int(duration_td.total_seconds())
+
             jobs.append({
                 "job_id": job["TrainingJobName"],
                 "status": job["TrainingJobStatus"],
                 "created": job["CreationTime"].isoformat(),
-                "duration": job.get("TrainingEndTime", job["CreationTime"]) - job["CreationTime"],
+                "duration_seconds": duration_seconds,
             })
         return jobs
 
@@ -651,20 +656,28 @@ ENTRYPOINT ["python", "/opt/ml/code/sagemaker_entry.py"]
         print("-" * 50)
 
         next_token = None
+        seen_events = set()  # Track seen events to avoid duplicates
+
         while True:
             try:
                 kwargs = {
                     "logGroupName": log_group,
                     "logStreamName": log_stream,
-                    "startFromHead": True,
                 }
+                # Only use startFromHead on first call, then use nextToken
                 if next_token:
                     kwargs["nextToken"] = next_token
+                else:
+                    kwargs["startFromHead"] = True
 
                 response = self.logs.get_log_events(**kwargs)
 
                 for event in response.get("events", []):
-                    print(event["message"])
+                    # Dedupe by event ID (timestamp + message hash)
+                    event_id = (event["timestamp"], hash(event["message"]))
+                    if event_id not in seen_events:
+                        seen_events.add(event_id)
+                        print(event["message"])
 
                 new_token = response.get("nextForwardToken")
 
@@ -674,8 +687,8 @@ ENTRYPOINT ["python", "/opt/ml/code/sagemaker_entry.py"]
                 # Check if job is still running
                 status = self.get_job_status(job_id)
                 if status["status"] not in ("InProgress", "Stopping"):
-                    # Print any remaining logs
-                    if new_token != next_token:
+                    # Fetch any remaining logs (one more iteration)
+                    if new_token and new_token != next_token:
                         next_token = new_token
                         continue
                     print("-" * 50)
@@ -706,8 +719,9 @@ ENTRYPOINT ["python", "/opt/ml/code/sagemaker_entry.py"]
             self.sagemaker.stop_training_job(TrainingJobName=job_id)
             print(f"Stop request sent for: {job_id}")
             return True
-        except self.sagemaker.exceptions.ClientError as e:
-            if "ValidationException" in str(e):
+        except Exception as e:
+            error_str = str(e)
+            if "ValidationException" in error_str or "does not exist" in error_str:
                 print(f"Job not running or already stopped: {job_id}")
             else:
                 print(f"Error stopping job: {e}")
