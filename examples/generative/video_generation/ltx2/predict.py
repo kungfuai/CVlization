@@ -37,9 +37,9 @@ from huggingface_hub import hf_hub_download, list_repo_files, snapshot_download
 from ltx_pipelines.distilled import DistilledPipeline
 from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
 from ltx_pipelines.utils.helpers import cleanup_memory
-from ltx_pipelines.utils.media_io import encode_video
+from ltx_pipelines.utils.media_io import encode_video, load_video_conditioning
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE, DEFAULT_NEGATIVE_PROMPT
-from ltx_core.conditioning import AudioConditionByLatentSequence
+from ltx_core.conditioning import AudioConditionByLatentSequence, VideoConditionByLatentIndex
 from ltx_core.loader import LTXV_LORA_COMFY_RENAMING_MAP, LoraPathStrengthAndSDOps
 from ltx_core.model.audio_vae import AudioProcessor
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
@@ -165,6 +165,7 @@ def parse_loras(lora_args: list) -> list:
 def build_audio_conditionings(
     audio_path: str | None,
     audio_strength: float,
+    audio_offset_seconds: float,
     model_ledger,
     num_frames: int,
     frame_rate: float,
@@ -183,6 +184,21 @@ def build_audio_conditionings(
         waveform = waveform.unsqueeze(0).unsqueeze(0)
     elif waveform.ndim == 2:
         waveform = waveform.unsqueeze(0)
+
+    if audio_offset_seconds:
+        offset_samples = int(round(audio_offset_seconds * waveform_sample_rate))
+        if offset_samples > 0:
+            pad = torch.zeros(
+                (waveform.shape[0], waveform.shape[1], offset_samples),
+                dtype=waveform.dtype,
+            )
+            waveform = torch.cat([pad, waveform], dim=2)
+        elif offset_samples < 0:
+            offset_samples = abs(offset_samples)
+            if offset_samples >= waveform.shape[2]:
+                waveform = torch.zeros((waveform.shape[0], waveform.shape[1], 1), dtype=waveform.dtype)
+            else:
+                waveform = waveform[:, :, offset_samples:]
 
     audio_encoder = model_ledger.audio_encoder()
     target_channels = int(getattr(audio_encoder, "in_channels", waveform.shape[1]))
@@ -258,6 +274,39 @@ def build_audio_conditionings(
     return [AudioConditionByLatentSequence(audio_latent, strength)]
 
 
+def build_prefix_video_conditionings(
+    prefix_video_path: str | None,
+    prefix_frames: int,
+    prefix_strength: float,
+    model_ledger,
+    height: int,
+    width: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> list:
+    if not prefix_video_path or prefix_frames <= 0:
+        return []
+
+    video = load_video_conditioning(
+        video_path=prefix_video_path,
+        height=height,
+        width=width,
+        frame_cap=prefix_frames,
+        dtype=dtype,
+        device=device,
+    )
+    if video is None or video.shape[2] == 0:
+        return []
+
+    video_encoder = model_ledger.video_encoder()
+    with torch.inference_mode():
+        encoded_video = video_encoder(video)
+    del video_encoder
+    cleanup_memory()
+
+    return [VideoConditionByLatentIndex(latent=encoded_video, strength=prefix_strength, latent_idx=0)]
+
+
 def get_model_paths(pipeline: str, fp8: bool) -> dict:
     """Get or download required model paths."""
     paths = {}
@@ -265,15 +314,15 @@ def get_model_paths(pipeline: str, fp8: bool) -> dict:
     # Select checkpoint based on pipeline and precision
     if pipeline == "distilled":
         checkpoint_file = CHECKPOINT_DISTILLED_FP8 if fp8 else CHECKPOINT_DISTILLED
-    else:  # two_stage
+    else:  # full (dev) pipeline
         checkpoint_file = CHECKPOINT_DEV_FP8 if fp8 else CHECKPOINT_DEV
 
     paths["checkpoint"] = download_model_file(checkpoint_file)
     paths["spatial_upsampler"] = download_model_file(SPATIAL_UPSAMPLER)
     paths["gemma"] = download_gemma_encoder()
 
-    # two_stage requires distilled LoRA
-    if pipeline == "two_stage":
+    # full pipeline requires distilled LoRA
+    if pipeline == "full":
         paths["distilled_lora"] = download_model_file(DISTILLED_LORA)
 
     return paths
@@ -286,6 +335,10 @@ def run_distilled_pipeline(
     image_path: str = None,
     audio_path: str | None = None,
     audio_strength: float = 1.0,
+    audio_offset_seconds: float = 0.0,
+    prefix_video_path: str | None = None,
+    prefix_frames: int = 0,
+    prefix_strength: float = 1.0,
     seed: int = 10,
     height: int = 1024,
     width: int = 1536,
@@ -316,9 +369,30 @@ def run_distilled_pipeline(
     audio_conditionings = build_audio_conditionings(
         audio_path=audio_path,
         audio_strength=audio_strength,
+        audio_offset_seconds=audio_offset_seconds,
         model_ledger=pipeline.model_ledger,
         num_frames=num_frames,
         frame_rate=frame_rate,
+        device=pipeline.device,
+        dtype=pipeline.dtype,
+    )
+    stage_1_prefix = build_prefix_video_conditionings(
+        prefix_video_path=prefix_video_path,
+        prefix_frames=prefix_frames,
+        prefix_strength=prefix_strength,
+        model_ledger=pipeline.model_ledger,
+        height=height // 2,
+        width=width // 2,
+        device=pipeline.device,
+        dtype=pipeline.dtype,
+    )
+    stage_2_prefix = build_prefix_video_conditionings(
+        prefix_video_path=prefix_video_path,
+        prefix_frames=prefix_frames,
+        prefix_strength=prefix_strength,
+        model_ledger=pipeline.model_ledger,
+        height=height,
+        width=width,
         device=pipeline.device,
         dtype=pipeline.dtype,
     )
@@ -339,6 +413,8 @@ def run_distilled_pipeline(
             tiling_config=tiling_config,
             enhance_prompt=enhance_prompt,
             audio_conditionings=audio_conditionings,
+            video_conditionings_stage1=stage_1_prefix,
+            video_conditionings_stage2=stage_2_prefix,
         )
 
         print(f"Encoding video to {output_path}...")
@@ -361,6 +437,10 @@ def run_two_stage_pipeline(
     image_path: str = None,
     audio_path: str | None = None,
     audio_strength: float = 1.0,
+    audio_offset_seconds: float = 0.0,
+    prefix_video_path: str | None = None,
+    prefix_frames: int = 0,
+    prefix_strength: float = 1.0,
     seed: int = 10,
     height: int = 1024,
     width: int = 1536,
@@ -407,9 +487,30 @@ def run_two_stage_pipeline(
     audio_conditionings = build_audio_conditionings(
         audio_path=audio_path,
         audio_strength=audio_strength,
+        audio_offset_seconds=audio_offset_seconds,
         model_ledger=pipeline.stage_1_model_ledger,
         num_frames=num_frames,
         frame_rate=frame_rate,
+        device=pipeline.device,
+        dtype=pipeline.dtype,
+    )
+    stage_1_prefix = build_prefix_video_conditionings(
+        prefix_video_path=prefix_video_path,
+        prefix_frames=prefix_frames,
+        prefix_strength=prefix_strength,
+        model_ledger=pipeline.stage_1_model_ledger,
+        height=height // 2,
+        width=width // 2,
+        device=pipeline.device,
+        dtype=pipeline.dtype,
+    )
+    stage_2_prefix = build_prefix_video_conditionings(
+        prefix_video_path=prefix_video_path,
+        prefix_frames=prefix_frames,
+        prefix_strength=prefix_strength,
+        model_ledger=pipeline.stage_1_model_ledger,
+        height=height,
+        width=width,
         device=pipeline.device,
         dtype=pipeline.dtype,
     )
@@ -433,6 +534,8 @@ def run_two_stage_pipeline(
             tiling_config=tiling_config,
             enhance_prompt=enhance_prompt,
             audio_conditionings=audio_conditionings,
+            video_conditionings_stage1=stage_1_prefix,
+            video_conditionings_stage2=stage_2_prefix,
         )
 
         print(f"Encoding video to {output_path}...")
@@ -458,9 +561,10 @@ def main():
     parser.add_argument(
         "--pipeline",
         type=str,
-        choices=["distilled", "two_stage"],
+        choices=["distilled", "full", "two_stage"],
         default="distilled",
-        help="Pipeline mode: distilled (fast, 8+4 steps) or two_stage (quality, 40 steps)",
+        help="Pipeline mode: distilled (fast, 8+4 steps) or full (quality, 40 steps). "
+             "'two_stage' is deprecated and maps to 'full'.",
     )
 
     # Input/output
@@ -488,6 +592,29 @@ def main():
         type=float,
         default=1.0,
         help="Strength for audio conditioning (0.0 to 1.0)",
+    )
+    parser.add_argument(
+        "--audio-align-prefix",
+        action="store_true",
+        help="Pad audio by the prefix duration to align continuation audio",
+    )
+    parser.add_argument(
+        "--prefix-video",
+        type=str,
+        default=None,
+        help="Optional prefix video for continuation conditioning",
+    )
+    parser.add_argument(
+        "--prefix-frames",
+        type=int,
+        default=0,
+        help="Number of prefix frames to condition from the prefix video",
+    )
+    parser.add_argument(
+        "--prefix-strength",
+        type=float,
+        default=1.0,
+        help="Strength for prefix video conditioning (0.0 to 1.0)",
     )
     parser.add_argument(
         "--output",
@@ -539,19 +666,19 @@ def main():
         "--num-inference-steps",
         type=int,
         default=40,
-        help="Denoising steps (two_stage pipeline only)",
+        help="Denoising steps (full pipeline only)",
     )
     parser.add_argument(
         "--cfg-guidance-scale",
         type=float,
         default=4.0,
-        help="CFG guidance scale (two_stage pipeline only)",
+        help="CFG guidance scale (full pipeline only)",
     )
     parser.add_argument(
         "--negative-prompt",
         type=str,
         default="",
-        help="Negative prompt (two_stage pipeline only, uses default if empty)",
+        help="Negative prompt (full pipeline only, uses default if empty)",
     )
 
     # LoRA
@@ -622,6 +749,19 @@ def main():
             print(f"Error: Audio file not found: {audio_path}")
             sys.exit(1)
 
+    prefix_video_path = None
+    if args.prefix_video:
+        prefix_video_path = resolve_input_path(args.prefix_video)
+        if not os.path.exists(prefix_video_path):
+            print(f"Error: Prefix video file not found: {prefix_video_path}")
+            sys.exit(1)
+        if args.prefix_frames <= 0:
+            print("Error: --prefix-frames must be > 0 when --prefix-video is set.")
+            sys.exit(1)
+        if args.prefix_frames > args.num_frames:
+            print("Error: --prefix-frames cannot exceed --num-frames.")
+            sys.exit(1)
+
     # Ensure output directory exists
     output_dir = os.path.dirname(output_path)
     if output_dir:
@@ -630,7 +770,12 @@ def main():
     fp8 = not args.no_fp8
     loras = parse_loras(args.lora)
 
-    print(f"Pipeline: {args.pipeline}")
+    pipeline = args.pipeline
+    if pipeline == "two_stage":
+        print("Warning: --pipeline two_stage is deprecated; use --pipeline full instead.")
+        pipeline = "full"
+
+    print(f"Pipeline: {pipeline}")
     print(f"FP8 mode: {'enabled' if fp8 else 'disabled'}")
     if loras:
         print(f"LoRAs: {len(loras)}")
@@ -638,10 +783,14 @@ def main():
 
     # Download models
     print("\nPreparing models...")
-    model_paths = get_model_paths(args.pipeline, fp8)
+    model_paths = get_model_paths(pipeline, fp8)
 
     # Run pipeline
-    if args.pipeline == "distilled":
+    audio_offset_seconds = 0.0
+    if args.audio_align_prefix and args.prefix_frames > 0:
+        audio_offset_seconds = float(args.prefix_frames) / float(args.frame_rate)
+
+    if pipeline == "distilled":
         run_distilled_pipeline(
             prompt=args.prompt,
             output_path=output_path,
@@ -649,6 +798,10 @@ def main():
             image_path=image_path,
             audio_path=audio_path,
             audio_strength=args.audio_strength,
+            audio_offset_seconds=audio_offset_seconds,
+            prefix_video_path=prefix_video_path,
+            prefix_frames=args.prefix_frames,
+            prefix_strength=args.prefix_strength,
             seed=args.seed,
             height=args.height,
             width=args.width,
@@ -666,6 +819,10 @@ def main():
             image_path=image_path,
             audio_path=audio_path,
             audio_strength=args.audio_strength,
+            audio_offset_seconds=audio_offset_seconds,
+            prefix_video_path=prefix_video_path,
+            prefix_frames=args.prefix_frames,
+            prefix_strength=args.prefix_strength,
             seed=args.seed,
             height=args.height,
             width=args.width,

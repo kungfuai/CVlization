@@ -82,6 +82,8 @@ class DistilledPipeline:
         tiling_config: TilingConfig | None = None,
         enhance_prompt: bool = False,
         audio_conditionings: list | None = None,
+        video_conditionings_stage1: list | None = None,
+        video_conditionings_stage2: list | None = None,
     ) -> tuple[Iterator[torch.Tensor], torch.Tensor]:
         assert_resolution(height=height, width=width, is_two_stage=True)
 
@@ -135,6 +137,7 @@ class DistilledPipeline:
             dtype=dtype,
             device=self.device,
         )
+        stage_1_conditionings = stage_1_conditionings + (video_conditionings_stage1 or [])
 
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_1_output_shape,
@@ -167,6 +170,7 @@ class DistilledPipeline:
             dtype=dtype,
             device=self.device,
         )
+        stage_2_conditionings = stage_2_conditionings + (video_conditionings_stage2 or [])
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_2_output_shape,
             conditionings=stage_2_conditionings,
