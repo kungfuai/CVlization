@@ -1,4 +1,5 @@
 name: ltx2
+image: cvlization/ltx2:latest
 capability: generative/video_generation
 modalities:
   - vision
