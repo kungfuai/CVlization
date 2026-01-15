@@ -26,5 +26,5 @@ frameworks:
 - onnx
 description: 2D pose estimation inference using DWPose ONNX models
 verification:
-  last_verified: "2025-12-31"
-  last_verification_note: "Upgraded to PyTorch 2.9.1+CUDA 12.8. Fixed LD_LIBRARY_PATH for cuDNN. ONNX GPU inference ~80 fps. VRAM: ~8GB."
+  last_verified: "2026-01-15"
+  last_verification_note: "Verified HuggingFace lazy download for sample assets. ONNX GPU inference ~80 fps on RTX PRO 6000 Blackwell. VRAM: ~8GB."
