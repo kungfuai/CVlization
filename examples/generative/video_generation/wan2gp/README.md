@@ -1,167 +1,76 @@
-# Wan2GP
+# Wan2GP CLI (LTX-2, Wan, LongCat)
 
-This is adapted from [Wan2GP](https://github.com/deepbeepmeep/Wan2GP).
+This example wraps [Wan2GP](https://github.com/DeepBeepMeep/Wan2GP) by DeepBeepMeep for CLI usage. Wan2GP provides optimized video generation with smart memory management via [mmgp](https://github.com/deepbeepmeep/mmgp) (Memory Management for the GPU Poor).
 
-Wan2GP provides state-of-the-art text-to-video (T2V) and image-to-video (I2V) generation using diffusion models. This implementation supports both CLI-based generation and an interactive Gradio web interface.
+It supports:
+- LTX-2 (full + distilled)
+- Wan T2V / I2V
+- LongCat video + avatar
 
-## Prerequisites
+## Quick start
 
-- Docker with GPU support
-- NVIDIA GPU with at least 24GB VRAM (for 14B models)
-- Downloaded model checkpoints (see below)
-
-## Setup
-
-### 1. Download Models
-
-First, download the pre-trained models:
-
+Build the image:
 ```bash
-bash examples/video_gen/wan2gp/download_models.sh
+./build.sh
 ```
 
-This will download the model checkpoints to a local directory. The models are quite large (several GB each).
-
-### 2. Build Docker Image
-
-Build the Docker image with all dependencies:
-
+Generate with LTX-2:
 ```bash
-bash examples/video_gen/wan2gp/build.sh
+cvl run wan2gp predict -- --model ltx2_19B --prompt "A cinematic city street at dusk, rain reflections, slow dolly" --output outputs/wan2gp_ltx2.mp4
 ```
 
-## Usage
-
-### Command-Line Interface (Recommended for Automation)
-
-The `predict.py` script provides a CLI for batch generation and scripting.
-
-> **Note**: The CLI script is newly added and not fully tested. It should work after building the Docker image, but you may need to adjust paths or parameters. The Gradio web interface below is the tested and recommended way to use this example.
-
-#### Text-to-Video Generation
-
-Generate a video from a text prompt:
-
+Generate Wan T2V:
 ```bash
-# Navigate to the wan2gp directory
-cd examples/generative/video_generation/wan2gp
-
-# Using 1.3B model (faster, lower VRAM)
-bash predict.sh t2v \
-  --prompt "A cat playing piano in a cozy room" \
-  --checkpoint-dir /workspace/models \
-  --output cat_piano.mp4
-
-# Using 14B model (higher quality, more VRAM)
-bash predict.sh t2v \
-  --prompt "A sunset over the ocean with waves crashing" \
-  --model-size 14B \
-  --checkpoint-dir /workspace/models \
-  --output sunset.mp4 \
-  --steps 50 \
-  --guidance-scale 7.5
+cvl run wan2gp predict -- --model wan_t2v --prompt "A wide aerial shot over rolling hills at sunrise" --output outputs/wan2gp_wan_t2v.mp4
 ```
 
-#### Image-to-Video Generation
-
-Animate an existing image:
-
+Generate Wan I2V:
 ```bash
-# From the wan2gp directory
-cd examples/generative/video_generation/wan2gp
-
-bash predict.sh i2v \
-  --image /workspace/input.jpg \
-  --prompt "The scene comes to life with gentle movement" \
-  --checkpoint-dir /workspace/models \
-  --output animated.mp4 \
-  --resolution 720p
+cvl run wan2gp predict -- --model wan_i2v --image inputs/start.jpg --prompt "The scene comes alive with gentle wind and drifting clouds" --output outputs/wan2gp_wan_i2v.mp4
 ```
 
-#### Advanced Options
-
+Generate LongCat video:
 ```bash
-# From the wan2gp directory
-cd examples/generative/video_generation/wan2gp
-
-# Generate with specific parameters
-bash predict.sh t2v \
-  --prompt "A futuristic city at night" \
-  --checkpoint-dir /workspace/models \
-  --output city.mp4 \
-  --frames 81 \           # Number of frames (must be 4n+1)
-  --fps 8 \               # Output framerate
-  --size 1280x720 \       # Resolution
-  --steps 50 \            # Sampling steps (higher = better quality)
-  --guidance-scale 5.0 \  # CFG scale (higher = more prompt adherence)
-  --shift 5.0 \           # Noise schedule shift (3.0 for 480p, 5.0 for 720p+)
-  --seed 42               # Reproducible results
-
-# View all options
-bash predict.sh t2v --help
-bash predict.sh i2v --help
+cvl run wan2gp predict -- --model longcat_video --prompt "A tiny robot exploring a kitchen countertop, cinematic lighting" --output outputs/wan2gp_longcat.mp4
 ```
 
-### Interactive Web Interface
-
-For interactive experimentation, start the Gradio web UI:
-
+Generate LongCat avatar (audio optional):
 ```bash
-bash examples/video_gen/wan2gp/up.sh
+cvl run wan2gp predict -- --model longcat_avatar --prompt "A friendly presenter speaks to camera" --audio inputs/voice.wav --output outputs/wan2gp_longcat_avatar.mp4
 ```
 
-The app will be available at [http://localhost:7860](http://localhost:7860).
+## Memory Profiles
 
-The web interface provides:
-- Real-time parameter adjustment
-- Multiple model selection (1.3B, 14B)
-- Prompt expansion with AI assistance
-- Preview and comparison tools
+Use `--mmgp-profile` to control memory usage vs speed tradeoff:
 
-## Model Specifications
+| Profile | RAM | VRAM | Speed | Use Case |
+|---------|-----|------|-------|----------|
+| 1 | 48GB+ | 24GB | Fastest | RTX 4090 with lots of RAM |
+| 2 | 48GB+ | 12GB | Fast | RTX 4070/4080 with lots of RAM |
+| 3 | 32GB | 24GB | Medium | RTX 4090 with less RAM |
+| 4 | 32GB | 12GB | Slow | Most consumer GPUs (default) |
+| 5 | 24GB | 10GB | Slowest | Minimal hardware |
 
-| Model | Parameters | VRAM Required | Speed | Quality |
-|-------|------------|---------------|-------|---------|
-| T2V 1.3B | 1.3 billion | ~12-16 GB | Fast | Good |
-| T2V 14B | 14 billion | ~24-32 GB | Slower | Excellent |
-| I2V 14B | 14 billion | ~24-32 GB | Slower | Excellent |
+Example:
+```bash
+cvl run wan2gp predict -- --model ltx2_19B --mmgp-profile 1 --prompt "..." --output out.mp4
+```
 
-## Tips for Best Results
+## Upstream Relationship
 
-1. **Frame Count**: Must be `4n+1` (e.g., 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81)
-2. **Shift Parameter**: Use `3.0` for 480p videos, `5.0` for 720p+ videos
-3. **Sampling Steps**: 40-50 steps provide good balance; 60+ for highest quality
-4. **Guidance Scale**: 5.0-7.5 works well; higher values increase prompt adherence but may reduce diversity
-5. **VRAM Optimization**: Use `--no-offload` flag if you have sufficient VRAM for faster generation
+This example vendors code from [Wan2GP](https://github.com/DeepBeepMeep/Wan2GP) with minimal patches for CLI compatibility. The patches are maintained in `patches/` and automatically applied during sync.
 
-## Troubleshooting
+**Syncing from upstream:**
+```bash
+git clone https://github.com/DeepBeepMeep/Wan2GP.git /tmp/Wan2GP
+WAN2GP_SRC=/tmp/Wan2GP ./sync_vendor.sh
+```
 
-**Out of Memory (OOM) errors:**
-- Use the 1.3B model instead of 14B
-- Reduce frame count (e.g., 41 instead of 81)
-- Reduce resolution (480p instead of 720p)
-- Enable model offloading (default behavior)
+See `patches/README.md` for details on what modifications are applied.
 
-**Slow generation:**
-- Model offloading to CPU saves VRAM but is slower
-- Use `--no-offload` if you have sufficient VRAM
-- Reduce sampling steps (30-40 instead of 50+)
+## Notes
 
-## Files
-
-- `predict.py` - CLI script for batch generation
-- `predict.sh` - Docker wrapper for CLI script
-- `gradio_server.py` - Web interface server
-- `up.sh` - Start web interface
-- `build.sh` - Build Docker image
-- `download_models.sh` - Download model checkpoints
-
-## Citation
-
-Based on the Wan video generation model from Alibaba. For more information, see the [upstream repository](https://github.com/deepbeepmeep/Wan2GP).
-
-
-
-
-
-
+- Vendored sources: `vendor/wan2gp/`
+- Model cache: `~/.cache/wan2gp` (override with `WAN2GP_CKPT_CACHE` env var)
+- HuggingFace cache: `~/.cache/huggingface` (override with `HF_HOME` env var)
+- Output paths are resolved relative to the host working directory when using `cvl run`.

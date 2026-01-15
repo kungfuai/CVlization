@@ -7,9 +7,29 @@ import torch
 import traceback
 import einops
 import numpy as np
+from pathlib import Path
 from PIL import Image
 
+from huggingface_hub import hf_hub_download
 from cvlization.paths import resolve_input_path, resolve_output_path
+
+# Sample assets in HuggingFace dataset
+ASSETS_REPO = "zzsi/cvl"
+
+
+def get_sample_asset(filename: str) -> str:
+    """Download sample asset from HuggingFace if not available locally."""
+    local_path = Path(__file__).parent / "data" / filename
+    if local_path.exists():
+        return str(local_path)
+
+    remote_path = f"samples/video_generation/framepack/{filename}"
+    print(f"Downloading sample asset: {filename}")
+    return hf_hub_download(
+        repo_id=ASSETS_REPO,
+        filename=remote_path,
+        repo_type="dataset",
+    )
 
 # Set HF cache directory relative to script location
 os.environ['HF_HOME'] = os.path.abspath(os.path.realpath(os.path.join(os.path.dirname(__file__), './hf_download')))
@@ -99,19 +119,15 @@ def parse_args():
     if args.input_video:
         args.input_video = resolve_input_path(args.input_video)
 
-    # Handle bundled samples as defaults
-    DEFAULT_IMAGE = "data/1.jpg"
-    DEFAULT_VIDEO = "data/1.mp4"
-
-    # Validate mode-specific arguments and use bundled samples if needed
+    # Validate mode-specific arguments and use HuggingFace samples if needed
     if args.mode == 'i2v':
         if not args.input_image:
-            args.input_image = DEFAULT_IMAGE
-            print(f"No --input_image provided, using bundled sample: {DEFAULT_IMAGE}")
+            args.input_image = get_sample_asset("1.jpg")
+            print(f"No --input_image provided, using sample from HuggingFace")
     elif args.mode == 'extend':
         if not args.input_video:
-            args.input_video = DEFAULT_VIDEO
-            print(f"No --input_video provided, using bundled sample: {DEFAULT_VIDEO}")
+            args.input_video = get_sample_asset("1.mp4")
+            print(f"No --input_video provided, using sample from HuggingFace")
     
     return args
 

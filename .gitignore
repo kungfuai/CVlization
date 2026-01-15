@@ -92,3 +92,12 @@ examples/**/data/*.csv
 
 # Log files
 **/*.log
+
+# Inference output files (prevent accidental commits to repo root)
+/*_output.json
+/*.wav
+/*.txt
+!requirements.txt
+!CONTRIBUTING.txt
+!LICENSE.txt
+!Notice.txt

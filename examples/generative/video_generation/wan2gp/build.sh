@@ -1,7 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+IMG="cvlization/wan2gp:latest"
 
-# Build from the script's directory, works from anywhere
-docker build -t wan2gp "$SCRIPT_DIR"
+echo "Building Wan2GP Docker image..."
+docker build -t "$IMG" -f "${SCRIPT_DIR}/Dockerfile" "$SCRIPT_DIR"
+
+echo ""
+echo "Build complete: $IMG"
+echo "Run inference with: ./predict.sh"

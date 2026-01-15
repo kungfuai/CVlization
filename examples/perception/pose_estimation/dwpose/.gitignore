@@ -1,0 +1,5 @@
+# Sample files (downloaded from HuggingFace)
+examples/*.mp4
+examples/*.png
+examples/*.jpg
+examples/*.wav

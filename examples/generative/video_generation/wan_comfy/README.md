@@ -42,7 +42,7 @@ cvl run generative/video_generation/wan_comfy predict \
 ```bash
 bash examples/generative/video_generation/wan_comfy/predict.sh \
   -p "a beautiful sunset over the ocean" \
-  -i /cvlization_repo/examples/generative/video_generation/framepack/data/1.jpg \
+  -i /user_data/my_photo.jpg \
   -o my_videos \
   --steps 10
 ```
