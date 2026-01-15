@@ -103,65 +103,26 @@ class CerebriumDeployer:
             f"Currently supported: {', '.join(sorted(SUPPORTED_EXAMPLES))}"
         )
 
-    def _is_cli_installed(self) -> bool:
-        """Check if cerebrium CLI is installed."""
-        try:
-            result = subprocess.run(
-                ["cerebrium", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            return result.returncode == 0
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return False
+    def _find_cli(self) -> Optional[str]:
+        """Find cerebrium CLI binary path."""
+        return shutil.which("cerebrium")
 
-    def _install_cli(self) -> bool:
-        """Install cerebrium CLI using pip. Returns True if successful."""
-        print("Installing cerebrium CLI...", flush=True)
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "cerebrium"],
-            text=True,
-        )
-        return result.returncode == 0
-
-    def check_cli(self, allow_install: bool = True) -> tuple[bool, str]:
+    def check_cli(self) -> tuple[bool, str]:
         """Check if Cerebrium CLI is installed and authenticated.
-
-        Args:
-            allow_install: If True, offer to install CLI if missing
 
         Returns:
             (is_ready, message)
         """
         # Check if CLI is installed
-        if not self._is_cli_installed():
-            if allow_install:
-                print("Cerebrium CLI not found.")
-                try:
-                    response = input("Install it now? [y/N]: ").strip().lower()
-                except EOFError:
-                    response = "n"
+        cli_path = self._find_cli()
+        if not cli_path:
+            return False, (
+                "Cerebrium CLI not found.\n"
+                "Install with: uv add cerebrium  (or: pip install cerebrium)\n"
+                "Then run: cerebrium login"
+            )
 
-                if response == "y":
-                    if self._install_cli():
-                        print("Cerebrium CLI installed successfully.")
-                    else:
-                        return False, "Failed to install cerebrium CLI"
-                else:
-                    return False, (
-                        "Cerebrium CLI required.\n"
-                        f"  Install with: {sys.executable} -m pip install cerebrium"
-                    )
-            else:
-                return False, (
-                    "Cerebrium CLI not found.\n"
-                    f"  Install with: {sys.executable} -m pip install cerebrium"
-                )
-
-        # Verify installation worked
-        if not self._is_cli_installed():
-            return False, "Cerebrium CLI installation failed"
+        print(f"  Found: {cli_path}", flush=True)
 
         # Check if logged in by checking config file
         config_path = Path.home() / ".cerebrium" / "config.yaml"

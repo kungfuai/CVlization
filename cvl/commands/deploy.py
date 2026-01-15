@@ -109,15 +109,11 @@ def _deploy_cerebrium(
 
     # Check CLI (skip for dry-run)
     if not dry_run:
-        print("\nChecking Cerebrium CLI...")
+        print("\nChecking Cerebrium CLI...", flush=True)
         ready, message = deployer.check_cli()
         if not ready:
-            print(f"  {message}", file=sys.stderr)
-            print("\nTo authenticate with Cerebrium:", file=sys.stderr)
-            print("  1. Login: cerebrium login", file=sys.stderr)
-            print("  2. Or set CEREBRIUM_TOKEN env var for CI/CD", file=sys.stderr)
+            print(f"\n{message}", file=sys.stderr, flush=True)
             return 1
-        print(f"  {message}")
 
     # Prepare deployment
     print("\nPreparing deployment...")
