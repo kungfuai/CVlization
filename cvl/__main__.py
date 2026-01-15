@@ -10,6 +10,13 @@ from cvl.commands.run import run_example
 from cvl.commands.export import export_example
 from cvl.commands.jobs import list_jobs, tail_logs, kill_job
 from cvl.commands.deploy import deploy_example
+from cvl.commands.services import (
+    list_services,
+    invoke_service,
+    service_logs,
+    service_status,
+    delete_service,
+)
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -288,6 +295,118 @@ def create_parser() -> argparse.ArgumentParser:
         default=20,
         help="Maximum number of jobs to show (default: 20)"
     )
+
+    # services command with subcommands
+    services_parser = subparsers.add_parser(
+        "services",
+        help="Manage deployed serverless services"
+    )
+    services_subparsers = services_parser.add_subparsers(dest="services_command", help="Service commands")
+
+    # Common arguments for services subcommands
+    def add_services_common_args(parser):
+        parser.add_argument(
+            "--platform",
+            choices=["cerebrium"],
+            default="cerebrium",
+            help="Platform (default: cerebrium)"
+        )
+
+    # cvl services list
+    services_list_parser = services_subparsers.add_parser(
+        "list",
+        help="List deployed services"
+    )
+    add_services_common_args(services_list_parser)
+
+    # cvl services invoke <name>
+    services_invoke_parser = services_subparsers.add_parser(
+        "invoke",
+        help="Invoke a deployed service"
+    )
+    services_invoke_parser.add_argument(
+        "name",
+        help="Service name to invoke"
+    )
+    services_invoke_parser.add_argument(
+        "--prompt",
+        help="Text prompt (for T2V/I2V models)"
+    )
+    services_invoke_parser.add_argument(
+        "--image",
+        help="Path to input image (for I2V models)"
+    )
+    services_invoke_parser.add_argument(
+        "--output", "-o",
+        help="Output file path (e.g., video.mp4)"
+    )
+    services_invoke_parser.add_argument(
+        "--height",
+        type=int,
+        help="Video height"
+    )
+    services_invoke_parser.add_argument(
+        "--width",
+        type=int,
+        help="Video width"
+    )
+    services_invoke_parser.add_argument(
+        "--num-frames",
+        type=int,
+        help="Number of frames"
+    )
+    services_invoke_parser.add_argument(
+        "--seed",
+        type=int,
+        help="Random seed"
+    )
+    add_services_common_args(services_invoke_parser)
+
+    # cvl services logs <name>
+    services_logs_parser = services_subparsers.add_parser(
+        "logs",
+        help="View logs for a service"
+    )
+    services_logs_parser.add_argument(
+        "name",
+        help="Service name"
+    )
+    services_logs_parser.add_argument(
+        "--follow", "-f",
+        action="store_true",
+        help="Follow/stream logs"
+    )
+    add_services_common_args(services_logs_parser)
+
+    # cvl services status <name>
+    services_status_parser = services_subparsers.add_parser(
+        "status",
+        help="Check status of a service"
+    )
+    services_status_parser.add_argument(
+        "name",
+        help="Service name"
+    )
+    add_services_common_args(services_status_parser)
+
+    # cvl services delete <name>
+    services_delete_parser = services_subparsers.add_parser(
+        "delete",
+        help="Delete a deployed service"
+    )
+    services_delete_parser.add_argument(
+        "name",
+        help="Service name to delete"
+    )
+    services_delete_parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Skip confirmation prompt"
+    )
+    add_services_common_args(services_delete_parser)
+
+    # Add common args to main services parser (defaults to list)
+    add_services_common_args(services_parser)
 
     return parser
 
@@ -621,6 +740,76 @@ def cmd_jobs(args) -> int:
         return 1
 
 
+def cmd_services(args) -> int:
+    """Handle the services command and subcommands."""
+    import base64
+
+    services_cmd = getattr(args, 'services_command', None)
+    platform = getattr(args, 'platform', 'cerebrium')
+
+    if services_cmd is None or services_cmd == "list":
+        return list_services(platform=platform)
+
+    elif services_cmd == "invoke":
+        # Build kwargs from args
+        kwargs = {}
+        if args.prompt:
+            kwargs["prompt"] = args.prompt
+        if args.height:
+            kwargs["height"] = args.height
+        if args.width:
+            kwargs["width"] = args.width
+        if getattr(args, 'num_frames', None):
+            kwargs["num_frames"] = args.num_frames
+        if args.seed:
+            kwargs["seed"] = args.seed
+
+        # Handle image input (read file and base64 encode)
+        if args.image:
+            try:
+                with open(args.image, "rb") as f:
+                    image_bytes = f.read()
+                kwargs["image_base64"] = base64.b64encode(image_bytes).decode("utf-8")
+            except FileNotFoundError:
+                print(f"Error: Image file not found: {args.image}", file=sys.stderr)
+                return 1
+
+        if not kwargs.get("prompt"):
+            print("Error: --prompt is required", file=sys.stderr)
+            return 1
+
+        return invoke_service(
+            service_name=args.name,
+            platform=platform,
+            output_file=getattr(args, 'output', None),
+            **kwargs,
+        )
+
+    elif services_cmd == "logs":
+        return service_logs(
+            service_name=args.name,
+            platform=platform,
+            follow=getattr(args, 'follow', False),
+        )
+
+    elif services_cmd == "status":
+        return service_status(
+            service_name=args.name,
+            platform=platform,
+        )
+
+    elif services_cmd == "delete":
+        return delete_service(
+            service_name=args.name,
+            platform=platform,
+            force=getattr(args, 'force', False),
+        )
+
+    else:
+        print(f"Unknown services subcommand: {services_cmd}")
+        return 1
+
+
 def main() -> int:
     """Main entry point."""
     parser = create_parser()
@@ -638,6 +827,8 @@ def main() -> int:
         return cmd_deploy(args)
     elif args.command == "jobs":
         return cmd_jobs(args)
+    elif args.command == "services":
+        return cmd_services(args)
     else:
         parser.print_help()
         return 1
