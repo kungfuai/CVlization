@@ -69,6 +69,7 @@ def deploy_example(
     print(f"  Disk: {resources.get('disk_gb', 'not specified')} GB")
 
     # Platform-specific deployment
+    sys.stdout.flush()
     if platform == "cerebrium":
         return _deploy_cerebrium(example_path, example, dry_run, deploy_dir, gpu_override)
     else:
@@ -86,6 +87,11 @@ def _deploy_cerebrium(
 ) -> int:
     """Deploy to Cerebrium platform."""
     deployer = CerebriumDeployer(example_path, example_meta, gpu_override=gpu_override)
+
+    # Check if example is supported for automatic deployment
+    if not deployer.is_supported():
+        print(f"\nError: {deployer.get_unsupported_message()}", file=sys.stderr, flush=True)
+        return 1
 
     # Show GPU configuration
     gpu_id, gpu_name, vram_needed = deployer.get_gpu_config()
