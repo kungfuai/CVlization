@@ -9,6 +9,7 @@ from cvl.commands.info import get_example_info
 from cvl.commands.run import run_example
 from cvl.commands.export import export_example
 from cvl.commands.jobs import list_jobs, tail_logs, kill_job
+from cvl.commands.deploy import deploy_example
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -176,6 +177,36 @@ def create_parser() -> argparse.ArgumentParser:
         help="Overwrite destination if it already exists"
     )
 
+    # deploy command
+    deploy_parser = subparsers.add_parser(
+        "deploy",
+        help="Deploy an example to a serverless platform"
+    )
+    deploy_parser.add_argument(
+        "example",
+        help="Example name or path to deploy (e.g., ltx2, stable-diffusion)"
+    )
+    deploy_parser.add_argument(
+        "--platform",
+        choices=["cerebrium"],
+        default="cerebrium",
+        help="Target platform (default: cerebrium)"
+    )
+    deploy_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Prepare deployment files but don't actually deploy"
+    )
+    deploy_parser.add_argument(
+        "--deploy-dir",
+        help="Directory to create deployment files (default: /tmp/cvl-deploy-<name>)"
+    )
+    deploy_parser.add_argument(
+        "--gpu",
+        choices=["T4", "L4", "A10", "L40", "A100", "A100_80GB", "H100"],
+        help="GPU type override (default: auto-selected based on VRAM requirements)"
+    )
+
     # jobs command with subcommands
     jobs_parser = subparsers.add_parser(
         "jobs",
@@ -308,6 +339,24 @@ def cmd_export(args) -> int:
         return 1
     except Exception as e:
         print(f"Unexpected error: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_deploy(args) -> int:
+    """Handle the deploy command."""
+    try:
+        return deploy_example(
+            example_query=args.example,
+            platform=getattr(args, "platform", "cerebrium"),
+            dry_run=getattr(args, "dry_run", False),
+            deploy_dir=getattr(args, "deploy_dir", None),
+            gpu_override=getattr(args, "gpu", None),
+        )
+    except KeyboardInterrupt:
+        print("\nDeployment cancelled.")
+        return 130
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
@@ -580,6 +629,8 @@ def main() -> int:
         return cmd_run(args)
     elif args.command == "export":
         return cmd_export(args)
+    elif args.command == "deploy":
+        return cmd_deploy(args)
     elif args.command == "jobs":
         return cmd_jobs(args)
     else:
