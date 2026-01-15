@@ -1,0 +1,29 @@
+# Core ML stack
+diffusers==0.34.0
+transformers==4.53.1
+tokenizers==0.21.4
+accelerate==1.12.0
+safetensors==0.4.5
+einops==0.8.0
+numpy==1.26.4
+scipy==1.14.1
+tqdm==4.67.1
+
+# Video & audio IO
+av==12.3.0
+ffmpeg-python==0.2.0
+imageio==2.37.2
+imageio-ffmpeg==0.6.0
+moviepy==1.0.3
+opencv-python==4.11.0.86
+pillow==10.0.1
+decord==0.6.0
+soundfile==0.13.1
+librosa==0.11.0
+pyloudnorm==0.2.0
+rembg[gpu]==2.0.65
+
+# Model utilities
+mmgp==3.6.14
+peft==0.15.0
+sentencepiece==0.2.1

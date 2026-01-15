@@ -1,0 +1,7 @@
+# Wan2GP vendor cache artifacts
+vendor/wan2gp/**/.cache/
+vendor/wan2gp/**/cache/
+
+# Output files
+outputs/
+*.mp4

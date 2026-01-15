@@ -1,0 +1,21 @@
+--- a/models/ltx2/ltx_core/text_encoders/gemma/encoders/base_encoder.py
++++ b/models/ltx2/ltx_core/text_encoders/gemma/encoders/base_encoder.py
+@@ -199,7 +199,9 @@
+         sequence_lengths,
+         padding_side=padding_side,
+     )
+-    return feature_extractor_linear(normed.to(encoded_text_features_dtype))
++    # Move to same device as feature_extractor for inference
++    target_device = next(feature_extractor_linear.parameters()).device
++    return feature_extractor_linear(normed.to(dtype=encoded_text_features_dtype, device=target_device))
+
+
+ def _apply_connectors(
+@@ -238,6 +240,7 @@
+     """
+     b, t, d, l = encoded_text.shape  # noqa: E741
+     device = encoded_text.device
++    sequence_lengths = sequence_lengths.to(device)
+
+     # Build mask: [B, T, 1, 1]
+     token_indices = torch.arange(t, device=device)[None, :]  # [1, T]

@@ -1,0 +1,27 @@
+name: wan2gp
+capability: generative/video_generation
+modalities:
+- vision
+datasets: []
+stability: beta
+resources:
+  gpu: 1
+  vram_gb: 48
+  disk_gb: 50
+image: cvlization/wan2gp:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run predict
+tags:
+- wan2gp
+- video-generation
+- pytorch
+tasks:
+- video_generation
+frameworks:
+- pytorch
+description: Wan2GP CLI (LTX-2, Wan, LongCat)
