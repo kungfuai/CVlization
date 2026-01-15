@@ -112,6 +112,43 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run without Docker (requires local Python environment with dependencies)"
     )
+    # Remote runner options
+    run_parser.add_argument(
+        "--runner",
+        choices=["local", "sagemaker", "ssh", "k8s", "skypilot"],
+        default="local",
+        help="Runner to use (default: local Docker)"
+    )
+    run_parser.add_argument(
+        "--instance-type",
+        help="Instance type for cloud runners (e.g., ml.g5.xlarge for SageMaker)"
+    )
+    run_parser.add_argument(
+        "--output-path",
+        help="S3 path for outputs (required for SageMaker, e.g., s3://bucket/outputs)"
+    )
+    run_parser.add_argument(
+        "--input-path",
+        help="S3 path for input data (optional for SageMaker)"
+    )
+    run_parser.add_argument(
+        "--spot",
+        action="store_true",
+        help="Use spot/preemptible instances for cost savings"
+    )
+    run_parser.add_argument(
+        "--region",
+        help="Cloud region (e.g., us-east-2 for AWS)"
+    )
+    run_parser.add_argument(
+        "--max-run-minutes",
+        type=int,
+        help="Maximum runtime in minutes (default: 60)"
+    )
+    run_parser.add_argument(
+        "--role-arn",
+        help="IAM role ARN for SageMaker (or set SAGEMAKER_ROLE_ARN env var)"
+    )
     run_parser.add_argument(
         "extra_args",
         nargs=argparse.REMAINDER,  # Captures all remaining args without parsing
@@ -298,12 +335,67 @@ def cmd_info(args) -> int:
         return 1
 
 
+def _extract_runner_args(args):
+    """Extract runner-related flags from extra_args due to argparse REMAINDER behavior.
+
+    When using REMAINDER, flags after positional args get captured in extra_args.
+    This function extracts known runner flags and updates the args namespace.
+    """
+    extra = list(getattr(args, 'extra_args', []) or [])
+    runner_flags = {
+        '--runner': 'runner',
+        '--instance-type': 'instance_type',
+        '--output-path': 'output_path',
+        '--input-path': 'input_path',
+        '--region': 'region',
+        '--max-run-minutes': 'max_run_minutes',
+        '--role-arn': 'role_arn',
+    }
+    bool_flags = {'--spot': 'spot'}
+
+    new_extra = []
+    i = 0
+    while i < len(extra):
+        arg = extra[i]
+        if arg in runner_flags:
+            # Flag with value
+            if i + 1 < len(extra):
+                attr = runner_flags[arg]
+                value = extra[i + 1]
+                # Convert types as needed
+                if attr == 'max_run_minutes':
+                    value = int(value)
+                setattr(args, attr, value)
+                i += 2
+            else:
+                new_extra.append(arg)
+                i += 1
+        elif arg in bool_flags:
+            setattr(args, bool_flags[arg], True)
+            i += 1
+        else:
+            new_extra.append(arg)
+            i += 1
+
+    args.extra_args = new_extra
+    return args
+
+
 def cmd_run(args) -> int:
     """Handle the run command.
 
     Returns:
         Exit code (0 for success, 1 for error)
     """
+    # Extract runner flags that might be in extra_args due to REMAINDER
+    args = _extract_runner_args(args)
+    runner = getattr(args, 'runner', 'local')
+
+    # Dispatch to remote runner if specified
+    if runner and runner != "local":
+        return cmd_run_remote(args, runner)
+
+    # Local Docker/native execution
     try:
         extra_args = list(getattr(args, 'extra_args', [])) or []
         if getattr(args, "simple_display", False):
@@ -331,6 +423,118 @@ def cmd_run(args) -> int:
     except Exception as e:
         print(f"Unexpected error: {e}", file=sys.stderr)
         return 1
+
+
+def cmd_run_remote(args, runner: str) -> int:
+    """Handle remote runner execution.
+
+    Args:
+        args: Parsed command line arguments
+        runner: Runner name (sagemaker, ssh, k8s, skypilot)
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    import os
+    from pathlib import Path
+    from cvl.core.config import get_runner_config, validate_sagemaker_config
+    from cvl.core.matching import find_matching_examples
+    from cvl.core.discovery import find_repo_root
+
+    # Find the example
+    examples = find_all_examples()
+    matches, _ = find_matching_examples(examples, args.example)
+
+    if not matches:
+        print(f"Error: Example '{args.example}' not found", file=sys.stderr)
+        return 1
+    if len(matches) > 1:
+        print(f"Error: Ambiguous example '{args.example}'. Matches: {[m['name'] for m in matches]}", file=sys.stderr)
+        return 1
+
+    example = matches[0]
+    repo_root = find_repo_root()
+    example_path = repo_root / example["_path"]
+
+    # Build CLI overrides from args
+    cli_overrides = {
+        "instance_type": getattr(args, 'instance_type', None),
+        "output_path": getattr(args, 'output_path', None),
+        "input_path": getattr(args, 'input_path', None),
+        "spot": getattr(args, 'spot', False) or None,  # Only set if True
+        "region": getattr(args, 'region', None),
+        "max_run_minutes": getattr(args, 'max_run_minutes', None),
+        "role_arn": getattr(args, 'role_arn', None),
+    }
+
+    # Get merged config
+    config = get_runner_config(runner, example_path, cli_overrides)
+
+    # Get extra args
+    extra_args = list(getattr(args, 'extra_args', [])) or []
+
+    if runner == "sagemaker":
+        return _run_sagemaker(args.example, args.preset, extra_args, config)
+    elif runner == "ssh":
+        print("SSH runner not yet integrated with cvl run", file=sys.stderr)
+        return 1
+    elif runner == "k8s":
+        print("K8s runner not yet integrated with cvl run", file=sys.stderr)
+        return 1
+    elif runner == "skypilot":
+        print("SkyPilot runner not yet integrated with cvl run", file=sys.stderr)
+        return 1
+    else:
+        print(f"Unknown runner: {runner}", file=sys.stderr)
+        return 1
+
+
+def _run_sagemaker(example: str, preset: str, extra_args: list, config: dict) -> int:
+    """Run example on SageMaker.
+
+    Args:
+        example: Example name/path
+        preset: Preset to run
+        extra_args: Additional arguments for the script
+        config: Merged runner config
+
+    Returns:
+        Exit code
+    """
+    import os
+    from cvl.core.config import validate_sagemaker_config
+
+    # Validate config
+    error = validate_sagemaker_config(config)
+    if error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+
+    try:
+        from cvl.runners import SageMakerRunner
+    except ImportError:
+        print("boto3 not installed. Install with: pip install boto3", file=sys.stderr)
+        return 1
+
+    # Get role ARN (from config or env)
+    role_arn = config.get("role_arn") or os.environ.get("SAGEMAKER_ROLE_ARN")
+    region = config.get("region") or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+
+    runner = SageMakerRunner(role_arn=role_arn, region=region)
+
+    return runner.run(
+        example=example,
+        preset=preset,
+        args=extra_args,
+        instance_type=config.get("instance_type", "ml.g5.xlarge"),
+        output_path=config["output_path"],
+        input_path=config.get("input_path"),
+        instance_count=config.get("instance_count", 1),
+        spot=config.get("spot", False),
+        max_run_minutes=config.get("max_run_minutes", 60),
+        volume_size_gb=config.get("volume_size_gb", 50),
+        download_outputs=config.get("download_outputs", True),
+    )
 
 
 def cmd_jobs(args) -> int:
