@@ -3,8 +3,27 @@ import json
 from pathlib import Path
 from PIL import Image
 import numpy as np
+from huggingface_hub import hf_hub_download
 from cvlization.paths import get_output_dir
 from dwpose_lib.pose import get_image_pose, get_video_pose
+
+# Sample assets in HuggingFace dataset
+ASSETS_REPO = "zzsi/cvl"
+
+
+def get_sample_asset(filename: str) -> str:
+    """Download sample asset from HuggingFace if not available locally."""
+    local_path = Path(__file__).parent / "examples" / filename
+    if local_path.exists():
+        return str(local_path)
+
+    remote_path = f"samples/pose_estimation/dwpose/{filename}"
+    print(f"Downloading sample asset: {filename}")
+    return hf_hub_download(
+        repo_id=ASSETS_REPO,
+        filename=remote_path,
+        repo_type="dataset",
+    )
 
 
 def download_weights(cache_dir: str = "/root/.cache"):
@@ -45,8 +64,8 @@ def main():
     output_dir.mkdir(exist_ok=True)
 
     ## Test on a video
-    print("Processing video: examples/pose1.mp4")
-    video_path = r"examples/pose1.mp4"
+    video_path = get_sample_asset("pose1.mp4")
+    print(f"Processing video: {video_path}")
     ref_pose, pose_img = get_video_pose(video_path, draw=False)
 
     # Print shapes for debugging
@@ -79,8 +98,9 @@ def main():
     print(f"\nSaved video pose output to: {video_output}")
 
     ## Test on an image
-    print("\nProcessing image: examples/human.png")
-    ref_image = Image.open(r"examples/human.png").convert("RGB")
+    image_path = get_sample_asset("human.png")
+    print(f"\nProcessing image: {image_path}")
+    ref_image = Image.open(image_path).convert("RGB")
     ref_image = np.array(ref_image)
     print(f"Input image shape: {ref_image.shape}")
 
