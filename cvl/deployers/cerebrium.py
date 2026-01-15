@@ -41,6 +41,22 @@ VRAM_TO_GPU = {
 # Examples with automatic main.py generation support
 SUPPORTED_EXAMPLES = {"ltx2"}
 
+# Models required for each example (HuggingFace repo IDs and optional file list)
+# These are uploaded to Cerebrium persistent storage during deploy
+# Format: repo_id -> list of files (None means full repo)
+EXAMPLE_MODELS = {
+    "ltx2": {
+        "Lightricks/LTX-2": [  # Only upload files needed for distilled fp8 pipeline (~27GB)
+            "ltx-2-19b-distilled-fp8.safetensors",
+            "ltx-2-spatial-upscaler-x2-1.0.safetensors",
+        ],
+        "google/gemma-3-12b-it-qat-q4_0-unquantized": None,  # Full repo (~23GB)
+    },
+}
+
+# Cerebrium persistent storage path for HuggingFace cache
+CEREBRIUM_HF_CACHE = ".cache/huggingface/hub"
+
 
 def get_cerebrium_gpu(vram_gb: int, gpu_override: Optional[str] = None) -> tuple[str, str]:
     """
@@ -152,6 +168,251 @@ class CerebriumDeployer:
         gpu_id, gpu_name = get_cerebrium_gpu(vram_gb, self.gpu_override)
         return gpu_id, gpu_name, vram_gb
 
+    def get_required_models(self) -> dict[str, list[str] | None]:
+        """Get dict of HuggingFace repo IDs -> file lists (None means full repo)."""
+        return EXAMPLE_MODELS.get(self.name, {})
+
+    def _get_hf_cache_path(self, repo_id: str) -> Path:
+        """Get local HuggingFace cache path for a repo."""
+        # HF cache format: models--{org}--{repo}
+        cache_name = "models--" + repo_id.replace("/", "--")
+        hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
+        return Path(hf_home) / "hub" / cache_name
+
+    def _check_cerebrium_storage(self, repo_id: str, files: list[str] | None = None) -> bool:
+        """Check if model exists and is complete in Cerebrium persistent storage."""
+        cache_name = "models--" + repo_id.replace("/", "--")
+        blobs_path = f"{CEREBRIUM_HF_CACHE}/{cache_name}/blobs"
+
+        result = subprocess.run(
+            ["cerebrium", "ls", blobs_path],
+            capture_output=True,
+            text=True,
+        )
+        # cerebrium ls returns 0 even for non-existent paths, but prints "No files found"
+        if result.returncode != 0:
+            return False
+        if "No files found" in result.stdout or "No files found" in result.stderr:
+            return False
+        # Check for incomplete uploads (files ending in .incomplete)
+        if ".incomplete" in result.stdout:
+            return False
+
+        # If specific files requested, check we have enough blobs
+        if files:
+            # Count non-incomplete blobs (each line is a file)
+            lines = [l for l in result.stdout.strip().split("\n") if l and not l.startswith("NAME")]
+            if len(lines) < len(files):
+                return False
+
+        return True
+
+    def _get_blob_hashes_for_files(self, repo_id: str, files: list[str]) -> list[str]:
+        """Get blob hashes for specific files by reading symlinks in snapshots."""
+        local_path = self._get_hf_cache_path(repo_id)
+        snapshots_dir = local_path / "snapshots"
+
+        if not snapshots_dir.exists():
+            return []
+
+        # Find the latest snapshot (most recent directory)
+        snapshot_dirs = sorted(snapshots_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not snapshot_dirs:
+            return []
+
+        latest_snapshot = snapshot_dirs[0]
+        blob_hashes = []
+
+        for filename in files:
+            file_path = latest_snapshot / filename
+            if file_path.is_symlink():
+                # Symlink target is like ../../blobs/<hash>
+                target = os.readlink(file_path)
+                blob_hash = os.path.basename(target)
+                blob_hashes.append(blob_hash)
+            elif file_path.exists():
+                # Direct file (shouldn't happen in HF cache, but handle it)
+                blob_hashes.append(filename)
+
+        return blob_hashes
+
+    def _download_model(self, repo_id: str, files: list[str] | None = None) -> Path:
+        """Download model (or specific files) to local HuggingFace cache."""
+        local_path = self._get_hf_cache_path(repo_id)
+
+        if files is None:
+            # Full repo download
+            if local_path.exists() and (local_path / "snapshots").exists():
+                print(f"    Model already in local cache: {repo_id}")
+                return local_path
+
+            print(f"    Downloading {repo_id} (full repo)...")
+            try:
+                from huggingface_hub import snapshot_download
+                snapshot_download(repo_id=repo_id)
+                print(f"    Downloaded: {repo_id}")
+            except Exception as e:
+                print(f"    Warning: Failed to download {repo_id}: {e}")
+                raise
+        else:
+            # Specific files download
+            print(f"    Downloading {len(files)} files from {repo_id}...")
+            try:
+                from huggingface_hub import hf_hub_download
+                for filename in files:
+                    file_path = local_path / "snapshots"
+                    # Check if file already exists in any snapshot
+                    already_exists = False
+                    if file_path.exists():
+                        for snapshot in file_path.iterdir():
+                            if (snapshot / filename).exists():
+                                already_exists = True
+                                break
+
+                    if already_exists:
+                        print(f"      {filename}: already cached")
+                    else:
+                        print(f"      {filename}: downloading...")
+                        hf_hub_download(repo_id=repo_id, filename=filename)
+                print(f"    Downloaded: {len(files)} files")
+            except Exception as e:
+                print(f"    Warning: Failed to download from {repo_id}: {e}")
+                raise
+
+        return local_path
+
+    def _upload_model_to_cerebrium(self, repo_id: str, local_path: Path, files: list[str] | None = None) -> bool:
+        """Upload model from local cache to Cerebrium persistent storage."""
+        cache_name = "models--" + repo_id.replace("/", "--")
+        remote_base = f"{CEREBRIUM_HF_CACHE}/{cache_name}"
+
+        if files is None:
+            # Upload entire directory
+            print(f"    Uploading {repo_id} (full repo) to Cerebrium...")
+            print(f"      Local: {local_path}")
+            print(f"      Remote: /persistent-storage/{remote_base}")
+
+            result = subprocess.run(
+                ["cerebrium", "cp", str(local_path), remote_base],
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode != 0:
+                print(f"    Warning: Upload failed: {result.stderr}")
+                return False
+        else:
+            # Upload only specific blobs + refs + snapshots structure
+            print(f"    Uploading {len(files)} files from {repo_id} to Cerebrium...")
+
+            # Get blob hashes for the requested files
+            blob_hashes = self._get_blob_hashes_for_files(repo_id, files)
+            if len(blob_hashes) != len(files):
+                print(f"    Warning: Could not find all blob hashes ({len(blob_hashes)}/{len(files)})")
+                return False
+
+            # Upload each blob
+            blobs_dir = local_path / "blobs"
+            for blob_hash in blob_hashes:
+                blob_path = blobs_dir / blob_hash
+                if not blob_path.exists():
+                    print(f"    Warning: Blob not found: {blob_hash}")
+                    return False
+
+                remote_blob = f"{remote_base}/blobs/{blob_hash}"
+                print(f"      Uploading blob: {blob_hash[:12]}... ({blob_path.stat().st_size / 1e9:.1f}GB)")
+
+                result = subprocess.run(
+                    ["cerebrium", "cp", str(blob_path), remote_blob],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    print(f"    Warning: Blob upload failed: {result.stderr}")
+                    return False
+
+            # Upload refs directory
+            refs_dir = local_path / "refs"
+            if refs_dir.exists():
+                result = subprocess.run(
+                    ["cerebrium", "cp", str(refs_dir), f"{remote_base}/refs"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    print(f"    Warning: refs upload failed: {result.stderr}")
+
+            # Upload snapshots directory (symlinks will be resolved)
+            snapshots_dir = local_path / "snapshots"
+            if snapshots_dir.exists():
+                result = subprocess.run(
+                    ["cerebrium", "cp", str(snapshots_dir), f"{remote_base}/snapshots"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    print(f"    Warning: snapshots upload failed: {result.stderr}")
+
+        print(f"    Uploaded: {repo_id}")
+        return True
+
+    def upload_models(self) -> dict[str, bool]:
+        """
+        Upload required models to Cerebrium persistent storage.
+
+        Downloads models to local cache if not present, then uploads to Cerebrium.
+
+        Returns:
+            Dict of repo_id -> success status
+        """
+        models = self.get_required_models()
+        if not models:
+            print("No models to upload for this example")
+            return {}
+
+        # Check for huggingface_hub upfront (needed if any model requires download)
+        try:
+            import huggingface_hub  # noqa: F401
+        except ImportError:
+            print("\nError: huggingface_hub is required for model upload.")
+            print("Install with: pip install huggingface_hub")
+            print("Or: pip install cvl[deploy]")
+            print("\nAlternatively, use --skip-model-upload and upload models manually.")
+            return {repo_id: False for repo_id in models}
+
+        print(f"\nUploading models to Cerebrium persistent storage...")
+        results = {}
+
+        for repo_id, files in models.items():
+            if files:
+                print(f"  Processing: {repo_id} ({len(files)} files)")
+            else:
+                print(f"  Processing: {repo_id} (full repo)")
+
+            # Check if already in Cerebrium
+            if self._check_cerebrium_storage(repo_id, files):
+                print(f"    Already in Cerebrium storage, skipping")
+                results[repo_id] = True
+                continue
+
+            # Download to local cache if needed
+            try:
+                local_path = self._download_model(repo_id, files)
+            except Exception:
+                results[repo_id] = False
+                continue
+
+            # Upload to Cerebrium
+            success = self._upload_model_to_cerebrium(repo_id, local_path, files)
+            results[repo_id] = success
+
+        # Summary
+        uploaded = sum(1 for v in results.values() if v)
+        failed = sum(1 for v in results.values() if not v)
+        print(f"\nModel upload complete: {uploaded} succeeded, {failed} failed")
+
+        return results
+
     def _parse_dockerfile(self) -> tuple[Optional[str], list[str]]:
         """Parse Dockerfile to extract base image and apt packages.
 
@@ -231,24 +492,17 @@ class CerebriumDeployer:
         return packages
 
     def generate_cerebrium_toml(self, deploy_dir: Path) -> str:
-        """Generate cerebrium.toml configuration."""
+        """Generate cerebrium.toml configuration for custom Dockerfile runtime."""
         resources = self.example_meta.get("resources", {})
         vram_gb = resources.get("vram_gb", 24)
         gpu_count = resources.get("gpu_count", resources.get("gpu", 1))
-        disk_gb = resources.get("disk_gb", 50)
 
         gpu_id, gpu_name, _ = self.get_gpu_config()
 
-        # Estimate memory: vram + some overhead for CPU operations
-        memory_gb = max(16, vram_gb // 2)
+        # Estimate CPU memory: 1.5x VRAM for large model loading overhead
+        memory_gb = max(32, int(vram_gb * 1.5))
 
-        # Parse Dockerfile for base image and apt packages
-        base_image, apt_packages = self._parse_dockerfile()
-
-        # Parse requirements.txt for pip packages
-        pip_packages = self._parse_requirements()
-
-        # Start building toml content
+        # Build toml content for custom Dockerfile runtime
         toml_lines = [
             "[cerebrium.deployment]",
             f'name = "{self.name}"',
@@ -257,16 +511,6 @@ class CerebriumDeployer:
         # Add project_id if provided
         if self.project_id:
             toml_lines.append(f'project_id = "{self.project_id}"')
-
-        toml_lines.extend([
-            'python_version = "3.11"',
-            'include = ["*", "**/*"]',
-            'exclude = [".*", "__pycache__", "*.pyc", "outputs"]',
-        ])
-
-        # Add base image if found in Dockerfile
-        if base_image:
-            toml_lines.append(f'docker_base_image_url = "{base_image}"')
 
         toml_lines.extend([
             "",
@@ -280,40 +524,15 @@ class CerebriumDeployer:
             "min_replicas = 0",
             "max_replicas = 5",
             "cooldown = 300",
-        ])
-
-        # Add apt packages if found
-        if apt_packages:
-            toml_lines.extend([
-                "",
-                "[cerebrium.dependencies.apt]",
-            ])
-            for pkg in apt_packages:
-                toml_lines.append(f'{pkg} = "latest"')
-
-        # Add pip packages
-        toml_lines.extend([
             "",
-            "[cerebrium.dependencies.pip]",
+            "# Custom Dockerfile runtime - we use our own Docker image",
+            "# This gives full control over dependencies and paths",
+            "[cerebrium.runtime.custom]",
+            "port = 8192",
+            'healthcheck_endpoint = "/health"',
+            'readycheck_endpoint = "/ready"',
+            'dockerfile_path = "./Dockerfile"',
         ])
-
-        # Use packages from requirements.txt if available, else defaults
-        if pip_packages:
-            for name, version in pip_packages.items():
-                if version == "latest":
-                    toml_lines.append(f'{name} = "latest"')
-                else:
-                    toml_lines.append(f'{name} = "{version}"')
-        else:
-            # Fallback defaults
-            toml_lines.extend([
-                'torch = ">=2.0.0"',
-                'torchaudio = ">=2.0.0"',
-                'transformers = ">=4.40.0"',
-                'accelerate = ">=0.30.0"',
-                'safetensors = ">=0.4.0"',
-                'huggingface_hub = ">=0.23.0"',
-            ])
 
         toml_content = "\n".join(toml_lines) + "\n"
         toml_path = deploy_dir / "cerebrium.toml"
@@ -321,7 +540,7 @@ class CerebriumDeployer:
         return str(toml_path)
 
     def generate_main_py(self, deploy_dir: Path) -> str:
-        """Generate main.py entry point for Cerebrium.
+        """Generate main.py FastAPI entry point for Cerebrium custom runtime.
 
         Currently only supports ltx2 example. Other examples will need
         manual main.py creation or future implementation.
@@ -331,12 +550,17 @@ class CerebriumDeployer:
                 f"Automatic main.py generation not supported for '{self.name}'.\n"
                 f"Currently only 'ltx2' is supported.\n"
                 f"For other examples, create a main.py manually in the deployment directory\n"
-                f"with a run() function that Cerebrium will call."
+                f"with FastAPI endpoints for /health, /ready, and /run."
             )
 
-        main_content = f'''"""
-Cerebrium entry point for {self.name}
+        main_content = '''"""
+Cerebrium FastAPI entry point for ltx2
 Auto-generated by cvl deploy
+
+Endpoints:
+- GET /health - health check
+- GET /ready - readiness check
+- POST /run - generate video (T2V or I2V)
 
 Supports:
 - T2V (text-to-video): provide prompt only
@@ -344,18 +568,52 @@ Supports:
 """
 
 import os
-import sys
 import base64
 import tempfile
 from typing import Optional
 
-# Add example directory and vendor to path
-sys.path.insert(0, "/app")
-sys.path.insert(0, "/app/vendor")
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI(title="LTX-2 Video Generation")
 
 # Global pipeline instance (loaded once on container start)
 _pipeline = None
 _model_paths = None
+
+
+class RunRequest(BaseModel):
+    """Request model for video generation."""
+    prompt: str
+    image_base64: Optional[str] = None
+    height: int = 512
+    width: int = 768
+    num_frames: int = 33
+    frame_rate: float = 24.0
+    seed: int = 42
+
+
+class RunResponse(BaseModel):
+    """Response model for video generation."""
+    video_base64: str
+    format: str
+    width: int
+    height: int
+    num_frames: int
+    frame_rate: float
+    mode: str
+
+
+@app.get("/health")
+def health():
+    """Health check endpoint."""
+    return {"status": "healthy"}
+
+
+@app.get("/ready")
+def ready():
+    """Readiness check endpoint."""
+    return {"status": "ready"}
 
 
 def _ensure_pipeline():
@@ -366,7 +624,7 @@ def _ensure_pipeline():
         return
 
     # Import here to avoid loading at module import time
-    from predict import get_model_paths, DistilledPipeline
+    from predict import get_model_paths
 
     print("Loading LTX-2 models (first request, this takes ~60s)...")
     _model_paths = get_model_paths(pipeline="distilled", fp8=True)
@@ -382,29 +640,16 @@ def _ensure_pipeline():
     print("Pipeline loaded!")
 
 
-def run(
-    prompt: str,
-    image_base64: Optional[str] = None,
-    height: int = 512,
-    width: int = 768,
-    num_frames: int = 33,
-    frame_rate: float = 24.0,
-    seed: int = 42,
-) -> dict:
+@app.post("/run", response_model=RunResponse)
+def run(request: RunRequest):
     """
     Generate video from text prompt, optionally with an input image (I2V).
 
     Args:
-        prompt: Text description of the video to generate
-        image_base64: Optional base64-encoded input image for image-to-video
-        height: Video height (default 512)
-        width: Video width (default 768)
-        num_frames: Number of frames (default 33, ~1.4s at 24fps)
-        frame_rate: Frame rate (default 24.0)
-        seed: Random seed for reproducibility
+        request: RunRequest with prompt and optional parameters
 
     Returns:
-        dict with "video_base64" containing the MP4 video encoded as base64
+        RunResponse with video_base64 containing the MP4 video
     """
     import torch
     from ltx_pipelines.utils.media_io import encode_video
@@ -420,11 +665,11 @@ def run(
     # Handle image input for I2V
     image_path = None
     images = []
-    if image_base64:
+    if request.image_base64:
         # Decode base64 image to temp file
-        image_bytes = base64.b64decode(image_base64)
+        image_bytes = base64.b64decode(request.image_base64)
         # Detect format from magic bytes
-        suffix = ".png" if image_bytes[:8] == b'\\x89PNG\\r\\n\\x1a\\n' else ".jpg"
+        suffix = ".png" if image_bytes[:8] == b\'\\x89PNG\\r\\n\\x1a\\n\' else ".jpg"
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
             f.write(image_bytes)
             image_path = f.name
@@ -432,16 +677,16 @@ def run(
 
     try:
         tiling_config = TilingConfig.default()
-        video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
+        video_chunks_number = get_video_chunks_number(request.num_frames, tiling_config)
 
         with torch.inference_mode():
             video, audio = _pipeline(
-                prompt=prompt,
-                seed=seed,
-                height=height,
-                width=width,
-                num_frames=num_frames,
-                frame_rate=frame_rate,
+                prompt=request.prompt,
+                seed=request.seed,
+                height=request.height,
+                width=request.width,
+                num_frames=request.num_frames,
+                frame_rate=request.frame_rate,
                 images=images,
                 tiling_config=tiling_config,
                 enhance_prompt=False,
@@ -452,7 +697,7 @@ def run(
 
             encode_video(
                 video=video,
-                fps=frame_rate,
+                fps=request.frame_rate,
                 audio=audio,
                 audio_sample_rate=AUDIO_SAMPLE_RATE,
                 output_path=output_path,
@@ -463,15 +708,15 @@ def run(
         with open(output_path, "rb") as f:
             video_bytes = f.read()
 
-        return {{
-            "video_base64": base64.b64encode(video_bytes).decode("utf-8"),
-            "format": "mp4",
-            "width": width,
-            "height": height,
-            "num_frames": num_frames,
-            "frame_rate": frame_rate,
-            "mode": "i2v" if image_base64 else "t2v",
-        }}
+        return RunResponse(
+            video_base64=base64.b64encode(video_bytes).decode("utf-8"),
+            format="mp4",
+            width=request.width,
+            height=request.height,
+            num_frames=request.num_frames,
+            frame_rate=request.frame_rate,
+            mode="i2v" if request.image_base64 else "t2v",
+        )
 
     finally:
         # Cleanup temp files
@@ -483,6 +728,94 @@ def run(
         main_path = deploy_dir / "main.py"
         main_path.write_text(main_content)
         return str(main_path)
+
+    def generate_dockerfile(self, deploy_dir: Path) -> str:
+        """Generate Dockerfile for Cerebrium custom runtime.
+
+        Closely follows the example's Dockerfile structure to maximize
+        Docker layer cache reuse (same base, apt, pip steps).
+        Only adds FastAPI/uvicorn and Cerebrium-specific settings at the end.
+        """
+        # Check if example has a Dockerfile to use as base
+        example_dockerfile = self.example_path / "Dockerfile"
+        base_image = "pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime"
+        apt_packages = ["build-essential", "git", "curl", "ffmpeg", "libsndfile1"]
+
+        if example_dockerfile.exists():
+            parsed_base, parsed_apt = self._parse_dockerfile()
+            if parsed_base:
+                base_image = parsed_base
+            if parsed_apt:
+                apt_packages = parsed_apt
+
+        # Build Dockerfile - structure matches original ltx2 Dockerfile for layer reuse
+        dockerfile_lines = [
+            "# Cerebrium deployment Dockerfile",
+            "# Structure matches example Dockerfile for layer cache reuse",
+            "",
+            f"FROM {base_image}",
+            "",
+            "ENV DEBIAN_FRONTEND=noninteractive",
+            "ENV PYTHONUNBUFFERED=1",
+            "",
+        ]
+
+        # Add apt packages - same order/format as original
+        if apt_packages:
+            dockerfile_lines.extend([
+                "RUN apt-get update && apt-get install -y --no-install-recommends \\",
+            ])
+            # Format each package on its own line with backslash continuation
+            for i, pkg in enumerate(apt_packages):
+                if i < len(apt_packages) - 1:
+                    dockerfile_lines.append(f"    {pkg} \\")
+                else:
+                    dockerfile_lines.append(f"    {pkg} \\")
+            dockerfile_lines.extend([
+                "    && rm -rf /var/lib/apt/lists/*",
+                "",
+            ])
+
+        # Match original structure: /workspace, /tmp/requirements.txt
+        dockerfile_lines.extend([
+            "WORKDIR /workspace",
+            "",
+            "RUN pip install --upgrade pip setuptools wheel",
+            "",
+            "# Copy and install requirements (same path as original for layer reuse)",
+            "COPY requirements.txt /tmp/requirements.txt",
+            "RUN pip install --no-cache-dir -r /tmp/requirements.txt",
+            "",
+            "# Reinstall torchaudio to ensure it matches torch version",
+            "RUN pip install --no-cache-dir torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128",
+            "",
+            "# --- Cerebrium additions below this line ---",
+            "",
+            "# Install FastAPI/uvicorn for Cerebrium custom runtime",
+            "RUN pip install --no-cache-dir fastapi uvicorn",
+            "",
+            "# Copy application code",
+            "COPY . .",
+            "",
+            "# Add vendor directory to Python path",
+            "ENV PYTHONPATH=/workspace/vendor",
+            "",
+            "# Use Cerebrium persistent storage for HuggingFace cache",
+            "# Models uploaded during deploy are available here",
+            "ENV HF_HOME=/persistent-storage/.cache/huggingface",
+            "",
+            "# PyTorch memory optimization",
+            "ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True",
+            "",
+            "# Cerebrium requires EXPOSE and CMD for custom runtime",
+            "EXPOSE 8192",
+            'CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8192"]',
+        ])
+
+        dockerfile_content = "\n".join(dockerfile_lines) + "\n"
+        dockerfile_path = deploy_dir / "Dockerfile"
+        dockerfile_path.write_text(dockerfile_content)
+        return str(dockerfile_path)
 
     def prepare_deployment(self, deploy_dir: Optional[Path] = None) -> Path:
         """
@@ -501,12 +834,13 @@ def run(
 
         print(f"Preparing deployment in: {deploy_dir}")
 
-        # Copy example code
+        # Copy example code (exclude Dockerfile - we generate our own)
         print("  Copying example code...")
         for item in self.example_path.iterdir():
             if item.name.startswith("."):
                 continue
-            if item.name in ("outputs", "__pycache__", "build.sh", "predict.sh", "test.sh"):
+            # Exclude files we'll generate or don't need
+            if item.name in ("outputs", "__pycache__", "build.sh", "predict.sh", "test.sh", "Dockerfile"):
                 continue
             dest = deploy_dir / item.name
             if item.is_dir():
@@ -518,8 +852,12 @@ def run(
         print("  Generating cerebrium.toml...")
         self.generate_cerebrium_toml(deploy_dir)
 
-        # Generate main.py
-        print("  Generating main.py...")
+        # Generate Dockerfile for custom runtime
+        print("  Generating Dockerfile...")
+        self.generate_dockerfile(deploy_dir)
+
+        # Generate main.py (FastAPI server)
+        print("  Generating main.py (FastAPI server)...")
         self.generate_main_py(deploy_dir)
 
         return deploy_dir

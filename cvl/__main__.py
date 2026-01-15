@@ -217,6 +217,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--project",
         help="Cerebrium project ID"
     )
+    deploy_parser.add_argument(
+        "--skip-model-upload",
+        action="store_true",
+        help="Skip uploading models to Cerebrium persistent storage"
+    )
 
     # jobs command with subcommands
     jobs_parser = subparsers.add_parser(
@@ -475,6 +480,7 @@ def cmd_deploy(args) -> int:
             deploy_dir=getattr(args, "deploy_dir", None),
             gpu_override=getattr(args, "gpu", None),
             project_id=getattr(args, "project", None),
+            skip_model_upload=getattr(args, "skip_model_upload", False),
         )
     except KeyboardInterrupt:
         print("\nDeployment cancelled.")

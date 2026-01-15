@@ -17,6 +17,7 @@ def deploy_example(
     deploy_dir: Optional[str] = None,
     gpu_override: Optional[str] = None,
     project_id: Optional[str] = None,
+    skip_model_upload: bool = False,
 ) -> int:
     """
     Deploy a CVL example to a serverless platform.
@@ -28,6 +29,7 @@ def deploy_example(
         deploy_dir: Optional directory for deployment files
         gpu_override: Override GPU type (e.g., "A10", "A100", "H100")
         project_id: Platform project ID (e.g., Cerebrium project)
+        skip_model_upload: If True, skip uploading models to persistent storage
 
     Returns:
         Exit code (0 for success)
@@ -73,7 +75,7 @@ def deploy_example(
     # Platform-specific deployment
     sys.stdout.flush()
     if platform == "cerebrium":
-        return _deploy_cerebrium(example_path, example, dry_run, deploy_dir, gpu_override, project_id)
+        return _deploy_cerebrium(example_path, example, dry_run, deploy_dir, gpu_override, project_id, skip_model_upload)
     else:
         print(f"Error: Unknown platform '{platform}'", file=sys.stderr)
         print("Supported platforms: cerebrium", file=sys.stderr)
@@ -87,6 +89,7 @@ def _deploy_cerebrium(
     deploy_dir: Optional[str],
     gpu_override: Optional[str] = None,
     project_id: Optional[str] = None,
+    skip_model_upload: bool = False,
 ) -> int:
     """Deploy to Cerebrium platform."""
     deployer = CerebriumDeployer(example_path, example_meta, gpu_override=gpu_override, project_id=project_id)
@@ -150,5 +153,25 @@ def _deploy_cerebrium(
         print("Deployment cancelled.")
         print(f"Files are still available at: {deploy_path}")
         return 0
+
+    # Upload models to Cerebrium persistent storage
+    if not skip_model_upload:
+        models = deployer.get_required_models()
+        if models:
+            # Format model list with file counts
+            model_strs = []
+            for repo_id, files in models.items():
+                if files:
+                    model_strs.append(f"{repo_id} ({len(files)} files)")
+                else:
+                    model_strs.append(f"{repo_id} (full)")
+            print(f"\nModels to upload: {', '.join(model_strs)}")
+            results = deployer.upload_models()
+            failed = [k for k, v in results.items() if not v]
+            if failed:
+                print(f"\nWarning: Some models failed to upload: {failed}")
+                print("The deployment will continue, but cold starts may be slow.")
+    else:
+        print("\n[--skip-model-upload] Skipping model upload to persistent storage")
 
     return deployer.deploy(deploy_path, dry_run=False)
