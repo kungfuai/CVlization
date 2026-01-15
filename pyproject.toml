@@ -48,6 +48,9 @@ k8s = [
 skypilot = [
     "skypilot>=0.4.0",  # For multi-cloud runner
 ]
+deploy = [
+    "huggingface_hub>=0.20.0",  # For downloading models to upload to serverless platforms
+]
 
 [project.scripts]
 cvl = "cvl.__main__:main"
