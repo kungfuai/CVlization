@@ -78,6 +78,7 @@ class CerebriumDeployer:
         example_path: Path,
         example_meta: Dict[str, Any],
         gpu_override: Optional[str] = None,
+        project_id: Optional[str] = None,
     ):
         """
         Initialize deployer.
@@ -86,11 +87,13 @@ class CerebriumDeployer:
             example_path: Path to example directory
             example_meta: Example metadata from example.yaml
             gpu_override: Override GPU type (e.g., "A10", "A100", "H100")
+            project_id: Cerebrium project ID
         """
         self.example_path = example_path
         self.example_meta = example_meta
         self.name = example_meta.get("name", example_path.name)
         self.gpu_override = gpu_override
+        self.project_id = project_id
 
     def is_supported(self) -> bool:
         """Check if this example has automatic deployment support."""
@@ -249,10 +252,17 @@ class CerebriumDeployer:
         toml_lines = [
             "[cerebrium.deployment]",
             f'name = "{self.name}"',
+        ]
+
+        # Add project_id if provided
+        if self.project_id:
+            toml_lines.append(f'project_id = "{self.project_id}"')
+
+        toml_lines.extend([
             'python_version = "3.11"',
             'include = ["*", "**/*"]',
             'exclude = [".*", "__pycache__", "*.pyc", "outputs"]',
-        ]
+        ])
 
         # Add base image if found in Dockerfile
         if base_image:

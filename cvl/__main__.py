@@ -206,6 +206,10 @@ def create_parser() -> argparse.ArgumentParser:
         choices=["T4", "L4", "A10", "L40", "A100", "A100_80GB", "H100"],
         help="GPU type override (default: auto-selected based on VRAM requirements)"
     )
+    deploy_parser.add_argument(
+        "--project",
+        help="Cerebrium project ID"
+    )
 
     # jobs command with subcommands
     jobs_parser = subparsers.add_parser(
@@ -351,6 +355,7 @@ def cmd_deploy(args) -> int:
             dry_run=getattr(args, "dry_run", False),
             deploy_dir=getattr(args, "deploy_dir", None),
             gpu_override=getattr(args, "gpu", None),
+            project_id=getattr(args, "project", None),
         )
     except KeyboardInterrupt:
         print("\nDeployment cancelled.")
