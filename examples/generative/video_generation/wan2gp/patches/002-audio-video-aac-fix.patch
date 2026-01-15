@@ -1,0 +1,11 @@
+--- a/shared/utils/audio_video.py
++++ b/shared/utils/audio_video.py
+@@ -196,7 +196,7 @@
+         if (lang := meta.get('language')):
+             cmd += ['-metadata:s:a:' + str(i), f'language={lang}']
+
+-    cmd += ['-c:v', 'copy', '-c:a', 'copy', '-t', str(dur), output_video]
++    cmd += ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-t', str(dur), output_video]
+
+     result = subprocess.run(cmd, capture_output=not verbose, text=True)
+     if result.returncode != 0:
