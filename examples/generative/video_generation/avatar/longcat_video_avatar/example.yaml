@@ -1,0 +1,54 @@
+name: longcat_video_avatar
+capability: generative/video_generation
+modalities:
+  - vision
+  - text
+  - video
+  - audio
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 64
+  disk_gb: 40
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate audio-driven avatar video
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--audio"
+        type: file
+      - flag: "--audio2"
+        type: file
+      - flag: "--output"
+        type: file
+tasks:
+  - audio_to_video
+  - image_to_video
+  - talking_head
+  - avatar_generation
+frameworks:
+  - pytorch
+  - transformers
+tags:
+  - video-generation
+  - diffusion
+  - longcat
+  - audio-driven
+  - avatar
+  - talking-head
+  - lip-sync
+  - 13b
+description: >
+  LongCat-Video-Avatar is a 13.6B parameter audio-driven avatar generation model from Meituan.
+  Supports single-person and multi-person (two-person conversation) modes. Uses audio embeddings
+  from Wav2Vec2 to drive natural lip movements and head motions. Based on Flow Matching with DiT backbone.
+
+verification:
+  last_verified: "2026-01-09"
+  last_verification_note: "Verified vendored build and single-mode inference on RTX PRO 6000 Blackwell (96GB). 10 steps, 33 frames ~96s. Base model ~12GB + Avatar model ~26GB. Host output persistence confirmed."
