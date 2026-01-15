@@ -37,5 +37,5 @@ frameworks:
 description: FramePack video generation with frame packing techniques (HunyuanVideo-based)
 
 verification:
-  last_verified: "2025-12-29"
-  last_verification_note: "Verified build and i2v mode on Blackwell RTX PRO 6000 (96GB). Uses ~35GB VRAM in low-VRAM mode. Upgraded to PyTorch 2.8 + CUDA 12.8. Downloads ~15GB models on first run."
+  last_verified: "2026-01-15"
+  last_verification_note: "Verified HuggingFace lazy download for sample assets. i2v mode on RTX PRO 6000 Blackwell (96GB). Uses ~35GB VRAM."
