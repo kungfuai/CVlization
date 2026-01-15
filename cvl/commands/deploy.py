@@ -16,6 +16,7 @@ def deploy_example(
     dry_run: bool = False,
     deploy_dir: Optional[str] = None,
     gpu_override: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> int:
     """
     Deploy a CVL example to a serverless platform.
@@ -26,6 +27,7 @@ def deploy_example(
         dry_run: If True, prepare files but don't deploy
         deploy_dir: Optional directory for deployment files
         gpu_override: Override GPU type (e.g., "A10", "A100", "H100")
+        project_id: Platform project ID (e.g., Cerebrium project)
 
     Returns:
         Exit code (0 for success)
@@ -71,7 +73,7 @@ def deploy_example(
     # Platform-specific deployment
     sys.stdout.flush()
     if platform == "cerebrium":
-        return _deploy_cerebrium(example_path, example, dry_run, deploy_dir, gpu_override)
+        return _deploy_cerebrium(example_path, example, dry_run, deploy_dir, gpu_override, project_id)
     else:
         print(f"Error: Unknown platform '{platform}'", file=sys.stderr)
         print("Supported platforms: cerebrium", file=sys.stderr)
@@ -84,9 +86,10 @@ def _deploy_cerebrium(
     dry_run: bool,
     deploy_dir: Optional[str],
     gpu_override: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> int:
     """Deploy to Cerebrium platform."""
-    deployer = CerebriumDeployer(example_path, example_meta, gpu_override=gpu_override)
+    deployer = CerebriumDeployer(example_path, example_meta, gpu_override=gpu_override, project_id=project_id)
 
     # Check if example is supported for automatic deployment
     if not deployer.is_supported():
