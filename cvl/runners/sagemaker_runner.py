@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Optional, List
 
+from cvl.runners.job_registry import JobRegistry, JobRecord
+
 
 class SageMakerRunner:
     """
@@ -166,8 +168,25 @@ class SageMakerRunner:
                 volume_size_gb=volume_size_gb,
             )
 
+            # Register job in local registry
+            registry = JobRegistry()
+            job_record = JobRecord(
+                job_id=job_name,
+                runner="sagemaker",
+                status="running",
+                start_time=time.time(),
+                region=self.region,
+                example=example,
+                preset=preset,
+            )
+            registry.add(job_record)
+
             # Monitor job
             exit_code = self._monitor_job(job_name)
+
+            # Update job status in registry
+            final_status = "completed" if exit_code == 0 else "failed"
+            registry.update_status(job_name, final_status, end_time=time.time())
 
             # Download outputs
             if download_outputs and exit_code == 0:
@@ -178,10 +197,24 @@ class SageMakerRunner:
 
         except KeyboardInterrupt:
             print("\nInterrupted by user")
+            # Update registry if job was created
+            if self.current_job_name:
+                try:
+                    registry = JobRegistry()
+                    registry.update_status(self.current_job_name, "stopped", end_time=time.time())
+                except Exception:
+                    pass
             return 130
 
         except Exception as e:
             print(f"Error: {e}")
+            # Update registry if job was created
+            if self.current_job_name:
+                try:
+                    registry = JobRegistry()
+                    registry.update_status(self.current_job_name, "failed", end_time=time.time())
+                except Exception:
+                    pass
             return 1
 
         finally:
