@@ -180,12 +180,15 @@ class CerebriumDeployer:
         return Path(hf_home) / "hub" / cache_name
 
     def _check_cerebrium_storage(self, repo_id: str, files: list[str] | None = None) -> bool:
-        """Check if model exists and is complete in Cerebrium persistent storage."""
+        """Check if model exists and is complete in Cerebrium persistent storage.
+
+        Checks for files in snapshots/ directory (where hf_hub_download looks).
+        """
         cache_name = "models--" + repo_id.replace("/", "--")
-        blobs_path = f"{CEREBRIUM_HF_CACHE}/{cache_name}/blobs"
+        snapshots_path = f"{CEREBRIUM_HF_CACHE}/{cache_name}/snapshots"
 
         result = subprocess.run(
-            ["cerebrium", "ls", blobs_path],
+            ["cerebrium", "ls", snapshots_path],
             capture_output=True,
             text=True,
         )
@@ -194,47 +197,38 @@ class CerebriumDeployer:
             return False
         if "No files found" in result.stdout or "No files found" in result.stderr:
             return False
-        # Check for incomplete uploads (files ending in .incomplete)
-        if ".incomplete" in result.stdout:
-            return False
 
-        # If specific files requested, check we have enough blobs
+        # If specific files requested, check they exist in the snapshot
         if files:
-            # Count non-incomplete blobs (each line is a file)
-            lines = [l for l in result.stdout.strip().split("\n") if l and not l.startswith("NAME")]
-            if len(lines) < len(files):
+            # List files in the snapshot revision directory
+            # First, find the revision directory
+            lines = [l.strip() for l in result.stdout.strip().split("\n") if l and not l.startswith("NAME")]
+            if not lines:
+                return False
+
+            # Get first revision directory name (remove trailing /)
+            revision_dir = lines[0].split()[0].rstrip("/")
+            revision_path = f"{snapshots_path}/{revision_dir}"
+
+            result = subprocess.run(
+                ["cerebrium", "ls", revision_path],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0 or "No files found" in result.stdout:
+                return False
+
+            # Check each requested file exists
+            existing_files = result.stdout
+            for filename in files:
+                if filename not in existing_files:
+                    return False
+
+            # Check for incomplete uploads
+            if ".incomplete" in existing_files:
                 return False
 
         return True
-
-    def _get_blob_hashes_for_files(self, repo_id: str, files: list[str]) -> list[str]:
-        """Get blob hashes for specific files by reading symlinks in snapshots."""
-        local_path = self._get_hf_cache_path(repo_id)
-        snapshots_dir = local_path / "snapshots"
-
-        if not snapshots_dir.exists():
-            return []
-
-        # Find the latest snapshot (most recent directory)
-        snapshot_dirs = sorted(snapshots_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
-        if not snapshot_dirs:
-            return []
-
-        latest_snapshot = snapshot_dirs[0]
-        blob_hashes = []
-
-        for filename in files:
-            file_path = latest_snapshot / filename
-            if file_path.is_symlink():
-                # Symlink target is like ../../blobs/<hash>
-                target = os.readlink(file_path)
-                blob_hash = os.path.basename(target)
-                blob_hashes.append(blob_hash)
-            elif file_path.exists():
-                # Direct file (shouldn't happen in HF cache, but handle it)
-                blob_hashes.append(filename)
-
-        return blob_hashes
 
     def _download_model(self, repo_id: str, files: list[str] | None = None) -> Path:
         """Download model (or specific files) to local HuggingFace cache."""
@@ -282,76 +276,100 @@ class CerebriumDeployer:
         return local_path
 
     def _upload_model_to_cerebrium(self, repo_id: str, local_path: Path, files: list[str] | None = None) -> bool:
-        """Upload model from local cache to Cerebrium persistent storage."""
+        """Upload model from local cache to Cerebrium persistent storage.
+
+        Uploads refs + snapshots directories. Symlinks in snapshots are resolved
+        to actual files by cerebrium cp, so hf_hub_download() finds them directly.
+        Blobs are skipped since snapshots contains the resolved file content.
+        """
         cache_name = "models--" + repo_id.replace("/", "--")
         remote_base = f"{CEREBRIUM_HF_CACHE}/{cache_name}"
 
-        if files is None:
-            # Upload entire directory
-            print(f"    Uploading {repo_id} (full repo) to Cerebrium...")
-            print(f"      Local: {local_path}")
-            print(f"      Remote: /persistent-storage/{remote_base}")
+        print(f"    Uploading {repo_id} to Cerebrium...")
+        print(f"      Local: {local_path}")
+        print(f"      Remote: /persistent-storage/{remote_base}")
 
+        # Upload refs directory (contains revision hash)
+        refs_dir = local_path / "refs"
+        if refs_dir.exists():
+            print(f"      Uploading refs...")
             result = subprocess.run(
-                ["cerebrium", "cp", str(local_path), remote_base],
+                ["cerebrium", "cp", str(refs_dir), f"{remote_base}/refs"],
                 capture_output=True,
                 text=True,
             )
-
             if result.returncode != 0:
-                print(f"    Warning: Upload failed: {result.stderr}")
+                print(f"    Warning: refs upload failed: {result.stderr}")
                 return False
+
+        # Upload snapshots directory (symlinks resolved to actual files)
+        # This is where hf_hub_download() looks for cached files
+        snapshots_dir = local_path / "snapshots"
+        if not snapshots_dir.exists():
+            print(f"    Warning: No snapshots directory found")
+            return False
+
+        # If specific files requested, only upload those from the snapshot
+        if files:
+            # Find the latest snapshot revision
+            snapshot_revisions = sorted(
+                snapshots_dir.iterdir(),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            if not snapshot_revisions:
+                print(f"    Warning: No snapshot revisions found")
+                return False
+
+            latest_snapshot = snapshot_revisions[0]
+            revision = latest_snapshot.name
+
+            # Calculate total size for progress
+            total_size = 0
+            for filename in files:
+                file_path = latest_snapshot / filename
+                if file_path.exists() or file_path.is_symlink():
+                    # Resolve symlink to get actual size
+                    real_path = file_path.resolve()
+                    if real_path.exists():
+                        total_size += real_path.stat().st_size
+
+            print(f"      Uploading {len(files)} files ({total_size / 1e9:.1f}GB) from snapshot {revision[:8]}...")
+
+            # Upload each file individually
+            for filename in files:
+                file_path = latest_snapshot / filename
+                if not file_path.exists() and not file_path.is_symlink():
+                    print(f"    Warning: File not found in snapshot: {filename}")
+                    return False
+
+                # Resolve symlink to get actual file path
+                real_path = file_path.resolve()
+                if not real_path.exists():
+                    print(f"    Warning: Resolved file not found: {real_path}")
+                    return False
+
+                remote_path = f"{remote_base}/snapshots/{revision}/{filename}"
+                size_gb = real_path.stat().st_size / 1e9
+
+                print(f"      Uploading: {filename} ({size_gb:.1f}GB)")
+                result = subprocess.run(
+                    ["cerebrium", "cp", str(real_path), remote_path],
+                    text=True,
+                )
+                if result.returncode != 0:
+                    print(f"    Warning: Upload failed for {filename}")
+                    return False
         else:
-            # Upload only specific blobs + refs + snapshots structure
-            print(f"    Uploading {len(files)} files from {repo_id} to Cerebrium...")
-
-            # Get blob hashes for the requested files
-            blob_hashes = self._get_blob_hashes_for_files(repo_id, files)
-            if len(blob_hashes) != len(files):
-                print(f"    Warning: Could not find all blob hashes ({len(blob_hashes)}/{len(files)})")
+            # Upload entire snapshots directory
+            print(f"      Uploading snapshots/ (symlinks will be resolved)...")
+            result = subprocess.run(
+                ["cerebrium", "cp", str(snapshots_dir), f"{remote_base}/snapshots"],
+                text=True,
+            )
+            if result.returncode != 0:
+                print(f"    Warning: snapshots upload failed")
                 return False
-
-            # Upload each blob
-            blobs_dir = local_path / "blobs"
-            for blob_hash in blob_hashes:
-                blob_path = blobs_dir / blob_hash
-                if not blob_path.exists():
-                    print(f"    Warning: Blob not found: {blob_hash}")
-                    return False
-
-                remote_blob = f"{remote_base}/blobs/{blob_hash}"
-                print(f"      Uploading blob: {blob_hash[:12]}... ({blob_path.stat().st_size / 1e9:.1f}GB)")
-
-                result = subprocess.run(
-                    ["cerebrium", "cp", str(blob_path), remote_blob],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode != 0:
-                    print(f"    Warning: Blob upload failed: {result.stderr}")
-                    return False
-
-            # Upload refs directory
-            refs_dir = local_path / "refs"
-            if refs_dir.exists():
-                result = subprocess.run(
-                    ["cerebrium", "cp", str(refs_dir), f"{remote_base}/refs"],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode != 0:
-                    print(f"    Warning: refs upload failed: {result.stderr}")
-
-            # Upload snapshots directory (symlinks will be resolved)
-            snapshots_dir = local_path / "snapshots"
-            if snapshots_dir.exists():
-                result = subprocess.run(
-                    ["cerebrium", "cp", str(snapshots_dir), f"{remote_base}/snapshots"],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode != 0:
-                    print(f"    Warning: snapshots upload failed: {result.stderr}")
 
         print(f"    Uploaded: {repo_id}")
         return True
