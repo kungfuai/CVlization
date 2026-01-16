@@ -18,6 +18,7 @@ def deploy_example(
     gpu_override: Optional[str] = None,
     project_id: Optional[str] = None,
     skip_model_upload: bool = False,
+    only_model_upload: bool = False,
 ) -> int:
     """
     Deploy a CVL example to a serverless platform.
@@ -30,6 +31,7 @@ def deploy_example(
         gpu_override: Override GPU type (e.g., "A10", "A100", "H100")
         project_id: Platform project ID (e.g., Cerebrium project)
         skip_model_upload: If True, skip uploading models to persistent storage
+        only_model_upload: If True, only upload models, skip code deployment
 
     Returns:
         Exit code (0 for success)
@@ -75,7 +77,7 @@ def deploy_example(
     # Platform-specific deployment
     sys.stdout.flush()
     if platform == "cerebrium":
-        return _deploy_cerebrium(example_path, example, dry_run, deploy_dir, gpu_override, project_id, skip_model_upload)
+        return _deploy_cerebrium(example_path, example, dry_run, deploy_dir, gpu_override, project_id, skip_model_upload, only_model_upload)
     else:
         print(f"Error: Unknown platform '{platform}'", file=sys.stderr)
         print("Supported platforms: cerebrium", file=sys.stderr)
@@ -90,6 +92,7 @@ def _deploy_cerebrium(
     gpu_override: Optional[str] = None,
     project_id: Optional[str] = None,
     skip_model_upload: bool = False,
+    only_model_upload: bool = False,
 ) -> int:
     """Deploy to Cerebrium platform."""
     deployer = CerebriumDeployer(example_path, example_meta, gpu_override=gpu_override, project_id=project_id)
@@ -120,6 +123,31 @@ def _deploy_cerebrium(
         if not ready:
             print(f"\n{message}", file=sys.stderr, flush=True)
             return 1
+
+    # Handle --only-model-upload: upload models and exit
+    if only_model_upload:
+        print("\n[--only-model-upload] Uploading models only, skipping code deployment")
+        models = deployer.get_required_models()
+        if not models:
+            print("No models to upload for this example")
+            return 0
+
+        # Format model list with file counts
+        model_strs = []
+        for repo_id, files in models.items():
+            if files:
+                model_strs.append(f"{repo_id} ({len(files)} files)")
+            else:
+                model_strs.append(f"{repo_id} (full)")
+        print(f"Models to upload: {', '.join(model_strs)}")
+
+        results = deployer.upload_models()
+        failed = [k for k, v in results.items() if not v]
+        if failed:
+            print(f"\nError: Some models failed to upload: {failed}")
+            return 1
+        print("\nModel upload complete!")
+        return 0
 
     # Prepare deployment
     print("\nPreparing deployment...")

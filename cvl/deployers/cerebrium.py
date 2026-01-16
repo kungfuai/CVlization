@@ -361,15 +361,42 @@ class CerebriumDeployer:
                     print(f"    Warning: Upload failed for {filename}")
                     return False
         else:
-            # Upload entire snapshots directory
-            print(f"      Uploading snapshots/ (symlinks will be resolved)...")
-            result = subprocess.run(
-                ["cerebrium", "cp", str(snapshots_dir), f"{remote_base}/snapshots"],
-                text=True,
+            # Upload entire snapshots directory by iterating through files
+            # (cerebrium cp doesn't properly resolve symlinks when uploading directories)
+            snapshot_revisions = sorted(
+                snapshots_dir.iterdir(),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
             )
-            if result.returncode != 0:
-                print(f"    Warning: snapshots upload failed")
+            if not snapshot_revisions:
+                print(f"    Warning: No snapshot revisions found")
                 return False
+
+            latest_snapshot = snapshot_revisions[0]
+            revision = latest_snapshot.name
+
+            # Get all files in the snapshot
+            all_files = list(latest_snapshot.iterdir())
+            print(f"      Uploading {len(all_files)} files from snapshot {revision[:8]}...")
+
+            for file_path in all_files:
+                # Resolve symlink to get actual file path
+                real_path = file_path.resolve()
+                if not real_path.exists():
+                    print(f"    Warning: Resolved file not found: {real_path}")
+                    return False
+
+                remote_path = f"{remote_base}/snapshots/{revision}/{file_path.name}"
+                size_gb = real_path.stat().st_size / 1e9
+
+                print(f"      Uploading: {file_path.name} ({size_gb:.2f}GB)")
+                result = subprocess.run(
+                    ["cerebrium", "cp", str(real_path), remote_path],
+                    text=True,
+                )
+                if result.returncode != 0:
+                    print(f"    Warning: Upload failed for {file_path.name}")
+                    return False
 
         print(f"    Uploaded: {repo_id}")
         return True
