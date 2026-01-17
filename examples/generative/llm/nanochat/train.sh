@@ -61,8 +61,9 @@ run_stage() {
     REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 
     docker run --rm --gpus all \
-        -v "$SCRIPT_DIR/data:/workspace/data" \
-        -v "$SCRIPT_DIR/outputs:/workspace/outputs" \
+        --workdir /workspace \
+        -e PYTHONUNBUFFERED=1 \
+        -v "$SCRIPT_DIR:/workspace" \
         -v "${CVL_NANOCHAT_CACHE:-$HOME/.cache/nanochat}:/root/.cache/nanochat" \
         nanochat \
         bash -c "
@@ -81,7 +82,7 @@ run_stage() {
 
                 # Train tokenizer
                 echo '=== Training tokenizer ==='
-                uv run python -m scripts.tok_train --max_chars=500000000
+                uv run python -m scripts.tok_train --max-chars 500000000
                 echo ''
             fi
 
