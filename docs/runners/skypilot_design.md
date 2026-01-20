@@ -24,6 +24,66 @@ SkyPilot runner provides multi-cloud execution for CVL examples via [SkyPilot](h
 - Example-aware deployment (like `cvl deploy`)
 - Managed storage volumes
 
+## Future: Cloud-Specific Runners
+
+We may implement cloud-specific runner flags that use SkyPilot under the hood:
+
+```bash
+# Current (explicit SkyPilot)
+cvl run example train --runner skypilot --cloud aws --gpu A100:1
+
+# Future (cloud as runner, SkyPilot hidden)
+cvl run example train --runner ec2 --gpu A100:1
+cvl run example train --runner gcp --gpu A100:1
+cvl run example train --runner azure --gpu A100:1
+cvl run example train --runner lambda --gpu A100:1
+```
+
+### Rationale
+
+1. **Simpler UX** - Users think in terms of clouds, not orchestration tools
+2. **Implementation detail hidden** - SkyPilot is the engine, not the interface
+3. **Consistent naming** - `--runner ec2` parallels `--runner sagemaker`
+
+### Implementation
+
+Each cloud runner would be a thin wrapper around SkyPilot:
+
+```python
+# In __main__.py
+if runner in ("ec2", "gcp", "azure", "lambda"):
+    cloud_map = {"ec2": "aws", "gcp": "gcp", "azure": "azure", "lambda": "lambda"}
+    return _run_skypilot(..., cloud=cloud_map[runner])
+```
+
+### AWS Services Used (for --runner ec2)
+
+SkyPilot uses these AWS services:
+
+| Service | Purpose |
+|---------|---------|
+| EC2 | Launch/manage GPU instances |
+| IAM | Instance role (`skypilot-v1`) |
+| S3 | Optional: storage mounts |
+| VPC | Default or configured VPC |
+
+**Not used:** ECS, EKS, SageMaker, Lambda, Batch
+
+Required IAM permissions: `ec2:RunInstances`, `ec2:TerminateInstances`, `ec2:Describe*`, `iam:PassRole`, etc.
+See [SkyPilot AWS Permissions](https://docs.skypilot.co/en/latest/cloud-setup/cloud-permissions/aws.html).
+
+### Comparison: --runner ec2 vs --runner sagemaker
+
+| Aspect | ec2 (via SkyPilot) | sagemaker |
+|--------|-------------------|-----------|
+| Compute | Raw EC2 instances | Managed containers |
+| Permissions | EC2 + IAM | SageMaker + ECR + S3 + CloudWatch |
+| Docker | Not used | Required (builds & pushes image) |
+| Artifacts | Manual | Auto-uploaded to S3 |
+| Spot recovery | Basic | Built-in checkpointing |
+| Cost | EC2 pricing | +20-30% SageMaker markup |
+| Best for | Simple runs, multi-cloud | Production training, managed infra |
+
 ## Architecture
 
 ```
