@@ -157,6 +157,15 @@ def create_parser() -> argparse.ArgumentParser:
         "--role-arn",
         help="IAM role ARN for SageMaker (or set SAGEMAKER_ROLE_ARN env var)"
     )
+    # SkyPilot options
+    run_parser.add_argument(
+        "--gpu",
+        help="GPU spec for SkyPilot (e.g., A100:1, V100:4, L4:1)"
+    )
+    run_parser.add_argument(
+        "--cloud",
+        help="Cloud provider for SkyPilot (e.g., aws, gcp, azure, lambda)"
+    )
     run_parser.add_argument(
         "extra_args",
         nargs=argparse.REMAINDER,  # Captures all remaining args without parsing
@@ -650,6 +659,8 @@ def cmd_run_remote(args, runner: str) -> int:
         "region": getattr(args, 'region', None),
         "max_run_minutes": getattr(args, 'max_run_minutes', None),
         "role_arn": getattr(args, 'role_arn', None),
+        "gpu": getattr(args, 'gpu', None),
+        "cloud": getattr(args, 'cloud', None),
     }
 
     # Get merged config
@@ -667,11 +678,68 @@ def cmd_run_remote(args, runner: str) -> int:
         print("K8s runner not yet integrated with cvl run", file=sys.stderr)
         return 1
     elif runner == "skypilot":
-        print("SkyPilot runner not yet integrated with cvl run", file=sys.stderr)
-        return 1
+        return _run_skypilot(example, example_path, args.preset, extra_args, config)
     else:
         print(f"Unknown runner: {runner}", file=sys.stderr)
         return 1
+
+
+def _run_skypilot(example: str, example_path, preset: str, extra_args: list, config: dict) -> int:
+    """Run example on SkyPilot (any cloud).
+
+    Args:
+        example: Example name
+        example_path: Path to example directory
+        preset: Preset to run (train, predict, etc.)
+        extra_args: Additional arguments for the script
+        config: Merged runner config
+
+    Returns:
+        Exit code
+    """
+    try:
+        from cvl.runners import SkyPilotRunner
+    except ImportError:
+        print("skypilot not installed. Install with: pip install 'skypilot[aws]'", file=sys.stderr)
+        print("For other clouds: pip install 'skypilot[gcp]' or 'skypilot[azure]'", file=sys.stderr)
+        return 1
+
+    # Build command
+    script = f"{preset}.py"
+    args_str = " ".join(extra_args) if extra_args else ""
+    command = f"python {script} {args_str}".strip()
+
+    # Get GPU from config or example resources
+    gpu = config.get("gpu")
+    if not gpu:
+        # Try to infer from example resources
+        resources = example_path.parent
+        # Default to A10 if not specified
+        gpu = "A10G:1"
+        print(f"No --gpu specified, using default: {gpu}")
+
+    runner = SkyPilotRunner()
+
+    print(f"Launching on SkyPilot...")
+    print(f"  Example: {example}")
+    print(f"  Preset: {preset}")
+    print(f"  Command: {command}")
+    print(f"  GPU: {gpu}")
+    if config.get("cloud"):
+        print(f"  Cloud: {config['cloud']}")
+    if config.get("spot"):
+        print(f"  Spot: enabled")
+
+    return runner.run(
+        command=command,
+        workdir=str(example_path),
+        gpu=gpu,
+        cloud=config.get("cloud"),
+        region=config.get("region"),
+        use_spot=config.get("spot", False),
+        idle_minutes_to_autostop=10,
+        down=True,
+    )
 
 
 def _run_sagemaker(example: str, preset: str, extra_args: list, config: dict) -> int:
