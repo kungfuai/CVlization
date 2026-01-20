@@ -16,6 +16,9 @@ presets:
   train:
     script: train.sh
     description: Run train
+  sagemaker:
+    script: run_sagemaker_training.py
+    description: Run training on AWS SageMaker
 tags:
 - unsloth
 - gpt-oss

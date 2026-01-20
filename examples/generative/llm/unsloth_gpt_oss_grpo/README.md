@@ -45,6 +45,34 @@ bash examples/text_gen/unsloth/gpt_oss_grpo/build.sh
 bash examples/text_gen/unsloth/gpt_oss_grpo/train.sh
 ```
 
+### SageMaker Training
+
+Run GRPO training on AWS SageMaker for cloud-scale execution:
+
+1. Set up environment variables:
+```bash
+export SAGEMAKER_ROLE_ARN="arn:aws:iam::YOUR_ACCOUNT:role/SageMakerRole"
+export SAGEMAKER_OUTPUT_BUCKET="your-s3-bucket-name"
+export AWS_DEFAULT_REGION="us-east-1"  # Optional
+```
+
+2. Run SageMaker training:
+```bash
+python run_sagemaker_training.py
+```
+
+**Requirements**:
+- AWS credentials configured (via `aws configure` or environment)
+- SageMaker execution role with S3, ECR, CloudWatch permissions
+- Docker installed locally (for building container image)
+
+**Instance types**:
+- Default: `ml.g5.2xlarge` (24GB VRAM, 1x A10G GPU, ~$1.50/hr)
+- Spot instances: Add `spot=True` in script for 70% cost savings
+- Training time: ~15 minutes for 10 steps
+
+**Outputs**: Downloaded to `./outputs/` after training completes
+
 ### Training Details
 
 - **Model**: unsloth/gpt-oss-20b (20 billion parameters)
