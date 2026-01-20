@@ -1,3 +1,4 @@
 sglang==0.5.6.post2
 # sglang pins openai 2.6.1; keep the same to avoid dependency conflicts.
 openai==2.6.1
+pillow>=10.0.0

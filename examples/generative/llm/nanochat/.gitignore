@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+nanochat/.venv/
+
+# Build artifacts
+dist/
+build/
+
+# Training outputs
+outputs/
+data/
+*.ckpt
+*.pt
+*.bin
+
+# IDE
+.idea/
+.vscode/

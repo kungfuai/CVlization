@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -16,14 +16,13 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 # Set working directory
-WORKDIR /workspace
-
-# Copy nanochat source code
-COPY nanochat /workspace/nanochat
-
-# Install nanochat dependencies using uv
 WORKDIR /workspace/nanochat
-RUN uv sync
+
+# Copy only dependency metadata (source is mounted at runtime)
+COPY nanochat/pyproject.toml nanochat/uv.lock nanochat/README.md ./
+
+# Dependencies will be installed via uv run at runtime
+# .venv in the mounted project directory persists to host
 
 # Default command
 CMD ["bash"]

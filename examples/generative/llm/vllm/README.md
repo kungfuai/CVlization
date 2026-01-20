@@ -1,9 +1,9 @@
 # vLLM Serve + Predict (auto-tuned)
 
-Dockerized vLLM preset with sensible defaults and optional auto-tuning based on your GPU. Includes:
-- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.12.0, OpenAI SDK 2.12.0).
+Dockerized vLLM preset with sensible defaults and optional auto-tuning based on your GPU. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
+- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.14.0, OpenAI SDK 2.12.0).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible server with heuristics for tensor-parallel size, max context, dtype, and GPU memory utilization (overridable).
-- `predict.sh`/`predict.py`: runs a quick test. Default mode is **chat** (loads the model inside the container with vLLM, no server needed). `embed` and `rerank` modes use transformers locally (not vLLM) for encoder models.
+- `predict.sh`/`predict.py`: runs a quick test. Default mode is **chat** (loads the model inside the container with vLLM, no server needed). Supports VLMs via `--image` flag. `embed` and `rerank` modes use transformers locally (not vLLM) for encoder models.
 
 ## Quick start
 ```bash
@@ -44,8 +44,20 @@ bash examples/generative/llm/vllm/serve.sh
 
 ## Client usage
 ```bash
-# Chat local (no server)
+# Chat local (no server) - text-only LLM
 bash examples/generative/llm/vllm/predict.sh --prompt "Summarize PagedAttention."
+
+# Vision-Language Model (VLM) - pass an image
+MODEL_ID=Qwen/Qwen2-VL-2B-Instruct \
+bash examples/generative/llm/vllm/predict.sh \
+  --image /path/to/image.jpg \
+  --prompt "Describe this image in detail."
+
+# VLM with URL image
+MODEL_ID=Qwen/Qwen2-VL-2B-Instruct \
+bash examples/generative/llm/vllm/predict.sh \
+  --image "https://example.com/image.jpg" \
+  --prompt "What text is in this image?"
 
 # Embeddings (encoder or decoder models) - runs locally with transformers
 python examples/generative/llm/vllm/predict.py --mode embed \
@@ -59,6 +71,14 @@ python examples/generative/llm/vllm/predict.py --mode rerank \
   --doc "candidate 1" --doc "candidate 2" \
   --docs-file my_docs.txt  # optional, one doc per line
 ```
+
+## Supported VLMs
+Any VLM supported by vLLM 0.14.0 with stable transformers should work:
+- `Qwen/Qwen2-VL-2B-Instruct`, `Qwen/Qwen2-VL-7B-Instruct`
+- `llava-hf/llava-v1.6-mistral-7b-hf`
+- `microsoft/Phi-3-vision-128k-instruct`
+- `OpenGVLab/InternVL2-8B`
+- See [vLLM supported models](https://docs.vllm.ai/en/latest/models/supported_models/) for full list
 
 ## Notes
 - Mounts `~/.cache/huggingface` into the container for model pulls.
