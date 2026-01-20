@@ -22,7 +22,8 @@ The original $100 "speedrun" trains a 1.9B parameter model (d32) in ~4 hours on 
 bash build.sh
 ```
 
-This copies the nanochat source from `~/zz/nanochat` and builds the container.
+This builds the container using the vendored nanochat dependency metadata in `examples/generative/llm/nanochat/nanochat`.
+The source code itself is mounted at runtime.
 
 ### 2. Run Training (Single GPU)
 
@@ -78,12 +79,11 @@ The speedrun requires 8xH100 GPUs, but you can train smaller models on a single 
 ```bash
 # Interactive shell
 docker run --rm -it --gpus all \
-    -v $(pwd)/data:/workspace/data \
-    -v $(pwd)/outputs:/workspace/outputs \
+    -v $(pwd):/workspace \
     nanochat bash
 
 # Inside container
-cd nanochat
+cd /workspace/nanochat
 source .venv/bin/activate
 
 # Train tiny model (fits on most GPUs)
@@ -141,6 +141,10 @@ The $100 speedrun (d32, 1.9B params) achieves:
 | MMLU | 0.3111 |
 
 This outperforms GPT-2 (2019) but falls short of modern LLMs.
+
+## TODO
+
+- [ ] Flash Attention 3 support for Blackwell (sm100) and future architectures (sm120). Currently falls back to PyTorch SDPA on non-Hopper GPUs.
 
 ## Reference
 

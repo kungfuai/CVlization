@@ -4,8 +4,13 @@
 echo "Testing nanochat Docker setup..."
 echo ""
 
-docker run --rm nanochat bash -c "
-    cd nanochat
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+docker run --rm \
+    --workdir /workspace \
+    -v "$SCRIPT_DIR:/workspace" \
+    nanochat bash -c "
+    cd /workspace/nanochat
     echo '=== Python & PyTorch ==='
     uv run python -c 'import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\")'
 

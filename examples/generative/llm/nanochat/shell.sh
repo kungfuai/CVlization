@@ -7,8 +7,8 @@ mkdir -p "$SCRIPT_DIR/data"
 mkdir -p "$SCRIPT_DIR/outputs"
 
 docker run --rm --gpus all \
-    -v "$SCRIPT_DIR/data:/workspace/data" \
-    -v "$SCRIPT_DIR/outputs:/workspace/outputs" \
+    --workdir /workspace \
+    -v "$SCRIPT_DIR:/workspace" \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
     nanochat \
-    bash -c "cd nanochat && exec bash"
+    bash -c "cd /workspace/nanochat && exec bash"
