@@ -1,9 +1,9 @@
 # SGLang Serve + Predict (OpenAI-compatible)
 
-Dockerized SGLang preset with sensible defaults. Includes:
+Dockerized SGLang preset with sensible defaults. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
 - `build.sh`: builds the image (torch 2.9.1 + sglang 0.5.6.post2, OpenAI SDK 2.6.1).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible HTTP server with heuristics for tensor-parallel size, context length, dtype, and static memory fraction (overridable).
-- `predict.sh`/`predict.py`: spins up a local server inside the container, sends a chat completion via the OpenAI client, then tears the server down.
+- `predict.sh`/`predict.py`: spins up a local server inside the container, sends a chat completion via the OpenAI client, then tears the server down. Supports VLMs via `--image` flag.
 
 ## Quick start
 ```bash
@@ -34,7 +34,7 @@ Defaults:
 
 ## Client usage
 ```bash
-# Chat (local server started automatically)
+# Chat (local server started automatically) - text-only LLM
 bash examples/generative/llm/sglang/predict.sh --prompt "Summarize SGLang routing."
 
 # Override model / context / TP
@@ -42,7 +42,27 @@ MODEL_ID=microsoft/Phi-4-mini-instruct \
 SGLANG_CONTEXT_LENGTH=4096 \
 SGLANG_TP_SIZE=1 \
 bash examples/generative/llm/sglang/predict.sh --max-tokens 64
+
+# Vision-Language Model (VLM) - pass an image
+MODEL_ID=Qwen/Qwen2-VL-2B-Instruct \
+SGLANG_CONTEXT_LENGTH=4096 \
+bash examples/generative/llm/sglang/predict.sh \
+  --image /path/to/image.jpg \
+  --prompt "Describe this image in detail."
+
+# VLM with URL image
+MODEL_ID=Qwen/Qwen2-VL-2B-Instruct \
+bash examples/generative/llm/sglang/predict.sh \
+  --image "https://example.com/image.jpg" \
+  --prompt "What text is in this image?"
 ```
+
+## Supported VLMs
+Any VLM supported by SGLang should work:
+- `Qwen/Qwen2-VL-2B-Instruct`, `Qwen/Qwen2-VL-7B-Instruct`
+- `llava-hf/llava-v1.6-mistral-7b-hf`
+- `microsoft/Phi-3-vision-128k-instruct`
+- See [SGLang supported models](https://sgl-project.github.io/references/supported_models.html) for full list
 
 ## Notes
 - Mounts `~/.cache/huggingface` into the container for model pulls. Set `HF_TOKEN` if needed.
