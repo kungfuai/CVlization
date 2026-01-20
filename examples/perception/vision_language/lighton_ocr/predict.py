@@ -2,8 +2,12 @@
 """
 Local LightOnOCR-1B inference with vLLM.generate (image/PDF inputs).
 """
-import argparse
 import os
+# Set spawn method early to avoid CUDA fork issues with vLLM
+# Must be set BEFORE importing vllm
+os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+
+import argparse
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -24,7 +28,8 @@ except Exception:
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_IMAGE = "/cvlization_repo/examples/perception/doc_ai/leaderboard/test_data/sample.jpg"
-DEFAULT_MODEL_ID = os.environ.get("LIGHTON_OCR_MODEL_ID", "lightonai/LightOnOCR-1B-1025")
+# DEFAULT_MODEL_ID = os.environ.get("LIGHTON_OCR_MODEL_ID", "lightonai/LightOnOCR-1B-1025")
+DEFAULT_MODEL_ID = os.environ.get("LIGHTON_OCR_MODEL_ID", "lightonai/LightOnOCR-2-1B")
 MAX_LONG_SIDE = 1540
 
 
@@ -131,7 +136,8 @@ def resolve_out(path: str) -> Path:
 
 
 def run_request_local(img: Image.Image, prompt: str, model_id: str, tp_size: int, max_model_len: Optional[int], gpu_memory_utilization: float, max_tokens: int, temperature: float, top_p: float) -> str:
-    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    # Initialize LLM FIRST to spawn worker processes before any CUDA init
+    # (AutoProcessor with trust_remote_code may trigger CUDA, causing fork issues)
     llm = LLM(
         model=model_id,
         tensor_parallel_size=tp_size,
@@ -139,6 +145,7 @@ def run_request_local(img: Image.Image, prompt: str, model_id: str, tp_size: int
         max_model_len=max_model_len,
         gpu_memory_utilization=gpu_memory_utilization,
     )
+    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
 
     messages = [{
         "role": "user",

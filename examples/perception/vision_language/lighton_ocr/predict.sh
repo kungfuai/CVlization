@@ -19,7 +19,7 @@ DOCKER_ARGS=(
   --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace"
   --mount "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface"
   --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace"
-  --env "LIGHTON_OCR_MODEL_ID=${LIGHTON_OCR_MODEL_ID:-lightonai/LightOnOCR-1B-1025}"
+  --env "LIGHTON_OCR_MODEL_ID=${LIGHTON_OCR_MODEL_ID:-lightonai/LightOnOCR-2-1B}"
   --env "PYTHONUNBUFFERED=1"
   --env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}"
   --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}"

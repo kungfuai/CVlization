@@ -7,11 +7,14 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /workspace
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        libxcb1 \
+        libgl1 && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# vLLM 0.12.0 pins torch==2.9.0; this will override the base torch 2.9.1 to satisfy that requirement.
+# vLLM 0.14.0 supports both text LLMs and vision-language models (VLMs)
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .

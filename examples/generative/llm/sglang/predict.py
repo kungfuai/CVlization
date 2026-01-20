@@ -4,30 +4,72 @@ Minimal chat client for the SGLang example.
 
 Spins up a local SGLang HTTP server (OpenAI-compatible) inside this process,
 hits it with the OpenAI Python client, then tears it down.
+
+Supports both text-only LLMs and vision-language models (VLMs) via --image flag.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import os
 import signal
 import subprocess
 import sys
 import time
+from io import BytesIO
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import requests
-from cvlization.paths import resolve_output_path
+from cvlization.paths import resolve_input_path, resolve_output_path
 from gpu_utils import get_optimal_attention_backend
 from openai import OpenAI
+from PIL import Image
 
 
-def build_messages(user_prompt: str, system_prompt: str) -> List[dict]:
+def load_image(src: str, max_size: int = 1280) -> Image.Image:
+    """Load an image from a local path or URL, optionally resizing."""
+    if src.startswith(("http://", "https://")):
+        resp = requests.get(src, timeout=30)
+        resp.raise_for_status()
+        img = Image.open(BytesIO(resp.content)).convert("RGB")
+    else:
+        img = Image.open(src).convert("RGB")
+
+    # Resize if too large (helps with memory)
+    w, h = img.size
+    if max(w, h) > max_size:
+        scale = max_size / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+    return img
+
+
+def image_to_base64(img: Image.Image, format: str = "JPEG") -> str:
+    """Convert PIL Image to base64 string."""
+    buffer = BytesIO()
+    img.save(buffer, format=format)
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+def build_messages(user_prompt: str, system_prompt: str, image: Optional[Image.Image] = None) -> List[dict]:
+    """Build chat messages, optionally including an image for VLMs."""
     msgs = []
     if system_prompt:
         msgs.append({"role": "system", "content": system_prompt})
-    msgs.append({"role": "user", "content": user_prompt})
+
+    if image is not None:
+        # Multimodal message format for VLMs (OpenAI-compatible)
+        b64 = image_to_base64(image)
+        msgs.append({
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                {"type": "text", "text": user_prompt},
+            ],
+        })
+    else:
+        msgs.append({"role": "user", "content": user_prompt})
     return msgs
 
 
@@ -96,7 +138,7 @@ def save_output(text: str, path: Path):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Test the SGLang example (chat)")
+    parser = argparse.ArgumentParser(description="SGLang inference (chat, supports VLMs via --image)")
     parser.add_argument("--prompt", default="Give me one bullet on why SGLang is fast.",
                         help="User message to send.")
     parser.add_argument("--system", default=os.getenv("SYSTEM_PROMPT", ""),
@@ -115,6 +157,11 @@ def parse_args():
                         help="Path to save output text.")
     parser.add_argument("--api-key", default=os.getenv("API_KEY", "sk-noauth"),
                         help="Dummy API key for OpenAI-compatible endpoint.")
+    # VLM support
+    parser.add_argument("--image", default=os.getenv("IMAGE_PATH"),
+                        help="Path or URL to an image (enables VLM mode).")
+    parser.add_argument("--max-image-size", type=int, default=1280,
+                        help="Max dimension for image resizing.")
     # Server knobs
     parser.add_argument("--dtype", default=os.getenv("SGLANG_DTYPE", "bfloat16"),
                         help="dtype passed to sglang.launch_server.")
@@ -137,11 +184,19 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # Load image if provided (VLM mode)
+    image = None
+    if args.image:
+        image_path = resolve_input_path(args.image) if not args.image.startswith(("http://", "https://")) else args.image
+        image = load_image(image_path, args.max_image_size)
+        print(f"Loaded image: {args.image} ({image.size[0]}x{image.size[1]})")
+
     proc = launch_server(args)
     try:
         wait_for_server(args.port)
         client = OpenAI(base_url=f"http://127.0.0.1:{args.port}/v1", api_key=args.api_key)
-        messages = build_messages(args.prompt, args.system)
+        messages = build_messages(args.prompt, args.system, image)
         resp = client.chat.completions.create(
             model=args.model,
             messages=messages,
