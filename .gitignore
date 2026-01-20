@@ -101,3 +101,7 @@ examples/**/data/*.csv
 !CONTRIBUTING.txt
 !LICENSE.txt
 !Notice.txt
+
+# Local test scripts and lockfiles
+/test_*.py
+uv.lock
