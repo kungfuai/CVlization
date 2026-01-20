@@ -13,6 +13,11 @@ cd CVlization
 # Install CLI (optional - or just use bash scripts)
 pip install .
 
+# Optional: install with remote execution support
+pip install .[remote]    # SSH runner
+pip install .[aws]       # SageMaker runner
+pip install .[deploy]    # Serverless deployment (Cerebrium)
+
 # Browse examples
 cvl list --tag pytorch    # search by tag
 cvl list -k gpt           # search by keyword
@@ -76,7 +81,7 @@ examples/
 |------------|-------------------|-----------------|--------|
 | ![LLMs](./doc/images/llm.png) LLMs (text generation) | [`examples/generative/llm`](./examples/generative/llm) | Pretraining (nanogpt, modded_nanogpt, nanomamba), Full pipeline (nanochat: pretrain, sft, rl), Fine-tuning (peft_mistral7b_sft, trl_sft, miles_grpo, unsloth: gpt_oss_grpo, gpt_oss_sft, llama_3b_sft, qwen_7b_sft, gemma3_4b_sft), Inference (mixtral8x7b, sglang, vllm, dllm, nanbeige4_3b_thinking, nomos_1, rnj_1_instruct) | ✅ |
 | ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, next_scene_qwen, pixart (experimental), rae, repa, stable_diffusion, uva_energy (experimental), vqgan | ✅ |
-| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_x, cogvideox, deforum, framepack, hunyuan_video_1_5, kandinsky_5, krea_realtime_scope (experimental), mimic_motion, minisora, phantom (experimental), real_video, reward_forcing, skyreals, svd_cog, svd_comfy, turbodiffusion, vace, vace_comfy (experimental), video_in_between, wan2gp, wan2gp_wan, wan_comfy | ✅ |
+| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_diff_cog, animate_x, cogvideox, deforum, framepack, hunyuan_video_1_5, kandinsky_5, krea_realtime_scope (experimental), longcat_video, ltx2, mimic_motion, minisora, phantom (experimental), real_video, reward_forcing, skyreals, svd_cog, svd_comfy, turbodiffusion, vace, vace_comfy (experimental), video_in_between, wan2gp, wan2gp_wan, wan_animate, wan_comfy, worldcanvas | ✅ |
 | Text-to-Speech (TTS) | [`examples/generative/audio`](./examples/generative/audio) | cosyvoice3, vibevoice_realtime, voxcpm | ✅ |
 | Avatar & Talking Head | [`examples/generative/video_generation/avatar`](./examples/generative/video_generation/avatar) | anytalker, imtalker, egstalker, fastavatar, lite_avatar, live_avatar, personalive, hunyuanvideo_avatar | ✅ |
 
@@ -149,6 +154,47 @@ cvl run agentic-rag-langgraph-helpdesk predict --question "How do I list example
 For detailed instructions and available options, see the README.md in each example directory.
 
 **License Note:** Each example may reference projects with different licenses. Check the license file in each example directory.
+
+## Remote Execution (Experimental)
+
+Run examples on cloud infrastructure instead of locally:
+
+```bash
+# AWS SageMaker (managed training)
+cvl run nanogpt train --runner sagemaker --spot --output-path s3://bucket/outputs
+
+# SkyPilot (any cloud: AWS, GCP, Azure, Lambda Labs)
+cvl run nanogpt train --runner skypilot --gpu A100:1 --cloud aws
+
+# SSH (existing GPU server)
+cvl run nanogpt train --runner ssh user@gpu-host
+```
+
+Manage remote jobs:
+```bash
+cvl jobs list --runner sagemaker
+cvl jobs logs <job-id>
+cvl jobs kill <job-id>
+```
+
+See [cvl/runners/README.md](./cvl/runners/README.md) for setup instructions.
+
+## Serverless Deployment (Experimental)
+
+Deploy inference endpoints to serverless GPU platforms:
+
+```bash
+# Deploy to Cerebrium
+cvl deploy ltx2 --gpu L40
+
+# Manage deployed services
+cvl services list
+cvl services status ltx2
+cvl services logs ltx2
+cvl services delete ltx2
+```
+
+See [cvl/deployers/README.md](./cvl/deployers/README.md) for setup and supported platforms.
 
 ## Benefits of Using CVlization
 
