@@ -21,17 +21,19 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Parse mode (default to base)
-MODE="${1:-base}"
+# Parse mode (default to all stages except RL)
+MODE="${1:-all}"
 shift || true  # Remove mode from args, continue if no args left
 
 # Validate mode
 case "$MODE" in
-    base|mid|sft|rl|all)
+    base|mid|sft|rl|all|full)
         ;;
     *)
         echo "Error: Invalid mode '$MODE'"
-        echo "Valid modes: base, mid, sft, rl, all"
+        echo "Valid modes: base, mid, sft, rl, all, full"
+        echo "  all  = base -> mid -> sft (default, no RL)"
+        echo "  full = base -> mid -> sft -> rl (includes RL)"
         exit 1
         ;;
 esac
@@ -110,13 +112,21 @@ case "$MODE" in
         run_stage rl chat_rl "Reinforcement Learning" --depth=8 --device_batch_size=4 "$@"
         ;;
     all)
-        echo "Running full training pipeline..."
+        echo "Running training pipeline (base -> mid -> sft)..."
+        run_stage base base_train "Base Pretraining" --depth=8 --device_batch_size=4 --num_iterations=100 "$@"
+        run_stage mid mid_train "Midtraining" --depth=8 --device_batch_size=4 "$@"
+        run_stage sft chat_sft "Supervised Fine-Tuning" --depth=8 --device_batch_size=4 "$@"
+        echo ""
+        echo "Training pipeline complete! (use 'full' mode to include RL)"
+        ;;
+    full)
+        echo "Running full training pipeline with RL..."
         run_stage base base_train "Base Pretraining" --depth=8 --device_batch_size=4 --num_iterations=100 "$@"
         run_stage mid mid_train "Midtraining" --depth=8 --device_batch_size=4 "$@"
         run_stage sft chat_sft "Supervised Fine-Tuning" --depth=8 --device_batch_size=4 "$@"
         run_stage rl chat_rl "Reinforcement Learning" --depth=8 --device_batch_size=4 "$@"
         echo ""
-        echo "Full pipeline complete!"
+        echo "Full pipeline with RL complete!"
         ;;
 esac
 
