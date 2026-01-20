@@ -99,7 +99,6 @@ DISTILLED_LORA = "ltx-2-19b-distilled-lora-384.safetensors"
 SAMPLE_AUDIO_REPO = "zzsi/cvl"
 SAMPLE_AUDIO_PATH = "ltx2/ltx2_tts_30s.wav"
 
-
 def get_cache_dir():
     """Get the cache directory for model weights."""
     return os.path.expanduser("~/.cache/huggingface/hub")
