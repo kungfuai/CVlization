@@ -1,5 +1,9 @@
 #!/bin/bash
 # Run training inside Docker container
+#
+# Usage:
+#   ./train.sh --vimeo --epochs 10          # Use all GPUs
+#   CUDA_VISIBLE_DEVICES=1 ./train.sh ...   # Use GPU 1 only
 
 set -e
 
@@ -16,10 +20,20 @@ if ! docker image inspect "${IMAGE_NAME}:latest" > /dev/null 2>&1; then
     "${SCRIPT_DIR}/build.sh"
 fi
 
+# Handle GPU selection
+if [ -n "${CUDA_VISIBLE_DEVICES}" ]; then
+    GPU_FLAG="--gpus '\"device=${CUDA_VISIBLE_DEVICES}\"'"
+    echo "Using GPU(s): ${CUDA_VISIBLE_DEVICES}"
+else
+    GPU_FLAG="--gpus all"
+    echo "Using all GPUs"
+fi
+
 # Pass all arguments to train.py
 echo "Starting training..."
-docker run --rm \
-    --gpus all \
+echo "TensorBoard: run ./tensorboard.sh in another terminal"
+eval docker run --rm \
+    ${GPU_FLAG} \
     --shm-size=16g \
     -v "${CACHE_DIR}:/cvl-cache" \
     -v "${SCRIPT_DIR}:/workspace" \
