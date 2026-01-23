@@ -379,13 +379,13 @@ def get_dataloaders(
     """
     if use_dummy:
         train_dataset = DummyDataset(
-            num_samples=500,
+            num_samples=10000,
             frame_size=frame_size,
             num_frames=num_frames,
             enabled_artifacts=enabled_artifacts,
         )
         val_dataset = DummyDataset(
-            num_samples=50,
+            num_samples=100,
             frame_size=frame_size,
             num_frames=num_frames,
             enabled_artifacts=enabled_artifacts,
