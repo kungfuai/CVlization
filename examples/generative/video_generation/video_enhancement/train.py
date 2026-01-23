@@ -215,15 +215,16 @@ def validate(
     val_loader,
     loss_fn: ArtifactRemovalLoss,
     device: torch.device,
+    config: Config,
 ) -> Dict[str, float]:
     """Validation loop"""
     model.eval()
-    
+
     total_losses = {}
     total_psnr = 0.0
     total_ssim = 0.0
     num_batches = 0
-    
+
     for batch in val_loader:
         clean = batch["clean"].to(device)
         degraded = batch["degraded"].to(device)
@@ -234,12 +235,20 @@ def validate(
         pred = model(degraded)
 
         # Handle mask output if model predicts it
+        pred_mask = None
         if isinstance(pred, tuple):
             pred, pred_mask = pred
 
         # Losses
         losses = loss_fn(pred, clean, is_video=True)
-        
+
+        # Mask loss (only for overlay artifacts where mask is non-zero)
+        if pred_mask is not None:
+            gt_mask = batch["mask"].to(device)
+            mask_loss = torch.nn.functional.mse_loss(pred_mask, gt_mask)
+            losses["mask"] = config.training.w_mask * mask_loss
+            losses["total"] = losses["total"] + losses["mask"]
+
         for k, v in losses.items():
             if k not in total_losses:
                 total_losses[k] = 0.0
@@ -432,7 +441,7 @@ def train(config: Config, args):
         print(f"  {' | '.join(loss_parts)}")
         
         # Validate
-        val_losses = validate(model, val_loader, loss_fn, device)
+        val_losses = validate(model, val_loader, loss_fn, device, config)
         
         print(f"  Val Loss: {val_losses['total']:.4f} | "
               f"PSNR: {val_losses['psnr']:.2f} dB | "
