@@ -55,13 +55,13 @@ class ArtifactGenerator:
         "color_banding", "blur"
     }
 
-    # Common overlay texts
+    # Common overlay texts (generic, no branded names)
     STOCK_TEXTS = [
-        "SAMPLE", "PREVIEW", "WATERMARK", "DEMO", "DRAFT",
-        "DO NOT COPY", "CONFIDENTIAL", "STOCK FOOTAGE",
-        "© 2024", "www.example.com", "@username",
-        "Shutterstock", "Getty Images", "Adobe Stock",
-        "iStock", "Pond5", "Envato"
+        "Sample", "Preview", "Draft", "Demo",
+        "Awesome Images", "Cool Stock", "Great Photos",
+        "Picture Pro", "Media Hub", "Visual Plus",
+        "Image World", "Photo Zone", "Video Vault",
+        "www.example.com", "@stockuser", "© 2024",
     ]
 
     def __init__(
@@ -572,7 +572,8 @@ def apply_overlay_artifact(
     color = color.to(frames.device)
     artifact_mask = artifact_mask.to(frames.device)
 
-    overlay = color.view(1, 3, 1, 1) * artifact_mask
+    # Alpha compositing: result = background * (1 - alpha) + foreground * alpha
+    overlay = color.view(1, 3, 1, 1)
     result = frames * (1 - artifact_mask) + overlay * artifact_mask
 
     if has_batch:
