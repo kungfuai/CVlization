@@ -327,8 +327,8 @@ class DummyDataset(Dataset):
             for c in range(3):
                 gradient[c] = torch.linspace(0, 1, H).view(H, 1) * 0.3
 
-            # Add noise and temporal variation
-            noise = torch.rand(3, H, W) * 0.15
+            # Add subtle noise and temporal variation
+            noise = torch.rand(3, H, W) * 0.02
             frame = base + gradient + noise + t * 0.02
             frame = frame.clamp(0, 1)
             frames.append(frame)
