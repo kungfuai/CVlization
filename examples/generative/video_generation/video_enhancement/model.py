@@ -182,15 +182,14 @@ class DownBlock(nn.Module):
     """Downsampling block"""
     def __init__(self, in_ch: int, out_ch: int, num_blocks: int = 2):
         super().__init__()
-        self.blocks = nn.Sequential(*[NAFBlock(in_ch if i == 0 else out_ch) 
-                                      for i in range(num_blocks)])
+        # All blocks operate at in_ch, downconv changes channels
+        self.blocks = nn.Sequential(*[NAFBlock(in_ch) for _ in range(num_blocks)])
         self.down = nn.Conv2d(in_ch, out_ch, 2, stride=2)
-    
+
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = self.blocks[0](x)
-        skip = x
-        for block in self.blocks[1:]:
+        for block in self.blocks:
             x = block(x)
+        skip = x
         x = self.down(x)
         return x, skip
 
@@ -213,17 +212,42 @@ class UpBlock(nn.Module):
         return x
 
 
-class ArtifactRemovalNet(nn.Module):
+class MaskGuidedModulation(nn.Module):
     """
-    Main artifact removal network.
+    Modulate features based on predicted mask.
 
-    2D U-Net with optional temporal attention for video consistency.
-    Designed to work well on Apple M4 (no 3D convolutions).
+    Applies: feat = feat * (1 + scale * mask) + bias * mask
+    where scale and bias are learned per-channel parameters.
+    """
+    def __init__(self, channels: int):
+        super().__init__()
+        self.scale = nn.Parameter(torch.zeros(1, channels, 1, 1))
+        self.bias = nn.Parameter(torch.zeros(1, channels, 1, 1))
 
-    Supports:
-    - Direct prediction: output = model(input)
-    - Residual prediction: output = input + model(input)
-    - Optional mask prediction head
+    def forward(self, feat: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        # mask: [B*T, 1, H, W] or [B, T, 1, H, W]
+        # feat: [B*T, C, H, W]
+        if mask.dim() == 5:
+            B, T, _, H, W = mask.shape
+            mask = mask.view(B * T, 1, H, W)
+        return feat * (1 + self.scale * mask) + self.bias * mask
+
+
+class TemporalNAFUNet(nn.Module):
+    """
+    U-Net with NAFNet-style blocks and optional temporal attention.
+
+    Architecture:
+    - Encoder: NAFBlocks with downsampling
+    - Bottleneck: NAFBlocks + optional temporal attention
+    - Decoder: NAFBlocks with upsampling and skip connections
+    - Heads: RGB output + optional mask prediction (multi-task)
+
+    Mask guidance modes:
+    - "none": No mask guidance (default)
+    - "modulation": Use predicted mask to modulate decoder features
+
+    Designed for video enhancement, optimized for Apple M4 (no 3D convolutions).
     """
     def __init__(
         self,
@@ -236,6 +260,7 @@ class ArtifactRemovalNet(nn.Module):
         attention_heads: int = 4,
         residual_learning: bool = False,
         predict_mask: bool = False,
+        mask_guidance: str = "none",  # "none" or "modulation"
     ):
         """
         Args:
@@ -248,6 +273,7 @@ class ArtifactRemovalNet(nn.Module):
             attention_heads: Number of attention heads
             residual_learning: If True, predict residual and add to input
             predict_mask: If True, also output a mask showing where artifacts were
+            mask_guidance: How to use predicted mask ("none" or "modulation")
         """
         super().__init__()
 
@@ -255,7 +281,14 @@ class ArtifactRemovalNet(nn.Module):
         self.num_frames = num_frames
         self.residual_learning = residual_learning
         self.predict_mask = predict_mask
+        self.mask_guidance = mask_guidance
         self.out_channels = out_channels
+
+        # Validate mask_guidance
+        if mask_guidance not in ("none", "modulation"):
+            raise ValueError(f"mask_guidance must be 'none' or 'modulation', got '{mask_guidance}'")
+        if mask_guidance != "none" and not predict_mask:
+            raise ValueError("mask_guidance requires predict_mask=True")
 
         # Initial projection
         self.in_conv = nn.Conv2d(in_channels, encoder_channels[0], 3, padding=1)
@@ -303,6 +336,10 @@ class ArtifactRemovalNet(nn.Module):
                 nn.Sigmoid(),
             )
 
+        # Optional mask-guided modulation
+        if mask_guidance == "modulation":
+            self.mask_modulation = MaskGuidedModulation(encoder_channels[0])
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
@@ -345,6 +382,15 @@ class ArtifactRemovalNet(nn.Module):
         for decoder, skip in zip(self.decoders, reversed(skips)):
             feat = decoder(feat, skip)
 
+        # Optional mask prediction (before output, so it can guide inpainting)
+        mask = None
+        if self.predict_mask:
+            mask = self.mask_conv(feat)
+
+            # Apply mask-guided modulation if enabled
+            if self.mask_guidance == "modulation":
+                feat = self.mask_modulation(feat, mask)
+
         # Output
         out = self.out_conv(feat)
 
@@ -357,9 +403,8 @@ class ArtifactRemovalNet(nn.Module):
         if is_video:
             out = out.view(B, T, self.out_channels, H, W)
 
-        # Optional mask prediction
+        # Return mask if predicted
         if self.predict_mask:
-            mask = self.mask_conv(feat)
             if is_video:
                 mask = mask.view(B, T, 1, H, W)
             return out, mask
@@ -372,9 +417,9 @@ class ArtifactRemovalNet(nn.Module):
 
 
 
-class ArtifactRemovalNetLite(nn.Module):
+class NAFUNetLite(nn.Module):
     """
-    Lightweight version for faster inference.
+    Lightweight U-Net with NAFNet-style blocks (no temporal attention).
     ~2-3M parameters, suitable for real-time on M4.
     """
     def __init__(
@@ -432,10 +477,15 @@ class ArtifactRemovalNetLite(nn.Module):
 
 
 
+# Backward compatibility aliases
+ArtifactRemovalNet = TemporalNAFUNet
+ArtifactRemovalNetLite = NAFUNetLite
+
+
 # Test
 if __name__ == "__main__":
     # Test standard model
-    model = ArtifactRemovalNet(
+    model = TemporalNAFUNet(
         encoder_channels=[32, 64, 128, 256],
         use_temporal_attention=True,
         num_frames=5
@@ -453,7 +503,7 @@ if __name__ == "__main__":
     print(f"Single frame: {x.shape} -> output: {y.shape}")
 
     # Test residual learning
-    model_residual = ArtifactRemovalNet(
+    model_residual = TemporalNAFUNet(
         encoder_channels=[32, 64, 128, 256],
         residual_learning=True
     )
@@ -461,17 +511,17 @@ if __name__ == "__main__":
     y = model_residual(x)
     print(f"\nResidual learning: {x.shape} -> {y.shape}")
 
-    # Test with mask prediction
-    model_with_mask = ArtifactRemovalNet(
+    # Test with mask prediction (multi-task)
+    model_with_mask = TemporalNAFUNet(
         encoder_channels=[32, 64, 128, 256],
         predict_mask=True
     )
     x = torch.randn(2, 5, 3, 256, 256)
     y, mask = model_with_mask(x)
-    print(f"With mask: output {y.shape}, mask {mask.shape}")
+    print(f"With mask (multi-task): output {y.shape}, mask {mask.shape}")
 
     # Test lite model
-    model_lite = ArtifactRemovalNetLite()
+    model_lite = NAFUNetLite()
     params = sum(p.numel() for p in model_lite.parameters())
     print(f"\nLite model parameters: {params:,}")
 
