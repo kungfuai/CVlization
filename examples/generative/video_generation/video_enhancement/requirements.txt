@@ -1,18 +1,16 @@
-# Core dependencies
-torch>=2.0.0
-torchvision>=0.15.0
-numpy>=1.24.0
-pillow>=9.0.0
+# Base image (pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime) includes:
+# torch==2.9.1, torchvision==0.24.1, numpy==2.3.4, pillow==11.3.0
 
 # Training
-tensorboard>=2.12.0
-tqdm>=4.65.0
+tensorboard==2.20.0
+tqdm==4.67.1
 
-# Perceptual loss (optional but recommended)
-lpips>=0.1.4
+# Perceptual loss
+lpips==0.1.4
 
-# Video processing (optional)
-opencv-python>=4.7.0
+# Video processing
+opencv-python==4.13.0.90
+decord==0.6.0
 
-# For M4/MPS optimization (optional)
-# coremltools>=7.0  # For Core ML export
+# Dataset download
+requests==2.32.5
