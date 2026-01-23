@@ -4,9 +4,77 @@ A deep learning model for removing visual artifacts from videos, optimized for A
 
 ## Architecture
 
+### Current (v1)
 - **2D U-Net with NAFNet-style blocks** - Efficient and well-supported on Apple Silicon
 - **Optional temporal attention** - For video consistency without 3D convolutions
 - **~5-10M parameters** - Suitable for real-time inference on M4
+
+### Planned Improvements (v2)
+
+Based on recent research (ProPainter ICCV 2023, VideoPainter SIGGRAPH 2024, DFCL 2025):
+
+```
+                              ┌─────────────────┐
+                              │   Mask Head     │ ← auxiliary supervision
+                              │   (learned)     │
+                              └────────┬────────┘
+                                       │ soft mask
+                                       ▼
+video → Encoder → ┌──────────────────────────────────┐
+                  │  Mask-Guided Sparse Attention    │
+                  │  (attend only where mask > τ)    │
+                  └──────────────────────────────────┘
+                                       │
+                  ┌────────────────────┼────────────────────┐
+                  ▼                    ▼                    ▼
+            Flow Completion    Feature Propagation    Inpaint Head
+                  │                    │                    │
+                  └────────────────────┴────────────────────┘
+                                       │
+                                   Decoder → clean video
+```
+
+**Key insights from recent work:**
+
+1. **Mask-guided sparse attention (ProPainter)**: The mask isn't just "where to fix" — it's for computational efficiency. Watermarks typically occupy <15% of frame, so sparse attention gives ~6-7x speedup by skipping non-watermark tokens.
+
+2. **Dual-pathway encoder (DFCL)**: RGB + gradient (Sobel) pathways. Gradients help detect watermark edges and high-frequency artifacts.
+
+3. **Flow completion**: Critical for temporal consistency. Prevents flickering by propagating information along motion trajectories.
+
+4. **Soft masks + joint training**: Hard masking causes boundary artifacts. Soft masks with decaying supervision let network learn to fix things regardless of mask accuracy.
+
+**Proposed changes:**
+
+| Current | Proposed | Reason |
+|---------|----------|--------|
+| Full temporal attention | Mask-guided sparse attention | Efficiency: skip computation on non-watermark regions |
+| Single encoder | Dual-pathway (RGB + gradient) | Gradients help detect watermark edges |
+| No flow | Flow completion network | Critical for video temporal consistency |
+| Optional mask head | Mask + flow + inpaint heads | Decouple tasks for better specialization |
+| Hard mask (if used) | Soft mask for token selection | Avoid boundary artifacts |
+
+**Training strategy:**
+1. **Stage 1 (warm-up)**: Train encoder + mask head with mask supervision only
+2. **Stage 2 (main)**: Joint training with all losses, mask loss weight decays
+3. **Stage 3 (fine-tune)**: Remove mask supervision, let network decide
+
+**Proposed loss function:**
+```python
+loss = (
+    1.0 * charbonnier(pred, gt) +
+    0.1 * lpips(pred, gt) +
+    0.5 * temporal_consistency(pred, gt, flow) +
+    0.3 * bce(pred_mask, gt_mask) +  # Mask supervision (if available)
+    0.1 * edge_loss(pred, gt)  # From gradient pathway
+)
+```
+
+**References:**
+- ProPainter (ICCV 2023): Mask-guided sparse video transformer
+- VideoPainter (SIGGRAPH 2024): Dual-branch for background preservation + foreground generation
+- DFCL (Neural Networks 2025): Dual-pathway RGB + gradient for watermark removal
+- SplitNet (AAAI 2021): Split detection/removal, then refine with RefineNet
 
 ## Project Structure
 
@@ -157,6 +225,45 @@ mlmodel.save("ArtifactRemoval.mlpackage")
 - ConvTranspose3d not supported on MPS (that's why we use 2D architecture)
 - Very long videos may need chunked processing
 - Moving/animated artifacts are harder than static ones
+
+## Open Questions (v2 Architecture)
+
+1. **Mask supervision source**: Do we have GT masks, or use self-supervised (degraded - clean difference)?
+
+2. **Scope of flow completion**: Full ProPainter-style is substantial. Options:
+   - (a) Mask-guided sparse attention only (moderate change)
+   - (b) Add dual-pathway encoder (smaller change)
+   - (c) Full overhaul with flow completion (major change)
+
+3. **Artifact type handling**: Watermarks benefit from masks, but compression/noise artifacts are global. Keep both paths?
+   - Overlay artifacts → mask-guided sparse attention
+   - Degradation artifacts → full attention (or different branch)
+
+4. **Efficiency vs accuracy tradeoff**: Sparse attention threshold τ selection. Too high = miss artifacts, too low = lose efficiency gains.
+
+## Implementation Roadmap
+
+> **Note**: Keep the existing `ArtifactRemovalNet` (v1) intact. New architecture should be a separate class (e.g., `ArtifactRemovalNetV2`). Add `--net {v1,v2}` flag to `train.py` and `predict.py` to select which network to use.
+
+### Phase 1: Quick wins
+- [ ] Enable edge loss (`w_edge=0.1`) — already implemented in losses.py
+- [ ] Add gradient (Sobel) input channel to encoder
+- [ ] Use mask head output to weight attention (soft gating)
+
+### Phase 2: Sparse attention
+- [ ] Implement `MaskGuidedSparseAttention` module
+- [ ] Benchmark efficiency gains vs current `TemporalAttention`
+- [ ] Tune sparsity threshold τ
+
+### Phase 3: Flow completion
+- [ ] Add lightweight flow estimation (RAFT-small or PWC-Net)
+- [ ] Implement flow-guided feature propagation
+- [ ] Add flow consistency loss
+
+### Phase 4: Multi-stage training
+- [ ] Implement staged training with mask loss decay
+- [ ] Evaluate on real watermarked videos
+- [ ] Compare v1 vs v2 on PSNR/SSIM/LPIPS
 
 ## License
 
