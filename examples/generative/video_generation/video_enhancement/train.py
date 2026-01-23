@@ -28,6 +28,46 @@ from losses import ArtifactRemovalLoss, PSNRMetric, SSIMMetric
 from dataset import get_dataloaders, get_vimeo_dataloaders
 
 
+def mask_loss_fn(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    dice_weight: float = 1.0,
+    l1_weight: float = 1.0,
+    dice_threshold: float = 0.1,
+    eps: float = 1e-6,
+) -> torch.Tensor:
+    """
+    Combined Dice + L1 loss for soft masks.
+
+    - Dice: Uses thresholded (binary) gt_mask for "where" (location)
+    - L1: Uses soft gt_mask for "how much" (intensity)
+
+    Args:
+        pred: Predicted mask [B, T, 1, H, W] or [B*T, 1, H, W]
+        target: Ground truth soft mask, same shape
+        dice_weight: Weight for Dice loss
+        l1_weight: Weight for L1 loss
+        dice_threshold: Threshold to binarize gt_mask for Dice
+        eps: Small value for numerical stability
+    """
+    # L1 loss on soft mask
+    l1_loss = torch.abs(pred - target).mean()
+
+    # Dice loss on binary mask
+    target_binary = (target > dice_threshold).float()
+
+    # Only compute Dice if there are positive pixels (overlay artifacts)
+    if target_binary.sum() > 0:
+        intersection = (pred * target_binary).sum()
+        dice = 2 * intersection / (pred.sum() + target_binary.sum() + eps)
+        dice_loss = 1 - dice
+    else:
+        # No artifact in mask (degradation type) - skip Dice
+        dice_loss = torch.tensor(0.0, device=pred.device)
+
+    return dice_weight * dice_loss + l1_weight * l1_loss
+
+
 def log_sample_images(
     writer: SummaryWriter,
     model: nn.Module,
@@ -156,10 +196,10 @@ def train_step(
         # Compute losses
         losses = loss_fn(pred, clean, is_video=True)
 
-        # Mask loss (only for overlay artifacts where mask is non-zero)
+        # Mask loss (Dice + L1)
         if pred_mask is not None:
             gt_mask = batch["mask"].to(device)
-            mask_loss = torch.nn.functional.mse_loss(pred_mask, gt_mask)
+            mask_loss = mask_loss_fn(pred_mask, gt_mask)
             losses["mask"] = config.training.w_mask * mask_loss
             losses["total"] = losses["total"] + losses["mask"]
 
@@ -218,10 +258,10 @@ def validate(
         # Losses
         losses = loss_fn(pred, clean, is_video=True)
 
-        # Mask loss (only for overlay artifacts where mask is non-zero)
+        # Mask loss (Dice + L1)
         if pred_mask is not None:
             gt_mask = batch["mask"].to(device)
-            mask_loss = torch.nn.functional.mse_loss(pred_mask, gt_mask)
+            mask_loss = mask_loss_fn(pred_mask, gt_mask)
             losses["mask"] = w_mask * mask_loss
             losses["total"] = losses["total"] + losses["mask"]
 
@@ -538,6 +578,8 @@ def main():
                         help="Use Vimeo Septuplet dataset (run prepare_data.sh first)")
     parser.add_argument("--workers", type=int, default=4,
                         help="DataLoader workers")
+    parser.add_argument("--num-frames", type=int, default=None,
+                        help="Number of frames per sample (default: 5, use 7 for Vimeo Septuplet)")
     parser.add_argument("--artifacts", type=str, default=None,
                         help="Comma-separated artifact types to enable (e.g., 'corner_logo,gaussian_noise')")
 
@@ -610,6 +652,9 @@ def main():
         config.training.batch_size = args.batch_size
     if args.lr:
         config.training.learning_rate = args.lr
+    if args.num_frames:
+        config.data.num_frames = args.num_frames
+        config.model.num_frames = args.num_frames
     if args.no_temporal:
         config.model.use_temporal_attention = False
     if args.device:
