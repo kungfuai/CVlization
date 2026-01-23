@@ -20,10 +20,67 @@ from datetime import datetime
 from typing import Dict, Optional
 import json
 
+import torchvision.utils as vutils
+
 from config import Config, get_config
-from model import ArtifactRemovalNet, ArtifactRemovalNetLite
+from model import TemporalNAFUNet, NAFUNetLite
 from losses import ArtifactRemovalLoss, PSNRMetric, SSIMMetric
 from dataset import get_dataloaders, get_vimeo_dataloaders
+
+
+def log_sample_images(
+    writer: SummaryWriter,
+    model: nn.Module,
+    val_loader,
+    device: torch.device,
+    epoch: int,
+    num_samples: int = 4,
+):
+    """Log sample images to TensorBoard for visual inspection.
+
+    Creates a grid showing: degraded (input) | predicted (output) | clean (ground truth)
+    for each frame in the sequence.
+    """
+    model.eval()
+
+    # Get first batch
+    batch = next(iter(val_loader))
+    clean = batch["clean"].to(device)  # [B, T, C, H, W]
+    degraded = batch["degraded"].to(device)
+
+    B, T, C, H, W = clean.shape
+    num_samples = min(num_samples, B)
+
+    with torch.no_grad():
+        pred = model(degraded)
+        if isinstance(pred, tuple):
+            pred, pred_mask = pred
+
+    # Log samples for first few items in batch
+    for b in range(num_samples):
+        # For each sample, create a grid showing all frames
+        # Layout: 3 rows (degraded, predicted, clean) x T columns (frames)
+        frames_degraded = degraded[b]  # [T, C, H, W]
+        frames_pred = pred[b].clamp(0, 1)  # [T, C, H, W]
+        frames_clean = clean[b]  # [T, C, H, W]
+
+        # Concatenate: all degraded, then all predicted, then all clean
+        # This gives us [3*T, C, H, W] in row-major order
+        all_frames = torch.cat([frames_degraded, frames_pred, frames_clean], dim=0)
+        grid = vutils.make_grid(all_frames, nrow=T, padding=2, normalize=False)
+
+        writer.add_image(f"samples/sample_{b}", grid, epoch)
+
+    # Also log a single frame comparison in higher detail
+    # Take middle frame from first sample
+    mid_t = T // 2
+    single_comparison = torch.stack([
+        degraded[0, mid_t],
+        pred[0, mid_t].clamp(0, 1),
+        clean[0, mid_t],
+    ], dim=0)
+    grid_single = vutils.make_grid(single_comparison, nrow=3, padding=4, normalize=False)
+    writer.add_image("comparison/degraded_pred_clean", grid_single, epoch)
 
 
 def setup_device(config: Config) -> torch.device:
@@ -42,7 +99,7 @@ def setup_device(config: Config) -> torch.device:
 
 def setup_model(config: Config, device: torch.device) -> nn.Module:
     """Create and setup model"""
-    model = ArtifactRemovalNet(
+    model = TemporalNAFUNet(
         in_channels=config.model.in_channels,
         out_channels=config.model.out_channels,
         encoder_channels=config.model.encoder_channels,
@@ -51,12 +108,17 @@ def setup_model(config: Config, device: torch.device) -> nn.Module:
         attention_heads=config.model.attention_heads,
         residual_learning=config.model.residual_learning,
         predict_mask=config.model.predict_mask,
+        mask_guidance=config.model.mask_guidance,
     )
 
     model = model.to(device)
 
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Model parameters: {params:,}")
+    print(f"Model: TemporalNAFUNet, parameters: {params:,}")
+    if config.model.predict_mask:
+        print(f"  Multi-task: mask prediction enabled (w_mask={config.training.w_mask})")
+        if config.model.mask_guidance != "none":
+            print(f"  Mask guidance: {config.model.mask_guidance}")
 
     return model
 
@@ -67,6 +129,7 @@ def train_epoch(
     optimizer: optim.Optimizer,
     loss_fn: ArtifactRemovalLoss,
     device: torch.device,
+    config: Config,
     scaler: Optional[GradScaler] = None,
     epoch: int = 0,
 ) -> Dict[str, float]:
@@ -95,11 +158,20 @@ def train_epoch(
             pred = model(degraded)
 
             # Handle mask output if model predicts it
+            pred_mask = None
             if isinstance(pred, tuple):
                 pred, pred_mask = pred
 
             # Compute losses
             losses = loss_fn(pred, clean, is_video=True)
+
+            # Mask loss (only for overlay artifacts where mask is non-zero)
+            if pred_mask is not None:
+                gt_mask = batch["mask"].to(device)
+                # Only compute mask loss where GT mask has signal
+                mask_loss = torch.nn.functional.mse_loss(pred_mask, gt_mask)
+                losses["mask"] = config.training.w_mask * mask_loss
+                losses["total"] = losses["total"] + losses["mask"]
         
         # Backward pass
         if use_amp:
@@ -311,7 +383,6 @@ def train(config: Config, args):
         mode="min",
         factor=config.training.scheduler_factor,
         patience=config.training.scheduler_patience,
-        verbose=True,
     ) if config.training.use_scheduler else None
     
     # Mixed precision scaler (CUDA only)
@@ -349,13 +420,16 @@ def train(config: Config, args):
         
         # Train
         train_losses = train_epoch(
-            model, train_loader, optimizer, loss_fn, device, scaler, epoch
+            model, train_loader, optimizer, loss_fn, device, config, scaler, epoch
         )
         
-        print(f"  Train Loss: {train_losses['total']:.4f} | "
-              f"Pixel: {train_losses['pixel']:.4f} | "
-              f"Perceptual: {train_losses.get('perceptual', 0):.4f} | "
-              f"Time: {train_losses['time']:.1f}s")
+        loss_parts = [f"Train Loss: {train_losses['total']:.4f}",
+                      f"Pixel: {train_losses['pixel']:.4f}",
+                      f"Percep: {train_losses.get('perceptual', 0):.4f}"]
+        if "mask" in train_losses:
+            loss_parts.append(f"Mask: {train_losses['mask']:.4f}")
+        loss_parts.append(f"Time: {train_losses['time']:.1f}s")
+        print(f"  {' | '.join(loss_parts)}")
         
         # Validate
         val_losses = validate(model, val_loader, loss_fn, device)
@@ -372,11 +446,15 @@ def train(config: Config, args):
         for k, v in train_losses.items():
             if k != "time":
                 writer.add_scalar(f"train/{k}", v, epoch)
-        
+
         for k, v in val_losses.items():
             writer.add_scalar(f"val/{k}", v, epoch)
-        
+
         writer.add_scalar("lr", optimizer.param_groups[0]["lr"], epoch)
+
+        # Log sample images every few epochs
+        if epoch % 5 == 0 or epoch == config.training.num_epochs - 1:
+            log_sample_images(writer, model, val_loader, device, epoch)
         
         # Save checkpoint
         is_best = val_losses["total"] < best_loss
@@ -438,11 +516,20 @@ def main():
     parser.add_argument("--residual", action="store_true",
                         help="Use residual learning (predict residual, add to input)")
     parser.add_argument("--predict-mask", action="store_true",
-                        help="Also predict artifact mask")
+                        help="Also predict artifact mask (multi-task learning)")
+    parser.add_argument("--mask-guidance", type=str, default="none",
+                        choices=["none", "modulation"],
+                        help="How predicted mask guides inpainting (default: none)")
+    parser.add_argument("--channels", type=int, default=None,
+                        help="Base channel width (default: 32). Model uses [c, 2c, 4c, 8c]")
+    parser.add_argument("--depth", type=int, default=None,
+                        help="Number of encoder/decoder stages (default: 4)")
 
     # Loss
     parser.add_argument("--no-lpips", action="store_true",
                         help="Use VGG instead of LPIPS for perceptual loss")
+    parser.add_argument("--pixel-only", action="store_true",
+                        help="Use only pixel loss (disable perceptual, good for dummy data)")
 
     # Resume
     parser.add_argument("--resume", type=str, default=None,
@@ -452,6 +539,8 @@ def main():
     parser.add_argument("--device", type=str, default="auto",
                         choices=["auto", "cuda", "mps", "cpu"],
                         help="Device to use")
+    parser.add_argument("--amp", action="store_true",
+                        help="Enable automatic mixed precision (faster but may cause inf loss)")
 
     args = parser.parse_args()
     
@@ -472,8 +561,24 @@ def main():
         config.model.residual_learning = True
     if args.predict_mask:
         config.model.predict_mask = True
+    if args.mask_guidance != "none":
+        config.model.mask_guidance = args.mask_guidance
+        config.model.predict_mask = True  # mask_guidance requires predict_mask
     if args.artifacts:
         config.data.enabled_artifacts = args.artifacts.split(",")
+    if args.amp:
+        config.training.use_amp = True
+    if args.pixel_only:
+        config.training.w_perceptual = 0.0
+        config.training.w_fft = 0.0
+    if args.channels:
+        # Build channel progression: [c, 2c, 4c, 8c, ...]
+        depth = args.depth or len(config.model.encoder_channels)
+        config.model.encoder_channels = [args.channels * (2 ** i) for i in range(depth)]
+    elif args.depth:
+        # Keep base channels, adjust depth
+        base = config.model.encoder_channels[0]
+        config.model.encoder_channels = [base * (2 ** i) for i in range(args.depth)]
 
     # Print config
     print("\n" + "=" * 60)
@@ -485,8 +590,11 @@ def main():
     print(f"Learning rate: {config.training.learning_rate}")
     print(f"Frame size: {config.data.frame_size}")
     print(f"Num frames: {config.data.num_frames}")
+    print(f"Encoder channels: {config.model.encoder_channels}")
     print(f"Temporal attention: {config.model.use_temporal_attention}")
     print(f"Residual learning: {config.model.residual_learning}")
+    print(f"Predict mask: {config.model.predict_mask}")
+    print(f"Mask guidance: {config.model.mask_guidance}")
     print(f"Enabled artifacts: {config.data.enabled_artifacts or 'overlay types (default)'}")
     print(f"Dataset: {'Vimeo Septuplet' if args.vimeo else ('dummy' if args.dummy else 'custom')}")
     
