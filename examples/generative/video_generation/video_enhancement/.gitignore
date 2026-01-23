@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Data and results
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+logs/
+data/
+outputs/
+
+# Large files
+*.zip
+*.tar
+*.tar.gz
