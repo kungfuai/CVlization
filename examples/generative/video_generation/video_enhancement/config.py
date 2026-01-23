@@ -59,25 +59,27 @@ class TrainingConfig:
     """Training configuration"""
     # Basic
     batch_size: int = 4
-    num_epochs: int = 100
+    num_steps: int = 50000  # Total training steps
     learning_rate: float = 1e-4
     weight_decay: float = 1e-5
-    
+
     # Loss weights
     w_pixel: float = 1.0
     w_perceptual: float = 0.1
     w_temporal: float = 0.5
     w_fft: float = 0.05
     w_mask: float = 0.3  # Mask prediction loss (only for overlay artifacts)
-    
+
     # Scheduler
     use_scheduler: bool = True
-    scheduler_patience: int = 5
+    scheduler_patience: int = 1000  # Steps without improvement before LR reduction
     scheduler_factor: float = 0.5
-    
-    # Checkpointing
+
+    # Logging and checkpointing (all step-based)
     checkpoint_dir: str = "./checkpoints"
-    save_every: int = 5
+    log_every: int = 50  # Log to TensorBoard every N steps
+    val_every: int = 500  # Validate every N steps
+    save_every: int = 2000  # Save checkpoint every N steps
     
     # Device
     device: str = "auto"  # "auto", "cuda", "mps", "cpu"
