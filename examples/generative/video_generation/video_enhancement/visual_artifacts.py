@@ -68,8 +68,8 @@ class ArtifactGenerator:
         self,
         frame_size: Tuple[int, int] = (256, 256),
         enabled_artifacts: Optional[Set[str]] = None,
-        min_opacity: float = 0.2,
-        max_opacity: float = 0.8,
+        min_opacity: float = 0.5,
+        max_opacity: float = 0.9,
         # Compression settings
         jpeg_quality_range: Tuple[int, int] = (10, 50),
         # Noise settings
@@ -305,7 +305,7 @@ class ArtifactGenerator:
     def _tiled_pattern(self, num_frames: int) -> Tuple[torch.Tensor, Dict]:
         """Repeating tiled pattern"""
         H, W = self.frame_size
-        opacity = self._random_opacity() * 0.6
+        opacity = self._random_opacity()
 
         img = Image.new('L', (W, H), 0)
         draw = ImageDraw.Draw(img)
@@ -378,7 +378,7 @@ class ArtifactGenerator:
     def _channel_logo(self, num_frames: int) -> Tuple[torch.Tensor, Dict]:
         """TV channel style logo"""
         H, W = self.frame_size
-        opacity = self._random_opacity() * 0.5
+        opacity = self._random_opacity()
 
         img = Image.new('L', (W, H), 0)
         draw = ImageDraw.Draw(img)
@@ -404,7 +404,7 @@ class ArtifactGenerator:
     def _diagonal_text(self, num_frames: int) -> Tuple[torch.Tensor, Dict]:
         """Large diagonal text across frame"""
         H, W = self.frame_size
-        opacity = self._random_opacity() * 0.4
+        opacity = self._random_opacity()
 
         diag = int(math.sqrt(H**2 + W**2))
         img = Image.new('L', (diag, diag), 0)
