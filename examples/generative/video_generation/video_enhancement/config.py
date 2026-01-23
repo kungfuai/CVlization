@@ -28,6 +28,7 @@ class ModelConfig:
     # Learning mode
     residual_learning: bool = False  # If True, predict residual and add to input
     predict_mask: bool = False  # If True, also output artifact mask
+    mask_guidance: str = "none"  # "none" or "modulation"
 
 
 @dataclass
@@ -67,6 +68,7 @@ class TrainingConfig:
     w_perceptual: float = 0.1
     w_temporal: float = 0.5
     w_fft: float = 0.05
+    w_mask: float = 0.3  # Mask prediction loss (only for overlay artifacts)
     
     # Scheduler
     use_scheduler: bool = True
@@ -81,7 +83,7 @@ class TrainingConfig:
     device: str = "auto"  # "auto", "cuda", "mps", "cpu"
     
     # Mixed precision
-    use_amp: bool = True  # Automatic mixed precision
+    use_amp: bool = False  # Automatic mixed precision (can cause inf loss with FFT)
     
     def get_device(self) -> torch.device:
         if self.device == "auto":
