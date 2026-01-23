@@ -24,7 +24,7 @@ except ImportError:
 from PIL import Image
 import torchvision.transforms.functional as TF
 
-from model import ArtifactRemovalNet, ArtifactRemovalNetLite
+from model import TemporalNAFUNet, NAFUNetLite
 
 
 def load_model(
@@ -40,16 +40,17 @@ def load_model(
     model_config = checkpoint.get("config", {}).get("model", {})
 
     if lite:
-        model = ArtifactRemovalNetLite(
+        model = NAFUNetLite(
             residual_learning=model_config.get("residual_learning", False),
         )
     else:
-        model = ArtifactRemovalNet(
+        model = TemporalNAFUNet(
             encoder_channels=model_config.get("encoder_channels", [32, 64, 128, 256]),
             use_temporal_attention=model_config.get("use_temporal_attention", True),
             num_frames=model_config.get("num_frames", 5),
             residual_learning=model_config.get("residual_learning", False),
             predict_mask=model_config.get("predict_mask", False),
+            mask_guidance=model_config.get("mask_guidance", "none"),
         )
 
     model.load_state_dict(checkpoint["model_state_dict"])
