@@ -27,6 +27,34 @@ import os
 from visual_artifacts import ArtifactGenerator, apply_overlay_artifact
 
 
+def get_resize_transform(
+    frame_size: Tuple[int, int],
+    preserve_aspect_ratio: bool = False
+) -> T.Compose:
+    """
+    Get resize transform, optionally preserving aspect ratio.
+
+    Args:
+        frame_size: Target (H, W)
+        preserve_aspect_ratio: If True, resize smallest edge to match target,
+                               then center crop. If False, stretch to target.
+    """
+    if preserve_aspect_ratio:
+        # Resize so smallest edge matches, then center crop
+        H, W = frame_size
+        return T.Compose([
+            T.Resize(min(H, W)),  # Resize smallest edge
+            T.CenterCrop(frame_size),
+            T.ToTensor(),
+        ])
+    else:
+        # Stretch to exact size
+        return T.Compose([
+            T.Resize(frame_size),
+            T.ToTensor(),
+        ])
+
+
 class VideoFrameDataset(Dataset):
     """
     Dataset that loads video frames and adds synthetic artifacts.
@@ -44,6 +72,7 @@ class VideoFrameDataset(Dataset):
         mode: str = "train",  # "train", "val", "test"
         max_samples: Optional[int] = None,
         enabled_artifacts: Optional[set] = None,
+        preserve_aspect_ratio: bool = False,
     ):
         """
         Args:
@@ -55,6 +84,7 @@ class VideoFrameDataset(Dataset):
             mode: Dataset mode (affects augmentation)
             max_samples: Limit number of samples (for quick testing)
             enabled_artifacts: Set of artifact types to use (see ArtifactGenerator.ARTIFACT_TYPES)
+            preserve_aspect_ratio: If True, resize + center crop instead of stretching
         """
         self.data_path = Path(data_path)
         self.frame_size = frame_size
@@ -68,19 +98,16 @@ class VideoFrameDataset(Dataset):
             max_opacity=max_opacity,
             enabled_artifacts=enabled_artifacts,
         )
-        
+
         # Find all data sources
         self.samples = self._find_samples()
-        
+
         if max_samples:
             self.samples = self.samples[:max_samples]
-        
+
         # Transforms
-        self.transform = T.Compose([
-            T.Resize(frame_size),
-            T.ToTensor(),
-        ])
-        
+        self.transform = get_resize_transform(frame_size, preserve_aspect_ratio)
+
         # Augmentations (only for training)
         self.augment = mode == "train"
     
@@ -441,6 +468,7 @@ class VimeoArtifactDataset(Dataset):
         enabled_artifacts: Optional[set] = None,
         min_opacity: float = 0.2,
         max_opacity: float = 0.8,
+        preserve_aspect_ratio: bool = False,
     ):
         """
         Args:
@@ -450,10 +478,12 @@ class VimeoArtifactDataset(Dataset):
             enabled_artifacts: Set of artifact types to use
             min_opacity: Min opacity for overlay artifacts
             max_opacity: Max opacity for overlay artifacts
+            preserve_aspect_ratio: If True, resize + center crop instead of stretching
         """
         self.vimeo_dataset = vimeo_dataset
         self.frame_size = frame_size
         self.num_frames = min(num_frames, 7)
+        self.preserve_aspect_ratio = preserve_aspect_ratio
 
         self.artifact_gen = ArtifactGenerator(
             frame_size=frame_size,
@@ -462,7 +492,15 @@ class VimeoArtifactDataset(Dataset):
             enabled_artifacts=enabled_artifacts,
         )
 
-        self.resize = T.Resize(frame_size)
+        # Build resize transform
+        if preserve_aspect_ratio:
+            H, W = frame_size
+            self.resize = T.Compose([
+                T.Resize(min(H, W)),
+                T.CenterCrop(frame_size),
+            ])
+        else:
+            self.resize = T.Resize(frame_size)
 
     def __len__(self) -> int:
         return len(self.vimeo_dataset)
@@ -506,6 +544,7 @@ def get_vimeo_dataloaders(
     num_workers: int = 4,
     enabled_artifacts: Optional[set] = None,
     data_dir: Optional[str] = None,
+    preserve_aspect_ratio: bool = False,
 ) -> Tuple[DataLoader, DataLoader]:
     """
     Create train and validation dataloaders using Vimeo Septuplet.
@@ -517,6 +556,7 @@ def get_vimeo_dataloaders(
         num_workers: DataLoader workers
         enabled_artifacts: Set of artifact types to use
         data_dir: Override data directory
+        preserve_aspect_ratio: If True, resize + center crop instead of stretching
 
     Returns:
         train_loader, val_loader
@@ -543,6 +583,7 @@ def get_vimeo_dataloaders(
         frame_size=frame_size,
         num_frames=num_frames,
         enabled_artifacts=enabled_artifacts,
+        preserve_aspect_ratio=preserve_aspect_ratio,
     )
 
     val_dataset = VimeoArtifactDataset(
@@ -550,6 +591,7 @@ def get_vimeo_dataloaders(
         frame_size=frame_size,
         num_frames=num_frames,
         enabled_artifacts=enabled_artifacts,
+        preserve_aspect_ratio=preserve_aspect_ratio,
     )
 
     train_loader = DataLoader(

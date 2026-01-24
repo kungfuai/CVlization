@@ -174,8 +174,49 @@ class TemporalAttention(nn.Module):
         
         if reshape_back:
             result = result.view(B, T, C, H, W)
-        
+
         return result
+
+
+class MaskGuidedTemporalAttention(nn.Module):
+    """
+    Temporal attention with mask-based gating.
+
+    Boosts attention to artifact regions by scaling features based on mask
+    before computing attention weights.
+    """
+
+    def __init__(self, channels: int, num_heads: int = 4, num_frames: int = 5):
+        super().__init__()
+        self.base_attn = TemporalAttention(channels, num_heads, num_frames)
+        # Learnable scale for mask influence
+        self.mask_scale = nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: [B, T, C, H, W] features
+            mask: [B*T, 1, H', W'] mask at bottleneck resolution
+
+        Returns:
+            [B, T, C, H, W] attended features
+        """
+        B, T, C, H, W = x.shape
+
+        # Reshape mask to [B, T, 1, H', W'] and upsample to feature resolution
+        mask_bt = mask.view(B, T, 1, mask.shape[-2], mask.shape[-1])
+        if mask_bt.shape[-2:] != (H, W):
+            mask_bt = F.interpolate(
+                mask_bt.view(B * T, 1, mask.shape[-2], mask.shape[-1]),
+                size=(H, W), mode='bilinear', align_corners=False
+            ).view(B, T, 1, H, W)
+
+        # Boost features in artifact regions before attention
+        # This makes attention "pay more attention" to artifacts
+        x_boosted = x * (1 + self.mask_scale * mask_bt)
+
+        # Run base attention on boosted features
+        return self.base_attn(x_boosted)
 
 
 class DownBlock(nn.Module):
@@ -285,8 +326,9 @@ class TemporalNAFUNet(nn.Module):
         self.out_channels = out_channels
 
         # Validate mask_guidance
-        if mask_guidance not in ("none", "modulation"):
-            raise ValueError(f"mask_guidance must be 'none' or 'modulation', got '{mask_guidance}'")
+        valid_guidance = ("none", "modulation", "concat", "residual", "skip_gate", "attn_gate")
+        if mask_guidance not in valid_guidance:
+            raise ValueError(f"mask_guidance must be one of {valid_guidance}, got '{mask_guidance}'")
         if mask_guidance != "none" and not predict_mask:
             raise ValueError("mask_guidance requires predict_mask=True")
 
@@ -306,11 +348,25 @@ class TemporalNAFUNet(nn.Module):
 
         # Optional temporal attention at bottleneck
         if use_temporal_attention:
-            self.temporal_attn = TemporalAttention(
-                encoder_channels[-1],
-                num_heads=attention_heads,
-                num_frames=num_frames
-            )
+            if mask_guidance == "attn_gate":
+                self.temporal_attn = MaskGuidedTemporalAttention(
+                    encoder_channels[-1],
+                    num_heads=attention_heads,
+                    num_frames=num_frames
+                )
+                # Early mask prediction for attention gating
+                self.early_mask_conv = nn.Sequential(
+                    nn.Conv2d(encoder_channels[-1], encoder_channels[-1] // 4, 1),
+                    nn.GELU(),
+                    nn.Conv2d(encoder_channels[-1] // 4, 1, 1),
+                    nn.Sigmoid(),
+                )
+            else:
+                self.temporal_attn = TemporalAttention(
+                    encoder_channels[-1],
+                    num_heads=attention_heads,
+                    num_frames=num_frames
+                )
 
         # Decoder
         self.decoders = nn.ModuleList()
@@ -339,6 +395,23 @@ class TemporalNAFUNet(nn.Module):
         # Optional mask-guided modulation
         if mask_guidance == "modulation":
             self.mask_modulation = MaskGuidedModulation(encoder_channels[0])
+        elif mask_guidance == "concat":
+            # Concat mask to features, need adjusted output conv
+            self.out_conv = nn.Sequential(
+                nn.Conv2d(encoder_channels[0] + 1, encoder_channels[0], 3, padding=1),
+                nn.GELU(),
+                nn.Conv2d(encoder_channels[0], out_channels, 1),
+            )
+        elif mask_guidance == "skip_gate":
+            # Early mask prediction from bottleneck for skip gating
+            self.early_mask_conv = nn.Sequential(
+                nn.Conv2d(encoder_channels[-1], encoder_channels[-1] // 4, 1),
+                nn.GELU(),
+                nn.Conv2d(encoder_channels[-1] // 4, 1, 1),
+                nn.Sigmoid(),
+            )
+            # Learnable gate strength (how much to suppress corrupted features)
+            self.skip_gate_strength = nn.Parameter(torch.tensor(0.5))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -372,30 +445,58 @@ class TemporalNAFUNet(nn.Module):
         # Bottleneck
         feat = self.bottleneck(feat)
 
+        # Early mask prediction for attn_gate (before temporal attention)
+        early_mask = None
+        if self.mask_guidance == "attn_gate":
+            early_mask = self.early_mask_conv(feat)  # [B*T, 1, H', W']
+
         # Temporal attention
         if self.use_temporal_attention and is_video:
             feat = feat.view(B, T, -1, feat.shape[-2], feat.shape[-1])
-            feat = self.temporal_attn(feat)
+            if self.mask_guidance == "attn_gate":
+                feat = self.temporal_attn(feat, early_mask)
+            else:
+                feat = self.temporal_attn(feat)
             feat = feat.view(B * T, -1, feat.shape[-2], feat.shape[-1])
 
-        # Decoder with skip connections
-        for decoder, skip in zip(self.decoders, reversed(skips)):
-            feat = decoder(feat, skip)
+        # Skip gating: predict early mask and gate skip connections
+        if self.mask_guidance == "skip_gate":
+            early_mask = self.early_mask_conv(feat)  # [B*T, 1, H', W'] at bottleneck res
+            gate = self.skip_gate_strength.clamp(0, 1)
+
+            # Decoder with gated skip connections
+            for decoder, skip in zip(self.decoders, reversed(skips)):
+                # Upsample mask to match skip resolution
+                skip_mask = F.interpolate(early_mask, size=skip.shape[-2:], mode='bilinear', align_corners=False)
+                # Gate: suppress encoder features in artifact regions
+                # skip_gated = skip * (1 - gate * skip_mask)
+                skip_gated = skip * (1 - gate * skip_mask)
+                feat = decoder(feat, skip_gated)
+        else:
+            # Standard decoder with skip connections
+            for decoder, skip in zip(self.decoders, reversed(skips)):
+                feat = decoder(feat, skip)
 
         # Optional mask prediction (before output, so it can guide inpainting)
         mask = None
         if self.predict_mask:
             mask = self.mask_conv(feat)
 
-            # Apply mask-guided modulation if enabled
+            # Apply mask guidance if enabled
             if self.mask_guidance == "modulation":
                 feat = self.mask_modulation(feat, mask)
+            elif self.mask_guidance == "concat":
+                feat = torch.cat([feat, mask], dim=1)
 
         # Output
         out = self.out_conv(feat)
 
-        # Apply residual learning if enabled
-        if self.residual_learning:
+        # Apply residual weighting if enabled (residual only in mask regions)
+        if self.mask_guidance == "residual" and mask is not None:
+            # out is the residual, apply only where mask > 0
+            out = x_input + out * mask
+            out = out.clamp(0, 1)
+        elif self.residual_learning:
             out = x_input + out
             out = out.clamp(0, 1)
 
@@ -410,6 +511,134 @@ class TemporalNAFUNet(nn.Module):
             return out, mask
 
         return out
+
+    def count_parameters(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+
+class ExplicitCompositeNet(nn.Module):
+    """
+    Explicit composite architecture for artifact removal.
+
+    Predicts inpainted image and mask separately, then composites:
+        output = input * (1 - mask) + inpainted * mask
+
+    This explicitly preserves clean regions (mask=0) unchanged.
+    """
+
+    def __init__(
+        self,
+        in_channels: int = 3,
+        out_channels: int = 3,
+        encoder_channels: List[int] = [32, 64, 128, 256],
+        use_temporal_attention: bool = True,
+        num_frames: int = 5,
+        attention_heads: int = 4,
+    ):
+        super().__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        # Build base network (reuse TemporalNAFUNet components)
+        self.in_conv = nn.Conv2d(in_channels, encoder_channels[0], 3, padding=1)
+
+        # Encoder
+        self.encoders = nn.ModuleList()
+        for i in range(len(encoder_channels) - 1):
+            self.encoders.append(
+                DownBlock(encoder_channels[i], encoder_channels[i + 1], num_blocks=2)
+            )
+
+        # Bottleneck
+        self.bottleneck = nn.Sequential(
+            NAFBlock(encoder_channels[-1]),
+            NAFBlock(encoder_channels[-1]),
+        )
+
+        # Temporal attention
+        self.use_temporal_attention = use_temporal_attention
+        if use_temporal_attention:
+            self.temporal_attn = TemporalAttention(
+                encoder_channels[-1], num_heads=attention_heads, num_frames=num_frames
+            )
+
+        # Decoder
+        decoder_channels = list(reversed(encoder_channels))
+        self.decoders = nn.ModuleList()
+        for i in range(len(decoder_channels) - 1):
+            self.decoders.append(
+                UpBlock(decoder_channels[i], decoder_channels[i + 1], num_blocks=2)
+            )
+
+        # Separate heads for inpainting and mask
+        self.inpaint_head = nn.Sequential(
+            nn.Conv2d(encoder_channels[0], encoder_channels[0], 3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(encoder_channels[0], out_channels, 1),
+            nn.Sigmoid(),
+        )
+
+        self.mask_head = nn.Sequential(
+            nn.Conv2d(encoder_channels[0], encoder_channels[0] // 2, 3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(encoder_channels[0] // 2, 1, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.Tensor):
+        """
+        Args:
+            x: [B, T, C, H, W] video frames or [B, C, H, W] single frame
+
+        Returns:
+            Tuple of (output, mask)
+        """
+        # Handle different input formats
+        if x.dim() == 5:
+            B, T, C, H, W = x.shape
+            is_video = True
+            x_input = x.view(B * T, C, H, W)
+        else:
+            B, C, H, W = x.shape
+            T = 1
+            is_video = False
+            x_input = x
+
+        # Encode
+        feat = self.in_conv(x_input)
+
+        skips = []
+        for encoder in self.encoders:
+            feat, skip = encoder(feat)
+            skips.append(skip)
+
+        # Bottleneck
+        feat = self.bottleneck(feat)
+
+        # Temporal attention
+        if self.use_temporal_attention and is_video:
+            feat = feat.view(B, T, -1, feat.shape[-2], feat.shape[-1])
+            feat = self.temporal_attn(feat)
+            feat = feat.view(B * T, -1, feat.shape[-2], feat.shape[-1])
+
+        # Decode
+        for decoder, skip in zip(self.decoders, reversed(skips)):
+            feat = decoder(feat, skip)
+
+        # Predict inpainted and mask separately
+        inpainted = self.inpaint_head(feat)
+        mask = self.mask_head(feat)
+
+        # Explicit composite: preserve clean regions exactly
+        out = x_input * (1 - mask) + inpainted * mask
+
+        # Reshape for video output
+        if is_video:
+            out = out.view(B, T, self.out_channels, H, W)
+            mask = mask.view(B, T, 1, H, W)
+
+        return out, mask
 
     def count_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)

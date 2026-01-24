@@ -15,10 +15,18 @@ class CharbonnierLoss(nn.Module):
     def __init__(self, eps: float = 1e-6):
         super().__init__()
         self.eps = eps
-    
-    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+
+    def forward(
+        self,
+        pred: torch.Tensor,
+        target: torch.Tensor,
+        weight: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         diff = pred - target
-        return torch.mean(torch.sqrt(diff ** 2 + self.eps ** 2))
+        loss = torch.sqrt(diff ** 2 + self.eps ** 2)
+        if weight is not None:
+            loss = loss * weight
+        return loss.mean()
 
 
 class VGGPerceptualLoss(nn.Module):
@@ -181,20 +189,24 @@ class ArtifactRemovalLoss(nn.Module):
         pred: torch.Tensor,
         target: torch.Tensor,
         is_video: bool = False,
+        mask: Optional[torch.Tensor] = None,
+        mask_weight: float = 1.0,
     ) -> Dict[str, torch.Tensor]:
         """
         Compute all losses.
-        
+
         Args:
             pred: [B, T, C, H, W] or [B, C, H, W]
             target: same shape as pred
             is_video: whether input is video (for temporal loss)
-        
+            mask: [B, T, 1, H, W] or [B, 1, H, W] artifact mask for weighted loss
+            mask_weight: weight multiplier for mask region (1.0 = equal, 5.0 = 5x focus on artifacts)
+
         Returns:
             Dictionary of loss values
         """
         losses = {}
-        
+
         # Handle video vs image input
         if is_video and pred.dim() == 5:
             B, T, C, H, W = pred.shape
@@ -203,9 +215,20 @@ class ArtifactRemovalLoss(nn.Module):
         else:
             pred_flat = pred
             target_flat = target
-        
+
+        # Compute spatial weight map from mask if provided
+        # weight = (1 - mask) + mask_weight * mask = 1 + (mask_weight - 1) * mask
+        weight = None
+        if mask is not None and mask_weight != 1.0:
+            if is_video and mask.dim() == 5:
+                mask_flat = mask.view(B * T, 1, H, W)
+            else:
+                mask_flat = mask
+            # Expand to match channels: [B*T, 1, H, W] -> [B*T, C, H, W]
+            weight = 1.0 + (mask_weight - 1.0) * mask_flat.expand_as(pred_flat)
+
         # Pixel loss
-        losses['pixel'] = self.w_pixel * self.pixel_loss(pred_flat, target_flat)
+        losses['pixel'] = self.w_pixel * self.pixel_loss(pred_flat, target_flat, weight)
         
         # Perceptual loss
         if self.use_lpips:
