@@ -82,19 +82,52 @@ COMMON="--vimeo --steps $STEPS --val-every $VAL_EVERY --save-every $SAVE_EVERY -
 # ===========================================
 # Phase 4: Next experiments
 # Based on learnings: LPIPS critical, modulation helps, larger model promising
+# DONE - Results: exp9 best, exp11/12 okay, exp13 broken (fixed now)
 # ===========================================
 
-# Exp 9: Large model + modulation + LPIPS (best of exp3 + exp8)
-./train.sh $COMMON --channels 64 --mask-guidance modulation \
-    --run-name vimeo_exp9_large_modulation_lpips \
-    --checkpoint-dir ./checkpoints/vimeo_exp9_large_modulation_lpips
+# Exp 9: Large model + modulation + LPIPS (best of exp3 + exp8) *** BEST ***
+# ./train.sh $COMMON --channels 64 --mask-guidance modulation \
+#     --run-name vimeo_exp9_large_modulation_lpips \
+#     --checkpoint-dir ./checkpoints/vimeo_exp9_large_modulation_lpips
 
-# Exp 10: Modulation + LPIPS + mask-weight (focus loss on artifact regions)
-./train.sh $COMMON --mask-guidance modulation --mask-weight 5.0 \
-    --run-name vimeo_exp10_modulation_lpips_maskweight5 \
-    --checkpoint-dir ./checkpoints/vimeo_exp10_modulation_lpips_maskweight5
+# Exp 10: Modulation + LPIPS + mask-weight 3.0 (moderate focus on artifacts)
+# ./train.sh $COMMON --mask-guidance modulation --mask-weight 3.0 \
+#     --run-name vimeo_exp10_modulation_maskweight3 \
+#     --checkpoint-dir ./checkpoints/vimeo_exp10_modulation_maskweight3
 
-# Exp 11: Large + modulation + LPIPS + mask-weight (all features combined)
-./train.sh $COMMON --channels 64 --mask-guidance modulation --mask-weight 5.0 \
-    --run-name vimeo_exp11_large_modulation_maskweight5 \
-    --checkpoint-dir ./checkpoints/vimeo_exp11_large_modulation_maskweight5
+# ===========================================
+# Phase 5: New mask guidance variants
+# Test skip_gate, attn_gate, and ExplicitCompositeNet
+# DONE - Results: exp11/12 not better than exp9, exp13 had mask collapse bug
+# ===========================================
+
+# Exp 11: skip_gate - suppress encoder features in artifact regions
+# ./train.sh $COMMON --mask-guidance skip_gate \
+#     --run-name vimeo_exp11_skipgate \
+#     --checkpoint-dir ./checkpoints/vimeo_exp11_skipgate
+
+# Exp 12: attn_gate - boost temporal attention to artifact regions
+# ./train.sh $COMMON --mask-guidance attn_gate \
+#     --run-name vimeo_exp12_attngate \
+#     --checkpoint-dir ./checkpoints/vimeo_exp12_attngate
+
+# Exp 13: ExplicitCompositeNet - had mask collapse bug, fixed in exp14
+# ./train.sh $COMMON --model composite \
+#     --run-name vimeo_exp13_composite \
+#     --checkpoint-dir ./checkpoints/vimeo_exp13_composite
+
+# ===========================================
+# Phase 6: Verify fixes and extended training
+# ===========================================
+
+# Exp 14: Re-run composite with fix (auxiliary inpaint loss + auto mask_weight=5.0)
+# Result: mask prediction still bad (small model, 2.3M params vs exp9's 8.9M)
+# ./train.sh $COMMON --model composite \
+#     --run-name vimeo_exp14_composite_fixed \
+#     --checkpoint-dir ./checkpoints/vimeo_exp14_composite_fixed
+
+# Exp 15: Composite with large model (same size as exp9) + detached mask fix
+# Fix: mask_head learns only from mask_loss, recon_loss only trains inpaint_head
+./train.sh $COMMON --model composite --channels 64 \
+    --run-name vimeo_exp15_composite_large \
+    --checkpoint-dir ./checkpoints/vimeo_exp15_composite_large

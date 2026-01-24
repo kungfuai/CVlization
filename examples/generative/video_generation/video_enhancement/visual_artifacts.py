@@ -55,14 +55,58 @@ class ArtifactGenerator:
         "color_banding", "blur"
     }
 
-    # Common overlay texts (generic, no branded names)
-    STOCK_TEXTS = [
-        "Sample", "Preview", "Draft", "Demo",
-        "Awesome Images", "Cool Stock", "Great Photos",
-        "Picture Pro", "Media Hub", "Visual Plus",
-        "Image World", "Photo Zone", "Video Vault",
-        "www.example.com", "@stockuser", "© 2024",
+    # Training texts (generic watermarks, stock photo style)
+    TRAIN_TEXTS = [
+        # Watermark words
+        "Sample", "Preview", "Draft", "Proof", "Review",
+        "Watermark", "Copyright", "Protected", "Licensed",
+        # Stock photo style
+        "Awesome Images", "Cool Stock", "Picture Pro", "Media Hub",
+        "Photo Plus", "Stock Central", "Image Bank", "Pixel Perfect",
+        "Visual Arts", "Creative Stock", "Pro Photos", "Elite Images",
+        # Websites
+        "www.example.com", "www.stockphoto.net", "images.sample.org",
+        "photos.demo.com", "stock.preview.io", "media.example.net",
+        # Social handles
+        "@stockphotos", "@imagepro", "@photohub", "@visualarts",
+        "@creativemedia", "@picturepro", "@stockimages", "@photobank",
+        # Copyright
+        "© 2024", "© 2023", "© Sample Co", "© Image Ltd",
+        "All Rights Reserved", "Do Not Copy", "For Review Only",
+        # ID/codes
+        "ID: 12345", "REF: ABC123", "CODE: XYZ789", "#STOCK2024",
+        # Misc
+        "NOT FOR RESALE", "EVALUATION COPY", "COMP IMAGE",
+        "FOR POSITION ONLY", "FPO", "LAYOUT ONLY",
     ]
+
+    # Validation texts (different style to test generalization)
+    VAL_TEXTS = [
+        # Different watermark words
+        "Demo", "Test", "Temporary", "Pending", "Unregistered",
+        "Trial", "Beta", "Mockup", "Placeholder", "Concept",
+        # Different stock style
+        "Great Photos", "Visual Plus", "Image World", "Photo Zone",
+        "Video Vault", "Snap Gallery", "Frame Studio", "Lens Library",
+        "Shot Archive", "Clip House", "Media Mart", "Picture Palace",
+        # Different websites
+        "www.testsite.com", "demo.photos.org", "trial.images.net",
+        "beta.media.io", "sample.gallery.com", "preview.pics.org",
+        # Different handles
+        "@testphotos", "@demoimages", "@trialpics", "@betamedia",
+        "@sampleshots", "@previewpix", "@mockupimg", "@placeholderpic",
+        # Different copyright
+        "© 2022", "© 2021", "© Demo Inc", "© Test Corp",
+        "Rights Reserved", "Confidential", "Internal Use",
+        # Different IDs
+        "ID: 99999", "REF: TEST01", "CODE: DEMO42", "#TRIAL2024",
+        # Different misc
+        "NOT FINAL", "WORK IN PROGRESS", "DRAFT VERSION",
+        "PREVIEW MODE", "SAMPLE ONLY", "TEMP FILE",
+    ]
+
+    # Combined for backward compatibility
+    STOCK_TEXTS = TRAIN_TEXTS
 
     def __init__(
         self,
@@ -74,6 +118,8 @@ class ArtifactGenerator:
         jpeg_quality_range: Tuple[int, int] = (10, 50),
         # Noise settings
         noise_std_range: Tuple[float, float] = (0.02, 0.15),
+        # Mode for train/val text split
+        mode: str = "train",
     ):
         """
         Args:
@@ -83,12 +129,20 @@ class ArtifactGenerator:
             max_opacity: Maximum opacity for overlay artifacts
             jpeg_quality_range: (min, max) JPEG quality for compression artifacts
             noise_std_range: (min, max) std for noise artifacts
+            mode: "train" or "val" - uses different text sets for generalization testing
         """
         self.frame_size = frame_size  # (H, W)
         self.min_opacity = min_opacity
         self.max_opacity = max_opacity
         self.jpeg_quality_range = jpeg_quality_range
         self.noise_std_range = noise_std_range
+        self.mode = mode
+
+        # Select text set based on mode
+        if mode == "val":
+            self.texts = self.VAL_TEXTS
+        else:
+            self.texts = self.TRAIN_TEXTS
 
         # Default to overlay artifacts only (backward compatible)
         if enabled_artifacts is None:
@@ -269,7 +323,7 @@ class ArtifactGenerator:
         elif shape == "ellipse":
             draw.ellipse([x, y, x + logo_size, y + logo_size], fill=int(255 * opacity))
         else:
-            text = random.choice(self.STOCK_TEXTS[:6])
+            text = random.choice(self.texts[:6])
             font = random.choice(self.fonts)
             draw.text((x, y), text, fill=int(255 * opacity), font=font)
 
@@ -289,7 +343,7 @@ class ArtifactGenerator:
         img = Image.new('L', (W, H), 0)
         draw = ImageDraw.Draw(img)
 
-        text = random.choice(self.STOCK_TEXTS)
+        text = random.choice(self.texts)
         font = random.choice(self.fonts)
 
         x = random.randint(0, max(1, W // 2))
@@ -310,7 +364,7 @@ class ArtifactGenerator:
         img = Image.new('L', (W, H), 0)
         draw = ImageDraw.Draw(img)
 
-        text = random.choice(self.STOCK_TEXTS)
+        text = random.choice(self.texts)
         font = random.choice(self.fonts)
 
         spacing_x = random.randint(80, 150)
@@ -410,7 +464,7 @@ class ArtifactGenerator:
         img = Image.new('L', (diag, diag), 0)
         draw = ImageDraw.Draw(img)
 
-        text = random.choice(self.STOCK_TEXTS)
+        text = random.choice(self.texts)
         font = random.choice(self.fonts)
 
         draw.text((diag // 4, diag // 2), text, fill=int(255 * opacity), font=font)

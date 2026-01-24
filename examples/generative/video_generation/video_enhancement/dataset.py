@@ -97,6 +97,7 @@ class VideoFrameDataset(Dataset):
             min_opacity=min_opacity,
             max_opacity=max_opacity,
             enabled_artifacts=enabled_artifacts,
+            mode=mode,
         )
 
         # Find all data sources
@@ -326,6 +327,7 @@ class DummyDataset(Dataset):
         frame_size: Tuple[int, int] = (256, 256),
         num_frames: int = 5,
         enabled_artifacts: Optional[set] = None,
+        mode: str = "train",
     ):
         self.num_samples = num_samples
         self.frame_size = frame_size
@@ -333,6 +335,7 @@ class DummyDataset(Dataset):
         self.artifact_gen = ArtifactGenerator(
             frame_size=frame_size,
             enabled_artifacts=enabled_artifacts,
+            mode=mode,
         )
 
     def __len__(self) -> int:
@@ -410,12 +413,14 @@ def get_dataloaders(
             frame_size=frame_size,
             num_frames=num_frames,
             enabled_artifacts=enabled_artifacts,
+            mode="train",
         )
         val_dataset = DummyDataset(
             num_samples=100,
             frame_size=frame_size,
             num_frames=num_frames,
             enabled_artifacts=enabled_artifacts,
+            mode="val",
         )
     else:
         train_dataset = VideoFrameDataset(
@@ -469,6 +474,7 @@ class VimeoArtifactDataset(Dataset):
         min_opacity: float = 0.2,
         max_opacity: float = 0.8,
         preserve_aspect_ratio: bool = False,
+        mode: str = "train",
     ):
         """
         Args:
@@ -479,6 +485,7 @@ class VimeoArtifactDataset(Dataset):
             min_opacity: Min opacity for overlay artifacts
             max_opacity: Max opacity for overlay artifacts
             preserve_aspect_ratio: If True, resize + center crop instead of stretching
+            mode: "train" or "val" - uses different text sets for generalization testing
         """
         self.vimeo_dataset = vimeo_dataset
         self.frame_size = frame_size
@@ -490,6 +497,7 @@ class VimeoArtifactDataset(Dataset):
             min_opacity=min_opacity,
             max_opacity=max_opacity,
             enabled_artifacts=enabled_artifacts,
+            mode=mode,
         )
 
         # Build resize transform
@@ -584,6 +592,7 @@ def get_vimeo_dataloaders(
         num_frames=num_frames,
         enabled_artifacts=enabled_artifacts,
         preserve_aspect_ratio=preserve_aspect_ratio,
+        mode="train",
     )
 
     val_dataset = VimeoArtifactDataset(
@@ -592,6 +601,7 @@ def get_vimeo_dataloaders(
         num_frames=num_frames,
         enabled_artifacts=enabled_artifacts,
         preserve_aspect_ratio=preserve_aspect_ratio,
+        mode="val",
     )
 
     train_loader = DataLoader(
