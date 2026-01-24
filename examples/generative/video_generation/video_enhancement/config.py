@@ -28,7 +28,7 @@ class ModelConfig:
     # Learning mode
     residual_learning: bool = False  # If True, predict residual and add to input
     predict_mask: bool = False  # If True, also output artifact mask
-    mask_guidance: str = "none"  # "none" or "modulation"
+    mask_guidance: str = "none"  # "none", "modulation", "concat", "residual", "skip_gate", "attn_gate"
 
 
 @dataclass
@@ -40,6 +40,7 @@ class DataConfig:
     # Frame settings
     frame_size: Tuple[int, int] = (256, 256)  # H, W - start small for prototyping
     num_frames: int = 5
+    preserve_aspect_ratio: bool = False  # If True, resize + center crop instead of stretch
 
     # Artifact generation - types to enable during training
     # Available overlay types: corner_logo, text_overlay, tiled_pattern,
@@ -50,8 +51,8 @@ class DataConfig:
     enabled_artifacts: Optional[List[str]] = None  # None = overlay types only (default)
 
     # Augmentation (for overlay artifacts)
-    min_opacity: float = 0.2
-    max_opacity: float = 0.8
+    min_opacity: float = 0.5
+    max_opacity: float = 1.0
     
 
 @dataclass
