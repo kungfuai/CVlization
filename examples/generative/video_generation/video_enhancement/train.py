@@ -243,6 +243,7 @@ def train_step(
     config: Config,
     scaler: Optional[GradScaler] = None,
     mask_weight: float = 1.0,
+    is_composite: bool = False,
 ) -> Dict[str, float]:
     """Execute a single training step"""
     model.train()
@@ -259,12 +260,17 @@ def train_step(
 
     with autocast(enabled=use_amp):
         # Predict clean frames from degraded
-        pred = model(degraded)
+        # For composite model, also get inpainted output for auxiliary loss
+        if is_composite:
+            pred, pred_mask, inpainted = model(degraded, return_inpainted=True)
+        else:
+            pred = model(degraded)
+            inpainted = None
 
-        # Handle mask output if model predicts it
-        pred_mask = None
-        if isinstance(pred, tuple):
-            pred, pred_mask = pred
+            # Handle mask output if model predicts it
+            pred_mask = None
+            if isinstance(pred, tuple):
+                pred, pred_mask = pred
 
         # Compute losses (with optional mask weighting)
         losses = loss_fn(pred, clean, is_video=True, mask=gt_mask, mask_weight=mask_weight)
@@ -274,6 +280,16 @@ def train_step(
             mask_loss = mask_loss_fn(pred_mask, gt_mask)
             losses["mask"] = config.training.w_mask * mask_loss
             losses["total"] = losses["total"] + losses["mask"]
+
+        # Auxiliary inpaint loss for composite model
+        # This supervises inpainted directly in mask regions to prevent degenerate solutions
+        if inpainted is not None:
+            # Loss: inpainted should match clean in artifact (mask) regions
+            # Weight by mask so we only care about artifact regions
+            inpaint_diff = (inpainted - clean).abs() * gt_mask
+            inpaint_loss = inpaint_diff.sum() / (gt_mask.sum() + 1e-6)
+            losses["inpaint"] = 0.5 * inpaint_loss  # Weight for auxiliary loss
+            losses["total"] = losses["total"] + losses["inpaint"]
 
     # Backward pass
     if use_amp:
@@ -566,7 +582,8 @@ def train(config: Config, args):
         batch = next(train_iter)
 
         # Train step
-        losses = train_step(model, batch, optimizer, loss_fn, device, config, scaler, args.mask_weight)
+        is_composite = args.model == "composite"
+        losses = train_step(model, batch, optimizer, loss_fn, device, config, scaler, args.mask_weight, is_composite)
 
         # Step-based scheduler (warmup+cosine)
         if scheduler and isinstance(scheduler, WarmupCosineScheduler):
@@ -805,6 +822,11 @@ def main():
         config.model.encoder_channels = [base * (2 ** i) for i in range(args.depth)]
 
     # Print config
+    # Composite model needs higher mask_weight by default to prevent degenerate solutions
+    if args.model == "composite" and args.mask_weight == 1.0:
+        args.mask_weight = 5.0
+        print("Note: Using mask_weight=5.0 for composite model (required for stable training)")
+
     print("\n" + "=" * 60)
     print("Video Artifact Removal Training (Step-based)")
     print("=" * 60)

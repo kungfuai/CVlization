@@ -586,13 +586,15 @@ class ExplicitCompositeNet(nn.Module):
             nn.Sigmoid(),
         )
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, return_inpainted: bool = False):
         """
         Args:
             x: [B, T, C, H, W] video frames or [B, C, H, W] single frame
+            return_inpainted: If True, also return the raw inpainted image (for auxiliary loss)
 
         Returns:
-            Tuple of (output, mask)
+            If return_inpainted=False: Tuple of (output, mask)
+            If return_inpainted=True: Tuple of (output, mask, inpainted)
         """
         # Handle different input formats
         if x.dim() == 5:
@@ -631,13 +633,19 @@ class ExplicitCompositeNet(nn.Module):
         mask = self.mask_head(feat)
 
         # Explicit composite: preserve clean regions exactly
-        out = x_input * (1 - mask) + inpainted * mask
+        # Detach mask so recon_loss only trains inpaint_head, not mask_head
+        # mask_head learns only from mask_loss (clean separation of concerns)
+        mask_detached = mask.detach()
+        out = x_input * (1 - mask_detached) + inpainted * mask_detached
 
         # Reshape for video output
         if is_video:
             out = out.view(B, T, self.out_channels, H, W)
             mask = mask.view(B, T, 1, H, W)
+            inpainted = inpainted.view(B, T, self.out_channels, H, W)
 
+        if return_inpainted:
+            return out, mask, inpainted
         return out, mask
 
     def count_parameters(self) -> int:
