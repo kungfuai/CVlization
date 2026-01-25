@@ -67,12 +67,13 @@ class VideoFrameDataset(Dataset):
         data_path: str,
         frame_size: Tuple[int, int] = (256, 256),
         num_frames: int = 5,
-        min_opacity: float = 0.2,
-        max_opacity: float = 0.8,
+        min_opacity: float = 0.5,
+        max_opacity: float = 1.5,  # Values > 1.0 clamped to 1.0, biases toward opaque
         mode: str = "train",  # "train", "val", "test"
         max_samples: Optional[int] = None,
         enabled_artifacts: Optional[set] = None,
         preserve_aspect_ratio: bool = False,
+        size_scale: float = 1.0,
     ):
         """
         Args:
@@ -85,6 +86,7 @@ class VideoFrameDataset(Dataset):
             max_samples: Limit number of samples (for quick testing)
             enabled_artifacts: Set of artifact types to use (see ArtifactGenerator.ARTIFACT_TYPES)
             preserve_aspect_ratio: If True, resize + center crop instead of stretching
+            size_scale: Scale factor for artifact sizes (1.0 = default, 2.0 = double)
         """
         self.data_path = Path(data_path)
         self.frame_size = frame_size
@@ -98,6 +100,7 @@ class VideoFrameDataset(Dataset):
             max_opacity=max_opacity,
             enabled_artifacts=enabled_artifacts,
             mode=mode,
+            size_scale=size_scale,
         )
 
         # Find all data sources
@@ -328,6 +331,7 @@ class DummyDataset(Dataset):
         num_frames: int = 5,
         enabled_artifacts: Optional[set] = None,
         mode: str = "train",
+        size_scale: float = 1.0,
     ):
         self.num_samples = num_samples
         self.frame_size = frame_size
@@ -336,6 +340,7 @@ class DummyDataset(Dataset):
             frame_size=frame_size,
             enabled_artifacts=enabled_artifacts,
             mode=mode,
+            size_scale=size_scale,
         )
 
     def __len__(self) -> int:
@@ -391,6 +396,7 @@ def get_dataloaders(
     num_workers: int = 4,
     use_dummy: bool = False,
     enabled_artifacts: Optional[set] = None,
+    size_scale: float = 1.0,
 ) -> Tuple[DataLoader, DataLoader]:
     """
     Create train and validation dataloaders.
@@ -403,6 +409,7 @@ def get_dataloaders(
         num_workers: DataLoader workers
         use_dummy: Use dummy data for testing
         enabled_artifacts: Set of artifact types to use (None = overlay types only)
+        size_scale: Scale factor for artifact sizes (1.0 = default, 2.0 = double)
 
     Returns:
         train_loader, val_loader
@@ -414,6 +421,7 @@ def get_dataloaders(
             num_frames=num_frames,
             enabled_artifacts=enabled_artifacts,
             mode="train",
+            size_scale=size_scale,
         )
         val_dataset = DummyDataset(
             num_samples=100,
@@ -421,6 +429,7 @@ def get_dataloaders(
             num_frames=num_frames,
             enabled_artifacts=enabled_artifacts,
             mode="val",
+            size_scale=size_scale,
         )
     else:
         train_dataset = VideoFrameDataset(
@@ -471,10 +480,11 @@ class VimeoArtifactDataset(Dataset):
         frame_size: Tuple[int, int] = (256, 256),
         num_frames: int = 5,
         enabled_artifacts: Optional[set] = None,
-        min_opacity: float = 0.2,
-        max_opacity: float = 0.8,
+        min_opacity: float = 0.5,
+        max_opacity: float = 1.5,  # Values > 1.0 clamped to 1.0, biases toward opaque
         preserve_aspect_ratio: bool = False,
         mode: str = "train",
+        size_scale: float = 1.0,
     ):
         """
         Args:
@@ -486,6 +496,7 @@ class VimeoArtifactDataset(Dataset):
             max_opacity: Max opacity for overlay artifacts
             preserve_aspect_ratio: If True, resize + center crop instead of stretching
             mode: "train" or "val" - uses different text sets for generalization testing
+            size_scale: Scale factor for artifact sizes (1.0 = default, 2.0 = double)
         """
         self.vimeo_dataset = vimeo_dataset
         self.frame_size = frame_size
@@ -498,6 +509,7 @@ class VimeoArtifactDataset(Dataset):
             max_opacity=max_opacity,
             enabled_artifacts=enabled_artifacts,
             mode=mode,
+            size_scale=size_scale,
         )
 
         # Build resize transform
@@ -553,6 +565,7 @@ def get_vimeo_dataloaders(
     enabled_artifacts: Optional[set] = None,
     data_dir: Optional[str] = None,
     preserve_aspect_ratio: bool = False,
+    size_scale: float = 1.0,
 ) -> Tuple[DataLoader, DataLoader]:
     """
     Create train and validation dataloaders using Vimeo Septuplet.
@@ -565,6 +578,7 @@ def get_vimeo_dataloaders(
         enabled_artifacts: Set of artifact types to use
         data_dir: Override data directory
         preserve_aspect_ratio: If True, resize + center crop instead of stretching
+        size_scale: Scale factor for artifact sizes (1.0 = default, 2.0 = double)
 
     Returns:
         train_loader, val_loader
@@ -593,6 +607,7 @@ def get_vimeo_dataloaders(
         enabled_artifacts=enabled_artifacts,
         preserve_aspect_ratio=preserve_aspect_ratio,
         mode="train",
+        size_scale=size_scale,
     )
 
     val_dataset = VimeoArtifactDataset(
@@ -602,6 +617,7 @@ def get_vimeo_dataloaders(
         enabled_artifacts=enabled_artifacts,
         preserve_aspect_ratio=preserve_aspect_ratio,
         mode="val",
+        size_scale=size_scale,
     )
 
     train_loader = DataLoader(

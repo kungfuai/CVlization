@@ -586,15 +586,18 @@ class ExplicitCompositeNet(nn.Module):
             nn.Sigmoid(),
         )
 
-    def forward(self, x: torch.Tensor, return_inpainted: bool = False):
+    def forward(self, x: torch.Tensor, return_inpainted: bool = False, inject_mask: torch.Tensor = None):
         """
         Args:
             x: [B, T, C, H, W] video frames or [B, C, H, W] single frame
             return_inpainted: If True, also return the raw inpainted image (for auxiliary loss)
+            inject_mask: Optional [B, T, 1, H, W] or [B, 1, H, W] mask to use instead of predicted.
+                         Useful for ablation studies, interactive editing, or two-stage pipelines.
 
         Returns:
-            If return_inpainted=False: Tuple of (output, mask)
-            If return_inpainted=True: Tuple of (output, mask, inpainted)
+            If return_inpainted=False: Tuple of (output, pred_mask)
+            If return_inpainted=True: Tuple of (output, pred_mask, inpainted)
+            Note: Always returns pred_mask for loss computation, even when inject_mask is used.
         """
         # Handle different input formats
         if x.dim() == 5:
@@ -630,23 +633,30 @@ class ExplicitCompositeNet(nn.Module):
 
         # Predict inpainted and mask separately
         inpainted = self.inpaint_head(feat)
-        mask = self.mask_head(feat)
+        pred_mask = self.mask_head(feat)
+
+        # Use injected mask if provided, otherwise use predicted mask
+        if inject_mask is not None:
+            # Reshape inject_mask to [B*T, 1, H, W] if needed
+            if inject_mask.dim() == 5:
+                inject_mask = inject_mask.view(B * T, 1, H, W)
+            composite_mask = inject_mask
+        else:
+            # Detach predicted mask so recon_loss only trains inpaint_head
+            composite_mask = pred_mask.detach()
 
         # Explicit composite: preserve clean regions exactly
-        # Detach mask so recon_loss only trains inpaint_head, not mask_head
-        # mask_head learns only from mask_loss (clean separation of concerns)
-        mask_detached = mask.detach()
-        out = x_input * (1 - mask_detached) + inpainted * mask_detached
+        out = x_input * (1 - composite_mask) + inpainted * composite_mask
 
         # Reshape for video output
         if is_video:
             out = out.view(B, T, self.out_channels, H, W)
-            mask = mask.view(B, T, 1, H, W)
+            pred_mask = pred_mask.view(B, T, 1, H, W)
             inpainted = inpainted.view(B, T, self.out_channels, H, W)
 
         if return_inpainted:
-            return out, mask, inpainted
-        return out, mask
+            return out, pred_mask, inpainted
+        return out, pred_mask
 
     def count_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)

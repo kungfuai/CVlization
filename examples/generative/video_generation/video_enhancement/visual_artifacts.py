@@ -120,6 +120,8 @@ class ArtifactGenerator:
         noise_std_range: Tuple[float, float] = (0.02, 0.15),
         # Mode for train/val text split
         mode: str = "train",
+        # Size scale for logos/text (1.0 = default, 2.0 = double size)
+        size_scale: float = 1.0,
     ):
         """
         Args:
@@ -130,6 +132,8 @@ class ArtifactGenerator:
             jpeg_quality_range: (min, max) JPEG quality for compression artifacts
             noise_std_range: (min, max) std for noise artifacts
             mode: "train" or "val" - uses different text sets for generalization testing
+            size_scale: Scale factor for artifact sizes (1.0 = default 12-25% of width,
+                        2.0 = double size, etc.). Affects logos, text, and patterns.
         """
         self.frame_size = frame_size  # (H, W)
         self.min_opacity = min_opacity
@@ -137,6 +141,7 @@ class ArtifactGenerator:
         self.jpeg_quality_range = jpeg_quality_range
         self.noise_std_range = noise_std_range
         self.mode = mode
+        self.size_scale = size_scale
 
         # Select text set based on mode
         if mode == "val":
@@ -161,29 +166,43 @@ class ArtifactGenerator:
         # Try to load fonts
         self.fonts = self._load_fonts()
 
-    def _load_fonts(self) -> List:
-        """Load available fonts"""
-        fonts = []
+    def _load_fonts(self) -> Dict[str, List]:
+        """Load available fonts at multiple sizes for per-example randomization.
+
+        Returns dict with 'small', 'medium', 'large' keys, each containing a list of fonts.
+        """
         font_paths = [
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
             "/System/Library/Fonts/Helvetica.ttc",  # macOS
-            None  # Default font fallback
         ]
 
-        for path in font_paths:
-            try:
-                if path:
-                    fonts.append(ImageFont.truetype(path, 24))
-                else:
-                    fonts.append(ImageFont.load_default())
-            except:
-                continue
+        # Base sizes scaled by size_scale
+        sizes = {
+            "small": int(16 * self.size_scale),
+            "medium": int(24 * self.size_scale),
+            "large": int(36 * self.size_scale),
+        }
 
-        if not fonts:
-            fonts.append(ImageFont.load_default())
+        fonts = {k: [] for k in sizes}
+
+        for size_name, font_size in sizes.items():
+            for path in font_paths:
+                try:
+                    fonts[size_name].append(ImageFont.truetype(path, font_size))
+                except:
+                    continue
+
+            # Fallback to default if no fonts loaded
+            if not fonts[size_name]:
+                fonts[size_name].append(ImageFont.load_default())
 
         return fonts
+
+    def _random_font(self):
+        """Get a random font with random size."""
+        size = random.choice(["small", "medium", "large"])
+        return random.choice(self.fonts[size])
 
     def generate(
         self,
@@ -292,7 +311,10 @@ class ArtifactGenerator:
         return degraded, metadata
 
     def _random_opacity(self) -> float:
-        return random.uniform(self.min_opacity, self.max_opacity)
+        # Allow max_opacity > 1.0 to bias toward fully opaque
+        # Values > 1.0 are clamped to 1.0
+        opacity = random.uniform(self.min_opacity, self.max_opacity)
+        return min(opacity, 1.0)
 
     # ==================== Overlay Artifacts ====================
 
@@ -301,7 +323,10 @@ class ArtifactGenerator:
         H, W = self.frame_size
         opacity = self._random_opacity()
 
-        logo_size = random.randint(W // 8, W // 4)
+        # Base size: W//8 to W//4, scaled by size_scale
+        base_min, base_max = W // 8, W // 4
+        logo_size = int(random.randint(base_min, base_max) * self.size_scale)
+        logo_size = min(logo_size, min(H, W) - 20)  # Don't exceed frame
         corner = random.choice(["tl", "tr", "bl", "br"])
 
         margin = random.randint(5, 20)
@@ -324,7 +349,7 @@ class ArtifactGenerator:
             draw.ellipse([x, y, x + logo_size, y + logo_size], fill=int(255 * opacity))
         else:
             text = random.choice(self.texts[:6])
-            font = random.choice(self.fonts)
+            font = self._random_font()
             draw.text((x, y), text, fill=int(255 * opacity), font=font)
 
         img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
@@ -344,7 +369,7 @@ class ArtifactGenerator:
         draw = ImageDraw.Draw(img)
 
         text = random.choice(self.texts)
-        font = random.choice(self.fonts)
+        font = self._random_font()
 
         x = random.randint(0, max(1, W // 2))
         y = random.randint(0, max(1, H // 2))
@@ -365,7 +390,7 @@ class ArtifactGenerator:
         draw = ImageDraw.Draw(img)
 
         text = random.choice(self.texts)
-        font = random.choice(self.fonts)
+        font = self._random_font()
 
         spacing_x = random.randint(80, 150)
         spacing_y = random.randint(60, 100)
@@ -390,7 +415,10 @@ class ArtifactGenerator:
         H, W = self.frame_size
         opacity = self._random_opacity()
 
-        logo_size = random.randint(W // 8, W // 5)
+        # Base size: W//8 to W//5, scaled by size_scale
+        base_min, base_max = W // 8, W // 5
+        logo_size = int(random.randint(base_min, base_max) * self.size_scale)
+        logo_size = min(logo_size, min(H, W) // 2)  # Don't exceed half frame
         pattern = random.choice(["linear", "bounce", "circular"])
 
         start_x = random.randint(0, W - logo_size)
@@ -438,7 +466,7 @@ class ArtifactGenerator:
         draw = ImageDraw.Draw(img)
 
         text = random.choice(["CH", "TV", "HD", "4K", "LIVE", "REC"])
-        font = random.choice(self.fonts)
+        font = self._random_font()
 
         corner = random.choice(["tr", "br"])
         margin = 10
@@ -465,7 +493,7 @@ class ArtifactGenerator:
         draw = ImageDraw.Draw(img)
 
         text = random.choice(self.texts)
-        font = random.choice(self.fonts)
+        font = self._random_font()
 
         draw.text((diag // 4, diag // 2), text, fill=int(255 * opacity), font=font)
 
