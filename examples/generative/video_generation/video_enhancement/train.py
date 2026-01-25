@@ -24,6 +24,8 @@ import torchvision.utils as vutils
 
 from config import Config, get_config
 from model import TemporalNAFUNet, NAFUNetLite, ExplicitCompositeNet
+from model_lama import LamaWithMask
+from model_elir import ElirWithMask
 from losses import ArtifactRemovalLoss, PSNRMetric, SSIMMetric
 from dataset import get_dataloaders, get_vimeo_dataloaders
 
@@ -192,7 +194,7 @@ def setup_device(config: Config) -> torch.device:
     return device
 
 
-def setup_model(config: Config, device: torch.device, model_type: str = "temporal_nafunet") -> nn.Module:
+def setup_model(config: Config, device: torch.device, model_type: str = "temporal_nafunet", pretrained_path: str = None) -> nn.Module:
     """Create and setup model"""
     if model_type == "temporal_nafunet":
         model = TemporalNAFUNet(
@@ -217,6 +219,45 @@ def setup_model(config: Config, device: torch.device, model_type: str = "tempora
             attention_heads=config.model.attention_heads,
         )
         model_name = "ExplicitCompositeNet"
+    elif model_type == "lama":
+        # LaMa uses base_channels instead of encoder_channels
+        base_channels = config.model.encoder_channels[0] if config.model.encoder_channels else 64
+        model = LamaWithMask(
+            in_channels=config.model.in_channels,
+            out_channels=config.model.out_channels,
+            base_channels=base_channels,
+            num_downs=3,
+            num_ffc_blocks=9,
+            use_temporal_attention=config.model.use_temporal_attention,
+            num_frames=config.model.num_frames,
+            attention_heads=config.model.attention_heads,
+        )
+        model_name = "LamaWithMask"
+
+        # Load pretrained weights if provided
+        if pretrained_path:
+            print(f"Loading pretrained LaMa weights from: {pretrained_path}")
+            model.load_pretrained(pretrained_path, strict=False)
+    elif model_type == "elir":
+        # ELIR uses latent channels and flow steps
+        base_channels = config.model.encoder_channels[0] if config.model.encoder_channels else 64
+        model = ElirWithMask(
+            in_channels=config.model.in_channels,
+            out_channels=config.model.out_channels,
+            latent_channels=16,  # Standard for TAESD
+            hidden_channels=base_channels,
+            flow_hidden_channels=base_channels * 2,
+            k_steps=3,  # 3 NFE like original ELIR
+            use_temporal_attention=config.model.use_temporal_attention,
+            num_frames=config.model.num_frames,
+            attention_heads=config.model.attention_heads,
+        )
+        model_name = "ElirWithMask"
+
+        # Load pretrained ELIR weights if provided
+        if pretrained_path:
+            print(f"Loading pretrained ELIR weights from: {pretrained_path}")
+            model.load_elir_weights(pretrained_path, strict=False)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -244,6 +285,7 @@ def train_step(
     scaler: Optional[GradScaler] = None,
     mask_weight: float = 1.0,
     is_composite: bool = False,
+    is_elir: bool = False,
 ) -> Dict[str, float]:
     """Execute a single training step"""
     model.train()
@@ -260,12 +302,20 @@ def train_step(
 
     with autocast(enabled=use_amp):
         # Predict clean frames from degraded
-        # For composite model, also get inpainted output for auxiliary loss
-        if is_composite:
+        # ELIR has special forward that takes clean for flow matching loss
+        if is_elir:
+            result = model(degraded, clean=clean)
+            pred = result['output']
+            pred_mask = result['pred_mask']
+            inpainted = result['restored']
+            flow_loss = result['flow_loss']
+        elif is_composite:
             pred, pred_mask, inpainted = model(degraded, return_inpainted=True)
+            flow_loss = None
         else:
             pred = model(degraded)
             inpainted = None
+            flow_loss = None
 
             # Handle mask output if model predicts it
             pred_mask = None
@@ -281,7 +331,12 @@ def train_step(
             losses["mask"] = config.training.w_mask * mask_loss
             losses["total"] = losses["total"] + losses["mask"]
 
-        # Auxiliary inpaint loss for composite model
+        # Flow matching loss for ELIR
+        if flow_loss is not None:
+            losses["flow"] = flow_loss  # Already weighted appropriately
+            losses["total"] = losses["total"] + losses["flow"]
+
+        # Auxiliary inpaint loss for composite/ELIR model
         # This supervises inpainted directly in mask regions to prevent degenerate solutions
         if inpainted is not None:
             # Loss: inpainted should match clean in artifact (mask) regions
@@ -446,7 +501,7 @@ def train(config: Config, args):
     
     # Model
     print("\nSetting up model...")
-    model = setup_model(config, device, args.model)
+    model = setup_model(config, device, args.model, args.pretrained)
     
     # Data
     print("\nSetting up data...")
@@ -466,6 +521,7 @@ def train(config: Config, args):
             enabled_artifacts=enabled_artifacts,
             data_dir=args.data,
             preserve_aspect_ratio=config.data.preserve_aspect_ratio,
+            size_scale=args.size_scale,
         )
     else:
         train_loader, val_loader = get_dataloaders(
@@ -476,6 +532,7 @@ def train(config: Config, args):
             num_workers=args.workers,
             use_dummy=args.dummy,
             enabled_artifacts=enabled_artifacts,
+            size_scale=args.size_scale,
         )
     print(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
     
@@ -529,7 +586,12 @@ def train(config: Config, args):
         )
 
     # Save config to both log_dir and checkpoint_dir
-    model_class = "ExplicitCompositeNet" if args.model == "composite" else "TemporalNAFUNet"
+    model_class = {
+        "temporal_nafunet": "TemporalNAFUNet",
+        "composite": "ExplicitCompositeNet",
+        "lama": "LamaWithMask",
+        "elir": "ElirWithMask",
+    }.get(args.model, args.model)
     config_dict = {
         "run_name": run_name,
         "experiment_name": config.experiment_name,
@@ -582,8 +644,9 @@ def train(config: Config, args):
         batch = next(train_iter)
 
         # Train step
-        is_composite = args.model == "composite"
-        losses = train_step(model, batch, optimizer, loss_fn, device, config, scaler, args.mask_weight, is_composite)
+        is_composite = args.model in ("composite", "lama")
+        is_elir = args.model == "elir"
+        losses = train_step(model, batch, optimizer, loss_fn, device, config, scaler, args.mask_weight, is_composite, is_elir)
 
         # Step-based scheduler (warmup+cosine)
         if scheduler and isinstance(scheduler, WarmupCosineScheduler):
@@ -692,6 +755,9 @@ def main():
                         help="Number of frames per sample (default: 5, use 7 for Vimeo Septuplet)")
     parser.add_argument("--artifacts", type=str, default=None,
                         help="Comma-separated artifact types to enable (e.g., 'corner_logo,gaussian_noise')")
+    parser.add_argument("--size-scale", type=float, default=1.0,
+                        help="Scale factor for artifact sizes (default: 1.0). "
+                             "Use 0.5 for smaller artifacts, 2.0 for larger.")
     parser.add_argument("--preserve-aspect", action="store_true",
                         help="Preserve aspect ratio (resize + center crop instead of stretching)")
 
@@ -728,10 +794,14 @@ def main():
                              "skip_gate (suppress encoder skip features in mask regions), "
                              "attn_gate (boost attention to artifact regions)")
     parser.add_argument("--model", type=str, default="temporal_nafunet",
-                        choices=["temporal_nafunet", "composite"],
+                        choices=["temporal_nafunet", "composite", "lama", "elir"],
                         help="Model architecture: "
                              "temporal_nafunet (default, with optional mask guidance), "
-                             "composite (explicit alpha blending, always predicts mask)")
+                             "composite (explicit alpha blending, always predicts mask), "
+                             "lama (LaMa with FFC blocks, temporal attention, mask prediction), "
+                             "elir (ELIR flow matching in latent space, 3-step inference)")
+    parser.add_argument("--pretrained", type=str, default=None,
+                        help="Path to pretrained weights (for LaMa or ELIR model)")
     parser.add_argument("--channels", type=int, default=None,
                         help="Base channel width (default: 32). Model uses [c, 2c, 4c, 8c]")
     parser.add_argument("--depth", type=int, default=None,
@@ -822,10 +892,10 @@ def main():
         config.model.encoder_channels = [base * (2 ** i) for i in range(args.depth)]
 
     # Print config
-    # Composite model needs higher mask_weight by default to prevent degenerate solutions
-    if args.model == "composite" and args.mask_weight == 1.0:
+    # Composite/LaMa/ELIR models need higher mask_weight by default to prevent degenerate solutions
+    if args.model in ("composite", "lama", "elir") and args.mask_weight == 1.0:
         args.mask_weight = 5.0
-        print("Note: Using mask_weight=5.0 for composite model (required for stable training)")
+        print(f"Note: Using mask_weight=5.0 for {args.model} model (required for stable training)")
 
     print("\n" + "=" * 60)
     print("Video Artifact Removal Training (Step-based)")
@@ -845,10 +915,20 @@ def main():
         print(f"Residual learning: {config.model.residual_learning}")
         print(f"Predict mask: {config.model.predict_mask}")
         print(f"Mask guidance: {config.model.mask_guidance}")
-    else:
+    elif args.model == "composite":
         print(f"Architecture: explicit composite (input*(1-mask) + inpainted*mask)")
+    elif args.model == "lama":
+        print(f"Architecture: LaMa with FFC blocks + temporal attention + mask prediction")
+        if args.pretrained:
+            print(f"Pretrained weights: {args.pretrained}")
+    elif args.model == "elir":
+        print(f"Architecture: ELIR flow matching (3-step latent ODE)")
+        if args.pretrained:
+            print(f"Pretrained weights: {args.pretrained}")
     if args.mask_weight != 1.0:
         print(f"Mask weight: {args.mask_weight}x (artifact regions weighted more in loss)")
+    if args.size_scale != 1.0:
+        print(f"Artifact size scale: {args.size_scale}x")
     print(f"Enabled artifacts: {config.data.enabled_artifacts or 'overlay types (default)'}")
     print(f"Dataset: {'Vimeo Septuplet' if args.vimeo else ('dummy' if args.dummy else 'custom')}")
     

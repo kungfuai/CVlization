@@ -128,6 +128,71 @@ COMMON="--vimeo --steps $STEPS --val-every $VAL_EVERY --save-every $SAVE_EVERY -
 
 # Exp 15: Composite with large model (same size as exp9) + detached mask fix
 # Fix: mask_head learns only from mask_loss, recon_loss only trains inpaint_head
-./train.sh $COMMON --model composite --channels 64 \
-    --run-name vimeo_exp15_composite_large \
-    --checkpoint-dir ./checkpoints/vimeo_exp15_composite_large
+# Result: Better than exp14, higher mask loss than exp9
+# ./train.sh $COMMON --model composite --channels 64 \
+#     --run-name vimeo_exp15_composite_large \
+#     --checkpoint-dir ./checkpoints/vimeo_exp15_composite_large
+
+# ===========================================
+# Phase 7: Larger artifacts (size_scale=1.5) + extended training (15k steps)
+# Test if models handle larger text/logos
+# ===========================================
+
+STEPS_LONG=15000
+COMMON_LONG="--vimeo --steps $STEPS_LONG --val-every $VAL_EVERY --save-every $SAVE_EVERY --num-frames $NUM_FRAMES"
+
+# Exp 16: Best config (exp9) with larger artifacts
+# ./train.sh $COMMON_LONG --channels 64 --mask-guidance modulation --size-scale 1.5 \
+#     --run-name vimeo_exp16_large_modulation_sizescale \
+#     --checkpoint-dir ./checkpoints/vimeo_exp16_large_modulation_sizescale
+
+# Exp 17: Composite (exp15) with larger artifacts
+./train.sh $COMMON_LONG --model composite --channels 64 --size-scale 1.5 \
+    --run-name vimeo_exp17_composite_sizescale \
+    --checkpoint-dir ./checkpoints/vimeo_exp17_composite_sizescale
+
+# ===========================================
+# Phase 8: LaMa architecture (FFC blocks + temporal attention)
+# Test if global receptive field from Fourier convolutions helps
+# ===========================================
+
+# Exp 18: LaMa with default settings (64 base channels, 9 FFC blocks)
+# From scratch, no pretrained weights
+./train.sh $COMMON_LONG --model lama --channels 64 \
+    --run-name vimeo_exp18_lama \
+    --checkpoint-dir ./checkpoints/vimeo_exp18_lama
+
+# Exp 19: LaMa with pretrained weights
+# Download from: https://github.com/advimman/lama
+# ./train.sh $COMMON_LONG --model lama --channels 64 \
+#     --pretrained ./pretrained/big-lama.pt \
+#     --run-name vimeo_exp19_lama_pretrained \
+#     --checkpoint-dir ./checkpoints/vimeo_exp19_lama_pretrained
+
+# Exp 20: ELIR with pretrained weights
+# Download from: https://github.com/KAIST-VML/ELIR
+# ./train.sh $COMMON_LONG --model elir --channels 64 \
+#     --pretrained ./pretrained/elir.ckpt \
+#     --run-name vimeo_exp20_elir_pretrained \
+#     --checkpoint-dir ./checkpoints/vimeo_exp20_elir_pretrained
+
+# ===========================================
+# Phase 9: From-scratch experiments
+# ===========================================
+
+# Exp 21: ELIR from scratch (64 hidden channels, 128 flow channels)
+# Training: flow matching loss + mask loss + composite loss
+# Inference: 3-step Euler ODE in latent space
+# ./train.sh $COMMON_LONG --model elir --channels 64 \
+#     --run-name vimeo_exp21_elir \
+#     --checkpoint-dir ./checkpoints/vimeo_exp21_elir
+
+# Exp 22: LaMa with larger artifacts (size_scale=1.5)
+# ./train.sh $COMMON_LONG --model lama --channels 64 --size-scale 1.5 \
+#     --run-name vimeo_exp22_lama_sizescale \
+#     --checkpoint-dir ./checkpoints/vimeo_exp22_lama_sizescale
+
+# Exp 23: ELIR with larger artifacts (size_scale=1.5)
+# ./train.sh $COMMON_LONG --model elir --channels 64 --size-scale 1.5 \
+#     --run-name vimeo_exp23_elir_sizescale \
+#     --checkpoint-dir ./checkpoints/vimeo_exp23_elir_sizescale
