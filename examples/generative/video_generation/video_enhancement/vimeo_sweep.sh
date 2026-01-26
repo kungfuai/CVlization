@@ -147,9 +147,9 @@ COMMON_LONG="--vimeo --steps $STEPS_LONG --val-every $VAL_EVERY --save-every $SA
 #     --checkpoint-dir ./checkpoints/vimeo_exp16_large_modulation_sizescale
 
 # Exp 17: Composite (exp15) with larger artifacts
-./train.sh $COMMON_LONG --model composite --channels 64 --size-scale 1.5 \
-    --run-name vimeo_exp17_composite_sizescale \
-    --checkpoint-dir ./checkpoints/vimeo_exp17_composite_sizescale
+# ./train.sh $COMMON_LONG --model composite --channels 64 --size-scale 1.5 \
+#     --run-name vimeo_exp17_composite_sizescale \
+#     --checkpoint-dir ./checkpoints/vimeo_exp17_composite_sizescale
 
 # ===========================================
 # Phase 8: LaMa architecture (FFC blocks + temporal attention)
@@ -158,21 +158,22 @@ COMMON_LONG="--vimeo --steps $STEPS_LONG --val-every $VAL_EVERY --save-every $SA
 
 # Exp 18: LaMa with default settings (64 base channels, 9 FFC blocks)
 # From scratch, no pretrained weights
-./train.sh $COMMON_LONG --model lama --channels 64 \
-    --run-name vimeo_exp18_lama \
-    --checkpoint-dir ./checkpoints/vimeo_exp18_lama
-
-# Exp 19: LaMa with pretrained weights
-# Download from: https://github.com/advimman/lama
 # ./train.sh $COMMON_LONG --model lama --channels 64 \
-#     --pretrained ./pretrained/big-lama.pt \
+#     --run-name vimeo_exp18_lama \
+#     --checkpoint-dir ./checkpoints/vimeo_exp18_lama
+
+# Exp 19: LaMa with pretrained weights (DONE)
+# Auto-downloads to ~/.cache/cvlization/models/video_enhancement/
+# ./train.sh $COMMON_LONG --model lama --channels 64 \
+#     --pretrained auto \
 #     --run-name vimeo_exp19_lama_pretrained \
 #     --checkpoint-dir ./checkpoints/vimeo_exp19_lama_pretrained
 
-# Exp 20: ELIR with pretrained weights
-# Download from: https://github.com/KAIST-VML/ELIR
+# Exp 20: ELIR with pretrained weights (architecture now matches original!)
+# Uses RRDBNet for MMSE, matching original ELIR checkpoint
+# Auto-uses lr=1e-5 for finetuning, flow_loss scaled by 0.1
 # ./train.sh $COMMON_LONG --model elir --channels 64 \
-#     --pretrained ./pretrained/elir.ckpt \
+#     --pretrained auto \
 #     --run-name vimeo_exp20_elir_pretrained \
 #     --checkpoint-dir ./checkpoints/vimeo_exp20_elir_pretrained
 
@@ -180,12 +181,15 @@ COMMON_LONG="--vimeo --steps $STEPS_LONG --val-every $VAL_EVERY --save-every $SA
 # Phase 9: From-scratch experiments
 # ===========================================
 
-# Exp 21: ELIR from scratch (64 hidden channels, 128 flow channels)
-# Training: flow matching loss + mask loss + composite loss
-# Inference: 3-step Euler ODE in latent space
-# ./train.sh $COMMON_LONG --model elir --channels 64 \
-#     --run-name vimeo_exp21_elir \
-#     --checkpoint-dir ./checkpoints/vimeo_exp21_elir
+# Exp 21: ELIR from scratch with MaskUNet (full NAFNet encoder-decoder)
+# Uses same encoder-decoder architecture as ExplicitCompositeNet for mask prediction
+# --mask-unet: full NAFNet UNet with skip connections (proven architecture)
+# --focal-mask-loss: handles class imbalance (mask coverage ~1-2%)
+# TensorBoard tracks: train/flow (flow matching), train/mask, train/total
+./train.sh $COMMON_LONG --model elir --channels 64 \
+    --mask-unet --focal-mask-loss \
+    --run-name vimeo_exp21_elir_maskunet \
+    --checkpoint-dir ./checkpoints/vimeo_exp21_elir_maskunet
 
 # Exp 22: LaMa with larger artifacts (size_scale=1.5)
 # ./train.sh $COMMON_LONG --model lama --channels 64 --size-scale 1.5 \

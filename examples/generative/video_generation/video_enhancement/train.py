@@ -10,6 +10,7 @@ Usage:
 """
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
@@ -28,6 +29,7 @@ from model_lama import LamaWithMask
 from model_elir import ElirWithMask
 from losses import ArtifactRemovalLoss, PSNRMetric, SSIMMetric
 from dataset import get_dataloaders, get_vimeo_dataloaders
+from pretrained import get_pretrained_path
 
 
 class WarmupCosineScheduler:
@@ -82,23 +84,42 @@ def mask_loss_fn(
     l1_weight: float = 1.0,
     dice_threshold: float = 0.1,
     eps: float = 1e-6,
+    use_focal: bool = False,
+    focal_gamma: float = 2.0,
+    focal_alpha: float = 0.9,  # High alpha for rare positive class (artifacts ~1-2%)
 ) -> torch.Tensor:
     """
-    Combined Dice + L1 loss for soft masks.
+    Combined Dice + L1 loss for soft masks, with optional Focal loss.
 
+    Default (use_focal=False):
     - Dice: Uses thresholded (binary) gt_mask for "where" (location)
     - L1: Uses soft gt_mask for "how much" (intensity)
+
+    With use_focal=True:
+    - Dice: Same as above
+    - Focal: Down-weights easy negatives, better for class imbalance
 
     Args:
         pred: Predicted mask [B, T, 1, H, W] or [B*T, 1, H, W]
         target: Ground truth soft mask, same shape
         dice_weight: Weight for Dice loss
-        l1_weight: Weight for L1 loss
+        l1_weight: Weight for L1/Focal loss
         dice_threshold: Threshold to binarize gt_mask for Dice
         eps: Small value for numerical stability
+        use_focal: If True, use Focal loss instead of L1 (better for class imbalance)
+        focal_gamma: Focusing parameter (higher = more focus on hard examples)
+        focal_alpha: Weight for positive class (higher for rare class)
     """
-    # L1 loss on soft mask
-    l1_loss = torch.abs(pred - target).mean()
+    if use_focal:
+        # Focal loss for class imbalance
+        bce = F.binary_cross_entropy(pred, target, reduction='none')
+        pt = torch.where(target > 0.5, pred, 1 - pred)
+        focal_mod = (1 - pt) ** focal_gamma
+        alpha_t = torch.where(target > 0.5, focal_alpha, 1 - focal_alpha)
+        secondary_loss = (alpha_t * focal_mod * bce).mean()
+    else:
+        # L1 loss on soft mask
+        secondary_loss = torch.abs(pred - target).mean()
 
     # Dice loss on binary mask
     target_binary = (target > dice_threshold).float()
@@ -112,7 +133,7 @@ def mask_loss_fn(
         # No artifact in mask (degradation type) - skip Dice
         dice_loss = torch.tensor(0.0, device=pred.device)
 
-    return dice_weight * dice_loss + l1_weight * l1_loss
+    return dice_weight * dice_loss + l1_weight * secondary_loss
 
 
 def log_sample_images(
@@ -194,7 +215,7 @@ def setup_device(config: Config) -> torch.device:
     return device
 
 
-def setup_model(config: Config, device: torch.device, model_type: str = "temporal_nafunet", pretrained_path: str = None) -> nn.Module:
+def setup_model(config: Config, device: torch.device, model_type: str = "temporal_nafunet", pretrained_path: str = None, use_mask_decoder: bool = False, use_mask_unet: bool = False, detach_mask_features: bool = True) -> nn.Module:
     """Create and setup model"""
     if model_type == "temporal_nafunet":
         model = TemporalNAFUNet(
@@ -236,8 +257,12 @@ def setup_model(config: Config, device: torch.device, model_type: str = "tempora
 
         # Load pretrained weights if provided
         if pretrained_path:
-            print(f"Loading pretrained LaMa weights from: {pretrained_path}")
-            model.load_pretrained(pretrained_path, strict=False)
+            # Handle "auto" - download from centralized cache
+            if pretrained_path == "auto":
+                pretrained_path = get_pretrained_path("lama", download=True)
+            if pretrained_path:
+                print(f"Loading pretrained LaMa weights from: {pretrained_path}")
+                model.load_pretrained(str(pretrained_path), strict=False)
     elif model_type == "elir":
         # ELIR uses latent channels and flow steps
         base_channels = config.model.encoder_channels[0] if config.model.encoder_channels else 64
@@ -251,13 +276,27 @@ def setup_model(config: Config, device: torch.device, model_type: str = "tempora
             use_temporal_attention=config.model.use_temporal_attention,
             num_frames=config.model.num_frames,
             attention_heads=config.model.attention_heads,
+            use_mask_decoder=use_mask_decoder,  # Option B: encoder features for mask
+            use_mask_unet=use_mask_unet,  # Option C: full NAFNet UNet for mask
+            detach_mask_features=detach_mask_features,  # False for training from scratch
         )
-        model_name = "ElirWithMask"
+        if use_mask_unet:
+            model_name = "ElirWithMask (MaskUNet)"
+        elif use_mask_decoder:
+            model_name = "ElirWithMask (MaskDecoder)"
+            if not detach_mask_features:
+                model_name += " (joint training)"
+        else:
+            model_name = "ElirWithMask"
 
         # Load pretrained ELIR weights if provided
         if pretrained_path:
-            print(f"Loading pretrained ELIR weights from: {pretrained_path}")
-            model.load_elir_weights(pretrained_path, strict=False)
+            # Handle "auto" - download from centralized cache
+            if pretrained_path == "auto":
+                pretrained_path = get_pretrained_path("elir", download=True)
+            if pretrained_path:
+                print(f"Loading pretrained ELIR weights from: {pretrained_path}")
+                model.load_elir_weights(str(pretrained_path), strict=False)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -286,6 +325,7 @@ def train_step(
     mask_weight: float = 1.0,
     is_composite: bool = False,
     is_elir: bool = False,
+    use_focal_mask_loss: bool = False,
 ) -> Dict[str, float]:
     """Execute a single training step"""
     model.train()
@@ -325,23 +365,31 @@ def train_step(
         # Compute losses (with optional mask weighting)
         losses = loss_fn(pred, clean, is_video=True, mask=gt_mask, mask_weight=mask_weight)
 
-        # Mask loss (Dice + L1)
+        # Mask loss (Dice + L1 or Dice + Focal)
         if pred_mask is not None:
-            mask_loss = mask_loss_fn(pred_mask, gt_mask)
+            mask_loss = mask_loss_fn(pred_mask, gt_mask, use_focal=use_focal_mask_loss)
             losses["mask"] = config.training.w_mask * mask_loss
             losses["total"] = losses["total"] + losses["mask"]
 
-        # Flow matching loss for ELIR
+        # Flow matching loss for ELIR (with weight and NaN check)
         if flow_loss is not None:
-            losses["flow"] = flow_loss  # Already weighted appropriately
+            # Check for NaN/inf
+            if torch.isnan(flow_loss) or torch.isinf(flow_loss):
+                print(f"WARNING: flow_loss is {flow_loss.item()}, skipping")
+                flow_loss = torch.tensor(0.0, device=device)
+            # Weight flow loss (can be tuned via config if needed)
+            losses["flow"] = 0.1 * flow_loss  # Scale down to balance with other losses
             losses["total"] = losses["total"] + losses["flow"]
 
         # Auxiliary inpaint loss for composite/ELIR model
         # This supervises inpainted directly in mask regions to prevent degenerate solutions
         if inpainted is not None:
+            # For ELIR: detach inpainted so flow model only gets gradients from flow_loss
+            # (inpainted goes through flow_loop, we don't want inpaint_loss to train flow)
+            inpainted_for_loss = inpainted.detach() if is_elir else inpainted
             # Loss: inpainted should match clean in artifact (mask) regions
             # Weight by mask so we only care about artifact regions
-            inpaint_diff = (inpainted - clean).abs() * gt_mask
+            inpaint_diff = (inpainted_for_loss - clean).abs() * gt_mask
             inpaint_loss = inpaint_diff.sum() / (gt_mask.sum() + 1e-6)
             losses["inpaint"] = 0.5 * inpaint_loss  # Weight for auxiliary loss
             losses["total"] = losses["total"] + losses["inpaint"]
@@ -376,6 +424,7 @@ def validate(
     device: torch.device,
     w_mask: float = 0.3,
     mask_weight: float = 1.0,
+    use_focal_mask_loss: bool = False,
 ) -> Dict[str, float]:
     """Validation loop"""
     model.eval()
@@ -403,9 +452,9 @@ def validate(
         # Losses (with optional mask weighting)
         losses = loss_fn(pred, clean, is_video=True, mask=gt_mask, mask_weight=mask_weight)
 
-        # Mask loss (Dice + L1)
+        # Mask loss (Dice + L1 or Dice + Focal)
         if pred_mask is not None:
-            mask_loss = mask_loss_fn(pred_mask, gt_mask)
+            mask_loss = mask_loss_fn(pred_mask, gt_mask, use_focal=use_focal_mask_loss)
             losses["mask"] = w_mask * mask_loss
             losses["total"] = losses["total"] + losses["mask"]
 
@@ -501,7 +550,9 @@ def train(config: Config, args):
     
     # Model
     print("\nSetting up model...")
-    model = setup_model(config, device, args.model, args.pretrained)
+    detach_mask_features = not getattr(args, 'no_detach_mask_features', False)
+    use_mask_unet = getattr(args, 'mask_unet', False)
+    model = setup_model(config, device, args.model, args.pretrained, args.use_mask_decoder, use_mask_unet, detach_mask_features)
     
     # Data
     print("\nSetting up data...")
@@ -545,10 +596,31 @@ def train(config: Config, args):
         use_lpips=not args.no_lpips,
     ).to(device)
     
+    # Handle pretrained model finetuning
+    if args.freeze_pretrained and args.model == "elir":
+        # Freeze all except mask_head
+        for name, param in model.named_parameters():
+            if "mask_head" not in name:
+                param.requires_grad = False
+        trainable_params = [p for p in model.parameters() if p.requires_grad]
+        print(f"Frozen pretrained weights. Training only mask_head ({sum(p.numel() for p in trainable_params):,} params)")
+    else:
+        trainable_params = model.parameters()
+
+    # Use lower learning rate for finetuning pretrained models
+    lr = config.training.learning_rate
+    if args.finetune_lr is not None:
+        lr = args.finetune_lr
+        print(f"Using finetune learning rate: {lr}")
+    elif args.pretrained and args.model == "elir" and not args.freeze_pretrained:
+        # Default to lower LR for ELIR finetuning
+        lr = 1e-5
+        print(f"Auto-reduced learning rate for ELIR finetuning: {lr}")
+
     # Optimizer
     optimizer = optim.AdamW(
-        model.parameters(),
-        lr=config.training.learning_rate,
+        trainable_params,
+        lr=lr,
         weight_decay=config.training.weight_decay,
     )
     
@@ -646,7 +718,8 @@ def train(config: Config, args):
         # Train step
         is_composite = args.model in ("composite", "lama")
         is_elir = args.model == "elir"
-        losses = train_step(model, batch, optimizer, loss_fn, device, config, scaler, args.mask_weight, is_composite, is_elir)
+        use_focal = getattr(args, 'focal_mask_loss', False)
+        losses = train_step(model, batch, optimizer, loss_fn, device, config, scaler, args.mask_weight, is_composite, is_elir, use_focal)
 
         # Step-based scheduler (warmup+cosine)
         if scheduler and isinstance(scheduler, WarmupCosineScheduler):
@@ -684,7 +757,7 @@ def train(config: Config, args):
             avg_train = {k: v / steps_since_val for k, v in running_losses.items()}
 
             # Validate
-            val_losses = validate(model, val_loader, loss_fn, device, config.training.w_mask, args.mask_weight)
+            val_losses = validate(model, val_loader, loss_fn, device, config.training.w_mask, args.mask_weight, use_focal)
 
             # Print summary
             print(f"  [Step {step+1}] Train: {avg_train['total']:.4f} | "
@@ -802,6 +875,20 @@ def main():
                              "elir (ELIR flow matching in latent space, 3-step inference)")
     parser.add_argument("--pretrained", type=str, default=None,
                         help="Path to pretrained weights (for LaMa or ELIR model)")
+    parser.add_argument("--freeze-pretrained", action="store_true",
+                        help="Freeze pretrained weights, only train mask_head (for ELIR)")
+    parser.add_argument("--finetune-lr", type=float, default=None,
+                        help="Learning rate for finetuning pretrained model (default: 1e-5)")
+    parser.add_argument("--use-mask-decoder", action="store_true",
+                        help="Use MaskDecoder with encoder features instead of simple MaskHead (for ELIR).")
+    parser.add_argument("--mask-unet", action="store_true",
+                        help="Use full NAFNet-style UNet for mask prediction (for ELIR). "
+                             "Same architecture as ExplicitCompositeNet's encoder-decoder. "
+                             "More powerful than MaskHead but adds ~2.3M params.")
+    parser.add_argument("--no-detach-mask-features", action="store_true",
+                        help="Don't detach encoder features for MaskDecoder (for ELIR). "
+                             "Use when training from scratch so mask loss can train encoder. "
+                             "With pretrained encoder, detaching is fine since encoder already has good features.")
     parser.add_argument("--channels", type=int, default=None,
                         help="Base channel width (default: 32). Model uses [c, 2c, 4c, 8c]")
     parser.add_argument("--depth", type=int, default=None,
@@ -818,6 +905,9 @@ def main():
                              "5.0 = artifact regions contribute 5x more to loss. "
                              "Use higher values (3-10) to focus learning on artifact removal "
                              "when artifacts cover small portion of image (<15%%).")
+    parser.add_argument("--focal-mask-loss", action="store_true",
+                        help="Use Focal loss instead of L1 for mask prediction. "
+                             "Better for class imbalance when mask coverage is low (<5%%).")
 
     # Checkpoints and logging
     parser.add_argument("--run-name", type=str, default=None,
