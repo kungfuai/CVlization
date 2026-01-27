@@ -25,9 +25,17 @@ NUM_FRAMES=2  # Use 2 frames for faster iteration
 COMMON="--vimeo --steps $STEPS --val-every $VAL_EVERY --save-every $SAVE_EVERY --num-frames $NUM_FRAMES"
 
 # ===========================================
-# Phase 1: Mask-guided modulation (priority)
-# DONE - Results: exp3 > exp6, exp8 promising
+# Phase 1-9: Exploration experiments (DONE)
+# All commented out - see results in notes.md
 # ===========================================
+
+# Exp 1-21: See git history for details
+# Key findings:
+#   - LPIPS is critical for perceptual quality
+#   - 64 channels provides good capacity
+#   - Modulation mask guidance helps
+#   - LaMa (FFC blocks) promising for global context
+#   - Best configs: exp9 (NAFUNet+modulation), exp16-18
 
 # Exp 1: Modulation + pixel-only (fastest baseline)
 # ./train.sh $COMMON --mask-guidance modulation --pixel-only \
@@ -44,11 +52,6 @@ COMMON="--vimeo --steps $STEPS --val-every $VAL_EVERY --save-every $SAVE_EVERY -
 #     --run-name vimeo_exp3_modulation_lpips \
 #     --checkpoint-dir ./checkpoints/vimeo_exp3_modulation_lpips
 
-# ===========================================
-# Phase 2: Baselines for comparison
-# DONE
-# ===========================================
-
 # Exp 4: No mask - pixel-only
 # ./train.sh $COMMON --pixel-only \
 #     --run-name vimeo_exp4_baseline_pixel \
@@ -64,11 +67,6 @@ COMMON="--vimeo --steps $STEPS --val-every $VAL_EVERY --save-every $SAVE_EVERY -
 #     --run-name vimeo_exp6_baseline_lpips \
 #     --checkpoint-dir ./checkpoints/vimeo_exp6_baseline_lpips
 
-# ===========================================
-# Phase 3: Ablations
-# DONE
-# ===========================================
-
 # Exp 7: Predict mask without guidance (multi-task only)
 # ./train.sh $COMMON --predict-mask --no-lpips \
 #     --run-name vimeo_exp7_multitask_vgg \
@@ -79,12 +77,6 @@ COMMON="--vimeo --steps $STEPS --val-every $VAL_EVERY --save-every $SAVE_EVERY -
 #     --run-name vimeo_exp8_large_modulation \
 #     --checkpoint-dir ./checkpoints/vimeo_exp8_large_modulation
 
-# ===========================================
-# Phase 4: Next experiments
-# Based on learnings: LPIPS critical, modulation helps, larger model promising
-# DONE - Results: exp9 best, exp11/12 okay, exp13 broken (fixed now)
-# ===========================================
-
 # Exp 9: Large model + modulation + LPIPS (best of exp3 + exp8) *** BEST ***
 # ./train.sh $COMMON --channels 64 --mask-guidance modulation \
 #     --run-name vimeo_exp9_large_modulation_lpips \
@@ -94,12 +86,6 @@ COMMON="--vimeo --steps $STEPS --val-every $VAL_EVERY --save-every $SAVE_EVERY -
 # ./train.sh $COMMON --mask-guidance modulation --mask-weight 3.0 \
 #     --run-name vimeo_exp10_modulation_maskweight3 \
 #     --checkpoint-dir ./checkpoints/vimeo_exp10_modulation_maskweight3
-
-# ===========================================
-# Phase 5: New mask guidance variants
-# Test skip_gate, attn_gate, and ExplicitCompositeNet
-# DONE - Results: exp11/12 not better than exp9, exp13 had mask collapse bug
-# ===========================================
 
 # Exp 11: skip_gate - suppress encoder features in artifact regions
 # ./train.sh $COMMON --mask-guidance skip_gate \
@@ -116,27 +102,15 @@ COMMON="--vimeo --steps $STEPS --val-every $VAL_EVERY --save-every $SAVE_EVERY -
 #     --run-name vimeo_exp13_composite \
 #     --checkpoint-dir ./checkpoints/vimeo_exp13_composite
 
-# ===========================================
-# Phase 6: Verify fixes and extended training
-# ===========================================
-
 # Exp 14: Re-run composite with fix (auxiliary inpaint loss + auto mask_weight=5.0)
-# Result: mask prediction still bad (small model, 2.3M params vs exp9's 8.9M)
 # ./train.sh $COMMON --model composite \
 #     --run-name vimeo_exp14_composite_fixed \
 #     --checkpoint-dir ./checkpoints/vimeo_exp14_composite_fixed
 
 # Exp 15: Composite with large model (same size as exp9) + detached mask fix
-# Fix: mask_head learns only from mask_loss, recon_loss only trains inpaint_head
-# Result: Better than exp14, higher mask loss than exp9
 # ./train.sh $COMMON --model composite --channels 64 \
 #     --run-name vimeo_exp15_composite_large \
 #     --checkpoint-dir ./checkpoints/vimeo_exp15_composite_large
-
-# ===========================================
-# Phase 7: Larger artifacts (size_scale=1.5) + extended training (15k steps)
-# Test if models handle larger text/logos
-# ===========================================
 
 STEPS_LONG=15000
 COMMON_LONG="--vimeo --steps $STEPS_LONG --val-every $VAL_EVERY --save-every $SAVE_EVERY --num-frames $NUM_FRAMES"
@@ -151,52 +125,137 @@ COMMON_LONG="--vimeo --steps $STEPS_LONG --val-every $VAL_EVERY --save-every $SA
 #     --run-name vimeo_exp17_composite_sizescale \
 #     --checkpoint-dir ./checkpoints/vimeo_exp17_composite_sizescale
 
-# ===========================================
-# Phase 8: LaMa architecture (FFC blocks + temporal attention)
-# Test if global receptive field from Fourier convolutions helps
-# ===========================================
-
 # Exp 18: LaMa with default settings (64 base channels, 9 FFC blocks)
-# From scratch, no pretrained weights
 # ./train.sh $COMMON_LONG --model lama --channels 64 \
 #     --run-name vimeo_exp18_lama \
 #     --checkpoint-dir ./checkpoints/vimeo_exp18_lama
 
-# Exp 19: LaMa with pretrained weights (DONE)
-# Auto-downloads to ~/.cache/cvlization/models/video_enhancement/
+# Exp 19: LaMa with pretrained weights
 # ./train.sh $COMMON_LONG --model lama --channels 64 \
 #     --pretrained auto \
 #     --run-name vimeo_exp19_lama_pretrained \
 #     --checkpoint-dir ./checkpoints/vimeo_exp19_lama_pretrained
 
-# Exp 20: ELIR with pretrained weights (architecture now matches original!)
-# Uses RRDBNet for MMSE, matching original ELIR checkpoint
-# Auto-uses lr=1e-5 for finetuning, flow_loss scaled by 0.1
+# Exp 20: ELIR with pretrained weights
 # ./train.sh $COMMON_LONG --model elir --channels 64 \
 #     --pretrained auto \
 #     --run-name vimeo_exp20_elir_pretrained \
 #     --checkpoint-dir ./checkpoints/vimeo_exp20_elir_pretrained
 
+# Exp 21: ELIR from scratch with MaskUNet
+# ./train.sh $COMMON_LONG --model elir --channels 64 \
+#     --mask-unet --focal-mask-loss \
+#     --run-name vimeo_exp21_elir_maskunet \
+#     --checkpoint-dir ./checkpoints/vimeo_exp21_elir_maskunet
+
 # ===========================================
-# Phase 9: From-scratch experiments
+# Phase 10: Production-Ready Model Training
 # ===========================================
+#
+# Goals:
+# 1. Longer training (30k-50k steps)
+# 2. More frames for temporal consistency (4-8 frames)
+# 3. Robust to various artifact sizes
+# 4. Best architecture from exploration phase
+#
+# Based on exp1-21 findings:
+# - Best architecture: TemporalNAFUNet 64ch + modulation + LPIPS (exp9/16)
+# - LaMa also promising for global context (exp18)
+# - ELIR good for flow-based refinement (exp21)
 
-# Exp 21: ELIR from scratch with MaskUNet (full NAFNet encoder-decoder)
-# Uses same encoder-decoder architecture as ExplicitCompositeNet for mask prediction
-# --mask-unet: full NAFNet UNet with skip connections (proven architecture)
-# --focal-mask-loss: handles class imbalance (mask coverage ~1-2%)
-# TensorBoard tracks: train/flow (flow matching), train/mask, train/total
-./train.sh $COMMON_LONG --model elir --channels 64 \
-    --mask-unet --focal-mask-loss \
-    --run-name vimeo_exp21_elir_maskunet \
-    --checkpoint-dir ./checkpoints/vimeo_exp21_elir_maskunet
+STEPS_PROD=30000
+VAL_EVERY_PROD=1000
+SAVE_EVERY_PROD=10000
 
-# Exp 22: LaMa with larger artifacts (size_scale=1.5)
-# ./train.sh $COMMON_LONG --model lama --channels 64 --size-scale 1.5 \
-#     --run-name vimeo_exp22_lama_sizescale \
-#     --checkpoint-dir ./checkpoints/vimeo_exp22_lama_sizescale
+# ---------------------------------------------
+# Exp 22: Production NAFUNet - 4 frames, 30k steps
+# ---------------------------------------------
+# Best config (exp9/16) with more temporal context
+# 4 frames provides better temporal consistency than 2
+# Reduce batch size if OOM (--batch-size 2)
 
-# Exp 23: ELIR with larger artifacts (size_scale=1.5)
-# ./train.sh $COMMON_LONG --model elir --channels 64 --size-scale 1.5 \
-#     --run-name vimeo_exp23_elir_sizescale \
-#     --checkpoint-dir ./checkpoints/vimeo_exp23_elir_sizescale
+COMMON_PROD_4F="--vimeo --steps $STEPS_PROD --val-every $VAL_EVERY_PROD --save-every $SAVE_EVERY_PROD --num-frames 4"
+
+./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
+    --run-name vimeo_exp22_prod_nafunet_4f \
+    --checkpoint-dir ./checkpoints/vimeo_exp22_prod_nafunet_4f
+
+# ---------------------------------------------
+# Exp 23: Production NAFUNet - 8 frames, 30k steps
+# ---------------------------------------------
+# Maximum temporal context for best consistency
+# Use smaller batch + gradient accumulation if OOM
+# --batch-size 1 --grad-accum 4
+
+# COMMON_PROD_8F="--vimeo --steps $STEPS_PROD --val-every $VAL_EVERY_PROD --save-every $SAVE_EVERY_PROD --num-frames 8"
+#
+# ./train.sh $COMMON_PROD_8F --channels 64 --mask-guidance modulation \
+#     --batch-size 1 \
+#     --run-name vimeo_exp23_prod_nafunet_8f \
+#     --checkpoint-dir ./checkpoints/vimeo_exp23_prod_nafunet_8f
+
+# ---------------------------------------------
+# Exp 24: Production LaMa - 4 frames, 30k steps
+# ---------------------------------------------
+# LaMa's FFC blocks provide global receptive field
+# Good for large watermarks spanning the frame
+
+# ./train.sh $COMMON_PROD_4F --model lama --channels 64 \
+#     --run-name vimeo_exp24_prod_lama_4f \
+#     --checkpoint-dir ./checkpoints/vimeo_exp24_prod_lama_4f
+
+# ---------------------------------------------
+# Exp 25: Production NAFUNet - Mixed artifact sizes
+# ---------------------------------------------
+# Train with varying size_scale for robustness
+# size_scale=1.0 (default) + 1.5 (larger) + 0.7 (smaller)
+# Note: Requires dataset augmentation support or multiple runs
+
+# ./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
+#     --size-scale 1.0 \
+#     --run-name vimeo_exp25_prod_nafunet_size1.0 \
+#     --checkpoint-dir ./checkpoints/vimeo_exp25_prod_nafunet_size1.0
+
+# ./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
+#     --size-scale 1.5 \
+#     --run-name vimeo_exp25_prod_nafunet_size1.5 \
+#     --checkpoint-dir ./checkpoints/vimeo_exp25_prod_nafunet_size1.5
+
+# ---------------------------------------------
+# Exp 26: Production ExplicitComposite - 4 frames
+# ---------------------------------------------
+# Explicit composite guarantees clean region preservation
+# Good for production where artifacts have clear boundaries
+
+# ./train.sh $COMMON_PROD_4F --model composite --channels 64 \
+#     --run-name vimeo_exp26_prod_composite_4f \
+#     --checkpoint-dir ./checkpoints/vimeo_exp26_prod_composite_4f
+
+# ---------------------------------------------
+# Exp 27: Final Production Model - 50k steps
+# ---------------------------------------------
+# Longest training with best architecture from exp22-26
+# Run after evaluating exp22-26 results
+
+# STEPS_FINAL=50000
+# COMMON_FINAL="--vimeo --steps $STEPS_FINAL --val-every $VAL_EVERY_PROD --save-every $SAVE_EVERY_PROD --num-frames 4"
+#
+# ./train.sh $COMMON_FINAL --channels 64 --mask-guidance modulation \
+#     --run-name vimeo_exp27_final_production \
+#     --checkpoint-dir ./checkpoints/vimeo_exp27_final_production
+
+# ===========================================
+# Phase 11: Long Video Optimizations (Future)
+# ===========================================
+# After best model is identified:
+# - Add overlapping clip training with consistency loss
+# - Progressive clip length curriculum
+# - Hidden state for cross-clip memory
+
+# Exp 28: Overlapping clip training (requires code changes)
+# ./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
+#     --overlap-training --overlap 2 --consistency-loss 0.1 \
+#     --run-name vimeo_exp28_overlap_training \
+#     --checkpoint-dir ./checkpoints/vimeo_exp28_overlap_training
+
+echo "Sweep complete!"
