@@ -55,6 +55,39 @@ def get_resize_transform(
         ])
 
 
+def resize_max_side(img: torch.Tensor, max_size: int, multiple_of: int = 8) -> torch.Tensor:
+    """
+    Resize image so max(H, W) = max_size, preserving aspect ratio.
+
+    Args:
+        img: [C, H, W] tensor
+        max_size: Target for the longest side
+        multiple_of: Ensure H and W are multiples of this (for conv alignment)
+
+    Returns:
+        Resized [C, H', W'] tensor
+    """
+    _, H, W = img.shape
+
+    # Calculate new size preserving aspect ratio
+    if H > W:
+        new_H = max_size
+        new_W = int(W * max_size / H)
+    else:
+        new_W = max_size
+        new_H = int(H * max_size / W)
+
+    # Round to multiple_of
+    new_H = (new_H // multiple_of) * multiple_of
+    new_W = (new_W // multiple_of) * multiple_of
+
+    # Ensure minimum size
+    new_H = max(new_H, multiple_of)
+    new_W = max(new_W, multiple_of)
+
+    return TF.resize(img, [new_H, new_W], antialias=True)
+
+
 class VideoFrameDataset(Dataset):
     """
     Dataset that loads video frames and adds synthetic artifacts.
@@ -472,6 +505,7 @@ class VimeoArtifactDataset(Dataset):
     Vimeo Septuplet dataset with synthetic artifact generation.
 
     Wraps VimeoSeptupletDataset and adds artifacts to create paired training data.
+    Supports multi-scale training with aspect ratio preservation.
     """
 
     def __init__(
@@ -485,42 +519,58 @@ class VimeoArtifactDataset(Dataset):
         preserve_aspect_ratio: bool = False,
         mode: str = "train",
         size_scale: float = 1.0,
+        multi_scale: Optional[List[int]] = None,
     ):
         """
         Args:
             vimeo_dataset: VimeoSeptupletDataset instance
-            frame_size: Output frame size (H, W)
+            frame_size: Output frame size (H, W) - used when multi_scale is None
             num_frames: Number of frames to use (1-7)
             enabled_artifacts: Set of artifact types to use
             min_opacity: Min opacity for overlay artifacts
             max_opacity: Max opacity for overlay artifacts
-            preserve_aspect_ratio: If True, resize + center crop instead of stretching
+            preserve_aspect_ratio: If True, resize preserving aspect ratio (no crop)
             mode: "train" or "val" - uses different text sets for generalization testing
             size_scale: Scale factor for artifact sizes (1.0 = default, 2.0 = double)
+            multi_scale: List of max sizes to sample from (e.g., [256, 320, 384]).
+                         If provided, overrides frame_size and enables preserve_aspect_ratio.
         """
         self.vimeo_dataset = vimeo_dataset
         self.frame_size = frame_size
         self.num_frames = min(num_frames, 7)
         self.preserve_aspect_ratio = preserve_aspect_ratio
+        self.mode = mode
+        self.min_opacity = min_opacity
+        self.max_opacity = max_opacity
+        self.enabled_artifacts = enabled_artifacts
+        self.size_scale = size_scale
 
-        self.artifact_gen = ArtifactGenerator(
-            frame_size=frame_size,
-            min_opacity=min_opacity,
-            max_opacity=max_opacity,
-            enabled_artifacts=enabled_artifacts,
-            mode=mode,
-            size_scale=size_scale,
-        )
+        # Multi-scale settings
+        self.multi_scale = multi_scale
+        if multi_scale is not None:
+            # Multi-scale implies preserve_aspect_ratio
+            self.preserve_aspect_ratio = True
 
-        # Build resize transform
-        if preserve_aspect_ratio:
-            H, W = frame_size
-            self.resize = T.Compose([
-                T.Resize(min(H, W)),
-                T.CenterCrop(frame_size),
-            ])
-        else:
-            self.resize = T.Resize(frame_size)
+        # Build resize transform (used when not multi-scale)
+        if not self.multi_scale:
+            if preserve_aspect_ratio:
+                H, W = frame_size
+                self.resize = T.Compose([
+                    T.Resize(min(H, W)),
+                    T.CenterCrop(frame_size),
+                ])
+            else:
+                self.resize = T.Resize(frame_size)
+
+            # Single artifact generator for fixed size
+            self.artifact_gen = ArtifactGenerator(
+                frame_size=frame_size,
+                min_opacity=min_opacity,
+                max_opacity=max_opacity,
+                enabled_artifacts=enabled_artifacts,
+                mode=mode,
+                size_scale=size_scale,
+            )
 
     def __len__(self) -> int:
         return len(self.vimeo_dataset)
@@ -533,14 +583,38 @@ class VimeoArtifactDataset(Dataset):
         # Take only num_frames
         frames = frames[:self.num_frames]
 
-        # Resize to target size
-        resized = []
-        for i in range(frames.shape[0]):
-            resized.append(self.resize(frames[i]))
-        frames = torch.stack(resized)
+        if self.multi_scale:
+            # Multi-scale: sample a max_size and resize preserving aspect ratio
+            max_size = random.choice(self.multi_scale)
+            resized = []
+            for i in range(frames.shape[0]):
+                resized.append(resize_max_side(frames[i], max_size))
+            frames = torch.stack(resized)
+
+            # Get actual frame size after resize
+            _, _, H, W = frames.shape
+            actual_size = (H, W)
+
+            # Create artifact generator for this size
+            artifact_gen = ArtifactGenerator(
+                frame_size=actual_size,
+                min_opacity=self.min_opacity,
+                max_opacity=self.max_opacity,
+                enabled_artifacts=self.enabled_artifacts,
+                mode=self.mode,
+                size_scale=self.size_scale,
+            )
+        else:
+            # Fixed size resize
+            resized = []
+            for i in range(frames.shape[0]):
+                resized.append(self.resize(frames[i]))
+            frames = torch.stack(resized)
+            actual_size = self.frame_size
+            artifact_gen = self.artifact_gen
 
         # Generate artifact
-        mask, degraded_direct, meta = self.artifact_gen.generate(
+        mask, degraded_direct, meta = artifact_gen.generate(
             self.num_frames, clean_frames=frames
         )
 
@@ -548,7 +622,7 @@ class VimeoArtifactDataset(Dataset):
             degraded = apply_overlay_artifact(frames, mask)
         else:
             degraded = degraded_direct
-            mask = torch.zeros(self.num_frames, 1, *self.frame_size)
+            mask = torch.zeros(self.num_frames, 1, *actual_size)
 
         return {
             "clean": frames,
@@ -566,19 +640,22 @@ def get_vimeo_dataloaders(
     data_dir: Optional[str] = None,
     preserve_aspect_ratio: bool = False,
     size_scale: float = 1.0,
+    multi_scale: Optional[List[int]] = None,
 ) -> Tuple[DataLoader, DataLoader]:
     """
     Create train and validation dataloaders using Vimeo Septuplet.
 
     Args:
-        batch_size: Batch size
-        frame_size: (H, W) frame size
+        batch_size: Batch size (forced to 1 if multi_scale is enabled)
+        frame_size: (H, W) frame size (ignored if multi_scale is set)
         num_frames: Frames per sample (1-7)
         num_workers: DataLoader workers
         enabled_artifacts: Set of artifact types to use
         data_dir: Override data directory
-        preserve_aspect_ratio: If True, resize + center crop instead of stretching
+        preserve_aspect_ratio: If True, resize preserving aspect ratio
         size_scale: Scale factor for artifact sizes (1.0 = default, 2.0 = double)
+        multi_scale: List of max sizes to sample from (e.g., [256, 320, 384]).
+                     Enables aspect-ratio-preserving resize. Forces batch_size=1.
 
     Returns:
         train_loader, val_loader
@@ -599,6 +676,12 @@ def get_vimeo_dataloaders(
             "  python vimeo_septuplet.py --prepare"
         )
 
+    # Multi-scale requires batch_size=1 due to variable output sizes
+    if multi_scale:
+        if batch_size > 1:
+            print(f"Note: multi_scale enabled, forcing batch_size=1 (was {batch_size})")
+        batch_size = 1
+
     # Create artifact-augmented datasets
     train_dataset = VimeoArtifactDataset(
         vimeo_dataset=builder.training_dataset(),
@@ -608,16 +691,25 @@ def get_vimeo_dataloaders(
         preserve_aspect_ratio=preserve_aspect_ratio,
         mode="train",
         size_scale=size_scale,
+        multi_scale=multi_scale,
     )
+
+    # Validation uses fixed size for consistent metrics
+    # Use the middle scale if multi_scale, otherwise use frame_size
+    val_size = frame_size
+    if multi_scale:
+        mid_scale = multi_scale[len(multi_scale) // 2]
+        val_size = (mid_scale, mid_scale)
 
     val_dataset = VimeoArtifactDataset(
         vimeo_dataset=builder.validation_dataset(),
-        frame_size=frame_size,
+        frame_size=val_size,
         num_frames=num_frames,
         enabled_artifacts=enabled_artifacts,
         preserve_aspect_ratio=preserve_aspect_ratio,
         mode="val",
         size_scale=size_scale,
+        multi_scale=None,  # Fixed size for validation
     )
 
     train_loader = DataLoader(
@@ -631,7 +723,7 @@ def get_vimeo_dataloaders(
 
     val_loader = DataLoader(
         val_dataset,
-        batch_size=batch_size,
+        batch_size=batch_size if not multi_scale else 4,  # Can batch validation
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,

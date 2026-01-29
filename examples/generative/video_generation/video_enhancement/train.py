@@ -561,6 +561,12 @@ def train(config: Config, args):
     if config.data.enabled_artifacts:
         enabled_artifacts = set(config.data.enabled_artifacts)
 
+    # Parse multi-scale if provided
+    multi_scale = None
+    if args.multi_scale:
+        multi_scale = [int(s.strip()) for s in args.multi_scale.split(",")]
+        print(f"Multi-scale training enabled: {multi_scale}")
+
     # Select data source
     if args.vimeo:
         print("Using Vimeo Septuplet dataset")
@@ -573,6 +579,7 @@ def train(config: Config, args):
             data_dir=args.data,
             preserve_aspect_ratio=config.data.preserve_aspect_ratio,
             size_scale=args.size_scale,
+            multi_scale=multi_scale,
         )
     else:
         train_loader, val_loader = get_dataloaders(
@@ -832,7 +839,13 @@ def main():
                         help="Scale factor for artifact sizes (default: 1.0). "
                              "Use 0.5 for smaller artifacts, 2.0 for larger.")
     parser.add_argument("--preserve-aspect", action="store_true",
-                        help="Preserve aspect ratio (resize + center crop instead of stretching)")
+                        help="Preserve aspect ratio (resize to max side, no crop)")
+    parser.add_argument("--multi-scale", type=str, default=None,
+                        help="Comma-separated max sizes for multi-scale training (e.g., '256,320,384'). "
+                             "Randomly samples a scale per example, resizes preserving aspect ratio. "
+                             "Forces batch_size=1 during training due to variable sizes.")
+    parser.add_argument("--frame-size", type=int, default=None,
+                        help="Frame size (square, e.g., 256 or 384). Default: 256")
 
     # Training
     parser.add_argument("--steps", type=int, default=None,
@@ -965,6 +978,8 @@ def main():
         config.data.enabled_artifacts = args.artifacts.split(",")
     if args.preserve_aspect:
         config.data.preserve_aspect_ratio = True
+    if args.frame_size:
+        config.data.frame_size = (args.frame_size, args.frame_size)
     if args.amp:
         config.training.use_amp = True
     if args.checkpoint_dir:

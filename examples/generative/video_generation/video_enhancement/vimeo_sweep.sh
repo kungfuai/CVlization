@@ -168,41 +168,80 @@ VAL_EVERY_PROD=1000
 SAVE_EVERY_PROD=10000
 
 # ---------------------------------------------
-# Exp 22: Production NAFUNet - 4 frames, 30k steps
+# Exp 22: Production NAFUNet - 4 frames, 30k steps, multi-scale (DONE)
 # ---------------------------------------------
 # Best config (exp9/16) with more temporal context
 # 4 frames provides better temporal consistency than 2
-# Reduce batch size if OOM (--batch-size 2)
+# Multi-scale: randomly samples 256/320/384, preserves aspect ratio
+# Note: multi-scale forces batch_size=1
 
 COMMON_PROD_4F="--vimeo --steps $STEPS_PROD --val-every $VAL_EVERY_PROD --save-every $SAVE_EVERY_PROD --num-frames 4"
 
-./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
-    --run-name vimeo_exp22_prod_nafunet_4f \
-    --checkpoint-dir ./checkpoints/vimeo_exp22_prod_nafunet_4f
+# ./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
+#     --multi-scale 256,320,384 \
+#     --run-name vimeo_exp22_prod_nafunet_4f_multiscale \
+#     --checkpoint-dir ./checkpoints/vimeo_exp22_prod_nafunet_4f_multiscale
 
 # ---------------------------------------------
-# Exp 23: Production NAFUNet - 8 frames, 30k steps
+# Exp 23: LaMa with multi-scale - FFC blocks for global context (DONE)
 # ---------------------------------------------
-# Maximum temporal context for best consistency
-# Use smaller batch + gradient accumulation if OOM
-# --batch-size 1 --grad-accum 4
-
-# COMMON_PROD_8F="--vimeo --steps $STEPS_PROD --val-every $VAL_EVERY_PROD --save-every $SAVE_EVERY_PROD --num-frames 8"
-#
-# ./train.sh $COMMON_PROD_8F --channels 64 --mask-guidance modulation \
-#     --batch-size 1 \
-#     --run-name vimeo_exp23_prod_nafunet_8f \
-#     --checkpoint-dir ./checkpoints/vimeo_exp23_prod_nafunet_8f
-
-# ---------------------------------------------
-# Exp 24: Production LaMa - 4 frames, 30k steps
-# ---------------------------------------------
-# LaMa's FFC blocks provide global receptive field
+# LaMa's Fast Fourier Convolution provides global receptive field
 # Good for large watermarks spanning the frame
+# Multi-scale for resolution robustness
 
 # ./train.sh $COMMON_PROD_4F --model lama --channels 64 \
-#     --run-name vimeo_exp24_prod_lama_4f \
-#     --checkpoint-dir ./checkpoints/vimeo_exp24_prod_lama_4f
+#     --multi-scale 256,320,384 \
+#     --run-name vimeo_exp23_lama_multiscale \
+#     --checkpoint-dir ./checkpoints/vimeo_exp23_lama_multiscale
+
+# ---------------------------------------------
+# Exp 24: ExplicitComposite with multi-scale (DONE)
+# ---------------------------------------------
+# Explicit alpha blending guarantees clean region preservation
+# Predicts both inpainted content and mask, composites them
+# Multi-scale for resolution robustness
+
+# ./train.sh $COMMON_PROD_4F --model composite --channels 64 \
+#     --multi-scale 256,320,384 \
+#     --run-name vimeo_exp24_composite_multiscale \
+#     --checkpoint-dir ./checkpoints/vimeo_exp24_composite_multiscale
+
+# ===========================================
+# Phase 10b: Resume Training (warm start from exp22-24)
+# ===========================================
+# Continue training for another 30k steps (total 60k)
+
+STEPS_RESUME=60000  # Total steps (not additional)
+
+# ---------------------------------------------
+# Exp 25: Resume NAFUNet from exp22 (best checkpoint)
+# ---------------------------------------------
+./train.sh --vimeo --steps $STEPS_RESUME --val-every $VAL_EVERY_PROD --save-every $SAVE_EVERY_PROD --num-frames 4 \
+    --channels 64 --mask-guidance modulation \
+    --multi-scale 256,320,384 \
+    --resume ./checkpoints/vimeo_exp22_prod_nafunet_4f_multiscale/best.pt \
+    --run-name vimeo_exp25_nafunet_resume \
+    --checkpoint-dir ./checkpoints/vimeo_exp25_nafunet_resume
+
+# ---------------------------------------------
+# Exp 26: Resume LaMa from exp23 (best checkpoint)
+# ---------------------------------------------
+./train.sh --vimeo --steps $STEPS_RESUME --val-every $VAL_EVERY_PROD --save-every $SAVE_EVERY_PROD --num-frames 4 \
+    --model lama --channels 64 \
+    --multi-scale 256,320,384 \
+    --resume ./checkpoints/vimeo_exp23_lama_multiscale/best.pt \
+    --run-name vimeo_exp26_lama_resume \
+    --checkpoint-dir ./checkpoints/vimeo_exp26_lama_resume
+
+# ---------------------------------------------
+# Exp 27: Resume ExplicitComposite from exp24 (best checkpoint)
+# ---------------------------------------------
+./train.sh --vimeo --steps $STEPS_RESUME --val-every $VAL_EVERY_PROD --save-every $SAVE_EVERY_PROD --num-frames 4 \
+    --model composite --channels 64 \
+    --multi-scale 256,320,384 \
+    --resume ./checkpoints/vimeo_exp24_composite_multiscale/best.pt \
+    --run-name vimeo_exp27_composite_resume \
+    --checkpoint-dir ./checkpoints/vimeo_exp27_composite_resume
 
 # ---------------------------------------------
 # Exp 25: Production NAFUNet - Mixed artifact sizes
@@ -245,17 +284,45 @@ COMMON_PROD_4F="--vimeo --steps $STEPS_PROD --val-every $VAL_EVERY_PROD --save-e
 #     --checkpoint-dir ./checkpoints/vimeo_exp27_final_production
 
 # ===========================================
-# Phase 11: Long Video Optimizations (Future)
+# Phase 11: Multi-Scale Training (Resolution Robustness)
+# ===========================================
+# Train with varying resolutions for robustness to different input sizes.
+# Uses aspect-ratio-preserving resize (no cropping).
+# batch_size=1 due to variable output sizes.
+
+# ---------------------------------------------
+# Exp 28: Multi-Scale NAFUNet - 4 frames, 30k steps
+# ---------------------------------------------
+# Scales: 256, 320, 384 (randomly sampled per example)
+# Preserves aspect ratio, aligns to multiples of 8
+
+# ./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
+#     --multi-scale 256,320,384 \
+#     --run-name vimeo_exp28_multiscale_nafunet \
+#     --checkpoint-dir ./checkpoints/vimeo_exp28_multiscale_nafunet
+
+# ---------------------------------------------
+# Exp 29: Multi-Scale with wider range
+# ---------------------------------------------
+# Scales: 192, 256, 320, 384, 448
+
+# ./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
+#     --multi-scale 192,256,320,384,448 \
+#     --run-name vimeo_exp29_multiscale_wide \
+#     --checkpoint-dir ./checkpoints/vimeo_exp29_multiscale_wide
+
+# ===========================================
+# Phase 12: Long Video Optimizations (Future)
 # ===========================================
 # After best model is identified:
 # - Add overlapping clip training with consistency loss
 # - Progressive clip length curriculum
 # - Hidden state for cross-clip memory
 
-# Exp 28: Overlapping clip training (requires code changes)
+# Exp 30: Overlapping clip training (requires code changes)
 # ./train.sh $COMMON_PROD_4F --channels 64 --mask-guidance modulation \
 #     --overlap-training --overlap 2 --consistency-loss 0.1 \
-#     --run-name vimeo_exp28_overlap_training \
-#     --checkpoint-dir ./checkpoints/vimeo_exp28_overlap_training
+#     --run-name vimeo_exp30_overlap_training \
+#     --checkpoint-dir ./checkpoints/vimeo_exp30_overlap_training
 
 echo "Sweep complete!"
