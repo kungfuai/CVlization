@@ -70,11 +70,219 @@ loss = (
 )
 ```
 
+**Mask Guidance Variants:**
+
+Different strategies for how predicted mask can guide the inpainting process:
+
+### 1. Feature Modulation (current implementation)
+```python
+# Modulate features where mask indicates artifacts
+feat = feat * (1 + scale * mask) + bias * mask
+```
+- Learned scale/bias per channel
+- Additive + multiplicative adjustment
+- Applied after final decoder stage
+
+### 2. Concatenation (simplest baseline)
+```python
+# Concat mask as extra input channel to decoder
+feat = torch.cat([feat, mask], dim=1)
+feat = conv(feat)  # network learns how to use mask
+```
+- Let network learn how to use mask
+- No architectural assumptions
+- Can apply at any resolution
+
+### 3. Attention Gating
+```python
+# Use mask to gate attention weights - focus on artifact regions
+attn_weights = softmax(Q @ K.T)
+attn_weights = attn_weights * (1 + alpha * mask)  # boost artifact regions
+out = attn_weights @ V
+```
+- Attention focuses more on artifact regions
+- Helps propagate clean context into artifacts
+- Good for temporal attention
+
+### 4. Skip Connection Gating
+```python
+# Gate skip connections based on mask
+# Hypothesis: encoder features in artifact regions are "corrupted", suppress them
+skip_gated = skip * (1 - mask) + skip * mask * gate_weight
+feat = decoder_block(feat, skip_gated)
+```
+- Suppress encoder features in artifact regions
+- Force decoder to hallucinate from context, not corrupted input
+- `gate_weight` can be learned or fixed (e.g., 0.1)
+
+### 5. Dual-Stream Decoder
+```python
+# Separate processing for clean vs artifact regions
+clean_feat = feat * (1 - mask)
+artifact_feat = feat * mask
+
+clean_out = preservation_branch(clean_feat)   # identity-like, lightweight
+artifact_out = inpainting_branch(artifact_feat)  # generative, heavier
+
+out = clean_out + artifact_out
+```
+- Specialized branches for different tasks
+- Preservation branch can be very lightweight (just pass-through)
+- Similar to VideoPainter's dual-branch philosophy
+
+### 6. Residual Weighting
+```python
+# Only predict/apply residual in mask regions
+residual = residual_net(feat)
+out = input + residual * mask  # residual only applied where mask > 0
+```
+- Explicit: no change outside mask
+- Like explicit composite but at residual level
+- Gradients only flow through mask regions
+
+### 7. Cross-Attention (Clean → Artifact)
+```python
+# Query artifact regions, Key/Value from clean regions
+Q = project_q(feat * mask)           # artifact region queries
+K = project_k(feat * (1 - mask))     # clean region keys
+V = project_v(feat * (1 - mask))     # clean region values
+
+# Artifact regions "borrow" features from clean regions
+borrowed_features = softmax(Q @ K.T) @ V
+feat_artifact = feat * mask + borrowed_features
+```
+- Explicitly borrow texture/patterns from clean regions
+- Good for pattern/texture completion
+- Can be expensive (full attention matrix)
+
+### Comparison
+
+| Variant | Complexity | Interpretability | Best For |
+|---------|------------|------------------|----------|
+| Modulation | Low | Medium | General purpose |
+| Concatenation | Lowest | Low | Simple baseline |
+| Attention Gating | Medium | Medium | Large artifacts |
+| Skip Gating | Medium | High | Suppressing corrupted features |
+| Dual-Stream | High | High | Different artifact types |
+| Residual Weighting | Low | High | Overlay artifacts |
+| Cross-Attention | High | High | Texture borrowing |
+
+**Recommendations:**
+1. Start with **Modulation** (current) or **Concatenation** (simpler)
+2. Try **Skip Gating** if encoder features seem corrupted
+3. Use **Cross-Attention** for texture-heavy inpainting
+
 **References:**
 - ProPainter (ICCV 2023): Mask-guided sparse video transformer
 - VideoPainter (SIGGRAPH 2024): Dual-branch for background preservation + foreground generation
 - DFCL (Neural Networks 2025): Dual-pathway RGB + gradient for watermark removal
 - SplitNet (AAAI 2021): Split detection/removal, then refine with RefineNet
+
+## Literature Review (2023-2025)
+
+### Video Inpainting
+
+#### VideoPainter (Bian et al., TOG 2024)
+**Dual-branch Diffusion Transformer** - State-of-the-art method combining lightweight CNN context encoder with pre-trained video diffusion Transformer (DiT).
+
+| Aspect | Details |
+|--------|---------|
+| Architecture | Dual-branch: CNN encoder (~6% of backbone) + DiT backbone |
+| Pretraining | Latent diffusion model on large video/image data (no ImageNet) |
+| VAE | Yes - frames encoded to latent space |
+| Inference | Multi-step diffusion sampling (iterative) |
+| Auxiliary | No mask/flow prediction - mask is input |
+| Training Data | VPData: ~390k clips (~867 hours) - largest video inpainting dataset |
+| Key Innovation | "Inpainting region ID resampling" for long video identity consistency |
+
+#### AVID (Zhang et al., CVPR 2024)
+**Any-Length Video Inpainting with Diffusion** - Builds on Stable Diffusion inpainting with temporal modules.
+
+| Aspect | Details |
+|--------|---------|
+| Architecture | Latent diffusion U-Net + temporal self-attention (AnimateDiff-style) |
+| Pretraining | Stable Diffusion inpainting backbone (LAION, not ImageNet) |
+| VAE | Yes - Stable Diffusion VAE |
+| Inference | Temporal Multi-Diffusion with middle-frame attention guide |
+| Auxiliary | Structure guidance module (HED edge maps) - adjustable per task |
+| Training | Two-stage: temporal modules, then structure module |
+| Open Source | Yes - GitHub |
+
+#### CoCoCo (Zi et al., AAAI 2024)
+**Consistency, Controllability, Compatibility** - Text-guided diffusion with enhanced temporal attention.
+
+| Aspect | Details |
+|--------|---------|
+| Architecture | Stable Diffusion + motion capture module (3 attention types) |
+| Key Features | Damped global temporal attention, instance-aware mask selection |
+| Compatibility | Plug-and-play with LoRA/DreamBooth models |
+| Open Source | Yes - Video-Inpaint-Anything |
+
+#### OmniPainter (ICLR 2026 submission)
+**Flow-Guided Latent Diffusion** - Adaptive global-local guidance for temporal consistency.
+
+| Aspect | Details |
+|--------|---------|
+| Key Innovation | Flow-Guided Ternary Control + Adaptive Global-Local Guidance |
+| Strategy | Early steps: global structure; Late steps: local details |
+| Flow | Uses off-the-shelf optical flow (not learned) |
+
+#### FGDVI (Gu et al., 2024)
+**Flow-Guided Diffusion (Training-Free)** - Inference-time technique for any diffusion model.
+
+| Aspect | Details |
+|--------|---------|
+| Approach | Warp latents via optical flow between frames |
+| Advantage | No training needed - works with existing models |
+| Open Source | Yes - GitHub |
+
+### Video Artifact Removal (Compression Enhancement)
+
+#### STFF (Wang et al., IEEE TBC 2025)
+**Spatio-Temporal & Frequency Fusion** - State-of-the-art for compression artifact removal.
+
+| Aspect | Details |
+|--------|---------|
+| Architecture | CNN-based, 3 stages |
+| Stage 1 | Feature Extraction & Alignment (FEA) - RNN-based (SRU) for spatio-temporal features |
+| Stage 2 | Bidirectional High-Frequency Enhanced Propagation (BHFEP) - forward/backward with HCAB |
+| Stage 3 | Residual High-Frequency Refinement (RHFR) - recover textures/edges |
+| Pretraining | None - trained from scratch (artifact patterns are compression-specific) |
+| VAE | No - direct regression model |
+| Inference | One-pass (real-time capable) |
+| Auxiliary | Implicitly targets high-frequency residuals via architecture |
+| Open Source | Yes - GitHub |
+
+### Key Takeaways
+
+#### Video Inpainting Trends (2023-2025)
+- **Shift to diffusion models** - From CNN-based to diffusion Transformers
+- **Leverage pretrained models** - Use large video/image diffusion backbones, add temporal modules
+- **VAE latent space** - Standard practice for efficiency
+- **Optical flow guidance** - Critical for temporal consistency (external or learned)
+- **High compute** - Large datasets (100k+ clips), multi-step inference
+
+#### Video Artifact Removal Trends
+- **CNN/Transformer-based** - Not diffusion (deterministic task)
+- **No ImageNet backbone** - Train from scratch on compressed video pairs
+- **Multi-frame aggregation** - Use neighboring frames for restoration
+- **Frequency-domain focus** - Target high-frequency details lost to compression
+- **One-pass inference** - Suitable for real-time/streaming
+
+#### Implications for Our Model
+
+| SOTA Approach | Our Current Approach | Gap |
+|---------------|---------------------|-----|
+| Pretrained diffusion backbone | Train from scratch | Could use pretrained encoder |
+| VAE latent space | Direct pixel space | Simpler but less efficient |
+| Multi-step diffusion | One-pass forward | Faster but less powerful |
+| Optical flow guidance | Temporal attention only | Could add flow |
+| Large datasets (100k+ clips) | Vimeo-90K + synthetic | Adequate for overlay artifacts |
+
+**Recommendation**: For watermark/overlay removal (our focus), one-pass CNN approach is appropriate. Key improvements:
+1. Add optical flow for temporal consistency
+2. Consider pretrained encoder (but increases model size)
+3. Frequency-domain losses (already have FFT loss)
 
 ## Project Structure
 
@@ -223,8 +431,216 @@ mlmodel.save("ArtifactRemoval.mlpackage")
 ## Known Limitations
 
 - ConvTranspose3d not supported on MPS (that's why we use 2D architecture)
-- Very long videos may need chunked processing
+- Very long videos may need chunked processing (see Long Video Inference below)
 - Moving/animated artifacts are harder than static ones
+
+## Long Video Inference
+
+For videos longer than the training clip length, three main strategies exist:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        LONG VIDEO INFERENCE OPTIONS                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. SLIDING WINDOW (Simple, but boundary artifacts)                          │
+│     ┌────┐ ┌────┐ ┌────┐ ┌────┐                                             │
+│     │ W1 │→│ W2 │→│ W3 │→│ W4 │→ ...                                        │
+│     └────┘ └────┘ └────┘ └────┘                                             │
+│        ↑overlap↑                                                             │
+│                                                                              │
+│  2. RECURRENT/STREAMING (Online, memory efficient)                           │
+│     frame₁ → [net + h₀] → frame₁' + h₁                                      │
+│     frame₂ → [net + h₁] → frame₂' + h₂                                      │
+│     frame₃ → [net + h₂] → frame₃' + h₃  ...                                 │
+│                                                                              │
+│  3. CLIP-RECURRENT (Best of both - RVRT/VideoPainter style)                  │
+│     ┌──────────┐     ┌──────────┐     ┌──────────┐                          │
+│     │ Clip 1   │────→│ Clip 2   │────→│ Clip 3   │→ ...                     │
+│     │ (parallel│ h₁  │ (parallel│ h₂  │ (parallel│                          │
+│     │  within) │     │  within) │     │  within) │                          │
+│     └──────────┘     └──────────┘     └──────────┘                          │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Strategy Comparison
+
+| Strategy | Pros | Cons | Best For |
+|----------|------|------|----------|
+| **Sliding Window** | Simple, parallel | Boundary flicker, no long-range | Short clips (<5s) |
+| **Recurrent** | Memory efficient, online | Error accumulates, quality degrades | Real-time streaming |
+| **Clip-Recurrent** | Quality + consistency | Slightly more complex | Production (recommended) |
+| **Bidirectional** | Best quality | 2x memory, 2x compute, offline only | Highest quality offline |
+
+### Recommended: Clip-Recurrent with Hidden State
+
+For watermark removal, **clip-recurrent** is ideal because:
+- Watermarks are temporally stable → hidden state helps track them
+- Watermarks don't need "future" context → unidirectional is fine
+- M4 memory constraints → clip-based fits better than full bidirectional
+
+```python
+class LongVideoInference:
+    """
+    Process video in clips, passing hidden state between clips.
+    Parallel within clip, sequential across clips.
+    """
+    def __init__(self, model, clip_length=16, overlap=4):
+        self.model = model
+        self.clip_length = clip_length
+        self.overlap = overlap
+        self.stride = clip_length - overlap
+
+    def __call__(self, video: Tensor) -> Tensor:
+        T = video.shape[0]
+        outputs = []
+        hidden = None
+
+        for start in range(0, T, self.stride):
+            end = min(start + self.clip_length, T)
+            clip = video[start:end]
+
+            # Process clip (parallel across frames within clip)
+            out_clip, hidden = self.model(clip, hidden)
+
+            # Only append non-overlapping frames
+            if outputs and self.overlap > 0:
+                out_clip = out_clip[self.overlap:]
+
+            outputs.append(out_clip)
+            hidden = self._detach_hidden(hidden)  # Prevent memory buildup
+
+        return torch.cat(outputs, dim=0)[:T]
+```
+
+### What Goes in Hidden State?
+
+For watermark removal:
+1. **Feature maps** from last N frames (for temporal attention)
+2. **Optical flow** from previous clip (for propagation)
+3. **Predicted masks** from previous clip (temporal consistency)
+4. **Texture bank** (optional): reference clean textures found so far
+
+### Training Considerations
+
+Training with short clips causes domain gap with long video inference (hidden states differ). Solution: train with random hidden state initialization.
+
+```python
+def train_step(model, long_video, clip_length=16):
+    T = long_video.shape[0]
+    start = random.randint(0, T - clip_length)
+    clip = long_video[start:start + clip_length]
+
+    # 50% warm start (compute hidden from previous frames)
+    # 50% cold start (simulate beginning of video)
+    if random.random() < 0.5:
+        with torch.no_grad():
+            warmup_clip = long_video[max(0, start-8):start]
+            _, hidden = model(warmup_clip, None)
+    else:
+        hidden = None
+
+    output, _ = model(clip, hidden)
+    return compute_loss(output, ground_truth[start:start + clip_length])
+```
+
+### Memory-Efficient Inference Pipeline
+
+```python
+@torch.inference_mode()
+def process_long_video(model, video_path, output_path, clip_length=16, overlap=4):
+    """Stream-based processing - don't load entire video into memory."""
+    reader = VideoReader(video_path)
+    writer = VideoWriter(output_path, fps=reader.fps)
+
+    hidden = None
+    frame_buffer = []
+
+    for frame in reader:
+        frame_buffer.append(frame)
+
+        if len(frame_buffer) >= clip_length:
+            clip = torch.stack(frame_buffer).to(device)
+
+            with torch.autocast(device_type="mps", dtype=torch.float16):
+                output_clip, hidden = model(clip, hidden)
+
+            # Write non-overlapping frames
+            for out_frame in output_clip[:-overlap] if overlap else output_clip:
+                writer.write(out_frame.cpu())
+
+            frame_buffer = frame_buffer[-overlap:] if overlap else []
+            hidden = detach_hidden(hidden)
+            torch.mps.empty_cache()
+
+    # Process remaining frames
+    if frame_buffer:
+        clip = torch.stack(frame_buffer).to(device)
+        output_clip, _ = model(clip, hidden)
+        for out_frame in output_clip:
+            writer.write(out_frame.cpu())
+
+    writer.close()
+```
+
+### TL;DR
+
+- Don't process frame-by-frame (too slow, no temporal context)
+- Don't load entire video (memory explosion)
+- Use **clip-recurrent**: 16-frame clips, 4-frame overlap, hidden state propagation
+- Hidden state should contain: previous features, flow, and predicted masks
+- Train with warm starts to avoid domain gap
+
+**References:**
+- RVRT: Recurrent Video Restoration Transformer
+- VideoPainter (SIGGRAPH 2024): ID resampling for 1+ minute consistency
+
+## Experiment Results
+
+### Vimeo Sweep (10k steps, num_frames=2)
+
+Best performers for removing floating text/logos:
+
+| Rank | Exp | Config | Key Factors |
+|------|-----|--------|-------------|
+| 1 | exp3 | Modulation + LPIPS | Mask guidance + strong perceptual loss |
+| 2 | exp6 | Baseline + LPIPS | No mask, just LPIPS |
+| 3 | exp8 | Large (64ch) + Modulation + VGG | More capacity compensates for weaker loss |
+
+**Observations:**
+- **LPIPS is critical**: Both exp3 and exp6 use LPIPS; exp8 compensates with 4x channels
+- **Modulation provides edge**: exp3 slightly better than exp6 — mask guidance helps
+- **Larger model promising**: exp8 (64ch + modulation) still training, potentially best
+- **Pixel-only insufficient**: exp4 (pixel-only) not in top 3
+- **VGG alone not enough**: exp2, exp5, exp7 (VGG perceptual) didn't make top 3
+
+**Interpretation:**
+- LPIPS loss naturally focuses on high-frequency anomalies (text edges, logo boundaries)
+- Mask-guided modulation provides incremental benefit over LPIPS alone
+- Model capacity (exp8: 64 channels) combined with modulation may be optimal
+
+### LaMa and ELIR Experiments
+
+| Exp | Model | Config | Status | Notes |
+|-----|-------|--------|--------|-------|
+| 18 | LaMa | From scratch, 64ch | Done | FFC blocks provide global receptive field |
+| 19 | LaMa | Pretrained + finetune | Done | TorchScript weights load via `torch.jit.load` |
+| 20 | ELIR | Pretrained + finetune | Active | Architecture matches original (RRDBNet for MMSE) |
+| 21 | ELIR | From scratch, 64ch | Backup | Flow matching loss + mask loss |
+
+**ELIR Training Objectives (exp 21):**
+1. **Mask prediction** (standalone): `mask_head` predicts artifact regions from degraded input only
+2. **Flow matching**: MSE loss between predicted velocity and target velocity in latent space
+   - Sample random t ∈ [0,1], interpolate z_t = (1-t)·z_degraded + t·z_clean
+   - Target: v_target = z_clean - z_degraded (straight path)
+3. **Composite output**: output = input×(1-mask) + restored×mask
+
+**TensorBoard Metrics:**
+- `train/flow` — flow matching loss
+- `train/mask` — Dice + L1 mask prediction loss
+- `train/inpaint` — auxiliary inpainting loss in mask regions
+- `train/total` — combined loss
 
 ## Open Questions (v2 Architecture)
 
@@ -241,9 +657,85 @@ mlmodel.save("ArtifactRemoval.mlpackage")
 
 4. **Efficiency vs accuracy tradeoff**: Sparse attention threshold τ selection. Too high = miss artifacts, too low = lose efficiency gains.
 
+## Architecture Variant: Explicit Composite
+
+An alternative to implicit end-to-end learning is explicit mask → inpaint → composite:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  EXPLICIT COMPOSITE ARCHITECTURE                               │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  degraded ──┬──► [Encoder] ──► [Decoder] ──► inpainted        │
+│             │         │                          │             │
+│             │         └──► [Mask Head] ──► mask  │             │
+│             │                              │     │             │
+│             │                              ▼     ▼             │
+│             └────────────────────────► output = degraded × (1-mask)
+│                                                + inpainted × mask
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Key difference from current modulation approach:**
+- **Current (modulation)**: mask modulates internal features, output is direct prediction
+- **Explicit composite**: mask used for final alpha-blending, explicitly preserves clean regions
+
+```python
+class ExplicitCompositeNet(nn.Module):
+    """
+    Predict inpainted image and mask separately, then composite.
+    Clean regions are explicitly preserved via alpha blending.
+    """
+    def __init__(self, base_net):
+        super().__init__()
+        self.encoder = base_net.encoder
+        self.decoder = base_net.decoder
+        self.mask_head = nn.Conv2d(channels, 1, 1)  # predict soft mask
+        self.inpaint_head = nn.Conv2d(channels, 3, 3, padding=1)  # predict inpainted
+
+    def forward(self, degraded):
+        # Encode
+        feat, skips = self.encoder(degraded)
+
+        # Decode
+        feat = self.decoder(feat, skips)
+
+        # Predict mask and inpainted separately
+        mask = torch.sigmoid(self.mask_head(feat))  # [0, 1]
+        inpainted = torch.sigmoid(self.inpaint_head(feat))  # full image inpainting
+
+        # Explicit composite: preserve clean regions exactly
+        output = degraded * (1 - mask) + inpainted * mask
+
+        return output, mask
+```
+
+**Benefits:**
+| Aspect | Benefit |
+|--------|---------|
+| Preservation guarantee | Clean regions (mask=0) pass through unchanged |
+| Interpretable | Can visualize what model thinks is artifact vs clean |
+| Gradient focus | Mask prediction error directly affects output |
+| Easier debugging | Check if mask is correct, check if inpainting is good |
+
+**Training considerations:**
+- Mask supervision helps (provides signal for where to inpaint)
+- `--mask-weight` focuses pixel loss on artifact regions
+- Inpaint head only needs to produce good results where mask > 0
+
+**When to use:**
+- Overlay artifacts (logos, text) with clear boundaries
+- When interpretability matters
+- When you want guaranteed preservation of clean regions
+
+**When NOT to use:**
+- Global degradations (noise, compression) where mask is everywhere
+- Soft/blended artifacts where hard composite creates edges
+
 ## Implementation Roadmap
 
-> **Note**: Keep the existing `ArtifactRemovalNet` (v1) intact. New architecture should be a separate class (e.g., `ArtifactRemovalNetV2`). Add `--net {v1,v2}` flag to `train.py` and `predict.py` to select which network to use.
+> **Note**: Keep the existing `TemporalNAFUNet` (v1) intact. New architecture should be a separate class (e.g., `ExplicitCompositeNet`). Add `--net {v1,composite}` flag to `train.py` and `predict.py` to select which network to use.
 
 ### Phase 1: Quick wins
 - [ ] Enable edge loss (`w_edge=0.1`) — already implemented in losses.py
