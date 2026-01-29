@@ -12,6 +12,106 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from typing import Tuple, List, Optional, Dict, Any, Set, Union
 import random
 import math
+import hashlib
+
+
+class TextGenerator:
+    """
+    Generates diverse watermark/overlay text on the fly.
+
+    Uses components (words, prefixes, suffixes, domains, etc.) to create
+    thousands of unique text combinations deterministically based on index.
+    """
+
+    # Word components for generating diverse text
+    WORDS = [
+        # Common watermark words
+        "Sample", "Preview", "Draft", "Proof", "Review", "Demo", "Test",
+        "Watermark", "Copyright", "Protected", "Licensed", "Stock", "Photo",
+        "Image", "Picture", "Media", "Video", "Clip", "Frame", "Shot",
+        # Adjectives
+        "Premium", "Pro", "Elite", "Best", "Top", "Great", "Cool", "Awesome",
+        "Perfect", "Quality", "Creative", "Digital", "Visual", "Ultimate",
+        # Nouns
+        "Studio", "Gallery", "Archive", "Library", "Bank", "Hub", "Central",
+        "Zone", "World", "Plus", "Max", "Source", "Market", "Shop", "Store",
+    ]
+
+    PREFIXES = ["", "My", "The", "Your", "Our", "Best", "Top", "Pro", "i", "e"]
+    SUFFIXES = ["", "Pro", "Plus", "Max", "HD", "4K", "HQ", "Online", "Net", "Web"]
+
+    DOMAINS = ["com", "net", "org", "io", "co", "tv", "media", "photo", "pics", "img"]
+
+    YEARS = ["2020", "2021", "2022", "2023", "2024", "2025"]
+
+    CODES = ["ABC", "XYZ", "IMG", "VID", "PIC", "REF", "ID", "CODE", "NO", "NUM"]
+
+    SYMBOLS = ["©", "®", "™", "#", "@", "•", "★", "▶", "●"]
+
+    # Templates for generating text
+    TEMPLATES = [
+        "{word}",                           # Simple: "Sample"
+        "{prefix}{word}",                   # Prefix: "MyPhoto"
+        "{word}{suffix}",                   # Suffix: "PhotoPro"
+        "{prefix}{word}{suffix}",           # Both: "MyPhotoPro"
+        "{word} {word2}",                   # Two words: "Stock Photo"
+        "{word}{word2}",                    # Combined: "StockPhoto"
+        "www.{word}.{domain}",              # Website: "www.sample.com"
+        "{word}.{domain}",                  # Short domain: "sample.com"
+        "@{word}{word2}",                   # Handle: "@stockphoto"
+        "@{word}_{word2}",                  # Handle with underscore
+        "{symbol} {year}",                  # Copyright: "© 2024"
+        "{symbol} {word}",                  # Symbol + word: "© Sample"
+        "{symbol} {year} {word}",           # Full copyright
+        "{code}: {number}",                 # ID: "REF: 12345"
+        "{code}{number}",                   # Code: "IMG12345"
+        "#{word}{number}",                  # Hashtag: "#STOCK2024"
+        "{word} {word2} {word3}",           # Three words
+        "NOT FOR {word}",                   # Warning style
+        "FOR {word} ONLY",                  # Restriction style
+        "{word} COPY",                      # Copy style
+        "{word} VERSION",                   # Version style
+    ]
+
+    def __init__(self, seed: int = 42):
+        self.base_seed = seed
+
+    def generate(self, index: int) -> str:
+        """Generate a deterministic text based on index."""
+        # Create deterministic random state from index
+        seed = self.base_seed + index
+        rng = random.Random(seed)
+
+        # Select template
+        template = rng.choice(self.TEMPLATES)
+
+        # Fill in template
+        text = template.format(
+            word=rng.choice(self.WORDS),
+            word2=rng.choice(self.WORDS),
+            word3=rng.choice(self.WORDS),
+            prefix=rng.choice(self.PREFIXES),
+            suffix=rng.choice(self.SUFFIXES),
+            domain=rng.choice(self.DOMAINS),
+            year=rng.choice(self.YEARS),
+            code=rng.choice(self.CODES),
+            number=rng.randint(1000, 99999),
+            symbol=rng.choice(self.SYMBOLS),
+        )
+
+        # Randomly apply case transformation
+        case_choice = rng.random()
+        if case_choice < 0.3:
+            text = text.upper()
+        elif case_choice < 0.5:
+            text = text.lower()
+        # else: keep original case
+
+        return text
+
+    def generate_batch(self, start_index: int, count: int) -> List[str]:
+        """Generate a batch of texts."""
+        return [self.generate(start_index + i) for i in range(count)]
 
 
 class ArtifactGenerator:
@@ -143,7 +243,13 @@ class ArtifactGenerator:
         self.mode = mode
         self.size_scale = size_scale
 
-        # Select text set based on mode
+        # Text generator for diverse watermark text
+        # Uses different seed for train vs val to ensure no overlap
+        text_seed = 42 if mode == "train" else 12345
+        self.text_generator = TextGenerator(seed=text_seed)
+        self._text_call_count = 0  # Counter for deterministic generation
+
+        # Legacy text lists (kept for backward compatibility)
         if mode == "val":
             self.texts = self.VAL_TEXTS
         else:
@@ -165,6 +271,15 @@ class ArtifactGenerator:
 
         # Try to load fonts
         self.fonts = self._load_fonts()
+
+    def _get_text(self) -> str:
+        """Get diverse text using TextGenerator.
+
+        Each call returns a different text deterministically based on call count.
+        """
+        text = self.text_generator.generate(self._text_call_count)
+        self._text_call_count += 1
+        return text
 
     def _load_fonts(self) -> Dict[str, List]:
         """Load available fonts at multiple sizes for per-example randomization.
@@ -348,7 +463,7 @@ class ArtifactGenerator:
         elif shape == "ellipse":
             draw.ellipse([x, y, x + logo_size, y + logo_size], fill=int(255 * opacity))
         else:
-            text = random.choice(self.texts[:6])
+            text = self._get_text()
             font = self._random_font()
             draw.text((x, y), text, fill=int(255 * opacity), font=font)
 
@@ -368,7 +483,7 @@ class ArtifactGenerator:
         img = Image.new('L', (W, H), 0)
         draw = ImageDraw.Draw(img)
 
-        text = random.choice(self.texts)
+        text = self._get_text()
         font = self._random_font()
 
         x = random.randint(0, max(1, W // 2))
@@ -389,7 +504,7 @@ class ArtifactGenerator:
         img = Image.new('L', (W, H), 0)
         draw = ImageDraw.Draw(img)
 
-        text = random.choice(self.texts)
+        text = self._get_text()
         font = self._random_font()
 
         spacing_x = random.randint(80, 150)
@@ -492,7 +607,7 @@ class ArtifactGenerator:
         img = Image.new('L', (diag, diag), 0)
         draw = ImageDraw.Draw(img)
 
-        text = random.choice(self.texts)
+        text = self._get_text()
         font = self._random_font()
 
         draw.text((diag // 4, diag // 2), text, fill=int(255 * opacity), font=font)
@@ -668,7 +783,18 @@ def apply_overlay_artifact(
 
 # Test
 if __name__ == "__main__":
-    print("Testing ArtifactGenerator...")
+    print("Testing TextGenerator...")
+    text_gen = TextGenerator(seed=42)
+    texts = text_gen.generate_batch(0, 20)
+    print(f"  Generated {len(texts)} unique texts:")
+    for i, t in enumerate(texts[:10]):
+        print(f"    {i}: {t}")
+    # Verify determinism
+    texts2 = text_gen.generate_batch(0, 10)
+    assert texts[:10] == texts2, "TextGenerator should be deterministic"
+    print("  Determinism verified!")
+
+    print("\nTesting ArtifactGenerator...")
 
     # Test overlay artifacts (default)
     gen = ArtifactGenerator(frame_size=(256, 256))
