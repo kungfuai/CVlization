@@ -99,6 +99,57 @@ DISTILLED_LORA = "ltx-2-19b-distilled-lora-384.safetensors"
 SAMPLE_AUDIO_REPO = "zzsi/cvl"
 SAMPLE_AUDIO_PATH = "ltx2/ltx2_tts_30s.wav"
 
+# Default distilled sigma schedules (from ltx_pipelines)
+DEFAULT_STAGE1_SIGMAS = [1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0]
+DEFAULT_STAGE2_SIGMAS = [0.909375, 0.725, 0.421875, 0.0]
+
+
+def generate_sigma_schedule(num_steps: int, sigma_max: float = 1.0, sigma_min: float = 0.0) -> list[float]:
+    """Generate a sigma schedule for diffusion denoising.
+
+    EXPERIMENTAL: This generates linear sigma schedules for arbitrary step counts.
+    The distilled model was trained on specific sigma values, so custom schedules
+    may produce suboptimal results. Use at your own risk.
+
+    Args:
+        num_steps: Number of denoising steps (will produce num_steps + 1 sigma values)
+        sigma_max: Starting sigma (noise level), default 1.0
+        sigma_min: Ending sigma (clean), default 0.0
+
+    Returns:
+        List of sigma values from sigma_max to sigma_min
+    """
+    if num_steps < 1:
+        raise ValueError("num_steps must be at least 1")
+    # Linear schedule from sigma_max to sigma_min
+    sigmas = [sigma_max - (sigma_max - sigma_min) * i / num_steps for i in range(num_steps + 1)]
+    return sigmas
+
+
+def get_sigma_schedule(num_steps: int | None, default_sigmas: list[float], sigma_max: float = None) -> list[float] | None:
+    """Get sigma schedule - returns None to use default, or generates custom schedule.
+
+    Args:
+        num_steps: Number of steps, or None to use default
+        default_sigmas: The default sigma schedule to use if num_steps is None
+        sigma_max: Starting sigma for custom schedules (uses default_sigmas[0] if None)
+
+    Returns:
+        None if using default, or list of sigma values for custom schedule
+    """
+    if num_steps is None:
+        return None  # Use default schedule in pipeline
+
+    default_steps = len(default_sigmas) - 1
+    if num_steps == default_steps:
+        return None  # Same as default, use built-in
+
+    # Generate custom schedule
+    if sigma_max is None:
+        sigma_max = default_sigmas[0]
+    return generate_sigma_schedule(num_steps, sigma_max=sigma_max, sigma_min=0.0)
+
+
 def get_cache_dir():
     """Get the cache directory for model weights."""
     return os.path.expanduser("~/.cache/huggingface/hub")
@@ -360,8 +411,62 @@ def build_prefix_video_conditionings(
     return [VideoConditionByLatentIndex(latent=encoded_video, strength=prefix_strength, latent_idx=0)]
 
 
+def get_local_model_path(filename: str, repo_id: str = LTX2_REPO) -> str | None:
+    """Check if model file exists in local/persistent storage.
+
+    Checks these locations in order:
+    1. Cerebrium persistent storage: /persistent-storage/.cache/huggingface/hub/...
+    2. Standard HF cache: ~/.cache/huggingface/hub/...
+    """
+    # Convert repo_id to HF cache format (e.g., "Lightricks/LTX-2" -> "models--Lightricks--LTX-2")
+    repo_dir = f"models--{repo_id.replace('/', '--')}"
+
+    # Known revision for LTX-2 models
+    revision = "1931de987c8e265eb64a9123227b903754e3cc68"
+
+    # Paths to check
+    locations = [
+        # Cerebrium persistent storage
+        f"/persistent-storage/.cache/huggingface/hub/{repo_dir}/snapshots/{revision}/{filename}",
+        # Also check blobs with original filename (legacy upload location)
+        f"/persistent-storage/.cache/huggingface/hub/{repo_dir}/blobs/{filename}",
+        # Standard HF cache
+        os.path.expanduser(f"~/.cache/huggingface/hub/{repo_dir}/snapshots/{revision}/{filename}"),
+    ]
+
+    for path in locations:
+        if os.path.exists(path):
+            print(f"Found local model: {path}")
+            return path
+
+    return None
+
+
+def get_local_gemma_path() -> str | None:
+    """Check if Gemma encoder exists in local/persistent storage."""
+    repo_dir = f"models--{GEMMA_REPO.replace('/', '--')}"
+
+    locations = [
+        f"/persistent-storage/.cache/huggingface/hub/{repo_dir}",
+        os.path.expanduser(f"~/.cache/huggingface/hub/{repo_dir}"),
+    ]
+
+    for path in locations:
+        # Check if it's a valid snapshot directory
+        snapshots_dir = os.path.join(path, "snapshots")
+        if os.path.isdir(snapshots_dir):
+            # Get first available snapshot
+            snapshots = os.listdir(snapshots_dir)
+            if snapshots:
+                snapshot_path = os.path.join(snapshots_dir, snapshots[0])
+                print(f"Found local Gemma encoder: {snapshot_path}")
+                return snapshot_path
+
+    return None
+
+
 def get_model_paths(pipeline: str, fp8: bool) -> dict:
-    """Get or download required model paths."""
+    """Get model paths - check local/persistent storage first, then download."""
     paths = {}
 
     # Select checkpoint based on pipeline and precision
@@ -370,13 +475,20 @@ def get_model_paths(pipeline: str, fp8: bool) -> dict:
     else:  # full (dev) pipeline
         checkpoint_file = CHECKPOINT_DEV_FP8 if fp8 else CHECKPOINT_DEV
 
-    paths["checkpoint"] = download_model_file(checkpoint_file)
-    paths["spatial_upsampler"] = download_model_file(SPATIAL_UPSAMPLER)
-    paths["gemma"] = download_gemma_encoder()
+    # Check local storage first, fall back to download
+    local_checkpoint = get_local_model_path(checkpoint_file)
+    paths["checkpoint"] = local_checkpoint if local_checkpoint else download_model_file(checkpoint_file)
+
+    local_upsampler = get_local_model_path(SPATIAL_UPSAMPLER)
+    paths["spatial_upsampler"] = local_upsampler if local_upsampler else download_model_file(SPATIAL_UPSAMPLER)
+
+    local_gemma = get_local_gemma_path()
+    paths["gemma"] = local_gemma if local_gemma else download_gemma_encoder()
 
     # full pipeline requires distilled LoRA
     if pipeline == "full":
-        paths["distilled_lora"] = download_model_file(DISTILLED_LORA)
+        local_lora = get_local_model_path(DISTILLED_LORA)
+        paths["distilled_lora"] = local_lora if local_lora else download_model_file(DISTILLED_LORA)
 
     return paths
 
@@ -400,8 +512,17 @@ def run_distilled_pipeline(
     fp8: bool = True,
     enhance_prompt: bool = False,
     loras: list = None,
+    stage1_steps: int | None = None,
+    stage2_steps: int | None = None,
 ):
-    """Run the distilled pipeline (faster, 8+4 steps)."""
+    """Run the distilled pipeline (faster, default 8+3 steps).
+
+    Args:
+        stage1_steps: EXPERIMENTAL - Override stage 1 denoising steps (default 8).
+                      Custom step counts use linear sigma schedules and may produce
+                      suboptimal results since the model was trained on specific sigmas.
+        stage2_steps: EXPERIMENTAL - Override stage 2 denoising steps (default 3).
+    """
     if loras is None:
         loras = []
 
@@ -450,7 +571,14 @@ def run_distilled_pipeline(
         dtype=pipeline.dtype,
     )
 
-    print(f"Generating video: {width}x{height}, {num_frames} frames...")
+    # Get sigma schedules (None = use default)
+    stage1_sigmas = get_sigma_schedule(stage1_steps, DEFAULT_STAGE1_SIGMAS)
+    stage2_sigmas = get_sigma_schedule(stage2_steps, DEFAULT_STAGE2_SIGMAS)
+
+    steps_info = f"{stage1_steps or 8}+{stage2_steps or 3} steps"
+    if stage1_steps or stage2_steps:
+        steps_info += " (EXPERIMENTAL)"
+    print(f"Generating video: {width}x{height}, {num_frames} frames, {steps_info}...")
     tiling_config = TilingConfig.default()
     video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
 
@@ -468,6 +596,8 @@ def run_distilled_pipeline(
             audio_conditionings=audio_conditionings,
             video_conditionings_stage1=stage_1_prefix,
             video_conditionings_stage2=stage_2_prefix,
+            stage1_sigmas=stage1_sigmas,
+            stage2_sigmas=stage2_sigmas,
         )
 
         print(f"Encoding video to {output_path}...")
@@ -616,7 +746,7 @@ def main():
         type=str,
         choices=["distilled", "full", "two_stage"],
         default="distilled",
-        help="Pipeline mode: distilled (fast, 8+4 steps) or full (quality, 40 steps). "
+        help="Pipeline mode: distilled (fast, 8+3 steps) or full (quality, 40 steps). "
              "'two_stage' is deprecated and maps to 'full'.",
     )
 
@@ -738,6 +868,22 @@ def main():
         type=str,
         default="",
         help="Negative prompt (full pipeline only, uses default if empty)",
+    )
+
+    # Distilled pipeline step override (EXPERIMENTAL)
+    parser.add_argument(
+        "--stage1-steps",
+        type=int,
+        default=None,
+        help="EXPERIMENTAL: Override stage 1 denoising steps for distilled pipeline (default 8). "
+             "Custom step counts may produce suboptimal results.",
+    )
+    parser.add_argument(
+        "--stage2-steps",
+        type=int,
+        default=None,
+        help="EXPERIMENTAL: Override stage 2 denoising steps for distilled pipeline (default 3). "
+             "Custom step counts may produce suboptimal results.",
     )
 
     # LoRA
@@ -887,6 +1033,8 @@ def main():
             fp8=fp8,
             enhance_prompt=args.enhance_prompt,
             loras=loras,
+            stage1_steps=args.stage1_steps,
+            stage2_steps=args.stage2_steps,
         )
     else:
         run_two_stage_pipeline(
