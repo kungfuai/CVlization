@@ -1,0 +1,16 @@
+# Base image (pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime) includes:
+# torch==2.9.1, torchvision==0.24.1, numpy==2.3.4, pillow==11.3.0
+
+# Training
+tensorboard==2.20.0
+tqdm==4.67.1
+
+# Perceptual loss
+lpips==0.1.4
+
+# Video processing
+opencv-python==4.13.0.90
+decord==0.6.0
+
+# Dataset download
+requests==2.32.5
