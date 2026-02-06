@@ -636,6 +636,8 @@ class RunRequest(BaseModel):
     num_frames: int = 33
     frame_rate: float = 24.0
     seed: int = 42
+    stage1_steps: Optional[int] = None  # EXPERIMENTAL: Override stage 1 steps (default 8)
+    stage2_steps: Optional[int] = None  # EXPERIMENTAL: Override stage 2 steps (default 3)
 
 
 class RunResponse(BaseModel):
@@ -724,6 +726,11 @@ def run(request: RunRequest):
         tiling_config = TilingConfig.default()
         video_chunks_number = get_video_chunks_number(request.num_frames, tiling_config)
 
+        # Get sigma schedules (EXPERIMENTAL: custom step counts)
+        from predict import get_sigma_schedule, DEFAULT_STAGE1_SIGMAS, DEFAULT_STAGE2_SIGMAS
+        stage1_sigmas = get_sigma_schedule(request.stage1_steps, DEFAULT_STAGE1_SIGMAS)
+        stage2_sigmas = get_sigma_schedule(request.stage2_steps, DEFAULT_STAGE2_SIGMAS)
+
         with torch.inference_mode():
             video, audio = _pipeline(
                 prompt=request.prompt,
@@ -738,6 +745,8 @@ def run(request: RunRequest):
                 audio_conditionings=None,
                 video_conditionings_stage1=[],
                 video_conditionings_stage2=[],
+                stage1_sigmas=stage1_sigmas,
+                stage2_sigmas=stage2_sigmas,
             )
 
             encode_video(

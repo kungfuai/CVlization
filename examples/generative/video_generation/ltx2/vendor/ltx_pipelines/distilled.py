@@ -84,6 +84,8 @@ class DistilledPipeline:
         audio_conditionings: list | None = None,
         video_conditionings_stage1: list | None = None,
         video_conditionings_stage2: list | None = None,
+        stage1_sigmas: list[float] | None = None,
+        stage2_sigmas: list[float] | None = None,
     ) -> tuple[Iterator[torch.Tensor], torch.Tensor]:
         assert_resolution(height=height, width=width, is_two_stage=True)
 
@@ -105,7 +107,11 @@ class DistilledPipeline:
         # Stage 1: Initial low resolution video generation.
         video_encoder = self.model_ledger.video_encoder()
         transformer = self.model_ledger.transformer()
-        stage_1_sigmas = torch.Tensor(DISTILLED_SIGMA_VALUES).to(self.device)
+        # Use custom sigmas if provided, otherwise use default distilled schedule
+        if stage1_sigmas is not None:
+            stage_1_sigmas = torch.Tensor(stage1_sigmas).to(self.device)
+        else:
+            stage_1_sigmas = torch.Tensor(DISTILLED_SIGMA_VALUES).to(self.device)
 
         def denoising_loop(
             sigmas: torch.Tensor, video_state: LatentState, audio_state: LatentState, stepper: DiffusionStepProtocol
@@ -160,7 +166,11 @@ class DistilledPipeline:
         torch.cuda.synchronize()
         cleanup_memory()
 
-        stage_2_sigmas = torch.Tensor(STAGE_2_DISTILLED_SIGMA_VALUES).to(self.device)
+        # Use custom sigmas if provided, otherwise use default distilled schedule
+        if stage2_sigmas is not None:
+            stage_2_sigmas = torch.Tensor(stage2_sigmas).to(self.device)
+        else:
+            stage_2_sigmas = torch.Tensor(STAGE_2_DISTILLED_SIGMA_VALUES).to(self.device)
         stage_2_output_shape = VideoPixelShape(batch=1, frames=num_frames, width=width, height=height, fps=frame_rate)
         stage_2_conditionings = image_conditionings_by_replacing_latent(
             images=images,
