@@ -1,0 +1,48 @@
+name: video2x
+image: cvlization/video2x:latest
+capability: generative/video_generation
+modalities:
+  - vision
+  - video
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 1  # ~64MB model weights + processing overhead
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Upscale images or videos using Real-ESRGAN
+    path_args:
+      - flag: "--input"
+        type: file
+      - flag: "--output"
+        type: file
+tasks:
+  - super_resolution
+  - video_enhancement
+frameworks:
+  - pytorch
+  - realesrgan
+tags:
+  - super-resolution
+  - upscaling
+  - video-enhancement
+  - real-esrgan
+  - anime
+  - face-enhancement
+description: >
+  Real-ESRGAN image and video super-resolution. Supports 6 models:
+  RealESRGAN_x4plus (general 4x), RealESRGAN_x2plus (general 2x),
+  RealESRNet_x4plus (smooth 4x), RealESRGAN_x4plus_anime_6B (anime 4x),
+  realesr-animevideov3 (anime video 4x), realesr-general-x4v3 (general 4x
+  with denoise control). Optional GFPGAN face enhancement. Tile-based
+  processing for low VRAM.
+
+verification:
+  last_verified: "2026-02-06"
+  last_verification_note: "Verified build, image upscale (0030.jpg), and video upscale (onepiece_demo.mp4, 181 frames at ~4 fps) on NVIDIA RTX PRO 6000 Blackwell (98GB). Lightweight model (~64MB weights). Sample assets on zzsi/cvl HuggingFace dataset."
