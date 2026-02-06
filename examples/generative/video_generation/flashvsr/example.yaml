@@ -1,0 +1,35 @@
+name: flashvsr
+capability: generative/video_generation
+modalities:
+  - vision
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 80
+  ram_gb: 64
+  disk_gb: 20
+image: cvlization/flashvsr:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run FlashVSR inference (v1.1 tiny default)
+  test:
+    script: test.sh
+    description: Lightweight container sanity checks
+tags:
+  - flashvsr
+  - video-super-resolution
+  - upscaling
+  - diffusion
+  - streaming
+  - real-time
+  - pytorch
+tasks:
+  - video_super_resolution
+frameworks:
+  - pytorch
+description: FlashVSR v1.1 (tiny default) for 4x video super-resolution
