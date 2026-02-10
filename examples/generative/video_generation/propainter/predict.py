@@ -405,7 +405,11 @@ def main():
 
     output_dir = resolve_output_path(args.output, output_base)
 
-    weights_dir = args.weights_dir or os.path.join(SCRIPT_DIR, "weights")
+    if args.weights_dir:
+        weights_dir = args.weights_dir
+    else:
+        cache_root = os.environ.get("HF_HOME", os.path.join(os.path.expanduser("~"), ".cache", "huggingface"))
+        weights_dir = os.path.join(cache_root, "propainter_weights")
 
     # ------------------------------------------------------------------
     # Read frames and masks
