@@ -31,6 +31,7 @@ HF_REPO = "zzsi/cvl_models"
 MODELS = {
     "nafunet": "video_enhancement/nafunet.pt",
     "composite": "video_enhancement/composite.pt",
+    "nafunet_widescale": "video_enhancement/nafunet_widescale.pt",
 }
 
 
@@ -226,7 +227,7 @@ def main():
     parser = argparse.ArgumentParser(description="Video Enhancement Inference")
     parser.add_argument("-i", "--input", required=True, help="Input video path (mp4, mov, etc.)")
     parser.add_argument("-o", "--output", required=True, help="Output video path")
-    parser.add_argument("--model", choices=["nafunet", "composite"], default="nafunet",
+    parser.add_argument("--model", choices=list(MODELS.keys()), default="composite",
                         help="Model to use (downloads from HuggingFace)")
     parser.add_argument("--checkpoint", type=str, default=None,
                         help="Local checkpoint path (overrides --model)")
