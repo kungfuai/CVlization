@@ -10,6 +10,7 @@ and track objects across video frames. Outputs an overlay MP4 and optional
 per-frame binary mask PNGs (compatible with ProPainter --mask folder format).
 """
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -123,6 +124,21 @@ def parse_args() -> argparse.Namespace:
         help="(Video only) Cap the number of tracked objects to limit GPU memory usage. "
         "Keeps the top-scoring detections. Recommended: 5-8 for 24GB GPUs at 1080p.",
     )
+    parser.add_argument(
+        "--save-tracks",
+        action="store_true",
+        help="(Video only) Save tracks.json with per-frame object IDs, scores, and bounding boxes",
+    )
+    parser.add_argument(
+        "--save-per-object-masks",
+        action="store_true",
+        help="(Video only) Save per-object binary mask PNGs in separate folders",
+    )
+    parser.add_argument(
+        "--show-labels",
+        action="store_true",
+        help="(Video only) Draw bounding boxes and object ID/score labels on overlay video",
+    )
     return parser.parse_args()
 
 
@@ -144,23 +160,55 @@ def overlay_masks(image: Image.Image, masks: torch.Tensor) -> Image.Image:
     return image
 
 
-def overlay_masks_cv2(frame_bgr: np.ndarray, masks: np.ndarray, alpha: float = 0.4) -> np.ndarray:
+def _obj_id_colors(obj_ids: np.ndarray) -> dict:
+    """Generate consistent colors keyed by object ID."""
+    rng = np.random.default_rng(42)
+    # Pre-generate enough colors for any object ID
+    max_id = int(obj_ids.max()) + 1 if len(obj_ids) > 0 else 1
+    palette = rng.integers(0, 255, size=(max(max_id + 1, 256), 3), dtype=np.uint8)
+    return {int(oid): palette[int(oid) % len(palette)] for oid in obj_ids}
+
+
+def overlay_masks_cv2(
+    frame_bgr: np.ndarray,
+    masks: np.ndarray,
+    alpha: float = 0.4,
+    obj_ids: np.ndarray = None,
+    scores: np.ndarray = None,
+    boxes_xywh: np.ndarray = None,
+    show_labels: bool = False,
+) -> np.ndarray:
     """Overlay boolean masks on a BGR frame using consistent colors."""
     out = frame_bgr.copy()
-    rng = np.random.default_rng(42)
-    n_objects = masks.shape[0] if masks.ndim == 3 else 1
-    colors = rng.integers(0, 255, size=(n_objects, 3), dtype=np.uint8)
+    h, w = frame_bgr.shape[:2]
 
     if masks.ndim == 2:
         masks = masks[None, ...]
 
-    for mask, color in zip(masks, colors):
-        h, w = frame_bgr.shape[:2]
+    if obj_ids is None:
+        obj_ids = np.arange(masks.shape[0])
+    colors = _obj_id_colors(obj_ids)
+
+    for i, (mask, oid) in enumerate(zip(masks, obj_ids)):
+        color = colors[int(oid)]
         if mask.shape != (h, w):
             mask = cv2.resize(mask.astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST).astype(bool)
         color_overlay = np.zeros_like(frame_bgr)
         color_overlay[mask] = color.tolist()
         out = np.where(mask[..., None], cv2.addWeighted(out, 1 - alpha, color_overlay, alpha, 0), out)
+
+    if show_labels and boxes_xywh is not None:
+        for i, oid in enumerate(obj_ids):
+            color = tuple(int(c) for c in colors[int(oid)])
+            bx, by, bw, bh = boxes_xywh[i]
+            x1, y1 = int(bx * w), int(by * h)
+            x2, y2 = int((bx + bw) * w), int((by + bh) * h)
+            cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
+            label = f"id={int(oid)}"
+            if scores is not None:
+                label += f" {scores[i]:.2f}"
+            cv2.putText(out, label, (x1, max(y1 - 6, 12)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
 
     return out
 
@@ -259,7 +307,7 @@ def process_video(args: argparse.Namespace, input_path: Path, output_path: Path)
 
     # Propagate through video
     print(f"Propagating masks ({args.propagation_direction})...")
-    frame_masks = {}  # frame_idx -> (N, H, W) bool array
+    frame_outputs = {}  # frame_idx -> dict with masks, obj_ids, scores, boxes
     for result in predictor.propagate_in_video(
         session_id,
         propagation_direction=args.propagation_direction,
@@ -267,37 +315,77 @@ def process_video(args: argparse.Namespace, input_path: Path, output_path: Path)
         max_frame_num_to_track=None,
     ):
         fidx = result["frame_index"]
-        masks = result["outputs"]["out_binary_masks"]  # (N_objects, H, W) bool
+        out = result["outputs"]
+        masks = out["out_binary_masks"]
         if isinstance(masks, torch.Tensor):
             masks = masks.cpu().numpy()
-        frame_masks[fidx] = masks
+        frame_outputs[fidx] = {
+            "masks": masks,  # (N, H, W) bool
+            "obj_ids": np.asarray(out["out_obj_ids"]),
+            "scores": np.asarray(out["out_probs"]),
+            "boxes_xywh": np.asarray(out["out_boxes_xywh"]),
+        }
 
     predictor.close_session(session_id)
-    print(f"Tracking complete: {len(frame_masks)} frames, "
-          f"{frame_masks[0].shape[0] if 0 in frame_masks else '?'} object(s)")
+    n_objects = frame_outputs[0]["masks"].shape[0] if 0 in frame_outputs else "?"
+    print(f"Tracking complete: {len(frame_outputs)} frames, {n_objects} object(s)")
 
-    if not frame_masks:
+    if not frame_outputs:
         print("No masks returned from video predictor.")
         return
 
-    # Save per-frame binary masks if requested
+    # Save per-frame union masks (ProPainter compatible)
     if args.save_masks:
         masks_dir = output_path.parent / (output_path.stem + "_masks")
         masks_dir.mkdir(parents=True, exist_ok=True)
-        for fidx in sorted(frame_masks.keys()):
-            masks = frame_masks[fidx]
-            # Union all object masks into a single binary mask per frame
-            union_mask = np.any(masks, axis=0).astype(np.uint8) * 255
-            mask_path = masks_dir / f"{fidx:04d}.png"
-            cv2.imwrite(str(mask_path), union_mask)
-        print(f"Saved {len(frame_masks)} binary mask PNGs to: {masks_dir}/")
+        for fidx in sorted(frame_outputs.keys()):
+            union_mask = np.any(frame_outputs[fidx]["masks"], axis=0).astype(np.uint8) * 255
+            cv2.imwrite(str(masks_dir / f"{fidx:04d}.png"), union_mask)
+        print(f"Saved {len(frame_outputs)} union mask PNGs to: {masks_dir}/")
 
-    # Re-read video and write overlay MP4
-    _write_overlay_video(input_path, output_path, frame_masks)
+    # Save per-object masks in separate folders
+    if args.save_per_object_masks:
+        objects_dir = output_path.parent / (output_path.stem + "_objects")
+        # Collect all object IDs across frames
+        all_obj_ids = set()
+        for out in frame_outputs.values():
+            all_obj_ids.update(out["obj_ids"].tolist())
+        for oid in sorted(all_obj_ids):
+            obj_dir = objects_dir / str(oid)
+            obj_dir.mkdir(parents=True, exist_ok=True)
+        for fidx in sorted(frame_outputs.keys()):
+            out = frame_outputs[fidx]
+            for i, oid in enumerate(out["obj_ids"].tolist()):
+                mask = out["masks"][i].astype(np.uint8) * 255
+                cv2.imwrite(str(objects_dir / str(oid) / f"{fidx:04d}.png"), mask)
+        print(f"Saved per-object masks for {len(all_obj_ids)} objects to: {objects_dir}/")
+
+    # Save tracking metadata JSON
+    if args.save_tracks:
+        tracks_path = output_path.parent / (output_path.stem + "_tracks.json")
+        tracks = {}
+        for fidx in sorted(frame_outputs.keys()):
+            out = frame_outputs[fidx]
+            tracks[str(fidx)] = {
+                "obj_ids": out["obj_ids"].tolist(),
+                "scores": [round(float(s), 4) for s in out["scores"]],
+                "boxes_xywh": [[round(float(v), 6) for v in box] for box in out["boxes_xywh"]],
+            }
+        with open(tracks_path, "w") as f:
+            json.dump(tracks, f, indent=2)
+        print(f"Saved tracking metadata to: {tracks_path}")
+
+    # Write overlay MP4
+    _write_overlay_video(
+        input_path, output_path, frame_outputs, show_labels=args.show_labels
+    )
 
 
 def _write_overlay_video(
-    input_path: Path, output_path: Path, frame_masks: dict
+    input_path: Path,
+    output_path: Path,
+    frame_outputs: dict,
+    show_labels: bool = False,
 ) -> None:
     """Read source video, overlay colored masks, write MP4 via ffmpeg."""
     cap = cv2.VideoCapture(str(input_path))
@@ -334,8 +422,16 @@ def _write_overlay_video(
         ret, frame = cap.read()
         if not ret:
             break
-        if fidx in frame_masks:
-            frame = overlay_masks_cv2(frame, frame_masks[fidx])
+        if fidx in frame_outputs:
+            out = frame_outputs[fidx]
+            frame = overlay_masks_cv2(
+                frame,
+                out["masks"],
+                obj_ids=out["obj_ids"],
+                scores=out["scores"],
+                boxes_xywh=out["boxes_xywh"],
+                show_labels=show_labels,
+            )
         proc.stdin.write(frame.tobytes())
         fidx += 1
 
