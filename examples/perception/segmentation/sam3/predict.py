@@ -129,6 +129,13 @@ def parse_args() -> argparse.Namespace:
         default="forward",
         help="(Video only) Direction to propagate tracking from the prompted frame",
     )
+    parser.add_argument(
+        "--max-objects",
+        type=int,
+        default=None,
+        help="(Video only) Cap the number of tracked objects to limit GPU memory usage. "
+        "Keeps the top-scoring detections. Recommended: 5-8 for 24GB GPUs at 1080p.",
+    )
     return parser.parse_args()
 
 
@@ -243,7 +250,25 @@ def process_video(args: argparse.Namespace, input_path: Path, output_path: Path)
 
     # Add text prompt on frame 0
     print(f"Adding text prompt on frame 0: '{args.text}'")
-    predictor.add_prompt(session_id, frame_idx=0, text=args.text)
+    prompt_result = predictor.add_prompt(session_id, frame_idx=0, text=args.text)
+
+    # Cap tracked objects if --max-objects is set
+    if args.max_objects is not None:
+        outputs = prompt_result["outputs"]
+        obj_ids = np.asarray(outputs["out_obj_ids"])
+        scores = np.asarray(outputs["out_probs"])
+        n_detected = len(obj_ids)
+        if n_detected > args.max_objects:
+            # Keep top-scoring objects, remove the rest
+            top_indices = np.argsort(scores)[::-1][: args.max_objects]
+            keep_ids = set(obj_ids[top_indices].tolist())
+            remove_ids = [int(oid) for oid in obj_ids if int(oid) not in keep_ids]
+            for oid in remove_ids:
+                predictor.remove_object(session_id, obj_id=oid)
+            print(
+                f"Capped objects: kept {args.max_objects} of {n_detected} "
+                f"(removed {len(remove_ids)} lowest-scoring)"
+            )
 
     # Propagate through video
     print(f"Propagating masks ({args.propagation_direction})...")
