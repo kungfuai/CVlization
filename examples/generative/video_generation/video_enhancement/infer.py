@@ -6,7 +6,8 @@ Downloads model from HF Hub (cached) and runs inference on videos.
 
 Usage:
     python infer.py -i input.mp4 -o output.mp4
-    python infer.py -i input.mp4 -o output.mp4 --model composite
+    python infer.py -i input.mp4 -o output.mp4 --model nafunet
+    python infer.py -i input.mp4 -o output.mp4 --side-by-side
     python infer.py -i input.mp4 -o output.mp4 --checkpoint local_model.pt
 """
 import argparse
@@ -15,7 +16,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 # HF download
 try:
@@ -96,6 +97,51 @@ def align_to_multiple(x: int, multiple: int = 16) -> int:
     return (x // multiple) * multiple
 
 
+def run_clip(model, clip: torch.Tensor, device: torch.device):
+    """
+    Run model on a clip and return (restored, mask).
+
+    Args:
+        clip: [T, C, H, W] tensor
+    Returns:
+        restored: [T, C, H, W] on cpu
+        mask: [T, 1, H, W] on cpu, or None if model doesn't predict masks
+    """
+    clip_input = clip.unsqueeze(0).to(device)  # [1, T, C, H, W]
+
+    with torch.no_grad():
+        result = model(clip_input)
+
+    if isinstance(result, tuple):
+        restored = result[0].squeeze(0).cpu()
+        mask = result[1].squeeze(0).cpu()
+    else:
+        restored = result.squeeze(0).cpu()
+        mask = None
+
+    return restored, mask
+
+
+def tensor_to_bgr(tensor: torch.Tensor, target_size: Tuple[int, int] = None) -> np.ndarray:
+    """Convert [C, H, W] float tensor to BGR uint8 numpy array."""
+    frame = tensor.permute(1, 2, 0).numpy()
+    frame = (frame * 255).clip(0, 255).astype(np.uint8)
+    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    if target_size:
+        frame = cv2.resize(frame, target_size)
+    return frame
+
+
+def mask_to_bgr(mask: torch.Tensor, target_size: Tuple[int, int] = None) -> np.ndarray:
+    """Convert [1, H, W] mask tensor to BGR heatmap."""
+    m = mask.squeeze(0).numpy()
+    m = (m * 255).clip(0, 255).astype(np.uint8)
+    heatmap = cv2.applyColorMap(m, cv2.COLORMAP_JET)
+    if target_size:
+        heatmap = cv2.resize(heatmap, target_size)
+    return heatmap
+
+
 def process_video(
     model: torch.nn.Module,
     input_path: str,
@@ -104,6 +150,7 @@ def process_video(
     clip_length: int = 4,
     overlap: int = 2,
     max_size: int = 512,
+    side_by_side: bool = False,
 ) -> None:
     """Process video with overlapping clips."""
     cap = cv2.VideoCapture(input_path)
@@ -124,102 +171,104 @@ def process_video(
     print(f"Input: {orig_width}x{orig_height} @ {fps:.1f}fps, {total_frames} frames")
     print(f"Processing at: {proc_width}x{proc_height}")
 
-    # Use processing dimensions
-    width, height = proc_width, proc_height
+    # Output dimensions
+    if side_by_side:
+        # 3 panels: input | mask | output, each at original resolution
+        out_width = orig_width * 3
+        out_height = orig_height
+        print(f"Side-by-side output: {out_width}x{out_height} (input | mask | output)")
+    else:
+        out_width = orig_width
+        out_height = orig_height
 
-    # Setup output (at original resolution)
+    # Setup output
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (orig_width, orig_height))
+    out = cv2.VideoWriter(output_path, fourcc, fps, (out_width, out_height))
 
-    # Process frames
-    frames_buffer = []
-    output_frames = []
-    stride = clip_length - overlap
-
-    pbar = tqdm(total=total_frames, desc="Processing")
+    # Read all input frames (for side-by-side we need the originals)
+    input_frames_bgr = []  # original resolution BGR frames for side-by-side
+    frames_buffer = []     # processing resolution tensors
+    all_frames_tensors = []
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
+        if side_by_side:
+            input_frames_bgr.append(frame.copy())
 
-        # Resize for processing
         frame_resized = cv2.resize(frame, (proc_width, proc_height))
-
-        # Convert BGR to RGB, normalize
         frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
         frame_tensor = torch.from_numpy(frame_rgb).float() / 255.0
-        frame_tensor = frame_tensor.permute(2, 0, 1)  # [C, H, W]
-        frames_buffer.append(frame_tensor)
+        frame_tensor = frame_tensor.permute(2, 0, 1)
+        all_frames_tensors.append(frame_tensor)
 
-        # Process when we have enough frames
-        if len(frames_buffer) >= clip_length:
-            clip = torch.stack(frames_buffer[:clip_length])  # [T, C, H, W]
-            clip = clip.unsqueeze(0).to(device)  # [1, T, C, H, W]
+    cap.release()
+    total_frames = len(all_frames_tensors)
 
-            with torch.no_grad():
-                result = model(clip)
-                if isinstance(result, tuple):
-                    restored = result[0]
-                else:
-                    restored = result
+    # Process clips
+    output_restored = [None] * total_frames  # [C, H, W] tensors
+    output_masks = [None] * total_frames     # [1, H, W] tensors or None
+    stride = clip_length - overlap
 
-            # Get output frames
-            restored = restored.squeeze(0).cpu()  # [T, C, H, W]
+    pbar = tqdm(total=total_frames, desc="Processing")
+    written = 0
+    pos = 0
 
-            # For first clip, keep all frames; for subsequent, keep only non-overlapping
-            if len(output_frames) == 0:
-                keep_from = 0
-            else:
-                keep_from = overlap
+    while pos < total_frames:
+        # Build clip
+        end = min(pos + clip_length, total_frames)
+        clip_frames = all_frames_tensors[pos:end]
 
-            for i in range(keep_from, clip_length):
-                out_frame = restored[i].permute(1, 2, 0).numpy()  # [H, W, C]
-                out_frame = (out_frame * 255).clip(0, 255).astype(np.uint8)
-                out_frame = cv2.cvtColor(out_frame, cv2.COLOR_RGB2BGR)
-                # Resize back to original resolution
-                out_frame = cv2.resize(out_frame, (orig_width, orig_height))
-                out.write(out_frame)
-                output_frames.append(1)
+        # Pad if needed
+        while len(clip_frames) < clip_length:
+            clip_frames.append(clip_frames[-1])
+
+        clip = torch.stack(clip_frames)
+        restored, mask = run_clip(model, clip, device)
+
+        # Determine which frames to keep
+        if pos == 0:
+            keep_from = 0
+        else:
+            keep_from = overlap
+
+        actual_end = min(pos + clip_length, total_frames)
+        for i in range(keep_from, actual_end - pos):
+            idx = pos + i
+            if idx < total_frames and output_restored[idx] is None:
+                output_restored[idx] = restored[i]
+                if mask is not None:
+                    output_masks[idx] = mask[i]
+                written += 1
                 pbar.update(1)
 
-            # Keep overlap frames for next iteration
-            frames_buffer = frames_buffer[stride:]
-
-    # Process remaining frames
-    if len(frames_buffer) > 0:
-        # Pad to clip_length if needed
-        while len(frames_buffer) < clip_length:
-            frames_buffer.append(frames_buffer[-1])
-
-        clip = torch.stack(frames_buffer[:clip_length])
-        clip = clip.unsqueeze(0).to(device)
-
-        with torch.no_grad():
-            result = model(clip)
-            if isinstance(result, tuple):
-                restored = result[0]
-            else:
-                restored = result
-
-        restored = restored.squeeze(0).cpu()
-
-        # Write remaining (non-padded) frames
-        remaining = total_frames - len(output_frames)
-        for i in range(overlap, overlap + remaining):
-            if i < clip_length:
-                out_frame = restored[i].permute(1, 2, 0).numpy()
-                out_frame = (out_frame * 255).clip(0, 255).astype(np.uint8)
-                out_frame = cv2.cvtColor(out_frame, cv2.COLOR_RGB2BGR)
-                # Resize back to original resolution
-                out_frame = cv2.resize(out_frame, (orig_width, orig_height))
-                out.write(out_frame)
-                pbar.update(1)
+        pos += stride
 
     pbar.close()
-    cap.release()
-    out.release()
 
+    # Write output
+    target_size = (orig_width, orig_height)
+    for idx in range(total_frames):
+        if output_restored[idx] is None:
+            continue
+
+        restored_bgr = tensor_to_bgr(output_restored[idx], target_size)
+
+        if side_by_side:
+            input_bgr = input_frames_bgr[idx]
+            if output_masks[idx] is not None:
+                mask_bgr = mask_to_bgr(output_masks[idx], target_size)
+            else:
+                # No mask — show a blank panel
+                mask_bgr = np.zeros_like(input_bgr)
+            frame_out = np.concatenate([input_bgr, mask_bgr, restored_bgr], axis=1)
+        else:
+            frame_out = restored_bgr
+
+        out.write(frame_out)
+
+    out.release()
     print(f"Output saved to: {output_path}")
 
 
@@ -233,6 +282,9 @@ def main():
                         help="Local checkpoint path (overrides --model)")
     parser.add_argument("--clip-length", type=int, default=4, help="Frames per clip")
     parser.add_argument("--overlap", type=int, default=2, help="Overlap between clips")
+    parser.add_argument("--max-size", type=int, default=512, help="Max processing dimension")
+    parser.add_argument("--side-by-side", action="store_true",
+                        help="Output side-by-side video: input | predicted mask | output")
     parser.add_argument("--device", type=str, default=None, help="Device (cuda/cpu/mps)")
     args = parser.parse_args()
 
@@ -259,6 +311,8 @@ def main():
         device=device,
         clip_length=args.clip_length,
         overlap=args.overlap,
+        max_size=args.max_size,
+        side_by_side=args.side_by_side,
     )
 
 
