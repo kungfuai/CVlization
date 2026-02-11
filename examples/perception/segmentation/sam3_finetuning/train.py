@@ -85,6 +85,24 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Use specific SAM3 config template (or create minimal config)",
     )
+    parser.add_argument(
+        "--wandb",
+        action="store_true",
+        default=False,
+        help="Enable Weights & Biases logging (requires WANDB_API_KEY env var)",
+    )
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default="sam3-finetuning",
+        help="W&B project name",
+    )
+    parser.add_argument(
+        "--wandb-run-name",
+        type=str,
+        default=None,
+        help="W&B run name (auto-generated if not set)",
+    )
 
     return parser.parse_args()
 
@@ -418,7 +436,37 @@ def prepare_dataset_structure(dataset_dir: str) -> str:
     return str(temp_dataset)
 
 
-def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_gpus: int, epochs: int = 20, lr: float = 8e-4):
+def setup_wandb_logging(project: str, run_name: str | None, config: dict):
+    """Initialize wandb and install a WandbLogger subclass into SAM3's trainer.
+
+    The SAM3 Trainer creates its logger as ``Logger(self.logging_conf)`` using
+    the class imported at the top of ``sam3.train.trainer``.  By replacing that
+    binding with our subclass *before* the Trainer is instantiated, the trainer
+    transparently picks up wandb logging with no other changes.
+    """
+    import wandb
+    from sam3.train.utils.logger import Logger
+    import sam3.train.trainer as _trainer_mod
+
+    wandb.init(project=project, name=run_name, config=config)
+
+    class WandbLogger(Logger):
+        """Extends SAM3's Logger to also forward metrics to W&B."""
+
+        def log_dict(self, payload, step):
+            super().log_dict(payload, step)
+            wandb.log(payload, step=step)
+
+        def log(self, name, data, step):
+            super().log(name, data, step)
+            wandb.log({name: data}, step=step)
+
+    # Replace Logger in the trainer module so Trainer.__init__ uses WandbLogger
+    _trainer_mod.Logger = WandbLogger
+    print("✓ W&B logging enabled")
+
+
+def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_gpus: int, epochs: int = 20, lr: float = 8e-4, wandb_args: dict | None = None):
     """Run SAM3 training using its native training script."""
 
     print("\n" + "=" * 80)
@@ -504,6 +552,19 @@ def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_g
             return _orig_do_matching(cost, repeats=repeats, return_tgt_indices=return_tgt_indices, do_filtering=do_filtering)
         _matcher_mod._do_matching = _safe_do_matching
 
+        # Setup wandb logging if requested
+        if wandb_args:
+            setup_wandb_logging(
+                project=wandb_args["project"],
+                run_name=wandb_args.get("run_name"),
+                config={
+                    "epochs": epochs,
+                    "dataset": dataset_dir,
+                    "config": config_name,
+                    "num_gpus": num_gpus,
+                },
+            )
+
         # Use random port for distributed training
         main_port = random.randint(10000, 20000)
 
@@ -565,6 +626,13 @@ def main():
     print()
 
     try:
+        wandb_args = None
+        if args.wandb:
+            wandb_args = {
+                "project": args.wandb_project,
+                "run_name": args.wandb_run_name,
+            }
+
         run_sam3_training(
             config_name=config_name,
             dataset_dir=str(Path(args.dataset_dir).absolute()),
@@ -572,6 +640,7 @@ def main():
             num_gpus=args.num_gpus,
             epochs=args.epochs,
             lr=args.lr,
+            wandb_args=wandb_args,
         )
 
         print("\n" + "=" * 80)
