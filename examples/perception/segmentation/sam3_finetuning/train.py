@@ -436,7 +436,68 @@ def prepare_dataset_structure(dataset_dir: str) -> str:
     return str(temp_dataset)
 
 
-def setup_wandb_logging(project: str, run_name: str | None, config: dict):
+def _log_val_predictions_to_wandb(predictions_json: str, gt_json: str, images_dir: str, max_images: int = 8):
+    """Log sample validation predictions to wandb as annotated images."""
+    import wandb
+    import json
+    from PIL import Image, ImageDraw
+
+    if not Path(predictions_json).exists() or not Path(gt_json).exists():
+        return
+
+    with open(predictions_json) as f:
+        predictions = json.load(f)
+    with open(gt_json) as f:
+        gt_data = json.load(f)
+
+    # Build lookup tables
+    id_to_file = {img["id"]: img["file_name"] for img in gt_data["images"]}
+    id_to_size = {img["id"]: (img["width"], img["height"]) for img in gt_data["images"]}
+    gt_by_image = {}
+    for ann in gt_data.get("annotations", []):
+        gt_by_image.setdefault(ann["image_id"], []).append(ann)
+    pred_by_image = {}
+    for pred in predictions:
+        pred_by_image.setdefault(pred["image_id"], []).append(pred)
+
+    # Pick sample images (those with most predictions, up to max_images)
+    sample_ids = sorted(pred_by_image.keys(), key=lambda x: len(pred_by_image[x]), reverse=True)[:max_images]
+    if not sample_ids:
+        sample_ids = list(id_to_file.keys())[:max_images]
+
+    wandb_images = []
+    for img_id in sample_ids:
+        fname = id_to_file.get(img_id)
+        if not fname:
+            continue
+        img_path = Path(images_dir) / fname
+        if not img_path.exists():
+            continue
+
+        img = Image.open(img_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+
+        # Draw GT boxes in green
+        for ann in gt_by_image.get(img_id, []):
+            x, y, w, h = ann["bbox"]
+            draw.rectangle([x, y, x + w, y + h], outline="green", width=2)
+
+        # Draw predicted boxes in red (with score)
+        for pred in pred_by_image.get(img_id, []):
+            x, y, w, h = pred["bbox"]
+            score = pred.get("score", 0)
+            if score < 0.3:
+                continue
+            draw.rectangle([x, y, x + w, y + h], outline="red", width=2)
+            draw.text((x, y - 10), f"{score:.2f}", fill="red")
+
+        wandb_images.append(wandb.Image(img, caption=f"{fname} (green=GT, red=pred)"))
+
+    if wandb_images:
+        wandb.log({"val/predictions": wandb_images})
+
+
+def setup_wandb_logging(project: str, run_name: str | None, config: dict, output_dir: str, dataset_dir: str):
     """Initialize wandb and install a WandbLogger subclass into SAM3's trainer.
 
     The SAM3 Trainer creates its logger as ``Logger(self.logging_conf)`` using
@@ -450,20 +511,35 @@ def setup_wandb_logging(project: str, run_name: str | None, config: dict):
 
     wandb.init(project=project, name=run_name, config=config)
 
+    # Paths for post-validation visualization
+    supercategory = "-grccs"
+    pred_json = str(Path(output_dir) / "dumps" / "roboflow" / supercategory / "coco_predictions_bbox.json")
+    gt_json = str(Path(dataset_dir) / supercategory / "test" / "_annotations.coco.json")
+    images_dir = str(Path(dataset_dir) / supercategory / "test")
+
     class WandbLogger(Logger):
         """Extends SAM3's Logger to also forward metrics to W&B."""
 
         def log_dict(self, payload, step):
             super().log_dict(payload, step)
-            wandb.log(payload, step=step)
+            # Epoch-level dicts (losses summary, val metrics) use epoch as step.
+            # Log without explicit step so wandb auto-increments and avoids
+            # "step is less than current step" warnings.
+            wandb.log(payload)
+            # After validation metrics are logged, also log visual predictions
+            if any("coco_eval" in k for k in payload):
+                try:
+                    _log_val_predictions_to_wandb(pred_json, gt_json, images_dir)
+                except Exception as e:
+                    print(f"Warning: failed to log val predictions to wandb: {e}")
 
         def log(self, name, data, step):
             super().log(name, data, step)
-            wandb.log({name: data}, step=step)
+            wandb.log({name: data, "trainer_step": step})
 
     # Replace Logger in the trainer module so Trainer.__init__ uses WandbLogger
     _trainer_mod.Logger = WandbLogger
-    print("✓ W&B logging enabled")
+    print("✓ W&B logging enabled (scalars + val predictions)")
 
 
 def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_gpus: int, epochs: int = 20, lr: float = 8e-4, wandb_args: dict | None = None):
@@ -563,6 +639,8 @@ def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_g
                     "config": config_name,
                     "num_gpus": num_gpus,
                 },
+                output_dir=output_dir,
+                dataset_dir=dataset_dir,
             )
 
         # Use random port for distributed training
