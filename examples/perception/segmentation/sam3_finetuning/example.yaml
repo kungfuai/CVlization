@@ -31,5 +31,5 @@ tasks:
   - instance_segmentation
   - semantic_segmentation
 verification:
-  last_verified: 2025-11-21
-  last_verification_note: "Initial implementation. Requires testing with actual dataset."
+  last_verified: 2026-02-11
+  last_verification_note: "Verified build, 2-epoch training on keremberke/pcb-defect-segmentation HF dataset. Loss decreasing (117→95), val mAP@0.50=0.25, checkpoint saved. 17GB VRAM on RTX PRO 6000 (98GB). Fixed --epochs override, checkpoint saving, and NaN matcher crash."

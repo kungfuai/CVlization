@@ -10,9 +10,19 @@ import io
 import os
 import sys
 import subprocess
-from pathlib import Path
-import yaml
 import tempfile
+from pathlib import Path
+
+import numpy as np
+import torch.multiprocessing
+import yaml
+
+# Patch set_start_method to always use force=True so SAM3's internal call
+# doesn't fail when the context was already set (e.g. by HF dataset loading).
+_orig_set_start_method = torch.multiprocessing.set_start_method
+def _safe_set_start_method(method, force=False):
+    _orig_set_start_method(method, force=True)
+torch.multiprocessing.set_start_method = _safe_set_start_method
 
 
 def parse_args() -> argparse.Namespace:
@@ -378,6 +388,18 @@ def prepare_dataset_structure(dataset_dir: str) -> str:
                 'date_created': '2025-01-01'
             }
 
+        # Filter out degenerate annotations (zero-area bboxes cause NaN in matcher)
+        orig_count = len(coco_data.get('annotations', []))
+        coco_data['annotations'] = [
+            ann for ann in coco_data.get('annotations', [])
+            if len(ann.get('bbox', [])) == 4
+            and ann['bbox'][2] > 0 and ann['bbox'][3] > 0
+            and ann.get('area', 0) > 0
+        ]
+        filtered = orig_count - len(coco_data['annotations'])
+        if filtered > 0:
+            print(f"  Filtered {filtered} degenerate annotations from {dst_name}")
+
         # Write updated COCO JSON
         with open(ann_dst, 'w') as f:
             json.dump(coco_data, f)
@@ -396,7 +418,7 @@ def prepare_dataset_structure(dataset_dir: str) -> str:
     return str(temp_dataset)
 
 
-def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_gpus: int):
+def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_gpus: int, epochs: int = 20, lr: float = 8e-4):
     """Run SAM3 training using its native training script."""
 
     print("\n" + "=" * 80)
@@ -448,6 +470,9 @@ def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_g
                 f"launcher.gpus_per_node={num_gpus}",
                 f"launcher.num_nodes=1",
                 "submitit.use_cluster=false",
+                f"trainer.max_epochs={epochs}",
+                "trainer.skip_saving_ckpts=false",
+                "trainer.val_epoch_freq=1",
             ]
         )
 
@@ -467,6 +492,17 @@ def run_sam3_training(config_name: str, dataset_dir: str, output_dir: str, num_g
         import random
 
         add_pythonpath_to_sys_path()
+
+        # Patch the matcher to handle NaN/Inf in cost matrices that cause
+        # linear_sum_assignment to crash with "matrix contains invalid numeric entries".
+        from sam3.train import matcher as _matcher_mod
+        _orig_do_matching = _matcher_mod._do_matching
+        def _safe_do_matching(cost, repeats=1, return_tgt_indices=False, do_filtering=False):
+            if not np.all(np.isfinite(cost)):
+                cost = np.copy(cost)
+                cost[~np.isfinite(cost)] = 1e8
+            return _orig_do_matching(cost, repeats=repeats, return_tgt_indices=return_tgt_indices, do_filtering=do_filtering)
+        _matcher_mod._do_matching = _safe_do_matching
 
         # Use random port for distributed training
         main_port = random.randint(10000, 20000)
@@ -534,6 +570,8 @@ def main():
             dataset_dir=str(Path(args.dataset_dir).absolute()),
             output_dir=str(Path(args.output_dir).absolute()),
             num_gpus=args.num_gpus,
+            epochs=args.epochs,
+            lr=args.lr,
         )
 
         print("\n" + "=" * 80)
