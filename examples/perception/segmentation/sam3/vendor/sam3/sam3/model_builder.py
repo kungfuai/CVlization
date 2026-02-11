@@ -471,7 +471,7 @@ def build_tracker(
         non_overlap_masks_for_mem_enc=False,
         non_overlap_masks_for_output=False,
         max_cond_frames_in_attn=4,
-        offload_output_to_cpu_for_eval=True,
+        offload_output_to_cpu_for_eval=False,
         # SAM decoder settings
         sam_mask_decoder_extra_args={
             "dynamic_multimask_via_stability": True,
