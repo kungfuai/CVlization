@@ -14,3 +14,4 @@ decord==0.6.0
 
 # Dataset download
 requests==2.32.5
+huggingface_hub>=0.20.0
