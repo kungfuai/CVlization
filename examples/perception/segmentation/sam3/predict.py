@@ -23,7 +23,6 @@ from PIL import Image
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
-DEFAULT_IMAGE = "examples/sample.jpg"
 DEFAULT_OUTPUT_IMAGE = "prediction.png"
 DEFAULT_OUTPUT_VIDEO = "prediction_video.mp4"
 
@@ -31,29 +30,22 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
 
 ASSETS_REPO = "zzsi/cvl"
-SAMPLE_FILES = {
-    "image": "examples/sample.jpg",  # bundled locally
-    "video": "sam3/soccer_360p.mp4",
-}
+SAMPLE_VIDEO_PATH = "sam3/soccer_360p.mp4"
 
 
-def get_sample_asset(kind: str = "image") -> str:
-    """Return a bundled sample or lazy-download from HuggingFace."""
-    if kind == "image":
-        return DEFAULT_IMAGE
-
-    remote_path = SAMPLE_FILES[kind]
-    filename = os.path.basename(remote_path)
+def get_sample_video() -> str:
+    """Return local path to sample video, downloading from HuggingFace if needed."""
+    filename = os.path.basename(SAMPLE_VIDEO_PATH)
     local_path = os.path.join(os.path.dirname(__file__), "examples", filename)
     if os.path.exists(local_path):
         return local_path
 
-    print(f"Downloading sample {kind}: {filename}")
+    print(f"Downloading sample video: {filename}")
     from huggingface_hub import hf_hub_download
 
     downloaded = hf_hub_download(
         repo_id=ASSETS_REPO,
-        filename=remote_path,
+        filename=SAMPLE_VIDEO_PATH,
         repo_type="dataset",
     )
     return downloaded
@@ -112,11 +104,6 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.1,
         help="Instance score threshold for mask filtering (transformers backend)",
-    )
-    parser.add_argument(
-        "--sample-video",
-        action="store_true",
-        help="Use bundled sample video (downloads from HuggingFace if needed)",
     )
     parser.add_argument(
         "--save-masks",
@@ -367,21 +354,17 @@ def _write_overlay_video(
 def main() -> None:
     args = parse_args()
 
-    # Resolve input: --sample-video > --input > --image > default image
+    # Resolve input: --input > --image (deprecated) > sample video
     raw_input = args.input or args.image
     if args.image and not args.input:
         print("Warning: --image is deprecated, use --input instead.")
 
-    if args.sample_video:
-        sample_path = get_sample_asset("video")
-        input_path = Path(sample_path)
-        print(f"Using sample video: {input_path}")
+    if raw_input is None:
+        input_path = Path(get_sample_video())
+        print(f"No --input provided, using sample video: {input_path}")
         if args.text == "text":
             args.text = "person"
-            print("Using default prompt 'person' for soccer sample video")
-    elif raw_input is None:
-        input_path = Path(get_sample_asset("image"))
-        print(f"No --input provided, using bundled sample: {input_path}")
+            print("Using default prompt 'person' for sample video")
     else:
         input_path = Path(resolve_input_path(raw_input))
 
@@ -396,9 +379,6 @@ def main() -> None:
         output_path = Path(resolve_output_path(default))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if args.text == "text" and raw_input is None:
-        print("Using default prompt 'text' for invoice sample")
 
     if is_video:
         process_video(args, input_path, output_path)
