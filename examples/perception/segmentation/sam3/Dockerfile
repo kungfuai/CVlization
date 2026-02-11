@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
+    ffmpeg \
     libgl1-mesa-glx \
     libglib2.0-0 \
     build-essential \
@@ -20,11 +21,9 @@ WORKDIR /workspace
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Clone SAM3 repo at fixed commit for reproducibility
-RUN git clone https://github.com/facebookresearch/sam3 /opt/sam3 && \
-    cd /opt/sam3 && \
-    git checkout 84cc43bca4347b772f17d1078a1ddb4c054655c2 && \
-    pip install --no-cache-dir -e .
+# Vendored SAM3 source (from github.com/facebookresearch/sam3, commit 2ec3c07)
+COPY vendor/sam3 /opt/sam3
+RUN cd /opt/sam3 && pip install --no-cache-dir -e .
 
 # Make SAM3 importable everywhere
 ENV PYTHONPATH=/opt/sam3
