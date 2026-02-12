@@ -1,0 +1,29 @@
+name: panoptic-segmentation-detectron2
+capability: perception/segmentation
+modalities:
+- vision
+datasets:
+- coco-panoptic
+stability: alpha
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 8
+presets:
+  build:
+    script: build.sh
+    description: Build the Detectron2 panoptic Docker image
+  predict:
+    script: predict.sh
+    description: Run panoptic segmentation inference using Detectron2 PanopticFPN
+tags:
+- detectron2
+- panoptic-segmentation
+- panoptic-fpn
+- pytorch
+tasks:
+- panoptic_segmentation
+frameworks:
+- pytorch
+- detectron2
+description: Detectron2 PanopticFPN inference pipeline for panoptic segmentation visualization.
