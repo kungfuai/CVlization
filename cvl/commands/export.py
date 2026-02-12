@@ -13,12 +13,33 @@ from cvl.core.matching import find_matching_examples
 
 
 IGNORE_PATTERNS = [
+    # Python
     "__pycache__",
     "*.pyc",
     "*.pyo",
     ".pytest_cache",
+    "*.egg-info",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    # OS
     ".DS_Store",
+    # Git
     ".git",
+    # Secrets
+    ".env",
+    # ML runtime artifacts
+    "wandb",
+    "runs",
+    "lightning_logs",
+    "mlruns",
+    "outputs",
+    "checkpoints",
+    "log",
+    "logs",
+    # Jupyter
+    ".ipynb_checkpoints",
 ]
 
 
