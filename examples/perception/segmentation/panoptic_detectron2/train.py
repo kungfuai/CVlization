@@ -391,6 +391,22 @@ class WandbPanopticImageHook(HookBase):
 # ---------------------------------------------------------------------------
 
 class PanopticTrainer(DefaultTrainer):
+    def run_step(self):
+        """Override to handle NaN sem_seg loss gracefully.
+
+        Some batches contain only "thing" pixels (sem_seg mask all 255/ignore),
+        which makes cross_entropy return NaN.  Since detectron2 raises
+        FloatingPointError *before* backward() is called, the model weights are
+        not corrupted and we can safely skip the step.
+        """
+        try:
+            self._trainer.run_step()
+        except FloatingPointError:
+            import logging
+            logging.getLogger("detectron2").warning(
+                f"NaN/Inf loss at iter {self.iter} – skipping step (likely all-ignore sem_seg batch)"
+            )
+
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
         if output_folder is None:
@@ -430,6 +446,13 @@ def build_cfg(args, train_dataset_name: str, val_dataset_name: str, num_thing_cl
     cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES = num_stuff_classes
 
     cfg.INPUT.MASK_FORMAT = "bitmask"
+
+    # Gradient clipping to prevent NaN in sem_seg head (randomly initialized)
+    cfg.SOLVER.CLIP_GRADIENTS.ENABLED = True
+    cfg.SOLVER.CLIP_GRADIENTS.CLIP_TYPE = "norm"
+    cfg.SOLVER.CLIP_GRADIENTS.CLIP_VALUE = 1.0
+    cfg.SOLVER.CLIP_GRADIENTS.NORM_TYPE = 2.0
+
     cfg.TEST.EVAL_PERIOD = args.eval_period
 
     cfg.OUTPUT_DIR = os.path.join("output", "panoptic_detectron2")
@@ -443,7 +466,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Train Detectron2 PanopticFPN on coco_panoptic_tiny")
     parser.add_argument("--max-iter", type=int, default=3000)
-    parser.add_argument("--lr", type=float, default=0.0005)
+    parser.add_argument("--lr", type=float, default=0.00025)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--eval-period", type=int, default=500)
     parser.add_argument("--freeze-at", type=int, default=2)

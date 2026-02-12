@@ -33,4 +33,4 @@ description: Detectron2 PanopticFPN training and inference for panoptic segmenta
 
 verification:
   last_verified: 2026-02-12
-  last_verification_note: "Verified build, training (100 iter smoke test), and panoptic eval on RTX 3090 (24GB VRAM). GPU usage: ~4.6GB VRAM (19%). PQ=29.3 after 50 iter (pretrained COCO weights). Loss decreased 4.27->2.18 over 100 iter."
+  last_verification_note: "Full 3000-iter training verified on RTX 3090 (24GB). GPU: ~4.9GB VRAM (20%). Loss 4.1->1.46, best PQ=33.2 at iter 2000 (Things=48.6, Stuff=10.4). Wandb: 36 media files (semantic+instance panels) + scalar metrics logged. 2 NaN sem_seg batches gracefully skipped."
