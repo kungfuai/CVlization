@@ -3,7 +3,7 @@ capability: perception/segmentation
 modalities:
 - vision
 datasets:
-- coco-panoptic
+- penn-fudan-pedestrian
 stability: stable
 resources:
   gpu: 1
@@ -28,4 +28,4 @@ frameworks:
 description: Panoptic segmentation training with Torchvision
 verification:
   last_verified: 2025-10-26
-  last_verification_note: "Build successful (PyTorch 2.4.0, Lightning 2.4.0). Fixed dtype conversion bug in validation metrics computation. Training verified with FCOS detector on Kitti-tiny dataset. Training runs successfully through multiple epochs with validation metrics: mAP 8.4%, mAP@50 22.4%."
+  last_verification_note: "Example now uses Mask R-CNN + lightweight semantic head on Penn-Fudan to produce panoptic targets via Detectron2-style merge logic."

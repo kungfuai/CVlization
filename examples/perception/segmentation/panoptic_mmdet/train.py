@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import numpy as np
 try:
     from mmdet.datasets import build_dataset
 except ImportError:
@@ -15,12 +16,115 @@ except ImportError:
         "pip install -U mmcv-full==1.6.1 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.12.0/index.html"
     )
     raise
+import mmcv
+from mmcv.runner import HOOKS, Hook
+from mmdet.core import INSTANCE_OFFSET
 from cvlization.dataset.coco_panoptic_tiny import CocoPanopticTinyDatasetBuilder
 from cvlization.torch.net.panoptic_segmentation.mmdet import (
     MMPanopticSegmentationModels,
     MMDatasetAdaptor,
     MMTrainer,
 )
+
+
+@HOOKS.register_module()
+class WandbPanopticImageHook(Hook):
+    """Log side-by-side (input | gt_semantic | pred_semantic) to wandb."""
+
+    MARGIN = 4
+
+    def __init__(self, img_paths, seg_paths, seg_id_to_class_idx_maps,
+                 num_images=3, log_every_n_epochs=1):
+        self.img_paths = img_paths[:num_images]
+        self.seg_paths = seg_paths[:num_images]
+        self.seg_id_to_class_idx_maps = seg_id_to_class_idx_maps[:num_images]
+        self.log_every_n_epochs = log_every_n_epochs
+        self._cmap = self._build_colormap(256)
+
+    @staticmethod
+    def _build_colormap(n):
+        rng = np.random.RandomState(42)
+        cmap = rng.randint(60, 220, size=(n, 3), dtype=np.uint8)
+        cmap[255] = 0
+        return cmap
+
+    def _colorize(self, label_map):
+        h, w = label_map.shape
+        rgb = np.zeros((h, w, 3), dtype=np.uint8)
+        for cid in np.unique(label_map):
+            rgb[label_map == cid] = self._cmap[int(cid) % len(self._cmap)]
+        return rgb
+
+    def _hmargin(self, h):
+        return np.full((h, self.MARGIN, 3), 255, dtype=np.uint8)
+
+    def after_train_epoch(self, runner):
+        if (runner.epoch + 1) % self.log_every_n_epochs != 0:
+            return
+        import wandb
+        if wandb.run is None:
+            return
+
+        from mmdet.apis import inference_detector
+        from panopticapi.utils import rgb2id
+
+        model = runner.model
+        if hasattr(model, "module"):
+            model = model.module  # unwrap DataParallel
+
+        sem_panels, inst_panels = [], []
+        for img_path, seg_path, sid2idx in zip(
+            self.img_paths, self.seg_paths, self.seg_id_to_class_idx_maps
+        ):
+            raw_img = mmcv.bgr2rgb(mmcv.imread(img_path))
+            h, w = raw_img.shape[:2]
+            margin = self._hmargin(h)
+
+            # GT panoptic PNG
+            pan_png = mmcv.bgr2rgb(mmcv.imread(seg_path, flag="color"))
+            seg_ids = rgb2id(pan_png)
+
+            # GT semantic: segment_id → contiguous class index
+            gt_sem = np.full_like(seg_ids, 255, dtype=np.int32)
+            for sid, cls_idx in sid2idx.items():
+                gt_sem[seg_ids == sid] = cls_idx
+
+            # Prediction
+            result = inference_detector(model, img_path)
+            pan = result.get("pan_results", None)
+            if pan is not None:
+                pred_sem = (pan % INSTANCE_OFFSET).astype(np.int32)
+            else:
+                pan = np.zeros(raw_img.shape[:2], dtype=np.int32)
+                pred_sem = pan
+
+            # Semantic panel (class-level colors)
+            gt_sem_rgb = mmcv.imresize(self._colorize(gt_sem), (w, h))
+            pred_sem_rgb = mmcv.imresize(self._colorize(pred_sem), (w, h))
+            sem_panels.append(np.concatenate(
+                [raw_img, margin, gt_sem_rgb, margin, pred_sem_rgb], axis=1,
+            ))
+
+            # Instance panel (unique color per instance)
+            gt_inst_rgb = mmcv.imresize(self._colorize(seg_ids), (w, h))
+            pred_inst_rgb = mmcv.imresize(self._colorize(pan), (w, h))
+            inst_panels.append(np.concatenate(
+                [raw_img, margin, gt_inst_rgb, margin, pred_inst_rgb], axis=1,
+            ))
+
+        wandb.log(
+            {
+                "images/val_semantic": [
+                    wandb.Image(p, caption="input | gt | pred")
+                    for p in sem_panels
+                ],
+                "images/val_instance": [
+                    wandb.Image(p, caption="input | gt | pred")
+                    for p in inst_panels
+                ],
+            },
+            step=runner.iter,
+        )
 
 
 def get_cache_dir() -> Path:
@@ -58,12 +162,55 @@ class TrainingSession:
         )
         self.trainer = self.create_trainer(self.cfg, self.args.net)
         self.cfg = self.trainer.config
+        if os.environ.get("WANDB_API_KEY"):
+            self._register_image_hook(self.cfg, dsb)
         print("batch size:", self.cfg.data.samples_per_gpu)
         self.trainer.fit(
             model=self.model,
             train_dataset=self.datasets[0],
             val_dataset=self.datasets[1],
         )
+
+    @staticmethod
+    def _register_image_hook(cfg, dsb):
+        """Build a WandbPanopticImageHook and attach it to cfg.custom_hooks."""
+        # Gather image/seg paths for a few val images
+        import json
+
+        ann_path = os.path.join(dsb.data_dir, dsb.dataset_folder, dsb.val_ann_file)
+        with open(ann_path) as f:
+            ann = json.load(f)
+        img_dir = os.path.join(dsb.data_dir, dsb.dataset_folder, dsb.img_folder)
+        seg_dir = os.path.join(dsb.data_dir, dsb.dataset_folder, dsb.seg_folder)
+
+        # Build coco_category_id → contiguous class index mapping
+        name_to_catid = {cat["name"]: cat["id"] for cat in ann["categories"]}
+        catid_to_idx = {}
+        for idx, name in enumerate(dsb.classes):
+            cid = name_to_catid.get(name)
+            if cid is not None:
+                catid_to_idx[cid] = idx
+
+        img_paths, seg_paths, sid2idx_maps = [], [], []
+        for entry in ann.get("annotations", [])[:3]:
+            fname = entry["file_name"]
+            img_fname = fname.replace(".png", ".jpg")
+            img_paths.append(os.path.join(img_dir, img_fname))
+            seg_paths.append(os.path.join(seg_dir, fname))
+            # segment_id → contiguous class index (same space as model output)
+            sid2idx_maps.append(
+                {seg["id"]: catid_to_idx[seg["category_id"]]
+                 for seg in entry["segments_info"]
+                 if seg["category_id"] in catid_to_idx}
+            )
+
+        hook = WandbPanopticImageHook(
+            img_paths=img_paths, seg_paths=seg_paths,
+            seg_id_to_class_idx_maps=sid2idx_maps, num_images=3,
+        )
+        if not hasattr(cfg, "custom_hooks") or cfg.custom_hooks is None:
+            cfg.custom_hooks = []
+        cfg.custom_hooks.append(hook)
 
     def create_model(self, num_things_classes: int, num_stuff_classes: int):
         model_registry = MMPanopticSegmentationModels(

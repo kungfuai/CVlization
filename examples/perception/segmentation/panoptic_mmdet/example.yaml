@@ -8,7 +8,7 @@ datasets:
 stability: stable
 resources:
   gpu: 1
-  vram_gb: 16
+  vram_gb: 10
   disk_gb: 15
 presets:
   build:
@@ -28,3 +28,7 @@ frameworks:
 - pytorch
 - mmdetection
 description: Panoptic segmentation training with MMDetection framework
+
+verification:
+  last_verified: 2026-02-12
+  last_verification_note: "Verified build, training (3 epochs), and panoptic eval on RTX 3090 (24GB VRAM). GPU usage: ~9GB VRAM (37%), 69% GPU utilization. PQ improved 25.9->31.3->35.8 across epochs. Fixed missing ~/.cache/cvlization mount in train.sh for dataset caching."

@@ -138,6 +138,7 @@ tail -f logs/train.log | grep -i "map\|loss_classifier\|loss_box"
 - **Target:** IoU increasing (>0.5 is decent, >0.7 is good), loss decreasing
 - **Typical range:** IoU 0-1, pixel accuracy 0-100%
 - **Variants:** mIoU (mean IoU across classes)
+- **Panoptic-specific:** PQ (Panoptic Quality), SQ (Segmentation Quality), RQ (Recognition Quality). PQ = SQ * RQ. Reported separately for "Things" (instances) and "Stuff" (amorphous regions). Pretrained COCO models may start with PQ ~28-30 on tiny subsets.
 
 ```bash
 # Monitor segmentation metrics
@@ -428,3 +429,5 @@ Check these files for debugging:
 - Check `docker logs <container>` if training hangs
 - For WandB integration, set `WANDB_API_KEY` environment variable
 - Most examples support environment variable overrides (check train.sh)
+- **Test wandb without API key**: Use `WANDB_MODE=offline ./train.sh --track ...` to verify wandb hooks fire correctly without needing a real API key. Check for `wandb: Synced N W&B file(s), M media file(s)` in the output to confirm images and scalars were logged.
+- **Root-owned files from Docker**: Files created inside Docker containers (e.g., cached datasets, generated masks, output checkpoints) are owned by root and can't be deleted from the host without sudo. To clean them up: `docker run --rm --mount "type=bind,src=${HOME}/.cache/cvlization,dst=/data" <image> rm -rf /data/path/to/stale/files`

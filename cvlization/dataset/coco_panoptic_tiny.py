@@ -3,6 +3,7 @@ Serves a subset of COCO val2017 panoptic segmentation dataset with 700 images.
 """
 
 from dataclasses import dataclass, field
+import json
 import numpy as np
 import os
 from pathlib import Path
@@ -10,7 +11,6 @@ from subprocess import check_output
 from PIL import Image
 from typing import Union, List, Tuple
 from panopticapi.utils import rgb2id
-from mmdet.datasets.coco_panoptic import COCOPanoptic
 from ..data.dataset_builder import Dataset, DatasetProvider
 from ..data.dataset_builder import TransformedMapStyleDataset
 from cvl.core.downloads import get_cache_dir
@@ -21,6 +21,58 @@ def _default_data_dir() -> Path:
     cache_dir = get_cache_dir() / "data"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
+
+
+class _SimpleCocoPanoptic:
+    """Minimal COCO panoptic reader used by CocoPanopticTinyDataset.
+
+    This replaces the previous dependency on MMDetection's ``COCOPanoptic`` and
+    only implements methods needed in this repository.
+    """
+
+    def __init__(self, ann_file: str):
+        with open(ann_file, "r", encoding="utf-8") as f:
+            self.dataset = json.load(f)
+
+        self.imgs = {img["id"]: img for img in self.dataset.get("images", [])}
+        self.cats = {cat["id"]: cat for cat in self.dataset.get("categories", [])}
+
+        self.anns = {}
+        self.imgToAnns = {}
+        for image_ann in self.dataset.get("annotations", []):
+            image_id = image_ann["image_id"]
+            segments_info = image_ann.get("segments_info", [])
+            self.imgToAnns[image_id] = []
+            for seg in segments_info:
+                ann = dict(seg)
+                ann["image_id"] = image_id
+                self.anns[ann["id"]] = ann
+                self.imgToAnns[image_id].append(ann["id"])
+
+    def get_ann_ids(self, img_ids=None):
+        if img_ids is None:
+            return list(self.anns.keys())
+        if isinstance(img_ids, int):
+            img_ids = [img_ids]
+        ann_ids = []
+        for img_id in img_ids:
+            ann_ids.extend(self.imgToAnns.get(img_id, []))
+        return ann_ids
+
+    def load_anns(self, ids):
+        if isinstance(ids, int):
+            ids = [ids]
+        return [self.anns[i] for i in ids if i in self.anns]
+
+    def load_cats(self, ids):
+        if isinstance(ids, int):
+            ids = [ids]
+        return [self.cats[i] for i in ids if i in self.cats]
+
+    def loadImgs(self, ids):
+        if isinstance(ids, int):
+            ids = [ids]
+        return [self.imgs[i] for i in ids if i in self.imgs]
 
 
 @dataclass
@@ -66,15 +118,27 @@ class CocoPanopticTinyDatasetBuilder:
 
     @property
     def classes(self):
-        return [c["name"] for c in self.training_dataset().coco.dataset["categories"]]
+        ds = self.training_dataset()
+        base_ds = ds.base_dataset if hasattr(ds, "base_dataset") else ds
+        if getattr(base_ds, "coco", None) is None:
+            base_ds.load_annotations()
+        return [c["name"] for c in base_ds.coco.dataset["categories"]]
 
     @property
     def things_classes(self) -> List[dict]:
-        return self.training_dataset().things_classes
+        ds = self.training_dataset()
+        base_ds = ds.base_dataset if hasattr(ds, "base_dataset") else ds
+        if getattr(base_ds, "coco", None) is None:
+            base_ds.load_annotations()
+        return base_ds.things_classes
 
     @property
     def stuff_classes(self) -> List[dict]:
-        return self.training_dataset().stuff_classes
+        ds = self.training_dataset()
+        base_ds = ds.base_dataset if hasattr(ds, "base_dataset") else ds
+        if getattr(base_ds, "coco", None) is None:
+            base_ds.load_annotations()
+        return base_ds.stuff_classes
 
     @property
     def num_classes(self):
@@ -173,6 +237,8 @@ class CocoPanopticTinyDataset:
         self.channels_first = channels_first
         self.label_offset = label_offset
         self.download_url = download_url
+        self.ids = None
+        self.coco = None
 
     def _get_ann_info(self, idx):
         """Get COCO annotation by index.
@@ -267,8 +333,11 @@ class CocoPanopticTinyDataset:
             if mask_info.get("is_thing"):
                 gt_masks.append(mask.astype(np.uint8))
 
-        gt_masks = np.stack(gt_masks, axis=0)
-        assert gt_masks.ndim == 3, f"gt_masks.ndim = {gt_masks.ndim}, expected: 3"
+        if gt_masks:
+            gt_masks = np.stack(gt_masks, axis=0)
+            assert gt_masks.ndim == 3, f"gt_masks.ndim = {gt_masks.ndim}, expected: 3"
+        else:
+            gt_masks = np.zeros((0,) + pan_png.shape, dtype=np.uint8)
 
         return gt_seg, gt_masks
 
@@ -300,33 +369,8 @@ class CocoPanopticTinyDataset:
         gt_seg, gt_masks = self._parse_pan_label_image(pan_label_image, ann["masks"])
 
         """
-        Code sample from mmdet.datasets.pipelines.loading:
-        (for parsing panoptic segmentations)
-
-        pan_png = mmcv.imfrombytes(
-            img_bytes, flag='color', channel_order='rgb').squeeze()
-        pan_png = rgb2id(pan_png)
-
-        gt_masks = []
-        gt_seg = np.zeros_like(pan_png) + 255  # 255 as ignore
-
-        for mask_info in results['ann_info']['masks']:
-            mask = (pan_png == mask_info['id'])
-            gt_seg = np.where(mask, mask_info['category'], gt_seg)
-
-            # The legal thing masks
-            if mask_info.get('is_thing'):
-                gt_masks.append(mask.astype(np.uint8))
-        
-        if self.with_mask:
-            h, w = results['img_info']['height'], results['img_info']['width']
-            gt_masks = BitmapMasks(gt_masks, h, w)
-            results['gt_masks'] = gt_masks
-            results['mask_fields'].append('gt_masks')
-
-        if self.with_seg:
-            results['gt_semantic_seg'] = gt_seg
-            results['seg_fields'].append('gt_semantic_seg')
+        Reference implementation idea:
+        parse RGB panoptic map -> segment ids -> semantic map + thing masks.
         """
 
         if self.channels_first:
@@ -345,9 +389,9 @@ class CocoPanopticTinyDataset:
             print("Loading annotations...")
             self.annotations = self.load_annotations()
 
-        if self.annotations is None:
+        if self.ids is None:
             raise ValueError("Annotations not loaded correctly.")
-        return len(self.annotations)
+        return len(self.ids)
 
     def download(self):
         assert self.download_url is not None, f"download_url is None"
@@ -394,28 +438,20 @@ class CocoPanopticTinyDataset:
         print("data_dir:", self.data_dir)
         print("ann_file:", self.ann_file)
         print("dataset_folder:", self.dataset_folder)
-        self.coco = COCOPanoptic(
+        self.coco = _SimpleCocoPanoptic(
             os.path.join(self.data_dir, self.dataset_folder, self.ann_file)
         )
         self.ids = list(sorted(self.coco.imgs.keys()))
         self.CLASSES = self.coco.cats.keys()
         print(f"{len(self.CLASSES)} classes")
         self.cat2label = {k: i for i, k in enumerate(self.CLASSES)}
-        return self.coco.anns
+        return self.ids
 
 
 if __name__ == "__main__":
     """
     python -m cvlization.dataset.coco_panoptic_tiny
     """
-    from mmdet.datasets.coco_panoptic import CocoPanopticDataset
-
-    # ds = CocoPanopticDataset(
-    #     ann_file="data/coco_panoptic_tiny/annotations/panoptic_val2017_first500.json",
-    #     pipeline=[],
-    # )
-    # assert False
-
     ds = CocoPanopticTinyDataset()
     print(len(ds), "examples in the dataset")
     example = ds[10]

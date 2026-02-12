@@ -2,8 +2,9 @@
 Training Script for Video Artifact Removal (Step-based)
 
 Usage:
+    python train.py                             # Train with Pexels Animals (default)
     python train.py --dummy                     # Train with dummy data
-    python train.py --vimeo --steps 50000       # Train with Vimeo dataset
+    python train.py --vimeo                     # Train with Vimeo dataset
     python train.py --resume checkpoint.pt      # Resume training
     python train.py --val-every 500             # Validate every 500 steps
     python train.py --artifacts "corner_logo,gaussian_noise"  # Specify artifact types
@@ -28,7 +29,7 @@ from model import TemporalNAFUNet, NAFUNetLite, ExplicitCompositeNet
 from model_lama import LamaWithMask
 from model_elir import ElirWithMask
 from losses import ArtifactRemovalLoss, PSNRMetric, SSIMMetric
-from dataset import get_dataloaders, get_vimeo_dataloaders
+from dataset import get_dataloaders, get_vimeo_dataloaders, get_pexels_dataloaders
 from pretrained import get_pretrained_path
 
 
@@ -567,7 +568,7 @@ def train(config: Config, args):
         multi_scale = [int(s.strip()) for s in args.multi_scale.split(",")]
         print(f"Multi-scale training enabled: {multi_scale}")
 
-    # Select data source
+    # Select data source: Pexels (default) > Vimeo > local/dummy
     if args.vimeo:
         print("Using Vimeo Septuplet dataset")
         train_loader, val_loader = get_vimeo_dataloaders(
@@ -581,7 +582,7 @@ def train(config: Config, args):
             size_scale=args.size_scale,
             multi_scale=multi_scale,
         )
-    else:
+    elif args.dummy or args.data:
         train_loader, val_loader = get_dataloaders(
             data_path=args.data if args.data else "./data",
             batch_size=config.training.batch_size,
@@ -591,6 +592,19 @@ def train(config: Config, args):
             use_dummy=args.dummy,
             enabled_artifacts=enabled_artifacts,
             size_scale=args.size_scale,
+        )
+    else:
+        print("Using Pexels Animals dataset (default)")
+        train_loader, val_loader = get_pexels_dataloaders(
+            batch_size=config.training.batch_size,
+            frame_size=config.data.frame_size,
+            num_frames=config.data.num_frames,
+            num_workers=args.workers,
+            enabled_artifacts=enabled_artifacts,
+            data_dir=args.data,
+            preserve_aspect_ratio=config.data.preserve_aspect_ratio,
+            size_scale=args.size_scale,
+            multi_scale=multi_scale,
         )
     print(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
     
@@ -828,7 +842,7 @@ def main():
     parser.add_argument("--dummy", action="store_true",
                         help="Use dummy data for testing")
     parser.add_argument("--vimeo", action="store_true",
-                        help="Use Vimeo Septuplet dataset (run prepare_data.sh first)")
+                        help="Use Vimeo Septuplet dataset instead of Pexels")
     parser.add_argument("--workers", type=int, default=4,
                         help="DataLoader workers")
     parser.add_argument("--num-frames", type=int, default=None,
@@ -1035,7 +1049,8 @@ def main():
     if args.size_scale != 1.0:
         print(f"Artifact size scale: {args.size_scale}x")
     print(f"Enabled artifacts: {config.data.enabled_artifacts or 'overlay types (default)'}")
-    print(f"Dataset: {'Vimeo Septuplet' if args.vimeo else ('dummy' if args.dummy else 'custom')}")
+    dataset_name = 'Vimeo Septuplet' if args.vimeo else ('dummy' if args.dummy else ('custom' if args.data else 'Pexels Animals'))
+    print(f"Dataset: {dataset_name}")
     
     # Train
     train(config, args)

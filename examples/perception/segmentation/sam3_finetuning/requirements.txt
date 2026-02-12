@@ -24,6 +24,9 @@ scikit-learn
 # torch>=2.7.0
 # torchvision
 
+# Experiment tracking
+wandb
+
 # Additional utilities
 pycocotools
 pillow

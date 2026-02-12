@@ -1,0 +1,9 @@
+git+https://github.com/facebookresearch/segment-anything.git
+monai
+safetensors
+wandb
+pycocotools
+datasets
+pyyaml
+tqdm
+pillow

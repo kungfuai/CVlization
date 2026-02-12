@@ -2,6 +2,7 @@ name: sam3
 capability: perception/segmentation
 modalities:
   - vision
+  - video
   - text
 stability: experimental
 resources:
@@ -15,19 +16,26 @@ presets:
     description: Build the SAM3 inference image
   predict:
     script: predict.sh
-    description: Run text-prompted SAM3 segmentation on an image
+    description: Run text-prompted SAM3 segmentation on an image or video
+  train:
+    script: train.sh
+    description: LoRA fine-tune SAM3 ViT backbone on a COCO-format dataset
 tags:
   - sam3
   - segmentation
+  - video
   - inference
   - open-vocabulary
+  - lora
+  - finetuning
 frameworks:
   - pytorch
   - transformers
-description: SAM3 text-prompted segmentation inference in a slim runtime container.
+description: SAM3 text-prompted segmentation and video object tracking in a slim runtime container.
 tasks:
   - instance_segmentation
   - semantic_segmentation
+  - video_object_segmentation
 verification:
-  last_verified: "2025-12-30"
-  last_verification_note: "Verified on Blackwell RTX PRO 6000. Upgraded to PyTorch 2.9.1+CUDA 12.8 runtime. Uses transformers from git (PyPI 4.57.3 doesn't include Sam3Model). Lowered default score-threshold to 0.1. Requires HF authentication for gated model. VRAM: ~10GB."
+  last_verified: "2026-02-12"
+  last_verification_note: "Verified build, image/video inference, and LoRA training on Blackwell RTX PRO 6000 (96GB). Training: 2-epoch LoRA test with rank=8, 1.0M/841M trainable params, 5GB VRAM, loss decreased 337→322, val AP@50=0.65. Mask+dice loss enabled. Requires HF auth for gated model."

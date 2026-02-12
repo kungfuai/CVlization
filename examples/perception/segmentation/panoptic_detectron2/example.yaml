@@ -1,0 +1,36 @@
+name: panoptic-segmentation-detectron2
+capability: perception/segmentation
+modalities:
+- vision
+datasets:
+- coco-panoptic
+stability: alpha
+resources:
+  gpu: 1
+  vram_gb: 12
+  disk_gb: 8
+presets:
+  build:
+    script: build.sh
+    description: Build the Detectron2 panoptic Docker image
+  predict:
+    script: predict.sh
+    description: Run panoptic segmentation inference using Detectron2 PanopticFPN
+  train:
+    script: train.sh
+    description: Train/finetune Detectron2 PanopticFPN on coco_panoptic_tiny
+tags:
+- detectron2
+- panoptic-segmentation
+- panoptic-fpn
+- pytorch
+tasks:
+- panoptic_segmentation
+frameworks:
+- pytorch
+- detectron2
+description: Detectron2 PanopticFPN training and inference for panoptic segmentation.
+
+verification:
+  last_verified: 2026-02-12
+  last_verification_note: "Full 3000-iter training verified on RTX 3090 (24GB). GPU: ~4.9GB VRAM (20%). Loss 4.1->1.46, best PQ=33.2 at iter 2000 (Things=48.6, Stuff=10.4). Wandb: 36 media files (semantic+instance panels) + scalar metrics logged. 2 NaN sem_seg batches gracefully skipped."
