@@ -94,6 +94,9 @@ def _compose_yaml_content(image_name: str) -> str:
             build:
               context: .
               dockerfile: services/app/Dockerfile
+              args:
+                USER_ID: ${{ARGS_USER_ID:-1000}}
+                GROUP_ID: ${{ARGS_GROUP_ID:-1000}}
             image: {image_name}
             volumes:
               - .:/workspace
@@ -136,6 +139,10 @@ def _setup_environment_sh() -> str:
         export HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
         export CVL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/cvlization"
         mkdir -p "$HF_CACHE" "$CVL_CACHE"
+
+        # User ID forwarding (for containers that switch to non-root user)
+        export ARGS_USER_ID=$(id -u)
+        export ARGS_GROUP_ID=$(id -g)
 
         # GPU detection
         if command -v nvidia-smi &>/dev/null; then
