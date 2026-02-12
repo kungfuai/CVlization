@@ -1,9 +1,11 @@
 import logging
 from typing import Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torchvision.transforms import functional as TVF
 
 from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
 from cvlization.torch.lightning_utils import LightningModule
@@ -106,12 +108,21 @@ def combine_semantic_and_instance_outputs(
 
 
 class TorchvisionPanopticLitModel(LightningModule):
-    def __init__(self, lr: float = 1e-4, num_classes: int = 2, freeze_backbone: bool = True):
+    def __init__(
+        self,
+        lr: float = 1e-4,
+        num_classes: int = 2,
+        freeze_backbone: bool = True,
+        log_detailed_metrics: bool = False,
+        log_images_every_n_epochs: int = 0,
+    ):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
         self.num_classes = num_classes
         self.freeze_backbone = freeze_backbone
+        self.log_detailed_metrics = log_detailed_metrics
+        self.log_images_every_n_epochs = max(0, int(log_images_every_n_epochs))
 
         # Keep a Torchvision model as requested; use mask-capable architecture.
         self.detector = detection.maskrcnn_resnet50_fpn(
@@ -132,6 +143,7 @@ class TorchvisionPanopticLitModel(LightningModule):
         self.train_mAP = MeanAveragePrecision(class_metrics=True)
         self.val_mAP = MeanAveragePrecision(class_metrics=True)
         self._reset_semantic_metrics()
+        self._val_image_panels: List[np.ndarray] = []
 
     def _reset_semantic_metrics(self):
         self._train_sem_intersection = torch.zeros(self.num_classes, dtype=torch.float64)
@@ -162,6 +174,16 @@ class TorchvisionPanopticLitModel(LightningModule):
         correct = (pred == target).sum().double().cpu()
         total = torch.tensor(float(target.numel()), dtype=torch.float64)
         return intersection, union, correct, total
+
+    @staticmethod
+    def _multiclass_dice_loss(logits: torch.Tensor, target: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+        probs = torch.softmax(logits, dim=1)
+        target_1h = F.one_hot(target.long(), num_classes=logits.shape[1]).permute(0, 3, 1, 2).float()
+        dims = (0, 2, 3)
+        intersection = torch.sum(probs * target_1h, dim=dims)
+        denom = torch.sum(probs, dim=dims) + torch.sum(target_1h, dim=dims)
+        dice_per_class = (2.0 * intersection + eps) / (denom + eps)
+        return 1.0 - dice_per_class.mean()
 
     def forward(self, images):
         # TorchTrainer runs a preflight forward(inputs) before fit().
@@ -224,6 +246,60 @@ class TorchvisionPanopticLitModel(LightningModule):
         sem_logits = self.semantic_head(feat)
         return sem_logits, original_image_sizes
 
+    @staticmethod
+    def _colorize_labels(labels: torch.Tensor) -> np.ndarray:
+        palette = torch.tensor(
+            [
+                [0, 0, 0],        # background
+                [255, 80, 80],    # pedestrian
+                [80, 180, 255],   # spare class color
+                [255, 220, 80],   # spare class color
+            ],
+            dtype=torch.uint8,
+            device=labels.device,
+        )
+        labels = labels.long().clamp(min=0, max=palette.shape[0] - 1)
+        rgb = palette[labels]
+        return rgb.detach().cpu().numpy()
+
+    def _should_log_val_images(self) -> bool:
+        if self.log_images_every_n_epochs <= 0:
+            return False
+        return self.current_epoch % self.log_images_every_n_epochs == 0
+
+    def _build_val_image_panels(
+        self,
+        images: List[torch.Tensor],
+        sem_targets: List[torch.Tensor],
+        sem_preds: List[torch.Tensor],
+    ) -> List[np.ndarray]:
+        panels: List[np.ndarray] = []
+        n = min(2, len(images))
+        for i in range(n):
+            img = images[i].detach().cpu().clamp(0, 1)
+            img = (img * 255).to(torch.uint8).permute(1, 2, 0).numpy()
+            gt = self._colorize_labels(sem_targets[i])
+            pred = self._colorize_labels(sem_preds[i])
+            panel = np.concatenate([img, gt, pred], axis=1)
+            panels.append(panel)
+        return panels
+
+    @staticmethod
+    def _pad_panels_to_same_size(panels: List[np.ndarray]) -> List[np.ndarray]:
+        if not panels:
+            return panels
+        max_h = max(p.shape[0] for p in panels)
+        max_w = max(p.shape[1] for p in panels)
+        padded: List[np.ndarray] = []
+        for p in panels:
+            # Convert HWC uint8 ndarray to CHW uint8 tensor for torchvision padding.
+            t = torch.from_numpy(p).permute(2, 0, 1).contiguous()
+            pad_right = max_w - t.shape[2]
+            pad_bottom = max_h - t.shape[1]
+            t = TVF.pad(t, padding=[0, 0, pad_right, pad_bottom], fill=0)
+            padded.append(t.permute(1, 2, 0).cpu().numpy())
+        return padded
+
     def training_step(self, batch, batch_idx):
         images, targets = self._normalize_batch(batch)
 
@@ -232,7 +308,9 @@ class TorchvisionPanopticLitModel(LightningModule):
 
         sem_logits, _ = self._semantic_logits(images, targets)
         sem_targets = self._build_semantic_targets(targets, sem_logits.shape[-2], sem_logits.shape[-1])
-        sem_loss = F.cross_entropy(sem_logits, sem_targets)
+        sem_loss_ce = F.cross_entropy(sem_logits, sem_targets)
+        sem_loss_dice = self._multiclass_dice_loss(sem_logits, sem_targets)
+        sem_loss = sem_loss_ce + sem_loss_dice
         sem_preds = sem_logits.argmax(dim=1)
         inter, union, correct, total = self._semantic_confusion_stats(
             sem_preds, sem_targets, self.num_classes
@@ -247,8 +325,11 @@ class TorchvisionPanopticLitModel(LightningModule):
         self.log("train/loss", total_loss, prog_bar=True)
         self.log("train/loss_det", det_loss, prog_bar=True)
         self.log("train/loss_sem", sem_loss, prog_bar=True)
-        for k, v in det_loss_dict.items():
-            self.log(f"train/{k}", v.detach(), prog_bar=False)
+        self.log("train/loss_sem_ce", sem_loss_ce, prog_bar=False)
+        self.log("train/loss_sem_dice", sem_loss_dice, prog_bar=False)
+        if self.log_detailed_metrics:
+            for k, v in det_loss_dict.items():
+                self.log(f"train/{k}", v.detach(), prog_bar=False)
 
         # Compute train mAP from predictions in eval mode, while keeping
         # optimization behavior unchanged.
@@ -286,7 +367,13 @@ class TorchvisionPanopticLitModel(LightningModule):
             if self._train_sem_total.item() > 0
             else torch.tensor(0.0, dtype=torch.float32)
         )
-        self.log_dict({f"train/{k}": v for k, v in scalar_metrics.items()}, prog_bar=False)
+        if self.log_detailed_metrics:
+            metrics_to_log = scalar_metrics
+        else:
+            metrics_to_log = {
+                k: v for k, v in scalar_metrics.items() if k in {"map", "map_50"}
+            }
+        self.log_dict({f"train/{k}": v for k, v in metrics_to_log.items()}, prog_bar=False)
         self.log("train/sem_miou", train_miou, prog_bar=False)
         self.log("train/sem_pixel_acc", train_pixel_acc, prog_bar=False)
         self.train_mAP.reset()
@@ -296,6 +383,8 @@ class TorchvisionPanopticLitModel(LightningModule):
         self._train_sem_total.zero_()
 
     def validation_step(self, batch, batch_idx):
+        if batch_idx == 0:
+            self._val_image_panels = []
         images, targets = self._normalize_batch(batch)
 
         detections = self.detector(images)
@@ -316,6 +405,27 @@ class TorchvisionPanopticLitModel(LightningModule):
         self._val_sem_union += union
         self._val_sem_correct += correct
         self._val_sem_total += total
+        if batch_idx == 0 and self._should_log_val_images():
+            vis_targets_list = []
+            vis_preds_list = []
+            for i, size in enumerate(original_sizes):
+                vis_targets_list.append(
+                    F.interpolate(
+                        sem_targets[i : i + 1].unsqueeze(1).float(),
+                        size=size,
+                        mode="nearest",
+                    ).squeeze(0).squeeze(0).long()
+                )
+                vis_preds_list.append(
+                    F.interpolate(
+                        sem_preds[i : i + 1].unsqueeze(1).float(),
+                        size=size,
+                        mode="nearest",
+                    ).squeeze(0).squeeze(0).long()
+                )
+            self._val_image_panels = self._build_val_image_panels(
+                images, vis_targets_list, vis_preds_list
+            )
         panoptic_segment_count = 0
         for i, det in enumerate(detections):
             sem_i = sem_logits[i : i + 1]
@@ -346,14 +456,45 @@ class TorchvisionPanopticLitModel(LightningModule):
             if self._val_sem_total.item() > 0
             else torch.tensor(0.0, dtype=torch.float32)
         )
-        self.log_dict({f"val/{k}": v for k, v in scalar_metrics.items()}, prog_bar=True)
+        if self.log_detailed_metrics:
+            metrics_to_log = scalar_metrics
+        else:
+            metrics_to_log = {
+                k: v for k, v in scalar_metrics.items() if k in {"map", "map_50"}
+            }
+        self.log_dict({f"val/{k}": v for k, v in metrics_to_log.items()}, prog_bar=True)
         self.log("val/sem_miou", val_miou, prog_bar=True)
         self.log("val/sem_pixel_acc", val_pixel_acc, prog_bar=True)
+        if self._val_image_panels and self.logger is not None:
+            try:
+                import wandb
+
+                logger = self.logger
+                experiment = None
+                if hasattr(logger, "experiment"):
+                    experiment = logger.experiment
+                if experiment is not None and hasattr(experiment, "log"):
+                    panels = self._pad_panels_to_same_size(self._val_image_panels)
+                    experiment.log(
+                        {
+                            "val/images": [
+                                wandb.Image(
+                                    panel,
+                                    caption="left: input, middle: gt_semantic, right: pred_semantic",
+                                )
+                                for panel in panels
+                            ],
+                            "trainer/global_step": int(self.global_step),
+                        }
+                    )
+            except Exception:
+                LOGGER.exception("Failed to log validation images to W&B.")
         self.val_mAP.reset()
         self._val_sem_intersection.zero_()
         self._val_sem_union.zero_()
         self._val_sem_correct.zero_()
         self._val_sem_total.zero_()
+        self._val_image_panels = []
 
 
 class TrainingSession:
@@ -371,12 +512,12 @@ class TrainingSession:
             val_dataset=dataset_builder.validation_dataset(),
             train_batch_size=4,
             val_batch_size=2,
-            epochs=20,
+            epochs=50,
             train_steps_per_epoch=50,
             val_steps_per_epoch=2,
             collate_method="zip",
             loss_function_included_in_model=True,
-            experiment_tracker=None,
+            experiment_tracker="wandb" if self.args.track else None,
             check_val_every_n_epoch=1,
         )
         trainer.run()
@@ -386,6 +527,8 @@ class TrainingSession:
             lr=0.0001,
             num_classes=2,
             freeze_backbone=not self.args.unfreeze_backbone,
+            log_detailed_metrics=self.args.log_detailed_metrics,
+            log_images_every_n_epochs=self.args.log_images_every_n_epochs,
         )
 
     def create_dataset(self):
@@ -408,6 +551,17 @@ if __name__ == "__main__":
         "--unfreeze-backbone",
         action="store_true",
         help="Unfreeze pretrained detector backbone (default: frozen).",
+    )
+    parser.add_argument(
+        "--log-detailed-metrics",
+        action="store_true",
+        help="Log full metric set (default logs a compact subset).",
+    )
+    parser.add_argument(
+        "--log-images-every-n-epochs",
+        type=int,
+        default=1,
+        help="Log validation image panels to W&B every N epochs (0 disables).",
     )
 
     args = parser.parse_args()
