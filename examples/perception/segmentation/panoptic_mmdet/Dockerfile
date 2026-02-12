@@ -10,3 +10,4 @@ RUN pip install mmdet==2.25.0 scikit-image==0.19.3 torch==1.11.0
 RUN pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu113/torch1.11.0/index.html # https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html
 RUN pip install git+https://github.com/cocodataset/panopticapi.git
 RUN pip install yapf==0.40.1  # https://github.com/open-mmlab/mmdetection/issues/10962
+RUN pip install wandb==0.16.6
