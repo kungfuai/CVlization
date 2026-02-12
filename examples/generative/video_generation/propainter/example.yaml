@@ -1,0 +1,37 @@
+name: propainter
+capability: generative/video_generation
+modalities:
+  - vision
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 10
+  ram_gb: 16
+  disk_gb: 5
+image: cvlization/propainter:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run ProPainter video inpainting inference
+  test:
+    script: test.sh
+    description: Lightweight container sanity checks
+tags:
+  - propainter
+  - video-inpainting
+  - object-removal
+  - video-outpainting
+  - optical-flow
+  - pytorch
+tasks:
+  - video_inpainting
+frameworks:
+  - pytorch
+description: ProPainter (ICCV 2023) video inpainting via flow propagation and sparse temporal transformers
+verification:
+  last_verified: 2026-02-10
+  last_verification_note: "Verified build, test (--help), and inference with sample running_car video (292 frames, ~45s) on RTX PRO 6000. Weights (~190MB) auto-download from GitHub releases on first run."

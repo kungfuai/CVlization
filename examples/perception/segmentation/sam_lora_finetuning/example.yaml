@@ -1,0 +1,33 @@
+name: sam-lora-finetuning
+capability: perception/segmentation
+modalities:
+  - vision
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 10
+  disk_gb: 15
+image: sam-lora-finetuning
+presets:
+  build:
+    script: build.sh
+    description: Build the SAM LoRA finetuning image
+  train:
+    script: train.sh
+    description: Train SAM ViT-B with LoRA on COCO-format segmentation dataset
+tags:
+  - sam
+  - segmentation
+  - finetune
+  - lora
+frameworks:
+  - pytorch
+  - segment-anything
+datasets:
+  - coco
+description: SAM ViT-B fine-tuning with LoRA adapters using DiceCELoss. Stable training on small datasets.
+tasks:
+  - instance_segmentation
+verification:
+  last_verified: 2026-02-12
+  last_verification_note: "Verified build, 2-epoch training on keremberke/pcb-defect-segmentation HF dataset. Loss decreasing (train: 0.63->0.34, val: 0.40->0.34), no NaN. LoRA weights saved as safetensors. Wandb logging working. RTX PRO 6000 (98GB VRAM)."

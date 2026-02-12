@@ -25,6 +25,8 @@ from PIL import Image
 import os
 
 from visual_artifacts import ArtifactGenerator, apply_overlay_artifact
+from pexels_animals import PexelsAnimalsBuilder
+from vimeo_septuplet import VimeoSeptupletBuilder
 
 
 def get_resize_transform(
@@ -660,8 +662,6 @@ def get_vimeo_dataloaders(
     Returns:
         train_loader, val_loader
     """
-    from vimeo_septuplet import VimeoSeptupletBuilder
-
     # Build Vimeo dataset
     kwargs = {}
     if data_dir:
@@ -724,6 +724,95 @@ def get_vimeo_dataloaders(
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size if not multi_scale else 4,  # Can batch validation
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    return train_loader, val_loader
+
+
+def get_pexels_dataloaders(
+    batch_size: int = 4,
+    frame_size: Tuple[int, int] = (256, 256),
+    num_frames: int = 5,
+    num_workers: int = 4,
+    enabled_artifacts: Optional[set] = None,
+    data_dir: Optional[str] = None,
+    preserve_aspect_ratio: bool = False,
+    size_scale: float = 1.0,
+    multi_scale: Optional[List[int]] = None,
+) -> Tuple[DataLoader, DataLoader]:
+    """
+    Create train and validation dataloaders using Pexels Animals videos.
+
+    Downloads from HuggingFace (zzsi/animals_pexels) on first use.
+
+    Args:
+        batch_size: Batch size (forced to 1 if multi_scale is enabled)
+        frame_size: (H, W) frame size (ignored if multi_scale is set)
+        num_frames: Frames per sample
+        num_workers: DataLoader workers
+        enabled_artifacts: Set of artifact types to use
+        data_dir: Override data directory
+        preserve_aspect_ratio: If True, resize preserving aspect ratio
+        size_scale: Scale factor for artifact sizes
+        multi_scale: List of max sizes for multi-scale training
+
+    Returns:
+        train_loader, val_loader
+    """
+    kwargs = {}
+    if data_dir:
+        kwargs["data_dir"] = data_dir
+
+    builder = PexelsAnimalsBuilder(**kwargs)
+    builder.prepare()
+
+    if multi_scale:
+        if batch_size > 1:
+            print(f"Note: multi_scale enabled, forcing batch_size=1 (was {batch_size})")
+        batch_size = 1
+
+    train_dataset = VimeoArtifactDataset(
+        vimeo_dataset=builder.training_dataset(num_frames=num_frames),
+        frame_size=frame_size,
+        num_frames=num_frames,
+        enabled_artifacts=enabled_artifacts,
+        preserve_aspect_ratio=preserve_aspect_ratio,
+        mode="train",
+        size_scale=size_scale,
+        multi_scale=multi_scale,
+    )
+
+    val_size = frame_size
+    if multi_scale:
+        mid_scale = multi_scale[len(multi_scale) // 2]
+        val_size = (mid_scale, mid_scale)
+
+    val_dataset = VimeoArtifactDataset(
+        vimeo_dataset=builder.validation_dataset(num_frames=num_frames),
+        frame_size=val_size,
+        num_frames=num_frames,
+        enabled_artifacts=enabled_artifacts,
+        preserve_aspect_ratio=preserve_aspect_ratio,
+        mode="val",
+        size_scale=size_scale,
+        multi_scale=None,
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=True,
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size if not multi_scale else 4,
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,

@@ -22,6 +22,7 @@ docker run --rm --gpus=all \
   --env "PYTHONPATH=/cvlization_repo:/opt/sam3" \
   --env "PYTHONUNBUFFERED=1" \
   --env "HF_TOKEN=${HF_TOKEN:-}" \
+  --env "WANDB_API_KEY=${WANDB_API_KEY:-}" \
   ${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"} \
   ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
   "$IMG" python3 train.py "$@"

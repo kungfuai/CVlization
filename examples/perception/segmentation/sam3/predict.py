@@ -1,22 +1,55 @@
 #!/usr/bin/env python3
 """
-SAM3 inference using Hugging Face transformers.
+SAM3 inference: text-prompted segmentation for images and videos.
 
-Loads facebook/sam3 via transformers, runs a text prompt on an image, and saves
-an overlay. Defaults to the bundled invoice sample and prompt "text".
+Image mode: Loads facebook/sam3 via transformers (or native repo fallback),
+runs a text prompt on an image, and saves an overlay PNG.
+
+Video mode: Uses the native SAM3 repo video predictor to detect, segment,
+and track objects across video frames. Outputs an overlay MP4 and optional
+per-frame binary mask PNGs (compatible with ProPainter --mask folder format).
 """
 import argparse
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Sequence
 
+import cv2
 import numpy as np
 import torch
 from PIL import Image
 
 from cvlization.paths import resolve_input_path, resolve_output_path
 
-DEFAULT_IMAGE = "examples/sample.jpg"
-DEFAULT_OUTPUT = "prediction.png"
+DEFAULT_OUTPUT_IMAGE = "prediction.png"
+DEFAULT_OUTPUT_VIDEO = "prediction_video.mp4"
+
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
+
+ASSETS_REPO = "zzsi/cvl"
+SAMPLE_VIDEO_PATH = "sam3/soccer_360p.mp4"
+
+
+def get_sample_video() -> str:
+    """Return local path to sample video, downloading from HuggingFace if needed."""
+    filename = os.path.basename(SAMPLE_VIDEO_PATH)
+    local_path = os.path.join(os.path.dirname(__file__), "examples", filename)
+    if os.path.exists(local_path):
+        return local_path
+
+    print(f"Downloading sample video: {filename}")
+    from huggingface_hub import hf_hub_download
+
+    downloaded = hf_hub_download(
+        repo_id=ASSETS_REPO,
+        filename=SAMPLE_VIDEO_PATH,
+        repo_type="dataset",
+    )
+    return downloaded
 
 TRANSFORMERS_AVAILABLE = True
 try:
@@ -27,18 +60,23 @@ except ImportError:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run text-prompted SAM3 segmentation using transformers",
+        description="Run text-prompted SAM3 segmentation on images or videos",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--input", "-i",
+        default=None,
+        help="Path to input image or video (auto-detected by extension)",
     )
     parser.add_argument(
         "--image",
         default=None,
-        help="Path to the input image (default: bundled invoice sample)",
+        help="(Deprecated, use --input) Path to input image",
     )
     parser.add_argument(
         "--text",
         default="text",
-        help="Text prompt to segment (default: 'text' for the invoice sample)",
+        help="Text prompt to segment",
     )
     parser.add_argument(
         "--checkpoint",
@@ -47,8 +85,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        default=DEFAULT_OUTPUT,
-        help="Path to save the RGBA overlay with masks",
+        default=None,
+        help="Output path (default: prediction.png for images, prediction_video.mp4 for videos)",
     )
     parser.add_argument(
         "--mask-threshold",
@@ -60,13 +98,46 @@ def parse_args() -> argparse.Namespace:
         "--model_loader",
         choices=["transformers", "repo"],
         default="transformers",
-        help="Use HF transformers Sam3Model (default) or the cloned sam3 repo backend",
+        help="Use HF transformers Sam3Model (default) or the cloned sam3 repo backend (image only)",
     )
     parser.add_argument(
         "--score-threshold",
         type=float,
         default=0.1,
         help="Instance score threshold for mask filtering (transformers backend)",
+    )
+    parser.add_argument(
+        "--save-masks",
+        action="store_true",
+        help="(Video only) Save per-frame binary mask PNGs for ProPainter compatibility",
+    )
+    parser.add_argument(
+        "--propagation-direction",
+        choices=["forward", "backward", "both"],
+        default="forward",
+        help="(Video only) Direction to propagate tracking from the prompted frame",
+    )
+    parser.add_argument(
+        "--max-objects",
+        type=int,
+        default=None,
+        help="(Video only) Cap the number of tracked objects to limit GPU memory usage. "
+        "Keeps the top-scoring detections. Recommended: 5-8 for 24GB GPUs at 1080p.",
+    )
+    parser.add_argument(
+        "--save-tracks",
+        action="store_true",
+        help="(Video only) Save tracks.json with per-frame object IDs, scores, and bounding boxes",
+    )
+    parser.add_argument(
+        "--save-per-object-masks",
+        action="store_true",
+        help="(Video only) Save per-object binary mask PNGs in separate folders",
+    )
+    parser.add_argument(
+        "--show-labels",
+        action="store_true",
+        help="(Video only) Draw bounding boxes and object ID/score labels on overlay video",
     )
     return parser.parse_args()
 
@@ -89,21 +160,61 @@ def overlay_masks(image: Image.Image, masks: torch.Tensor) -> Image.Image:
     return image
 
 
-def main() -> None:
-    args = parse_args()
+def _obj_id_colors(obj_ids: np.ndarray) -> dict:
+    """Generate consistent colors keyed by object ID."""
+    rng = np.random.default_rng(42)
+    # Pre-generate enough colors for any object ID
+    max_id = int(obj_ids.max()) + 1 if len(obj_ids) > 0 else 1
+    palette = rng.integers(0, 255, size=(max(max_id + 1, 256), 3), dtype=np.uint8)
+    return {int(oid): palette[int(oid) % len(palette)] for oid in obj_ids}
 
-    # Defaults are local to example dir; user-provided paths resolve to cwd
-    if args.image is None:
-        image_path = Path(DEFAULT_IMAGE)
-        print(f"No --image provided, using bundled sample: {image_path}")
-    else:
-        image_path = Path(resolve_input_path(args.image))
-    # Output always resolves to user's cwd
-    output_path = Path(resolve_output_path(args.output))
-    if args.text == "text" and args.image is None:
-        print("Using default prompt 'text' for invoice sample")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
+def overlay_masks_cv2(
+    frame_bgr: np.ndarray,
+    masks: np.ndarray,
+    alpha: float = 0.4,
+    obj_ids: np.ndarray = None,
+    scores: np.ndarray = None,
+    boxes_xywh: np.ndarray = None,
+    show_labels: bool = False,
+) -> np.ndarray:
+    """Overlay boolean masks on a BGR frame using consistent colors."""
+    out = frame_bgr.copy()
+    h, w = frame_bgr.shape[:2]
+
+    if masks.ndim == 2:
+        masks = masks[None, ...]
+
+    if obj_ids is None:
+        obj_ids = np.arange(masks.shape[0])
+    colors = _obj_id_colors(obj_ids)
+
+    for i, (mask, oid) in enumerate(zip(masks, obj_ids)):
+        color = colors[int(oid)]
+        if mask.shape != (h, w):
+            mask = cv2.resize(mask.astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST).astype(bool)
+        color_overlay = np.zeros_like(frame_bgr)
+        color_overlay[mask] = color.tolist()
+        out = np.where(mask[..., None], cv2.addWeighted(out, 1 - alpha, color_overlay, alpha, 0), out)
+
+    if show_labels and boxes_xywh is not None:
+        for i, oid in enumerate(obj_ids):
+            color = tuple(int(c) for c in colors[int(oid)])
+            bx, by, bw, bh = boxes_xywh[i]
+            x1, y1 = int(bx * w), int(by * h)
+            x2, y2 = int((bx + bw) * w), int((by + bh) * h)
+            cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
+            label = f"id={int(oid)}"
+            if scores is not None:
+                label += f" {scores[i]:.2f}"
+            cv2.putText(out, label, (x1, max(y1 - 6, 12)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+
+    return out
+
+
+def process_image(args: argparse.Namespace, image_path: Path, output_path: Path) -> None:
+    """Run SAM3 image segmentation (existing logic)."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Reading image: {image_path}")
     image = Image.open(image_path).convert("RGB")
@@ -158,6 +269,217 @@ def main() -> None:
         print(f"First box: {boxes[0].tolist()}")
     if scores is not None and len(scores):
         print(f"Top scores: {scores[:5].tolist()}")
+
+
+def process_video(args: argparse.Namespace, input_path: Path, output_path: Path) -> None:
+    """Run SAM3 video segmentation using the native repo video predictor."""
+    print("Video mode: using native SAM3 repo video predictor.")
+    from sam3.model_builder import build_sam3_video_predictor
+
+    # Build predictor and start session
+    print("Building SAM3 video predictor...")
+    predictor = build_sam3_video_predictor(gpus_to_use=[0])
+    print(f"Starting session for: {input_path}")
+    resp = predictor.start_session(resource_path=str(input_path))
+    session_id = resp["session_id"]
+
+    # Add text prompt on frame 0
+    print(f"Adding text prompt on frame 0: '{args.text}'")
+    prompt_result = predictor.add_prompt(session_id, frame_idx=0, text=args.text)
+
+    # Cap tracked objects if --max-objects is set
+    if args.max_objects is not None:
+        outputs = prompt_result["outputs"]
+        obj_ids = np.asarray(outputs["out_obj_ids"])
+        scores = np.asarray(outputs["out_probs"])
+        n_detected = len(obj_ids)
+        if n_detected > args.max_objects:
+            # Keep top-scoring objects, remove the rest
+            top_indices = np.argsort(scores)[::-1][: args.max_objects]
+            keep_ids = set(obj_ids[top_indices].tolist())
+            remove_ids = [int(oid) for oid in obj_ids if int(oid) not in keep_ids]
+            for oid in remove_ids:
+                predictor.remove_object(session_id, obj_id=oid)
+            print(
+                f"Capped objects: kept {args.max_objects} of {n_detected} "
+                f"(removed {len(remove_ids)} lowest-scoring)"
+            )
+
+    # Propagate through video
+    print(f"Propagating masks ({args.propagation_direction})...")
+    frame_outputs = {}  # frame_idx -> dict with masks, obj_ids, scores, boxes
+    for result in predictor.propagate_in_video(
+        session_id,
+        propagation_direction=args.propagation_direction,
+        start_frame_idx=0,
+        max_frame_num_to_track=None,
+    ):
+        fidx = result["frame_index"]
+        out = result["outputs"]
+        masks = out["out_binary_masks"]
+        if isinstance(masks, torch.Tensor):
+            masks = masks.cpu().numpy()
+        frame_outputs[fidx] = {
+            "masks": masks,  # (N, H, W) bool
+            "obj_ids": np.asarray(out["out_obj_ids"]),
+            "scores": np.asarray(out["out_probs"]),
+            "boxes_xywh": np.asarray(out["out_boxes_xywh"]),
+        }
+
+    predictor.close_session(session_id)
+    n_objects = frame_outputs[0]["masks"].shape[0] if 0 in frame_outputs else "?"
+    print(f"Tracking complete: {len(frame_outputs)} frames, {n_objects} object(s)")
+
+    if not frame_outputs:
+        print("No masks returned from video predictor.")
+        return
+
+    # Save per-frame union masks (ProPainter compatible)
+    if args.save_masks:
+        masks_dir = output_path.parent / (output_path.stem + "_masks")
+        masks_dir.mkdir(parents=True, exist_ok=True)
+        for fidx in sorted(frame_outputs.keys()):
+            union_mask = np.any(frame_outputs[fidx]["masks"], axis=0).astype(np.uint8) * 255
+            cv2.imwrite(str(masks_dir / f"{fidx:04d}.png"), union_mask)
+        print(f"Saved {len(frame_outputs)} union mask PNGs to: {masks_dir}/")
+
+    # Save per-object masks in separate folders
+    if args.save_per_object_masks:
+        objects_dir = output_path.parent / (output_path.stem + "_objects")
+        # Collect all object IDs across frames
+        all_obj_ids = set()
+        for out in frame_outputs.values():
+            all_obj_ids.update(out["obj_ids"].tolist())
+        for oid in sorted(all_obj_ids):
+            obj_dir = objects_dir / str(oid)
+            obj_dir.mkdir(parents=True, exist_ok=True)
+        for fidx in sorted(frame_outputs.keys()):
+            out = frame_outputs[fidx]
+            for i, oid in enumerate(out["obj_ids"].tolist()):
+                mask = out["masks"][i].astype(np.uint8) * 255
+                cv2.imwrite(str(objects_dir / str(oid) / f"{fidx:04d}.png"), mask)
+        print(f"Saved per-object masks for {len(all_obj_ids)} objects to: {objects_dir}/")
+
+    # Save tracking metadata JSON
+    if args.save_tracks:
+        tracks_path = output_path.parent / (output_path.stem + "_tracks.json")
+        tracks = {}
+        for fidx in sorted(frame_outputs.keys()):
+            out = frame_outputs[fidx]
+            tracks[str(fidx)] = {
+                "obj_ids": out["obj_ids"].tolist(),
+                "scores": [round(float(s), 4) for s in out["scores"]],
+                "boxes_xywh": [[round(float(v), 6) for v in box] for box in out["boxes_xywh"]],
+            }
+        with open(tracks_path, "w") as f:
+            json.dump(tracks, f, indent=2)
+        print(f"Saved tracking metadata to: {tracks_path}")
+
+    # Write overlay MP4
+    _write_overlay_video(
+        input_path, output_path, frame_outputs, show_labels=args.show_labels
+    )
+
+
+def _write_overlay_video(
+    input_path: Path,
+    output_path: Path,
+    frame_outputs: dict,
+    show_labels: bool = False,
+) -> None:
+    """Read source video, overlay colored masks, write MP4 via ffmpeg."""
+    cap = cv2.VideoCapture(str(input_path))
+    if not cap.isOpened():
+        print(f"Error: cannot open video {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-f", "rawvideo",
+        "-vcodec", "rawvideo",
+        "-s", f"{width}x{height}",
+        "-pix_fmt", "bgr24",
+        "-r", str(fps),
+        "-i", "-",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "18",
+        "-pix_fmt", "yuv420p",
+        str(output_path),
+    ]
+
+    print(f"Writing overlay video to: {output_path}")
+    proc = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    fidx = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if fidx in frame_outputs:
+            out = frame_outputs[fidx]
+            frame = overlay_masks_cv2(
+                frame,
+                out["masks"],
+                obj_ids=out["obj_ids"],
+                scores=out["scores"],
+                boxes_xywh=out["boxes_xywh"],
+                show_labels=show_labels,
+            )
+        proc.stdin.write(frame.tobytes())
+        fidx += 1
+
+    cap.release()
+    proc.stdin.close()
+    proc.wait()
+
+    if proc.returncode != 0:
+        stderr = proc.stderr.read().decode()
+        print(f"ffmpeg error (exit {proc.returncode}): {stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Done. Wrote {fidx} frames to: {output_path}")
+
+
+def main() -> None:
+    args = parse_args()
+
+    # Resolve input: --input > --image (deprecated) > sample video
+    raw_input = args.input or args.image
+    if args.image and not args.input:
+        print("Warning: --image is deprecated, use --input instead.")
+
+    if raw_input is None:
+        input_path = Path(get_sample_video())
+        print(f"No --input provided, using sample video: {input_path}")
+        if args.text == "text":
+            args.text = "person"
+            print("Using default prompt 'person' for sample video")
+    else:
+        input_path = Path(resolve_input_path(raw_input))
+
+    ext = input_path.suffix.lower()
+    is_video = ext in VIDEO_EXTENSIONS
+
+    # Resolve output path
+    if args.output:
+        output_path = Path(resolve_output_path(args.output))
+    else:
+        default = DEFAULT_OUTPUT_VIDEO if is_video else DEFAULT_OUTPUT_IMAGE
+        output_path = Path(resolve_output_path(default))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if is_video:
+        process_video(args, input_path, output_path)
+    else:
+        process_image(args, input_path, output_path)
 
 
 if __name__ == "__main__":

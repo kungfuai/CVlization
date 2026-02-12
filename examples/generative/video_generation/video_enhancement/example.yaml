@@ -1,0 +1,62 @@
+name: video_enhancement
+capability: generative/video_generation
+modalities:
+  - video
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 4
+  disk_gb: 2
+image: cvl-video-enhancement
+presets:
+  build:
+    script: build.sh
+    description: Build the video enhancement Docker image
+  train:
+    script: train.sh
+    description: Train artifact removal model (Pexels Animals dataset by default)
+  predict:
+    script: predict.sh
+    description: Run video artifact removal inference (downloads model from HuggingFace)
+tags:
+  - video-enhancement
+  - artifact-removal
+  - watermark-removal
+  - training
+  - inference
+frameworks:
+  - pytorch
+description: >
+  Video artifact removal model that removes overlaid watermarks, logos, and text
+  from videos. Trains on synthetic artifacts applied to Pexels Animals videos.
+  Three pretrained models available on HuggingFace (zzsi/cvl_models): composite
+  (default), nafunet, and nafunet_widescale.
+tasks:
+  - video_enhancement
+  - artifact_removal
+models:
+  - name: composite
+    description: ExplicitCompositeNet - predicts mask + inpaint, alpha-blends
+    hf_path: video_enhancement/composite.pt
+    default: true
+  - name: nafunet
+    description: TemporalNAFUNet with modulation mask guidance
+    hf_path: video_enhancement/nafunet.pt
+  - name: nafunet_widescale
+    description: TemporalNAFUNet with wider multi-scale range [192-448]
+    hf_path: video_enhancement/nafunet_widescale.pt
+limitations:
+  - High-opacity text on bright/white backgrounds leaves visible ghost traces
+  - Dense tiled watermarks covering the full frame are only partially removed
+  - Models trained on synthetic artifacts only; real-world watermarks may differ
+  - Trained at 256-384px; quality may degrade at higher resolutions
+  - 30k training steps on ~500 Pexels videos; more data and steps would help
+verification:
+  last_verified: "2026-02-11"
+  last_verification_note: >
+    Verified build, training (3 experiments x 30k steps on Pexels Animals),
+    and inference on all 3 models. Tested on synthetic watermarks: diagonal text
+    (3 layers, 0.9 opacity) and tiled patterns (2 layers, 0.9 opacity). Models
+    reduce but do not fully remove dense high-opacity watermarks. Inference at
+    ~33 fps on GPU for 512x288 input. Mark as experimental until removal quality
+    improves.

@@ -228,11 +228,16 @@ class MMTrainer:
         set_random_seed(0, deterministic=False)
         cfg.gpu_ids = range(1)
 
-        # We can also use tensorboard to log the training process
         cfg.log_config.hooks = [
             dict(type="TextLoggerHook"),
-            # dict(type="TensorboardLoggerHook"),
         ]
+        if os.environ.get("WANDB_API_KEY"):
+            cfg.log_config.hooks.append(
+                dict(
+                    type="WandbLoggerHook",
+                    init_kwargs=dict(project="cvlab", name=f"mmdet-{self.net}"),
+                )
+            )
 
         cfg.runner.max_epochs = 15
 
