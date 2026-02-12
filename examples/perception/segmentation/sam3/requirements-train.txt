@@ -1,0 +1,11 @@
+# Additional dependencies for SAM3 LoRA training
+# (installed on top of the inference image)
+safetensors
+hydra-core>=1.3
+submitit>=1.5
+fvcore>=0.1.5
+fairscale
+tensorboard
+scipy
+torchmetrics
+wandb

@@ -17,12 +17,17 @@ presets:
   predict:
     script: predict.sh
     description: Run text-prompted SAM3 segmentation on an image or video
+  train:
+    script: train.sh
+    description: LoRA fine-tune SAM3 ViT backbone on a COCO-format dataset
 tags:
   - sam3
   - segmentation
   - video
   - inference
   - open-vocabulary
+  - lora
+  - finetuning
 frameworks:
   - pytorch
   - transformers
@@ -32,5 +37,5 @@ tasks:
   - semantic_segmentation
   - video_object_segmentation
 verification:
-  last_verified: "2026-02-11"
-  last_verification_note: "Verified build, image inference (transformers), and video inference (native repo) on Blackwell RTX PRO 6000 (96GB). Video mode: 75-frame 360p clip tracked 26 objects, overlay MP4 + binary mask PNGs generated. Peak VRAM ~15GB for video. Vendored sam3 source, added ffmpeg. Requires HF authentication for gated model."
+  last_verified: "2026-02-12"
+  last_verification_note: "Verified build, image/video inference, and LoRA training on Blackwell RTX PRO 6000 (96GB). Training: 2-epoch LoRA test with rank=8, 1.0M/841M trainable params, 5GB VRAM, loss decreased 337→322, val AP@50=0.65. Mask+dice loss enabled. Requires HF auth for gated model."
