@@ -200,7 +200,8 @@ class TorchvisionPanopticLitModel(LightningModule):
         self.train_mAP = MeanAveragePrecision(class_metrics=True)
         self.val_mAP = MeanAveragePrecision(class_metrics=True)
         self._reset_semantic_metrics()
-        self._val_image_panels: List[np.ndarray] = []
+        self._val_sem_panels: List[np.ndarray] = []
+        self._val_inst_panels: List[np.ndarray] = []
 
     def _reset_semantic_metrics(self):
         self._train_sem_intersection = torch.zeros(self.num_classes, dtype=torch.float64)
@@ -359,7 +360,59 @@ class TorchvisionPanopticLitModel(LightningModule):
             img = (img * 255).to(torch.uint8).permute(1, 2, 0).numpy()
             gt = self._colorize_labels(sem_targets[i])
             pred = self._colorize_labels(sem_preds[i])
-            panel = np.concatenate([img, gt, pred], axis=1)
+            margin = np.full((img.shape[0], 4, 3), 255, dtype=np.uint8)
+            panel = np.concatenate([img, margin, gt, margin, pred], axis=1)
+            panels.append(panel)
+        return panels
+
+    @staticmethod
+    def _instance_colormap(n: int = 256) -> np.ndarray:
+        rng = np.random.RandomState(42)
+        cmap = rng.randint(60, 220, size=(n, 3), dtype=np.uint8)
+        cmap[0] = 0  # background = black
+        return cmap
+
+    def _build_val_instance_panels(
+        self,
+        images: List[torch.Tensor],
+        targets: List[Dict],
+        detections: List[Dict],
+    ) -> List[np.ndarray]:
+        cmap = self._instance_colormap()
+        panels: List[np.ndarray] = []
+        n = min(2, len(images))
+        for i in range(n):
+            img = images[i].detach().cpu().clamp(0, 1)
+            img = (img * 255).to(torch.uint8).permute(1, 2, 0).numpy()
+            h, w = img.shape[:2]
+
+            # GT instances
+            gt_inst = np.zeros((h, w, 3), dtype=np.uint8)
+            masks = targets[i].get("masks")
+            if masks is not None and masks.numel() > 0:
+                m = masks.detach().cpu()
+                if m.ndim == 4:
+                    m = m[:, 0]
+                for j in range(m.shape[0]):
+                    mask = m[j] > 0.5
+                    gt_inst[mask.numpy()] = cmap[(j + 1) % len(cmap)]
+
+            # Pred instances
+            pred_inst = np.zeros((h, w, 3), dtype=np.uint8)
+            det = detections[i]
+            if "masks" in det and det["masks"].numel() > 0:
+                dm = det["masks"].detach().cpu()
+                if dm.ndim == 4:
+                    dm = dm[:, 0]
+                scores = det.get("scores", torch.ones(dm.shape[0]))
+                for j in range(dm.shape[0]):
+                    if scores[j] < 0.5:
+                        continue
+                    mask = dm[j] > 0.5
+                    pred_inst[mask.numpy()] = cmap[(j + 1) % len(cmap)]
+
+            margin = np.full((h, 4, 3), 255, dtype=np.uint8)
+            panel = np.concatenate([img, margin, gt_inst, margin, pred_inst], axis=1)
             panels.append(panel)
         return panels
 
@@ -465,7 +518,8 @@ class TorchvisionPanopticLitModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         if batch_idx == 0:
-            self._val_image_panels = []
+            self._val_sem_panels = []
+            self._val_inst_panels = []
         images, targets = self._normalize_batch(batch)
 
         detections = self.detector(images)
@@ -504,8 +558,11 @@ class TorchvisionPanopticLitModel(LightningModule):
                         mode="nearest",
                     ).squeeze(0).squeeze(0).long()
                 )
-            self._val_image_panels = self._build_val_image_panels(
+            self._val_sem_panels = self._build_val_image_panels(
                 images, vis_targets_list, vis_preds_list
+            )
+            self._val_inst_panels = self._build_val_instance_panels(
+                images, targets, detections
             )
         panoptic_segment_count = 0
         for i, det in enumerate(detections):
@@ -546,36 +603,32 @@ class TorchvisionPanopticLitModel(LightningModule):
         self.log_dict({f"val/{k}": v for k, v in metrics_to_log.items()}, prog_bar=True)
         self.log("val/sem_miou", val_miou, prog_bar=True)
         self.log("val/sem_pixel_acc", val_pixel_acc, prog_bar=True)
-        if self._val_image_panels and self.logger is not None:
-            try:
-                import wandb
+        has_panels = self._val_sem_panels or self._val_inst_panels
+        if has_panels and self.logger is not None:
+            import wandb
 
-                logger = self.logger
-                experiment = None
-                if hasattr(logger, "experiment"):
-                    experiment = logger.experiment
-                if experiment is not None and hasattr(experiment, "log"):
-                    panels = self._pad_panels_to_same_size(self._val_image_panels)
-                    experiment.log(
-                        {
-                            "val/images": [
-                                wandb.Image(
-                                    panel,
-                                    caption="left: input, middle: gt_semantic, right: pred_semantic",
-                                )
-                                for panel in panels
-                            ],
-                            "trainer/global_step": int(self.global_step),
-                        }
-                    )
-            except Exception:
-                LOGGER.exception("Failed to log validation images to W&B.")
+            logger = self.logger
+            experiment = getattr(logger, "experiment", None)
+            if experiment is not None and hasattr(experiment, "log"):
+                log_dict = {"trainer/global_step": int(self.global_step)}
+                if self._val_sem_panels:
+                    panels = self._pad_panels_to_same_size(self._val_sem_panels)
+                    log_dict["images/val_semantic"] = [
+                        wandb.Image(p, caption="input | gt | pred") for p in panels
+                    ]
+                if self._val_inst_panels:
+                    panels = self._pad_panels_to_same_size(self._val_inst_panels)
+                    log_dict["images/val_instance"] = [
+                        wandb.Image(p, caption="input | gt | pred") for p in panels
+                    ]
+                experiment.log(log_dict)
         self.val_mAP.reset()
         self._val_sem_intersection.zero_()
         self._val_sem_union.zero_()
         self._val_sem_correct.zero_()
         self._val_sem_total.zero_()
-        self._val_image_panels = []
+        self._val_sem_panels = []
+        self._val_inst_panels = []
 
 
 class TrainingSession:
