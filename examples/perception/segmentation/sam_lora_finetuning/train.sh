@@ -10,7 +10,10 @@ mkdir -p "$CVL_CACHE"
 # Load env vars from .env if it exists
 ENV_FILE="$SCRIPT_DIR/.env"
 if [ -f "$ENV_FILE" ]; then
-  export $(grep -v '^#' "$ENV_FILE" | xargs)
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
 fi
 
 docker run --rm --gpus=all \
