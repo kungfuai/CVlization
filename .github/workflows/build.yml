@@ -82,7 +82,7 @@ jobs:
       - name: Python syntax check
         run: |
           # Check syntax of changed Python files in examples/ and benchmarks/
-          changed_py=$(git diff --name-only origin/main...HEAD -- 'examples/**/*.py' 'benchmarks/**/*.py' || true)
+          changed_py=$(git diff --name-only origin/main...HEAD -- 'examples/**/*.py' 'benchmarks/**/*.py' | while read f; do [ -f "$f" ] && echo "$f"; done || true)
           if [ -n "$changed_py" ]; then
             echo "Checking Python syntax for:"
             echo "$changed_py"
@@ -94,7 +94,7 @@ jobs:
       - name: Dockerfile lint
         run: |
           # Check changed Dockerfiles with hadolint
-          changed_dockerfiles=$(git diff --name-only origin/main...HEAD -- 'examples/**/Dockerfile' 'benchmarks/**/Dockerfile' || true)
+          changed_dockerfiles=$(git diff --name-only origin/main...HEAD -- 'examples/**/Dockerfile' 'benchmarks/**/Dockerfile' | while read f; do [ -f "$f" ] && echo "$f"; done || true)
           if [ -n "$changed_dockerfiles" ]; then
             echo "Linting Dockerfiles:"
             echo "$changed_dockerfiles"
@@ -109,7 +109,7 @@ jobs:
       - name: Shell script lint
         run: |
           # Check changed shell scripts with shellcheck
-          changed_sh=$(git diff --name-only origin/main...HEAD -- 'examples/**/*.sh' 'benchmarks/**/*.sh' || true)
+          changed_sh=$(git diff --name-only origin/main...HEAD -- 'examples/**/*.sh' 'benchmarks/**/*.sh' | while read f; do [ -f "$f" ] && echo "$f"; done || true)
           if [ -n "$changed_sh" ]; then
             echo "Linting shell scripts:"
             echo "$changed_sh"
