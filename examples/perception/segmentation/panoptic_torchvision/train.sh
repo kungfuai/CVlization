@@ -9,9 +9,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Image name
 IMG="${CVL_IMAGE:-panoptic_torchvision}"
+GPU_ARGS=(--gpus=all)
+if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
+	GPU_ARGS=(--gpus "device=${CUDA_VISIBLE_DEVICES}")
+fi
 
 # Mount workspace as writable (training writes outputs to /workspace)
-docker run --rm --gpus=all --shm-size 16G \
+docker run --rm "${GPU_ARGS[@]}" --shm-size 16G \
 	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
 	--workdir /workspace \
 	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
