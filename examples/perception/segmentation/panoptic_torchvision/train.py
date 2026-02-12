@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.utils.data import Dataset
 from torchvision.transforms import functional as TVF
 
 from cvlization.dataset.penn_fudan_pedestrian import PennFudanPedestrianDatasetBuilder
@@ -20,6 +21,60 @@ from torchvision.models import detection
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+class UnifiedPanopticTorchvisionDataset(Dataset):
+    """Normalize dataset targets to a shared panoptic contract.
+
+    target keys used by the model:
+    - boxes: Tensor[N,4]
+    - labels: Tensor[N]
+    - masks: Tensor[N,H,W]
+    - semantic_map: Tensor[H,W] with class ids, optional ignore index 255
+    """
+
+    def __init__(self, base_dataset: Dataset, source: str):
+        self.base_dataset = base_dataset
+        self.source = source
+
+    def __len__(self):
+        return len(self.base_dataset)
+
+    def __getitem__(self, idx):
+        image, target = self.base_dataset[idx]
+        target = dict(target)
+
+        if self.source == "pennfudan":
+            # Derive semantic map from instance masks and labels.
+            h, w = image.shape[-2:]
+            semantic_map = torch.zeros((h, w), dtype=torch.long)
+            masks = target.get("masks")
+            labels = target.get("labels")
+            if masks is not None and labels is not None and masks.numel() > 0:
+                if masks.ndim == 4:
+                    masks = masks[:, 0]
+                labels = labels.long()
+                for i in range(masks.shape[0]):
+                    semantic_map[masks[i] > 0.5] = labels[i]
+            target["semantic_map"] = semantic_map
+            return image, target
+
+        if self.source == "coco_panoptic_tiny":
+            # COCO panoptic seg_map is contiguous category ids with ignore=255.
+            # Shift valid classes by +1 so 0 remains reserved as background.
+            seg_map = target.get("seg_map")
+            if seg_map is None:
+                raise ValueError("Expected seg_map in COCO panoptic target.")
+            seg_map = seg_map.long()
+            semantic_map = torch.where(
+                seg_map == 255,
+                torch.full_like(seg_map, 255),
+                seg_map + 1,
+            )
+            target["semantic_map"] = semantic_map
+            return image, target
+
+        raise ValueError(f"Unknown dataset source: {self.source}")
 
 
 def combine_semantic_and_instance_outputs(
@@ -115,6 +170,7 @@ class TorchvisionPanopticLitModel(LightningModule):
         freeze_backbone: bool = True,
         log_detailed_metrics: bool = False,
         log_images_every_n_epochs: int = 0,
+        sem_ignore_index: int = 255,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -123,6 +179,7 @@ class TorchvisionPanopticLitModel(LightningModule):
         self.freeze_backbone = freeze_backbone
         self.log_detailed_metrics = log_detailed_metrics
         self.log_images_every_n_epochs = max(0, int(log_images_every_n_epochs))
+        self.sem_ignore_index = sem_ignore_index
 
         # Keep a Torchvision model as requested; use mask-capable architecture.
         self.detector = detection.maskrcnn_resnet50_fpn(
@@ -158,27 +215,38 @@ class TorchvisionPanopticLitModel(LightningModule):
 
     @staticmethod
     def _semantic_confusion_stats(
-        pred: torch.Tensor, target: torch.Tensor, num_classes: int
+        pred: torch.Tensor, target: torch.Tensor, num_classes: int, ignore_index: int = 255
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         pred = pred.long()
         target = target.long()
+        valid = target != ignore_index
 
         intersection = torch.zeros(num_classes, dtype=torch.float64)
         union = torch.zeros(num_classes, dtype=torch.float64)
         for class_id in range(num_classes):
-            pred_c = pred == class_id
-            target_c = target == class_id
+            pred_c = (pred == class_id) & valid
+            target_c = (target == class_id) & valid
             intersection[class_id] = torch.logical_and(pred_c, target_c).sum().double().cpu()
             union[class_id] = torch.logical_or(pred_c, target_c).sum().double().cpu()
 
-        correct = (pred == target).sum().double().cpu()
-        total = torch.tensor(float(target.numel()), dtype=torch.float64)
+        correct = ((pred == target) & valid).sum().double().cpu()
+        total = valid.sum().double().cpu()
         return intersection, union, correct, total
 
     @staticmethod
-    def _multiclass_dice_loss(logits: torch.Tensor, target: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    def _multiclass_dice_loss(
+        logits: torch.Tensor,
+        target: torch.Tensor,
+        ignore_index: int = 255,
+        eps: float = 1e-6,
+    ) -> torch.Tensor:
         probs = torch.softmax(logits, dim=1)
-        target_1h = F.one_hot(target.long(), num_classes=logits.shape[1]).permute(0, 3, 1, 2).float()
+        valid = target != ignore_index
+        safe_target = torch.where(valid, target, torch.zeros_like(target))
+        target_1h = F.one_hot(safe_target.long(), num_classes=logits.shape[1]).permute(0, 3, 1, 2).float()
+        valid_mask = valid.unsqueeze(1).float()
+        probs = probs * valid_mask
+        target_1h = target_1h * valid_mask
         dims = (0, 2, 3)
         intersection = torch.sum(probs * target_1h, dim=dims)
         denom = torch.sum(probs, dim=dims) + torch.sum(target_1h, dim=dims)
@@ -212,6 +280,17 @@ class TorchvisionPanopticLitModel(LightningModule):
     def _build_semantic_targets(targets: List[Dict], out_h: int, out_w: int) -> torch.Tensor:
         sem_targets = []
         for t in targets:
+            if "semantic_map" in t:
+                sem = t["semantic_map"].long()
+                if sem.ndim != 2:
+                    raise ValueError(f"semantic_map must be HxW, got shape {tuple(sem.shape)}")
+                sem = F.interpolate(
+                    sem.unsqueeze(0).unsqueeze(0).float(),
+                    size=(out_h, out_w),
+                    mode="nearest",
+                ).squeeze(0).squeeze(0).long()
+                sem_targets.append(sem)
+                continue
             if "masks" not in t or t["masks"].numel() == 0:
                 sem_targets.append(torch.zeros((out_h, out_w), dtype=torch.long, device=t["boxes"].device))
                 continue
@@ -308,12 +387,14 @@ class TorchvisionPanopticLitModel(LightningModule):
 
         sem_logits, _ = self._semantic_logits(images, targets)
         sem_targets = self._build_semantic_targets(targets, sem_logits.shape[-2], sem_logits.shape[-1])
-        sem_loss_ce = F.cross_entropy(sem_logits, sem_targets)
-        sem_loss_dice = self._multiclass_dice_loss(sem_logits, sem_targets)
+        sem_loss_ce = F.cross_entropy(sem_logits, sem_targets, ignore_index=self.sem_ignore_index)
+        sem_loss_dice = self._multiclass_dice_loss(
+            sem_logits, sem_targets, ignore_index=self.sem_ignore_index
+        )
         sem_loss = sem_loss_ce + sem_loss_dice
         sem_preds = sem_logits.argmax(dim=1)
         inter, union, correct, total = self._semantic_confusion_stats(
-            sem_preds, sem_targets, self.num_classes
+            sem_preds, sem_targets, self.num_classes, ignore_index=self.sem_ignore_index
         )
         self._train_sem_intersection += inter
         self._train_sem_union += union
@@ -399,7 +480,7 @@ class TorchvisionPanopticLitModel(LightningModule):
         sem_targets = self._build_semantic_targets(targets, sem_logits.shape[-2], sem_logits.shape[-1])
         sem_preds = sem_logits.argmax(dim=1)
         inter, union, correct, total = self._semantic_confusion_stats(
-            sem_preds, sem_targets, self.num_classes
+            sem_preds, sem_targets, self.num_classes, ignore_index=self.sem_ignore_index
         )
         self._val_sem_intersection += inter
         self._val_sem_union += union
@@ -502,14 +583,14 @@ class TrainingSession:
         self.args = args
 
     def run(self):
-        dataset_builder = self.create_dataset()
-        model = self.create_model()
+        train_dataset, val_dataset, num_classes, sem_ignore_index = self.create_dataset()
+        model = self.create_model(num_classes=num_classes, sem_ignore_index=sem_ignore_index)
         trainer = TorchTrainer(
             model=model,
             model_inputs=[],
             model_targets=[],
-            train_dataset=dataset_builder.training_dataset(),
-            val_dataset=dataset_builder.validation_dataset(),
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
             train_batch_size=4,
             val_batch_size=2,
             epochs=50,
@@ -522,23 +603,53 @@ class TrainingSession:
         )
         trainer.run()
 
-    def create_model(self):
+    def create_model(self, num_classes: int, sem_ignore_index: int):
         return TorchvisionPanopticLitModel(
             lr=0.0001,
-            num_classes=2,
+            num_classes=num_classes,
             freeze_backbone=not self.args.unfreeze_backbone,
             log_detailed_metrics=self.args.log_detailed_metrics,
             log_images_every_n_epochs=self.args.log_images_every_n_epochs,
+            sem_ignore_index=sem_ignore_index,
         )
 
     def create_dataset(self):
-        # Use masks to generate semantic targets from instance masks.
-        dataset_builder = PennFudanPedestrianDatasetBuilder(
-            flavor="torchvision",
-            include_masks=True,
-            label_offset=1,
-        )
-        return dataset_builder
+        if self.args.dataset == "pennfudan":
+            dataset_builder = PennFudanPedestrianDatasetBuilder(
+                flavor="torchvision",
+                include_masks=True,
+                label_offset=1,
+            )
+            train_dataset = UnifiedPanopticTorchvisionDataset(
+                dataset_builder.training_dataset(), source="pennfudan"
+            )
+            val_dataset = UnifiedPanopticTorchvisionDataset(
+                dataset_builder.validation_dataset(), source="pennfudan"
+            )
+            num_classes = 2  # background + pedestrian
+            sem_ignore_index = 255
+            return train_dataset, val_dataset, num_classes, sem_ignore_index
+
+        if self.args.dataset == "coco_panoptic_tiny":
+            from cvlization.dataset.coco_panoptic_tiny import CocoPanopticTinyDatasetBuilder
+
+            dataset_builder = CocoPanopticTinyDatasetBuilder(
+                flavor="torchvision",
+                preload=False,
+                label_offset=1,
+            )
+            train_dataset = UnifiedPanopticTorchvisionDataset(
+                dataset_builder.training_dataset(), source="coco_panoptic_tiny"
+            )
+            val_dataset = UnifiedPanopticTorchvisionDataset(
+                dataset_builder.validation_dataset(), source="coco_panoptic_tiny"
+            )
+            # +1 for reserved background class 0
+            num_classes = len(dataset_builder.classes) + 1
+            sem_ignore_index = 255
+            return train_dataset, val_dataset, num_classes, sem_ignore_index
+
+        raise ValueError(f"Unknown dataset: {self.args.dataset}")
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -547,6 +658,13 @@ if __name__ == "__main__":
         epilog="Torchvision panoptic-ish training (Mask R-CNN + semantic head + panoptic merge)."
     )
     parser.add_argument("--track", action="store_true")
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="pennfudan",
+        choices=["pennfudan", "coco_panoptic_tiny"],
+        help="Dataset to train on.",
+    )
     parser.add_argument(
         "--unfreeze-backbone",
         action="store_true",
