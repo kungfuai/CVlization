@@ -297,6 +297,16 @@ class WandbPanopticImageHook(HookBase):
         all_cats = pan["categories"]
         self._cat_id_to_idx = {c["id"]: i for i, c in enumerate(all_cats)}
 
+        # Build inverse maps: model contiguous ID → original dataset category ID.
+        # Detectron2 predictions use contiguous IDs (things 0..79, stuff 0..52)
+        # but GT uses original COCO IDs. We need to convert pred IDs back.
+        self._contiguous_thing_to_dataset = {
+            v: k for k, v in meta.thing_dataset_id_to_contiguous_id.items()
+        }
+        self._contiguous_stuff_to_dataset = {
+            v: k for k, v in meta.stuff_dataset_id_to_contiguous_id.items()
+        }
+
         self._samples = []
         img_id_to_info = {img["id"]: img for img in pan["images"]}
         for ann_entry in pan["annotations"][: self.num_images]:
@@ -354,12 +364,17 @@ class WandbPanopticImageHook(HookBase):
             panoptic_seg, segments_info = outputs["panoptic_seg"]
             panoptic_seg = panoptic_seg.cpu().numpy()
 
-            # Pred semantic: map each predicted segment to its category index
+            # Pred semantic: convert model contiguous IDs back to dataset IDs,
+            # then map to the same unified index used for GT colorization.
             pred_sem = np.full_like(panoptic_seg, 255, dtype=np.int32)
             for s in segments_info:
-                cat_id = s["category_id"]
-                if cat_id in self._cat_id_to_idx:
-                    pred_sem[panoptic_seg == s["id"]] = self._cat_id_to_idx[cat_id]
+                contiguous_id = s["category_id"]
+                if s["isthing"]:
+                    dataset_id = self._contiguous_thing_to_dataset.get(contiguous_id)
+                else:
+                    dataset_id = self._contiguous_stuff_to_dataset.get(contiguous_id)
+                if dataset_id is not None and dataset_id in self._cat_id_to_idx:
+                    pred_sem[panoptic_seg == s["id"]] = self._cat_id_to_idx[dataset_id]
 
             # Semantic panel: [input | gt_semantic | pred_semantic]
             gt_sem_rgb = self._colorize(gt_sem)
