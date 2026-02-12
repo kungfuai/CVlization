@@ -41,9 +41,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--hf-dataset", type=str, default=None, help="HuggingFace dataset to download")
     p.add_argument("--dataset-dir", type=str, default=None, help="Path to COCO dataset root")
     p.add_argument("--output-dir", type=str, default="outputs", help="Output directory")
-    p.add_argument("--epochs", type=int, default=20)
+    p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--batch-size", type=int, default=1)
-    p.add_argument("--rank", type=int, default=64, help="LoRA rank")
+    p.add_argument("--rank", type=int, default=512, help="LoRA rank")
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--checkpoint", type=str, default=None, help="SAM ViT-B checkpoint path")
     p.add_argument("--wandb", action="store_true", default=False)
@@ -69,8 +69,13 @@ def sam_forward(model, batched_input, multimask_output=False):
     """SAM forward pass WITHOUT @torch.no_grad() so gradients can flow.
 
     The pip-installed segment_anything decorates Sam.forward with
-    @torch.no_grad(), which blocks training. This reimplements the same
+    @torch.no_grad(), which blocks training.  This reimplements the same
     logic with gradients enabled.
+
+    Critically, the predicted masks are **post-processed** (upsampled) to the
+    original image resolution *before* being returned — matching the behaviour
+    of the original Sam_LoRA vendored SAM where the loss is computed at full
+    resolution rather than the decoder's native 256x256.
     """
     input_images = torch.stack(
         [model.preprocess(x["image"]) for x in batched_input], dim=0
@@ -95,7 +100,14 @@ def sam_forward(model, batched_input, multimask_output=False):
             dense_prompt_embeddings=dense_embeddings,
             multimask_output=multimask_output,
         )
-        outputs.append({"low_res_logits": low_res_masks, "iou_predictions": iou_predictions})
+
+        # Upsample to original image resolution (matches original Sam_LoRA repo)
+        masks = model.postprocess_masks(
+            low_res_masks,
+            input_size=image_record["image"].shape[-2:],
+            original_size=image_record["original_size"],
+        )
+        outputs.append({"low_res_logits": masks, "iou_predictions": iou_predictions})
     return outputs
 
 
@@ -107,15 +119,11 @@ def train_one_epoch(model, dataloader, optimizer, loss_fn, device):
         batch = _batch_to_device(batch, device)
         outputs = sam_forward(model, batch, multimask_output=False)
 
-        # Stack ground truth and predicted masks
+        # Both pred and GT are at original image resolution
         gt = torch.stack([b["ground_truth_mask"] for b in batch], dim=0)
         pred = torch.stack([out["low_res_logits"] for out in outputs], dim=0)
-
-        # pred shape: [B, 1, 1, H, W] -> [B, 1, H, W]
-        pred = pred.squeeze(1)
-        # gt shape: [B, H, W] -> [B, 1, H, W], resized to match pred
-        gt = gt.unsqueeze(1).float().to(device)
-        gt = F.interpolate(gt, size=pred.shape[-2:], mode="nearest")
+        pred = pred.squeeze(1)            # [B, 1, 1, H, W] -> [B, 1, H, W]
+        gt = gt.unsqueeze(1).float().to(device)  # [B, H, W] -> [B, 1, H, W]
 
         loss = loss_fn(pred, gt)
         optimizer.zero_grad()
@@ -132,17 +140,82 @@ def validate(model, dataloader, loss_fn, device):
     losses = []
     for batch in tqdm(dataloader, desc="  val"):
         batch = _batch_to_device(batch, device)
-        outputs = model(batched_input=batch, multimask_output=False)
+        outputs = sam_forward(model, batch, multimask_output=False)
 
         gt = torch.stack([b["ground_truth_mask"] for b in batch], dim=0)
         pred = torch.stack([out["low_res_logits"] for out in outputs], dim=0)
         pred = pred.squeeze(1)
         gt = gt.unsqueeze(1).float().to(device)
-        gt = F.interpolate(gt, size=pred.shape[-2:], mode="nearest")
 
         loss = loss_fn(pred, gt)
         losses.append(loss.item())
     return losses
+
+
+@torch.no_grad()
+def visualize_predictions(model, dataset, device, max_samples=4, target_h=256):
+    """Run inference on validation samples and build side-by-side images.
+
+    Returns a list of numpy arrays, each showing:
+        [input image | GT mask | predicted mask]
+    with a white margin between panels.  All canvases are normalised to
+    ``target_h`` so wandb doesn't warn about mismatched sizes.
+    """
+    from PIL import Image as PILImage
+
+    model.eval()
+    margin = 10  # pixels between panels
+    panels = []
+
+    def _resize(arr, th, tw):
+        return np.array(PILImage.fromarray(arr).resize((tw, th), PILImage.BILINEAR))
+
+    n = min(max_samples, len(dataset))
+    for i in range(n):
+        sample = dataset[i]
+
+        # --- original-resolution image (re-read from dataset) ---
+        if hasattr(dataset, "samples"):
+            entry = dataset.samples[i]
+            if isinstance(entry, tuple) and isinstance(entry[0], Path):
+                # ImageMaskDataset: (img_path, mask_path)
+                orig_img = np.array(PILImage.open(entry[0]).convert("RGB"))
+            else:
+                # CocoSamDataset: (img_info dict, ann)
+                img_info = entry[0]
+                orig_img = np.array(
+                    PILImage.open(dataset.images_dir / img_info["file_name"]).convert("RGB")
+                )
+        else:
+            orig_img = sample["image"].permute(1, 2, 0).numpy().astype(np.uint8)
+
+        h, w = sample["original_size"]
+
+        # --- GT mask → RGB (green channel) ---
+        gt_mask = sample["ground_truth_mask"].numpy()  # (H, W) binary
+        gt_rgb = np.stack([np.zeros_like(gt_mask), gt_mask * 255, np.zeros_like(gt_mask)], axis=-1).astype(np.uint8)
+
+        # --- predicted mask (already at original resolution) ---
+        batch = [{"image": sample["image"].to(device), "boxes": sample["boxes"].to(device),
+                  "original_size": sample["original_size"]}]
+        outputs = sam_forward(model, batch, multimask_output=False)
+        pred_logits = outputs[0]["low_res_logits"]  # (1, 1, H, W) at original res
+        pred_mask = (pred_logits.squeeze().cpu().numpy() > 0).astype(np.uint8)
+        pred_rgb = np.stack([np.zeros_like(pred_mask), pred_mask * 255, np.zeros_like(pred_mask)], axis=-1).astype(np.uint8)
+
+        # Resize all three panels to uniform target_h (preserve aspect ratio)
+        scale = target_h / h
+        target_w = int(w * scale)
+        img_panel = _resize(orig_img, target_h, target_w)
+        gt_panel = _resize(gt_rgb, target_h, target_w)
+        pred_panel = _resize(pred_rgb, target_h, target_w)
+
+        # Build side-by-side with white margin
+        sep = np.full((target_h, margin, 3), 255, dtype=np.uint8)
+        canvas = np.concatenate([img_panel, sep, gt_panel, sep, pred_panel], axis=1)
+        panels.append(canvas)
+
+    return panels
 
 
 def main():
@@ -300,6 +373,14 @@ def main():
                 best_path = output_dir / f"lora_rank{args.rank}_best.safetensors"
                 sam_lora.save_lora_parameters(str(best_path))
                 print(f"  Saved best model -> {best_path}")
+
+        # Visualize predictions on validation set
+        if wandb_run and val_loader is not None:
+            panels = visualize_predictions(model, val_loader.dataset, device)
+            log["val/predictions"] = [
+                wandb.Image(p, caption=f"sample {i}: input | GT | pred")
+                for i, p in enumerate(panels)
+            ]
 
         if wandb_run:
             wandb_run.log(log)
