@@ -33,9 +33,11 @@ class WandbPanopticImageHook(Hook):
 
     MARGIN = 4
 
-    def __init__(self, img_paths, seg_paths, num_images=3, log_every_n_epochs=1):
+    def __init__(self, img_paths, seg_paths, seg_id_to_class_idx_maps,
+                 num_images=3, log_every_n_epochs=1):
         self.img_paths = img_paths[:num_images]
         self.seg_paths = seg_paths[:num_images]
+        self.seg_id_to_class_idx_maps = seg_id_to_class_idx_maps[:num_images]
         self.log_every_n_epochs = log_every_n_epochs
         self._cmap = self._build_colormap(256)
 
@@ -70,41 +72,55 @@ class WandbPanopticImageHook(Hook):
         if hasattr(model, "module"):
             model = model.module  # unwrap DataParallel
 
-        panels = []
-        for img_path, seg_path in zip(self.img_paths, self.seg_paths):
-            # raw image (BGR→RGB)
+        sem_panels, inst_panels = [], []
+        for img_path, seg_path, sid2idx in zip(
+            self.img_paths, self.seg_paths, self.seg_id_to_class_idx_maps
+        ):
             raw_img = mmcv.bgr2rgb(mmcv.imread(img_path))
+            h, w = raw_img.shape[:2]
+            margin = self._hmargin(h)
 
-            # GT semantic: read panoptic PNG, convert RGB→id, then id→category
-            pan_png = np.array(mmcv.imread(seg_path, flag="color"))
-            gt_sem = (rgb2id(pan_png) % INSTANCE_OFFSET).astype(np.int32)
-            gt_rgb = self._colorize(gt_sem)
+            # GT panoptic PNG
+            pan_png = mmcv.bgr2rgb(mmcv.imread(seg_path, flag="color"))
+            seg_ids = rgb2id(pan_png)
 
-            # prediction
+            # GT semantic: segment_id → contiguous class index
+            gt_sem = np.full_like(seg_ids, 255, dtype=np.int32)
+            for sid, cls_idx in sid2idx.items():
+                gt_sem[seg_ids == sid] = cls_idx
+
+            # Prediction
             result = inference_detector(model, img_path)
             pan = result.get("pan_results", None)
             if pan is not None:
                 pred_sem = (pan % INSTANCE_OFFSET).astype(np.int32)
             else:
-                pred_sem = np.zeros(raw_img.shape[:2], dtype=np.int32)
-            pred_rgb = self._colorize(pred_sem)
+                pan = np.zeros(raw_img.shape[:2], dtype=np.int32)
+                pred_sem = pan
 
-            # resize gt/pred to match raw image dimensions
-            h, w = raw_img.shape[:2]
-            gt_rgb = mmcv.imresize(gt_rgb, (w, h))
-            pred_rgb = mmcv.imresize(pred_rgb, (w, h))
+            # Semantic panel (class-level colors)
+            gt_sem_rgb = mmcv.imresize(self._colorize(gt_sem), (w, h))
+            pred_sem_rgb = mmcv.imresize(self._colorize(pred_sem), (w, h))
+            sem_panels.append(np.concatenate(
+                [raw_img, margin, gt_sem_rgb, margin, pred_sem_rgb], axis=1,
+            ))
 
-            panel = np.concatenate(
-                [raw_img, self._hmargin(h), gt_rgb, self._hmargin(h), pred_rgb],
-                axis=1,
-            )
-            panels.append(panel)
+            # Instance panel (unique color per instance)
+            gt_inst_rgb = mmcv.imresize(self._colorize(seg_ids), (w, h))
+            pred_inst_rgb = mmcv.imresize(self._colorize(pan), (w, h))
+            inst_panels.append(np.concatenate(
+                [raw_img, margin, gt_inst_rgb, margin, pred_inst_rgb], axis=1,
+            ))
 
         wandb.log(
             {
-                "images/val": [
-                    wandb.Image(p, caption="input | gt_semantic | pred_semantic")
-                    for p in panels
+                "images/val_semantic": [
+                    wandb.Image(p, caption="input | gt | pred")
+                    for p in sem_panels
+                ],
+                "images/val_instance": [
+                    wandb.Image(p, caption="input | gt | pred")
+                    for p in inst_panels
                 ],
             },
             step=runner.iter,
@@ -166,15 +182,31 @@ class TrainingSession:
             ann = json.load(f)
         img_dir = os.path.join(dsb.data_dir, dsb.dataset_folder, dsb.img_folder)
         seg_dir = os.path.join(dsb.data_dir, dsb.dataset_folder, dsb.seg_folder)
-        img_paths, seg_paths = [], []
+
+        # Build coco_category_id → contiguous class index mapping
+        name_to_catid = {cat["name"]: cat["id"] for cat in ann["categories"]}
+        catid_to_idx = {}
+        for idx, name in enumerate(dsb.classes):
+            cid = name_to_catid.get(name)
+            if cid is not None:
+                catid_to_idx[cid] = idx
+
+        img_paths, seg_paths, sid2idx_maps = [], [], []
         for entry in ann.get("annotations", [])[:3]:
             fname = entry["file_name"]
             img_fname = fname.replace(".png", ".jpg")
             img_paths.append(os.path.join(img_dir, img_fname))
             seg_paths.append(os.path.join(seg_dir, fname))
+            # segment_id → contiguous class index (same space as model output)
+            sid2idx_maps.append(
+                {seg["id"]: catid_to_idx[seg["category_id"]]
+                 for seg in entry["segments_info"]
+                 if seg["category_id"] in catid_to_idx}
+            )
 
         hook = WandbPanopticImageHook(
-            img_paths=img_paths, seg_paths=seg_paths, num_images=3
+            img_paths=img_paths, seg_paths=seg_paths,
+            seg_id_to_class_idx_maps=sid2idx_maps, num_images=3,
         )
         if not hasattr(cfg, "custom_hooks") or cfg.custom_hooks is None:
             cfg.custom_hooks = []
