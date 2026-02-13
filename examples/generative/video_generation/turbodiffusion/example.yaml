@@ -1,6 +1,6 @@
 name: turbodiffusion
 description: Fast text-to-video generation with 100x+ speedup using TurboDiffusion
-category: generative/video_generation
+capability: generative/video_generation
 tags:
   - video-generation
   - text-to-video

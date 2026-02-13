@@ -59,9 +59,9 @@ def create_parser() -> argparse.ArgumentParser:
     list_parser.add_argument(
         "--format",
         "-f",
-        choices=["list", "table"],
-        default="list",
-        help="Output format (default: list)"
+        choices=["grouped", "list", "table"],
+        default="grouped",
+        help="Output format (default: grouped)"
     )
     # Type filter flags (mutually exclusive)
     type_group = list_parser.add_mutually_exclusive_group()
@@ -439,12 +439,11 @@ def cmd_list(args) -> int:
     try:
         examples = find_all_examples()
 
-        # Determine example_type filter from flags
-        example_type = None
-        if getattr(args, 'examples', False):
-            example_type = 'example'
-        elif getattr(args, 'benchmarks', False):
+        # Determine example_type filter from flags (default: examples only)
+        if getattr(args, 'benchmarks', False):
             example_type = 'benchmark'
+        else:
+            example_type = 'example'
 
         output = list_examples(
             examples,
