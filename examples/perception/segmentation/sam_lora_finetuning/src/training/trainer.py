@@ -8,21 +8,44 @@ from tqdm import tqdm
 
 from src.models.sam_forward import _batch_to_device, sam_forward
 
+_VIZ_SEED = 0
+
 
 class Trainer:
     """Encapsulates training, validation, and visualization for SAM LoRA."""
 
-    def __init__(self, model, optimizer, loss_fn, device):
+    def __init__(self, model, optimizer, loss_fn, device,
+                 train_loader=None, val_loader=None, wandb_run=None):
         self.model = model
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.device = device
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.wandb_run = wandb_run
 
-    def train_epoch(self, dataloader) -> list[float]:
+    def log_val_predictions(self, log=None):
+        """Log visualization panels to wandb. Seeds np.random for reproducibility."""
+        if self.wandb_run is None or self.val_loader is None:
+            return
+        import wandb
+
+        np.random.seed(_VIZ_SEED)
+        panels = self.visualize_predictions(self.val_loader.dataset)
+        images = [
+            wandb.Image(p, caption=f"sample {i}: input | GT | pred")
+            for i, p in enumerate(panels)
+        ]
+        if log is not None:
+            log["val/predictions"] = images
+        else:
+            self.wandb_run.log({"val/predictions": images})
+
+    def train_epoch(self) -> list[float]:
         """Run one training epoch. Returns list of per-batch losses."""
         self.model.train()
         losses = []
-        for batch in tqdm(dataloader, desc="  train"):
+        for batch in tqdm(self.train_loader, desc="  train"):
             batch = _batch_to_device(batch, self.device)
             outputs = sam_forward(self.model, batch, multimask_output=False)
 
@@ -39,11 +62,11 @@ class Trainer:
         return losses
 
     @torch.no_grad()
-    def validate_epoch(self, dataloader) -> list[float]:
+    def validate_epoch(self) -> list[float]:
         """Run validation. Returns list of per-batch losses."""
         self.model.eval()
         losses = []
-        for batch in tqdm(dataloader, desc="  val"):
+        for batch in tqdm(self.val_loader, desc="  val"):
             batch = _batch_to_device(batch, self.device)
             outputs = sam_forward(self.model, batch, multimask_output=False)
 
