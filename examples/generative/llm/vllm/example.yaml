@@ -1,5 +1,5 @@
 name: vllm
-capability: llm
+capability: generative/llm
 modalities: [text]
 stability: experimental
 resources:

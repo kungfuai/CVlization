@@ -1,6 +1,6 @@
 name: live-avatar
 description: Audio-driven avatar video generation using LiveAvatar with Wan2.2-S2V-14B + LoRA
-category: generative/video_generation
+capability: generative/video_generation
 tags:
   - video-generation
   - talking-head

@@ -1,6 +1,6 @@
 name: openvla_single_step
 description: OpenVLA single-step inference with action visualization
-category: physical
+capability: physical/vla
 tags:
   - vla
   - openvla
