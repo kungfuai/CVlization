@@ -7,6 +7,7 @@ from pathlib import Path
 from statistics import mean
 
 import monai
+import numpy as np
 import torch
 from torch.optim import Adam
 
@@ -32,8 +33,11 @@ def main():
     if config.checkpoint:
         sam = build_sam_vit_b(checkpoint=config.checkpoint)
     else:
-        # Download default checkpoint
-        ckpt_path = Path(config.output_dir) / "sam_vit_b_01ec64.pth"
+        # Download default checkpoint to centralized cache
+        import os
+
+        cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+        ckpt_path = Path(cache_home) / "cvlization" / "models" / "sam" / "sam_vit_b_01ec64.pth"
         if not ckpt_path.exists():
             print("  Downloading SAM ViT-B checkpoint...")
             ckpt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -41,7 +45,9 @@ def main():
 
             url = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"
             urllib.request.urlretrieve(url, str(ckpt_path))
-            print(f"  Saved to {ckpt_path}")
+            print(f"  Cached to {ckpt_path}")
+        else:
+            print(f"  Using cached checkpoint: {ckpt_path}")
         sam = build_sam_vit_b(checkpoint=str(ckpt_path))
 
     sam_lora = LoRA_sam(sam, config.rank)
@@ -91,6 +97,17 @@ def main():
 
     best_val_loss = float("inf")
 
+    # Log step-0 val images (before any training)
+    if wandb_run and val_loader is not None:
+        np.random.seed(0)
+        panels = trainer.visualize_predictions(val_loader.dataset)
+        wandb_run.log({
+            "val/predictions": [
+                wandb.Image(p, caption=f"sample {i}: input | GT | pred")
+                for i, p in enumerate(panels)
+            ],
+        })
+
     for epoch in range(config.epochs):
         print(f"\nEpoch {epoch + 1}/{config.epochs}")
 
@@ -116,6 +133,7 @@ def main():
 
         # Visualize predictions on validation set
         if wandb_run and val_loader is not None:
+            np.random.seed(0)
             panels = trainer.visualize_predictions(val_loader.dataset)
             log["val/predictions"] = [
                 wandb.Image(p, caption=f"sample {i}: input | GT | pred")
