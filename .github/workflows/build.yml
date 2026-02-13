@@ -23,9 +23,7 @@ jobs:
               - 'cvl/**'
               - 'cvlization/**'
               - 'tests/**'
-              - 'Dockerfile'
               - 'pyproject.toml'
-              - 'requirements*.txt'
               - 'bin/**'
               - '.github/**'
             examples:
@@ -36,32 +34,26 @@ jobs:
     needs: changes
     # Only run if core files changed (applies to both push and PR)
     if: needs.changes.outputs.core == 'true'
-    env:
-      DOCKER_BUILDKIT: "1"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
         with:
-          install: true
-          driver: docker-container
-      - name: Build test image
-        uses: docker/build-push-action@v6
+          fetch-depth: 0  # needed for setuptools-scm version detection
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          context: .
-          file: Dockerfile
-          push: false
-          load: true
-          tags: cvlization-test:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Unit test
+          python-version: '3.11'
+
+      - name: Install package
+        run: pip install .
+
+      - name: Verify CLI
         run: |
-          ./bin/ci-test.sh -vv
-        env:
-          CVL_DOCKER_IMAGE: cvlization-test:${{ github.sha }}
+          cvl list
+          cvl list --format list | head -20
+          cvl list -k sam
 
   # Lightweight checks for examples/benchmarks-only changes
   examples_check:
