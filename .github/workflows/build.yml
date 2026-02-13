@@ -11,7 +11,8 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      core: ${{ steps.filter.outputs.core }}
+      cli: ${{ steps.filter.outputs.cli }}
+      library: ${{ steps.filter.outputs.library }}
       examples: ${{ steps.filter.outputs.examples }}
     steps:
       - uses: actions/checkout@v4
@@ -19,49 +20,87 @@ jobs:
         id: filter
         with:
           filters: |
-            core:
+            cli:
               - 'cvl/**'
+              - 'pyproject.toml'
+              - 'bin/**'
+              - '.github/**'
+            library:
               - 'cvlization/**'
               - 'tests/**'
-              - 'Dockerfile'
               - 'pyproject.toml'
-              - 'requirements*.txt'
-              - 'bin/**'
               - '.github/**'
             examples:
               - 'examples/**'
               - 'benchmarks/**'
 
-  build_and_test:
+  # CLI tests (lightweight, no heavy deps)
+  cli_tests:
     needs: changes
-    # Only run if core files changed (applies to both push and PR)
-    if: needs.changes.outputs.core == 'true'
-    env:
-      DOCKER_BUILDKIT: "1"
+    if: needs.changes.outputs.cli == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
         with:
-          install: true
-          driver: docker-container
-      - name: Build test image
-        uses: docker/build-push-action@v6
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          context: .
-          file: Dockerfile
-          push: false
-          load: true
-          tags: cvlization-test:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Unit test
+          python-version: '3.11'
+
+      - name: Install package
+        run: pip install ".[dev]"
+
+      - name: CLI unit tests
+        run: pytest -v cvl/tests/
+
+      - name: CLI smoke test
         run: |
-          ./bin/ci-test.sh -vv
-        env:
-          CVL_DOCKER_IMAGE: cvlization-test:${{ github.sha }}
+          cvl list
+          cvl list --format list | head -20
+          cvl list -k sam
+
+  # Library tests (heavy deps: pytorch, tensorflow, etc.)
+  library_tests:
+    needs: changes
+    if: needs.changes.outputs.library == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package and heavy deps
+        run: |
+          pip install ".[dev]"
+          pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install \
+            pytorch-lightning==2.5.5 \
+            lightning==2.5.5 \
+            torchmetrics==1.8.2 \
+            timm==1.0.12 \
+            numpy==2.3.5 \
+            albumentations==1.4.24 \
+            kornia==0.7.4 \
+            transformers==4.47.1 \
+            mlflow==2.19.0 \
+            scikit-image==0.24.0 \
+            pandas==2.2.3 \
+            tensorflow-cpu==2.20.0 \
+            wandb==0.19.11 \
+            datasets==2.14.4 \
+            nltk==3.9.1
+
+      - name: Library unit tests
+        run: pytest -v tests/
 
   # Lightweight checks for examples/benchmarks-only changes
   examples_check:
@@ -98,7 +137,6 @@ jobs:
           if [ -n "$changed_dockerfiles" ]; then
             echo "Linting Dockerfiles:"
             echo "$changed_dockerfiles"
-            # Download hadolint
             curl -sL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o /tmp/hadolint
             chmod +x /tmp/hadolint
             echo "$changed_dockerfiles" | xargs -I {} /tmp/hadolint --failure-threshold error {}
