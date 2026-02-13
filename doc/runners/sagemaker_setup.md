@@ -20,7 +20,7 @@ SageMaker training jobs require an IAM role with permissions to:
 **Create the role using our setup script:**
 
 ```bash
-AWS_PROFILE=your_profile ./docs/runners/setup_sagemaker_role.sh
+AWS_PROFILE=your_profile ./doc/runners/setup_sagemaker_role.sh
 ```
 
 Or manually create a role with these policies attached:
@@ -106,7 +106,7 @@ Common instance types and their quota codes:
    export AWS_PROFILE=your_profile
 
    # Create SageMaker role
-   ./docs/runners/setup_sagemaker_role.sh
+   ./doc/runners/setup_sagemaker_role.sh
 
    # Create S3 bucket (if needed)
    aws s3 mb s3://my-training-outputs
