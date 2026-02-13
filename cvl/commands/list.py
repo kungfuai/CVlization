@@ -181,6 +181,85 @@ def format_list(examples: List[Dict], keyword: Optional[str] = None, show_type: 
     return "\n".join(lines)
 
 
+def format_grouped(examples: List[Dict], keyword: Optional[str] = None) -> str:
+    """Format examples as a grouped, compact view.
+
+    Groups by top-level capability, then sub-category, showing example names
+    inline with counts.
+
+    Args:
+        examples: List of example metadata dicts
+        keyword: Optional keyword to highlight in output
+
+    Returns:
+        Formatted grouped view as string
+    """
+    if not examples:
+        return "No examples found."
+
+    BOLD = '\033[1m'
+    DIM = '\033[2m'
+    RESET = '\033[0m'
+
+    # Group by primary capability -> sub-capability -> list of names
+    # Only use first 2 levels: "analytical/tabular/causal" -> ("analytical", "tabular")
+    groups: Dict[str, Dict[str, List[str]]] = {}
+    for e in examples:
+        cap = e.get('capability', '') or ''
+        parts = cap.split('/')
+        primary = parts[0] if parts[0] else 'uncategorized'
+        sub = parts[1] if len(parts) > 1 and parts[1] else 'other'
+        name = e.get('name', 'unknown')
+        groups.setdefault(primary, {}).setdefault(sub, []).append(name)
+
+    # Sort sub-categories by count descending within each group
+    for primary in groups:
+        for sub in groups[primary]:
+            groups[primary][sub].sort()
+
+    # Sort primary groups by count descending
+    sorted_primaries = sorted(
+        groups.items(),
+        key=lambda item: sum(len(v) for v in item[1].values()),
+        reverse=True,
+    )
+
+    lines = [f"Examples ({len(examples)} total)", ""]
+
+    for primary, subs in sorted_primaries:
+        primary_count = sum(len(names) for names in subs.values())
+        primary_label = highlight_matches(primary, keyword) if keyword else primary
+        lines.append(f"{BOLD}{primary_label}{RESET} ({primary_count})")
+
+        sorted_subs = sorted(subs.items(), key=lambda item: len(item[1]), reverse=True)
+        max_sub_len = max(len(sub) for sub, _ in sorted_subs)
+
+        for sub, names in sorted_subs:
+            # Truncate name list if too many
+            MAX_INLINE = 3
+            if keyword:
+                display_names = [highlight_matches(n, keyword) for n in names]
+            else:
+                display_names = list(names)
+
+            if len(display_names) > MAX_INLINE:
+                shown = ", ".join(display_names[:MAX_INLINE])
+                name_str = f"{shown}, {DIM}...{RESET} ({len(names)})"
+            else:
+                name_str = f"{', '.join(display_names)} ({len(names)})"
+
+            sub_label = highlight_matches(sub, keyword) if keyword else sub
+            lines.append(f"  {sub_label:<{max_sub_len}}  {name_str}")
+
+        lines.append("")
+
+    # Remove trailing blank line
+    if lines and lines[-1] == "":
+        lines.pop()
+
+    return "\n".join(lines)
+
+
 def list_examples(
     examples: List[Dict],
     capability: Optional[str] = None,
@@ -198,7 +277,7 @@ def list_examples(
         tag: Optional tag filter
         stability: Optional stability filter
         keyword: Optional keyword filter
-        format_type: Output format ('list' or 'table')
+        format_type: Output format ('grouped', 'list', or 'table')
         example_type: Filter by type ('example', 'benchmark', or None for all)
 
     Returns:
@@ -216,5 +295,7 @@ def list_examples(
     # Choose formatter based on format_type
     if format_type == 'table':
         return format_table(filtered, keyword)
-    else:  # default to 'list'
+    elif format_type == 'list':
         return format_list(filtered, keyword)
+    else:  # default to 'grouped'
+        return format_grouped(filtered, keyword)
