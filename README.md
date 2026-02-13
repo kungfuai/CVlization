@@ -1,6 +1,6 @@
 # CVlization: Curated AI Training and Inference Recipes That Just Work
 
-A curated collection of 150+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need.
+A curated collection of 190+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need.
 
 *CVlization stands on the shoulders of giants - we package and test amazing open source projects so you can use them with confidence.*
 
@@ -19,8 +19,9 @@ pip install .[aws]       # SageMaker runner
 pip install .[deploy]    # Serverless deployment (Cerebrium)
 
 # Browse examples
-cvl list --tag pytorch    # search by tag
+cvl list                  # compact grouped overview
 cvl list -k gpt           # search by keyword
+cvl list --format list    # detailed view
 # or browse examples/ on GitHub
 
 # Run any example
@@ -65,9 +66,9 @@ examples/
 
 | Capability | Example Directory | Implementations | Status |
 |------------|-------------------|-----------------|--------|
-| ![Image Classification](./doc/images/plant_classification.png) Image Classification | [`examples/perception/image_classification`](./examples/perception/image_classification) | torch | ✅ |
+| ![Image Classification](./doc/images/plant_classification.png) Image Classification | [`examples/perception/image_classification`](./examples/perception/image_classification) | torch, cifar10-speedrun | ✅ |
 | ![Object Detection](./doc/images/object_detection.jpg) Object Detection | [`examples/perception/object_detection`](./examples/perception/object_detection) | mmdet, torchvision, rt-detr, yolov13 | ✅ |
-| ![Segmentation](./doc/images/semantic_segmentation.png) Segmentation | [`examples/perception/segmentation`](./examples/perception/segmentation) | instance (mmdet, torchvision), semantic (mmseg, torchvision), panoptic (mmdet, torchvision), sam, sam3, sam3_finetuning | ✅ |
+| ![Segmentation](./doc/images/semantic_segmentation.png) Segmentation | [`examples/perception/segmentation`](./examples/perception/segmentation) | instance (mmdet, torchvision), semantic (mmseg, torchvision), panoptic (detectron2, mmdet, torchvision), sam, sam_lora_finetuning, sam3, sam3_finetuning | ✅ |
 | ![Pose Estimation](./doc/images/pose_estimation.jpeg) Pose Estimation | [`examples/perception/pose_estimation`](./examples/perception/pose_estimation) | dwpose, mmpose | ✅ |
 | ![Object Tracking](./doc/images/player_tracking.gif) Tracking | [`examples/perception/tracking`](./examples/perception/tracking) | global_tracking_transformer, soccer_visual_tracking | ✅ |
 | ![Line Detection](./doc/images/line_detection.png) Line Detection | [`examples/perception/line_detection`](./examples/perception/line_detection) | torch | ✅ |
@@ -79,11 +80,11 @@ examples/
 
 | Capability | Example Directory | Implementations | Status |
 |------------|-------------------|-----------------|--------|
-| ![LLMs](./doc/images/llm.png) LLMs (text generation) | [`examples/generative/llm`](./examples/generative/llm) | Pretraining (nanogpt, modded_nanogpt, nanomamba), Full pipeline (nanochat: pretrain, sft, rl), Fine-tuning (peft_mistral7b_sft, trl_sft, miles_grpo, unsloth: gpt_oss_grpo, gpt_oss_sft, llama_3b_sft, qwen_7b_sft, gemma3_4b_sft), Inference (mixtral8x7b, sglang, vllm, dllm, nanbeige4_3b_thinking, nomos_1, rnj_1_instruct) | ✅ |
-| ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, next_scene_qwen, pixart (experimental), rae, repa, stable_diffusion, uva_energy (experimental), vqgan | ✅ |
-| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_diff_cog, animate_x, cogvideox, deforum, framepack, hunyuan_video_1_5, kandinsky_5, krea_realtime_scope (experimental), longcat_video, ltx2, mimic_motion, minisora, phantom (experimental), real_video, reward_forcing, skyreals, svd_cog, svd_comfy, turbodiffusion, vace, vace_comfy (experimental), video_in_between, wan2gp, wan2gp_wan, wan_animate, wan_comfy, worldcanvas | ✅ |
+| ![LLMs](./doc/images/llm.png) LLMs (text generation) | [`examples/generative/llm`](./examples/generative/llm) | Pretraining (nanogpt, modded_nanogpt, nanomamba), Full pipeline (nanochat: pretrain, sft, rl), Fine-tuning (peft_mistral7b_sft, trl_sft, miles_grpo, unsloth: gpt_oss_grpo, gpt_oss_sft, llama_3b_sft, qwen_7b_sft, gemma3_4b_sft), Inference (mixtral8x7b, sglang, vllm, dllm, nanbeige4_3b_thinking, nomos_1, rnj_1_instruct), Interpretability (gemma_scope_2_270m_it) | ✅ |
+| ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, next_scene_qwen, qwen_image_layered, rae, repa, stable_diffusion, uva_energy (experimental), vqgan | ✅ |
+| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_diff_cog, animate_x, cogvideox, deforum, flashvsr, framepack, hunyuan_video_1_5, kandinsky_5, krea_realtime_scope (experimental), longcat_video, ltx2, mimic_motion, minisora, phantom (experimental), propainter, real_video, reward_forcing, skyreals, svd_cog, svd_comfy, turbodiffusion, vace, vace_comfy (experimental), video2x, video_enhancement, video_in_between, wan2gp, wan2gp_wan, wan_animate, wan_comfy, worldcanvas | ✅ |
 | Text-to-Speech (TTS) | [`examples/generative/audio`](./examples/generative/audio) | cosyvoice3, vibevoice_realtime, voxcpm | ✅ |
-| Avatar & Talking Head | [`examples/generative/video_generation/avatar`](./examples/generative/video_generation/avatar) | anytalker, imtalker, egstalker, fastavatar, lite_avatar, live_avatar, personalive, hunyuanvideo_avatar | ✅ |
+| Avatar & Talking Head | [`examples/generative/video_generation/avatar`](./examples/generative/video_generation/avatar) | anytalker, egstalker, fastavatar, flashportrait, hunyuanvideo_avatar, imtalker, lite_avatar, live_avatar, livetalk, longcat_video_avatar, personalive, wan_s2v | ✅ |
 
 #### 📊 Analytical (Prediction & Forecasting)
 
@@ -108,13 +109,14 @@ examples/
 | **RAG & Knowledge** | [`examples/agentic/rag`](./examples/agentic/rag) | langgraph_helpdesk, clara | 🧪 |
 | **LlamaIndex Agents** | [`examples/agentic/llamaindex`](./examples/agentic/llamaindex) | graph_rag_cognee, jsonalyze_structured_qa, react_finance_query_agent | 🧪 |
 | **Prompt Optimization** | [`examples/agentic/optimization`](./examples/agentic/optimization) | dspy_gepa_promptops, mcts_prompt_agent | 🧪 |
-| **Tool Use & Coding** | [`examples/agentic`](./examples/agentic) | Code (autogen_pair_programmer), Data analysis (smolagents_data_analyst), Local AI (llamacpp_assistant) | 🧪 |
+| **Tool Use & Coding** | [`examples/agentic`](./examples/agentic) | Code (autogen_pair_programmer), Data analysis (smolagents_data_analyst), Data preparation (physio_signal_prep), Local AI (llamacpp_assistant) | 🧪 |
+| **Formal Reasoning** | [`examples/agentic/formal`](./examples/agentic/formal) | nanoproof (Lean theorem proving) | 🧪 |
 
 Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. We recommend starting with the nanogpt example.
 
 **Browse on GitHub:** [perception/](./examples/perception/) • [generative/](./examples/generative/) • [analytical/](./examples/analytical/) • [physical/](./examples/physical/) • [agentic/](./examples/agentic/)
 
-**Browse via CLI:** `cvl list -k <keyword>` or `cvl list --tag <tag>`
+**Browse via CLI:** `cvl list` for a compact overview, or `cvl list -k <keyword>` to search
 
 ## Running an Example
 
@@ -210,7 +212,7 @@ See [cvl/deployers/README.md](./cvl/deployers/README.md) for setup and supported
 
 **Production-Ready Patterns:** Copy what works into your projects:
 - Consistent build/train/predict script structure across all examples
-- Battle-tested configurations for 150+ AI capabilities
+- Battle-tested configurations for 190+ AI capabilities
 - Examples regularly updated and tested for compatibility
 
 ## Requirements
@@ -247,7 +249,7 @@ These skills enable Claude to automatically verify examples end-to-end, helping 
 - `examples/`: Dockerized AI examples (perception, generative, analytical, physical, agentic)
 - `cvl/`: CLI tool source code
 - `cvlization/`: Optional reusable library components
-- `doc/`: Project documentation
+- `doc/`: Project documentation, including `doc/runners/` for cloud setup guides
 - `tests/`: Unit and integration tests
 
 ## CVlization Library
@@ -268,9 +270,9 @@ The `cvlization/` directory provides optional reusable components:
 
 Detailed documentation can be found in the `doc/` directory:
 
-- [Computer vision model training workflow and quality checks](./doc/Computer%20vision%20model%20training%20workflow%20and%20quality%20checks.pdf)
-- [Multi-task multi-input models: a common pattern](./doc/Multi-task%20multi-input%20models_%20a%20common%20pattern.pdf)
-- [Reusable model components](./doc/reusable_model_components.md)
+- [Computer vision model training workflow and quality checks](./doc/archived/Computer%20vision%20model%20training%20workflow%20and%20quality%20checks.pdf)
+- [Multi-task multi-input models: a common pattern](./doc/archived/Multi-task%20multi-input%20models_%20a%20common%20pattern.pdf)
+- [Reusable model components](./doc/archived/reusable_model_components.md)
 
 ## Licenses
 
