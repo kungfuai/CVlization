@@ -30,16 +30,16 @@ jobs:
               - 'examples/**'
               - 'benchmarks/**'
 
-  build_and_test:
+  # CLI tests (lightweight, no heavy deps)
+  cli_tests:
     needs: changes
-    # Only run if core files changed (applies to both push and PR)
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # needed for setuptools-scm version detection
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -47,13 +47,57 @@ jobs:
           python-version: '3.11'
 
       - name: Install package
-        run: pip install .
+        run: pip install ".[dev]"
 
-      - name: Verify CLI
+      - name: CLI unit tests
+        run: pytest -v cvl/tests/
+
+      - name: CLI smoke test
         run: |
           cvl list
           cvl list --format list | head -20
           cvl list -k sam
+
+  # Library tests (heavy deps: pytorch, tensorflow, etc.)
+  library_tests:
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package and heavy deps
+        run: |
+          pip install ".[dev]"
+          pip install \
+            torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu \
+            torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu \
+            pytorch-lightning==2.5.5 \
+            lightning==2.5.5 \
+            torchmetrics==1.8.2 \
+            timm==1.0.12 \
+            numpy==2.3.0 \
+            albumentations==1.4.0 \
+            kornia \
+            transformers>=4.22.0 \
+            mlflow \
+            scikit-image>=0.16.2 \
+            pandas \
+            tensorflow-cpu==2.20.0 \
+            wandb \
+            datasets==2.14.4 \
+            nltk
+
+      - name: Library unit tests
+        run: pytest -v tests/
 
   # Lightweight checks for examples/benchmarks-only changes
   examples_check:
@@ -90,7 +134,6 @@ jobs:
           if [ -n "$changed_dockerfiles" ]; then
             echo "Linting Dockerfiles:"
             echo "$changed_dockerfiles"
-            # Download hadolint
             curl -sL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o /tmp/hadolint
             chmod +x /tmp/hadolint
             echo "$changed_dockerfiles" | xargs -I {} /tmp/hadolint --failure-threshold error {}
