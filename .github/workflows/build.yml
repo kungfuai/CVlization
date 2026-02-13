@@ -11,7 +11,8 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      core: ${{ steps.filter.outputs.core }}
+      cli: ${{ steps.filter.outputs.cli }}
+      library: ${{ steps.filter.outputs.library }}
       examples: ${{ steps.filter.outputs.examples }}
     steps:
       - uses: actions/checkout@v4
@@ -19,12 +20,15 @@ jobs:
         id: filter
         with:
           filters: |
-            core:
+            cli:
               - 'cvl/**'
+              - 'pyproject.toml'
+              - 'bin/**'
+              - '.github/**'
+            library:
               - 'cvlization/**'
               - 'tests/**'
               - 'pyproject.toml'
-              - 'bin/**'
               - '.github/**'
             examples:
               - 'examples/**'
@@ -33,7 +37,7 @@ jobs:
   # CLI tests (lightweight, no heavy deps)
   cli_tests:
     needs: changes
-    if: needs.changes.outputs.core == 'true'
+    if: needs.changes.outputs.cli == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -61,7 +65,7 @@ jobs:
   # Library tests (heavy deps: pytorch, tensorflow, etc.)
   library_tests:
     needs: changes
-    if: needs.changes.outputs.core == 'true'
+    if: needs.changes.outputs.library == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
