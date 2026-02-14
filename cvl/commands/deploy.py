@@ -1,13 +1,14 @@
 """Deploy command - deploy CVL examples to serverless platforms."""
 
-import os
 import sys
 from pathlib import Path
 from typing import Optional
 
 from cvl.core.discovery import find_all_examples, find_repo_root
 from cvl.core.matching import find_matching_examples
-from cvl.deployers.cerebrium import CerebriumDeployer, CEREBRIUM_GPUS
+from cvl.deployers.base import BaseDeployer
+from cvl.deployers.cerebrium import CerebriumDeployer
+from cvl.deployers.modal import ModalDeployer
 
 
 def deploy_example(
@@ -20,22 +21,7 @@ def deploy_example(
     skip_model_upload: bool = False,
     only_model_upload: bool = False,
 ) -> int:
-    """
-    Deploy a CVL example to a serverless platform.
-
-    Args:
-        example_query: Example name or path to deploy
-        platform: Target platform (default: cerebrium)
-        dry_run: If True, prepare files but don't deploy
-        deploy_dir: Optional directory for deployment files
-        gpu_override: Override GPU type (e.g., "A10", "A100", "H100")
-        project_id: Platform project ID (e.g., Cerebrium project)
-        skip_model_upload: If True, skip uploading models to persistent storage
-        only_model_upload: If True, only upload models, skip code deployment
-
-    Returns:
-        Exit code (0 for success)
-    """
+    """Deploy a CVL example to a serverless platform."""
     # Find the example
     print(f"Finding example: {example_query}")
     examples = find_all_examples()
@@ -74,57 +60,58 @@ def deploy_example(
     print(f"  VRAM: {resources.get('vram_gb', 'not specified')} GB")
     print(f"  Disk: {resources.get('disk_gb', 'not specified')} GB")
 
-    # Platform-specific deployment
+    # Create platform-specific deployer
     sys.stdout.flush()
     if platform == "cerebrium":
-        return _deploy_cerebrium(example_path, example, dry_run, deploy_dir, gpu_override, project_id, skip_model_upload, only_model_upload)
+        deployer = CerebriumDeployer(example_path, example, gpu_override=gpu_override, project_id=project_id)
+    elif platform == "modal":
+        deployer = ModalDeployer(example_path, example, gpu_override=gpu_override)
     else:
         print(f"Error: Unknown platform '{platform}'", file=sys.stderr)
-        print("Supported platforms: cerebrium", file=sys.stderr)
+        print("Supported platforms: cerebrium, modal", file=sys.stderr)
         return 1
 
+    return _run_deploy(deployer, dry_run, deploy_dir, gpu_override, skip_model_upload, only_model_upload)
 
-def _deploy_cerebrium(
-    example_path: Path,
-    example_meta: dict,
+
+def _run_deploy(
+    deployer: BaseDeployer,
     dry_run: bool,
     deploy_dir: Optional[str],
-    gpu_override: Optional[str] = None,
-    project_id: Optional[str] = None,
-    skip_model_upload: bool = False,
-    only_model_upload: bool = False,
+    gpu_override: Optional[str],
+    skip_model_upload: bool,
+    only_model_upload: bool,
 ) -> int:
-    """Deploy to Cerebrium platform."""
-    deployer = CerebriumDeployer(example_path, example_meta, gpu_override=gpu_override, project_id=project_id)
+    """Shared deployment flow for all platforms."""
+    platform = deployer.platform_name
 
-    # Check if example is supported for automatic deployment
+    # Check if example is supported
     if not deployer.is_supported():
         print(f"\nError: {deployer.get_unsupported_message()}", file=sys.stderr, flush=True)
         return 1
 
     # Show GPU configuration
     gpu_id, gpu_name, vram_needed = deployer.get_gpu_config()
-    gpu_info = CEREBRIUM_GPUS.get(gpu_name, {})
-    print(f"\nCerebrium GPU configuration:")
+    print(f"\n{platform} GPU configuration:")
     print(f"  GPU: {gpu_name} ({gpu_id})")
-    print(f"  VRAM: {gpu_info.get('vram', 'N/A')} GB")
-    print(f"  Plan: {gpu_info.get('plan', 'N/A')}")
+    for line in deployer.format_gpu_info(gpu_name, gpu_id, vram_needed):
+        print(line)
     if gpu_override:
         print(f"  (User override: --gpu {gpu_override})")
     else:
         print(f"  (Auto-selected for {vram_needed}GB VRAM requirement)")
-    print(f"\nAvailable GPUs: {', '.join(CEREBRIUM_GPUS.keys())}")
-    print(f"Override with: cvl deploy {example_meta.get('name')} --gpu <GPU>")
+    print(f"\nAvailable GPUs: {', '.join(deployer.GPU_TABLE.keys())}")
+    print(f"Override with: cvl deploy {deployer.name} --gpu <GPU>")
 
     # Check CLI (skip for dry-run)
     if not dry_run:
-        print("\nChecking Cerebrium CLI...", flush=True)
+        print(f"\nChecking {platform} CLI...", flush=True)
         ready, message = deployer.check_cli()
         if not ready:
             print(f"\n{message}", file=sys.stderr, flush=True)
             return 1
 
-    # Handle --only-model-upload: upload models and exit
+    # Handle --only-model-upload
     if only_model_upload:
         print("\n[--only-model-upload] Uploading models only, skipping code deployment")
         models = deployer.get_required_models()
@@ -132,15 +119,7 @@ def _deploy_cerebrium(
             print("No models to upload for this example")
             return 0
 
-        # Format model list with file counts
-        model_strs = []
-        for repo_id, files in models.items():
-            if files:
-                model_strs.append(f"{repo_id} ({len(files)} files)")
-            else:
-                model_strs.append(f"{repo_id} (full)")
-        print(f"Models to upload: {', '.join(model_strs)}")
-
+        _print_model_list(models)
         results = deployer.upload_models()
         failed = [k for k, v in results.items() if not v]
         if failed:
@@ -162,16 +141,15 @@ def _deploy_cerebrium(
         else:
             print(f"  {f.name}/")
 
-    # Deploy
     if dry_run:
         print("\n[Dry run] Skipping actual deployment")
         print(f"[Dry run] To deploy manually, run:")
         print(f"  cd {deploy_path}")
-        print(f"  cerebrium deploy")
+        print(f"  {deployer.dry_run_command}")
         return 0
 
     # Ask for confirmation
-    print("\nReady to deploy to Cerebrium.")
+    print(f"\nReady to deploy to {platform}.")
     try:
         response = input("Proceed? [y/N]: ").strip().lower()
     except EOFError:
@@ -182,24 +160,28 @@ def _deploy_cerebrium(
         print(f"Files are still available at: {deploy_path}")
         return 0
 
-    # Upload models to Cerebrium persistent storage
+    # Upload models
     if not skip_model_upload:
         models = deployer.get_required_models()
         if models:
-            # Format model list with file counts
-            model_strs = []
-            for repo_id, files in models.items():
-                if files:
-                    model_strs.append(f"{repo_id} ({len(files)} files)")
-                else:
-                    model_strs.append(f"{repo_id} (full)")
-            print(f"\nModels to upload: {', '.join(model_strs)}")
+            _print_model_list(models)
             results = deployer.upload_models()
             failed = [k for k, v in results.items() if not v]
             if failed:
                 print(f"\nWarning: Some models failed to upload: {failed}")
                 print("The deployment will continue, but cold starts may be slow.")
     else:
-        print("\n[--skip-model-upload] Skipping model upload to persistent storage")
+        print(f"\n[--skip-model-upload] Skipping model upload to {platform} storage")
 
     return deployer.deploy(deploy_path, dry_run=False)
+
+
+def _print_model_list(models: dict) -> None:
+    """Print formatted model list."""
+    model_strs = []
+    for repo_id, files in models.items():
+        if files:
+            model_strs.append(f"{repo_id} ({len(files)} files)")
+        else:
+            model_strs.append(f"{repo_id} (full)")
+    print(f"Models to upload: {', '.join(model_strs)}")
