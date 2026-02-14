@@ -209,7 +209,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     deploy_parser.add_argument(
         "--platform",
-        choices=["cerebrium"],
+        choices=["cerebrium", "modal"],
         default="cerebrium",
         help="Target platform (default: cerebrium)"
     )
