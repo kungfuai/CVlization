@@ -157,6 +157,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--role-arn",
         help="IAM role ARN for SageMaker (or set SAGEMAKER_ROLE_ARN env var)"
     )
+    # SSH runner options
+    run_parser.add_argument(
+        "--host",
+        help="Remote host for SSH runner (e.g., ubuntu@gpu-server, or SSH config alias)"
+    )
     # SkyPilot options
     run_parser.add_argument(
         "--gpu",
@@ -543,6 +548,7 @@ def _extract_runner_args(args):
         '--region': 'region',
         '--max-run-minutes': 'max_run_minutes',
         '--role-arn': 'role_arn',
+        '--host': 'host',
     }
     bool_flags = {'--spot': 'spot'}
 
@@ -671,8 +677,11 @@ def cmd_run_remote(args, runner: str) -> int:
     if runner == "sagemaker":
         return _run_sagemaker(args.example, args.preset, extra_args, config)
     elif runner == "ssh":
-        print("SSH runner not yet integrated with cvl run", file=sys.stderr)
-        return 1
+        host = getattr(args, 'host', None) or config.get("host")
+        if not host:
+            print("Error: --host is required for SSH runner (e.g., --host ubuntu@gpu-server)", file=sys.stderr)
+            return 1
+        return _run_ssh(args.example, args.preset, extra_args, config, host)
     elif runner == "k8s":
         print("K8s runner not yet integrated with cvl run", file=sys.stderr)
         return 1
@@ -681,6 +690,58 @@ def cmd_run_remote(args, runner: str) -> int:
     else:
         print(f"Unknown runner: {runner}", file=sys.stderr)
         return 1
+
+
+def _check_remote_gpu(host: str) -> bool:
+    """Run nvidia-smi on remote host and display GPU status.
+
+    Returns True if GPUs are available, False if check fails.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
+             "nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode != 0:
+            print("Warning: Could not query GPU status on remote host", file=sys.stderr)
+            return True  # Proceed anyway
+        print("Remote GPU status:")
+        for line in result.stdout.strip().split("\n"):
+            print(f"  {line.strip()}")
+        return True
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        print("Warning: Could not check remote GPU status", file=sys.stderr)
+        return True  # Proceed anyway
+
+
+def _run_ssh(example: str, preset: str, extra_args: list, config: dict, host: str) -> int:
+    """Run example on remote host via rsync + SSH.
+
+    Args:
+        example: Example name/path
+        preset: Preset to run
+        extra_args: Additional arguments for the script
+        config: Merged runner config
+        host: Remote host (e.g., ubuntu@gpu-server or SSH config alias)
+
+    Returns:
+        Exit code
+    """
+    from cvl.runners.rsync_runner import RsyncRunner
+
+    # Pre-flight GPU check
+    _check_remote_gpu(host)
+
+    runner = RsyncRunner()
+    return runner.run(
+        example=example,
+        preset=preset,
+        args=extra_args,
+        host=host,
+        timeout_minutes=config.get("max_run_minutes"),
+    )
 
 
 def _run_skypilot(example: str, example_path, preset: str, extra_args: list, config: dict) -> int:
