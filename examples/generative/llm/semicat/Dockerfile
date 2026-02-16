@@ -3,10 +3,7 @@ FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
 WORKDIR /workspace
 
 # System deps
-RUN apt-get update && apt-get install -y git wget unzip && rm -rf /var/lib/apt/lists/*
-
-# Clone semicat repo
-RUN git clone https://github.com/olsdavis/semicat.git /opt/semicat
+RUN apt-get update && apt-get install -y wget unzip && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies (matching semicat's environment.yaml)
 RUN --mount=type=cache,mode=0777,target=/root/.cache pip install \
