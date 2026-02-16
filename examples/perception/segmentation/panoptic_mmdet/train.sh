@@ -10,8 +10,14 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 # Image name
 IMG="${CVL_IMAGE:-mmdet_ps}"
 
+# Request GPUs by default; respect explicit CUDA_VISIBLE_DEVICES if set
+GPU_ARGS=(--gpus=all)
+if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
+  GPU_ARGS+=(--env "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES")
+fi
+
 # Mount workspace as writable (training writes outputs to /workspace)
-docker run --rm --gpus=all --shm-size 16G \
+docker run --rm "${GPU_ARGS[@]}" --shm-size 16G \
 	${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
 	--workdir /workspace \
 	--mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
