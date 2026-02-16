@@ -209,7 +209,8 @@ def _log_val_box_images(dataset_dir, output_dir, epoch, max_images=4):
         panel_pred = _make_panel(pred_img, "Prediction")
 
         composite = _compose_side_by_side([panel_input, panel_gt, panel_pred])
-        composites.append(wandb.Image(composite, caption=fname))
+        caption = f"{fname} — input | gt | pred"
+        composites.append(wandb.Image(composite, caption=caption))
 
     if composites:
         wandb.log({"images/val_box": composites, "epoch": epoch})
@@ -359,7 +360,8 @@ def _log_val_instance_images(dataset_dir, output_dir, epoch, max_images=4):
         panel_pred = _make_panel(pred_img, "Pred Masks")
 
         composite = _compose_side_by_side([panel_input, panel_gt, panel_pred])
-        composites.append(wandb.Image(composite, caption=fname))
+        caption = f"{fname} — input | gt | pred"
+        composites.append(wandb.Image(composite, caption=caption))
 
     if composites:
         wandb.log({"images/val_instance": composites, "epoch": epoch})
