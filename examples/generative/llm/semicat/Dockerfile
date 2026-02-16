@@ -26,5 +26,5 @@ RUN --mount=type=cache,mode=0777,target=/root/.cache pip install \
 RUN --mount=type=cache,mode=0777,target=/root/.cache pip install \
     https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.5.4/flash_attn-2.8.3+cu128torch2.7-cp311-cp311-linux_x86_64.whl
 
-ENV PYTHONPATH=/opt/semicat
-ENV PROJECT_ROOT=/opt/semicat
+ENV PYTHONPATH=/workspace/vendor
+ENV PROJECT_ROOT=/workspace/vendor

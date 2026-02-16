@@ -10,11 +10,10 @@ mkdir -p "$HOME/.cache/cvlization"
 docker run --rm --gpus=all --shm-size 16G \
     ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
-    --mount "type=bind,src=${SCRIPT_DIR}/vendor,dst=/opt/semicat" \
     --mount "type=bind,src=${HOME}/.cache/cvlization,dst=/cache" \
     --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
-    --env "PYTHONPATH=/opt/semicat" \
-    --env "PROJECT_ROOT=/opt/semicat" \
+    --env "PYTHONPATH=/workspace/vendor" \
+    --env "PROJECT_ROOT=/workspace/vendor" \
     --env "CVL_CACHE_DIR=/cache" \
     --env "PYTHONUNBUFFERED=1" \
     ${WANDB_API_KEY:+-e WANDB_API_KEY=$WANDB_API_KEY} \
