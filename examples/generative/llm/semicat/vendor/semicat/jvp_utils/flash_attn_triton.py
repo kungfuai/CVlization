@@ -691,8 +691,10 @@ def init_to_zero(name):
 
 
 import torch
-# NOTE: if not at least hopper, cap the block sizes
-is_hopper = torch.cuda.get_device_capability()[0] >= 9
+# NOTE: use large blocks only on Hopper (SM90) which has enough shared memory (228KB).
+# Blackwell workstation GPUs (SM120, e.g. RTX PRO 6000) report capability >= 9 but
+# have only ~99KB shared memory per block, insufficient for 128x128 blocks.
+is_hopper = torch.cuda.get_device_capability()[0] == 9
 
 
 @triton.autotune(
