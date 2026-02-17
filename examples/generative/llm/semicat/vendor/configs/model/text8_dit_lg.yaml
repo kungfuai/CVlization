@@ -1,0 +1,15 @@
+defaults:
+  - base_text_semicat
+
+in_shape:
+  - ${data.k}
+  - 27
+
+net:
+  _target_: semicat.net.duo.DIT
+  hidden_size: 768
+  n_heads: 12
+  cond_dim: 128
+  n_blocks: 12
+  dropout: 0.1
+  vocab_size: 27
