@@ -1,0 +1,45 @@
+# @package _global_
+
+defaults:
+  - override /data: text8
+  - override /model: text8_semicat_song
+  - override /trainer: default
+
+seed: 12345
+
+trainer:
+  min_epochs: 100
+  max_epochs: 500
+  precision: bf16-mixed
+  # gradient accumulation
+  accumulate_grad_batches: 6
+
+tags: ["semicat", "text8", "song_lg"]
+
+model:
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 1e-4
+    weight_decay: 0.01
+  net:
+    img_resolution: 256
+    in_channels: 27
+    channel_mult:
+      - 1
+      - 2
+      - 2
+      - 2
+    attn_resolutions:
+      - 32
+      - 64
+    model_channels: 256
+
+data:
+  batch_size: 400
+
+logger:
+  wandb:
+    group: song_lg_text8
+    name: ${logger.wandb.group}-${seed}
+    tags: ["semicat", "text8", "song_lg"]
