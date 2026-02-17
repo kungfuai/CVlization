@@ -150,6 +150,7 @@ def main():
     overrides = [
         "trainer=gpu",
         "extras.enforce_tags=false",
+        "++model.calc_nll=false",
     ]
 
     file_path = resolve_file_path(args.dataset)
@@ -175,6 +176,7 @@ def main():
             f"model.net.length={seq_len}",
             f"trainer.min_steps={steps}",
             f"++trainer.max_steps={steps}",
+            f"trainer.val_check_interval=5000",
             f"tags=[semicat,custom,cvl]",
         ]
 
@@ -190,6 +192,7 @@ def main():
             f"+data.data_dir={data_dir}",
             f"data.batch_size={batch_size}",
             f"trainer.min_steps={steps}",
+            f"trainer.val_check_interval=5000",
             f"tags=[semicat,text8,cvl]",
         ]
         if args.seq_len:
@@ -212,6 +215,7 @@ def main():
             "experiment=lm1b_dit",
             f"data.batch_size={batch_size}",
             f"trainer.min_steps={steps}",
+            f"trainer.val_check_interval=10000",
             f"tags=[semicat,lm1b,cvl]",
         ]
 
@@ -241,6 +245,7 @@ def main():
             f"model.net.vocab_size={vocab_size}",
             f"model.net.length={seq_len}",
             f"trainer.min_steps={steps}",
+            f"trainer.val_check_interval=10000",
             f"tags=[semicat,openwebtext,cvl]",
         ]
 

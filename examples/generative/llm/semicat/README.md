@@ -49,11 +49,29 @@ Extra arguments are passed as Hydra overrides:
 # Adjust learning rate
 cvl run semicat train -- model.optimizer.lr=5e-5
 
-# Enable wandb logging
-cvl run semicat train -- logger=wandb
-
 # Use larger model
 cvl run semicat train -- experiment=text8_dit_lg
+
+# More frequent validation (generates text samples + metrics)
+cvl run semicat train -- trainer.val_check_interval=1000
+
+# Enable NLL computation during validation (slow but informative)
+cvl run semicat train -- model.calc_nll=true
+```
+
+## WandB logging
+
+Generated text samples are logged as WandB Tables, along with loss curves and entropy metrics.
+
+```bash
+# Set your API key (or export in shell)
+export WANDB_API_KEY=your_key
+
+# Train with wandb logging
+cvl run semicat train -- logger=wandb
+
+# Combine with other options
+cvl run semicat train -- -d lm1b logger=wandb
 ```
 
 ## Architecture
@@ -68,7 +86,7 @@ cvl run semicat train -- experiment=text8_dit_lg
 |---|---|---|---|
 | Text8 (sm) | ~8 GB | 100K | Hours (1 GPU) |
 | Text8 (lg) | ~16 GB | 500K | Days (1 GPU) |
-| LM1B | ~24+ GB | 250K | Days (multi-GPU) |
+| LM1B | ~15 GB | 250K | Days (multi-GPU) |
 | OpenWebText | ~24+ GB | 250K | Days (multi-GPU) |
 
 ## References
