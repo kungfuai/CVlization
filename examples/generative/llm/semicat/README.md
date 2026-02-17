@@ -61,7 +61,13 @@ cvl run semicat train -- model.calc_nll=true
 
 ## WandB logging
 
-Generated text samples are logged as WandB Tables, along with loss curves and entropy metrics.
+During validation, the model generates text samples using different numbers of ODE sampling steps (1, 2, 4, 8, 16). More steps = better quality. These appear in WandB as:
+
+- `samples/001` through `samples/016` — generated text tables (number = sampling steps)
+- `val/entropy_N_steps` — token entropy of generated samples
+- `train/loss`, `val/loss` — training and validation loss curves
+
+Samples are logged at each validation checkpoint, so you can track text quality improving over training.
 
 ```bash
 # Set your API key (or export in shell)
@@ -86,7 +92,7 @@ cvl run semicat train -- -d lm1b logger=wandb
 |---|---|---|---|
 | Text8 (sm) | ~8 GB | 100K | Hours (1 GPU) |
 | Text8 (lg) | ~16 GB | 500K | Days (1 GPU) |
-| LM1B | ~15 GB | 250K | Days (multi-GPU) |
+| LM1B (bs=64) | ~12 GB | 120K | ~4 hours (1 GPU, ~8 steps/s) |
 | OpenWebText | ~24+ GB | 250K | Days (multi-GPU) |
 
 ## References
