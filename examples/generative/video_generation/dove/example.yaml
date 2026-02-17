@@ -1,0 +1,38 @@
+name: dove
+capability: generative/video_generation
+modalities:
+  - vision
+datasets: []
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 40
+  ram_gb: 32
+  disk_gb: 30
+image: cvlization/dove:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run DOVE one-step video super-resolution
+  test:
+    script: test.sh
+    description: Lightweight container sanity checks
+tags:
+  - dove
+  - video-super-resolution
+  - upscaling
+  - diffusion
+  - one-step
+  - cogvideox
+  - pytorch
+tasks:
+  - video_super_resolution
+frameworks:
+  - pytorch
+description: DOVE (NeurIPS 2025) one-step diffusion for real-world video super-resolution
+verification:
+  last_verified: 2026-02-16
+  last_verification_note: "Verified build, inference with bundled demo video (256x256 -> 1024x1024 4x upscale, 100 frames), model caching from zzsi/DOVE on HuggingFace (~40GB), and host output persistence on RTX PRO 6000 (98GB VRAM). Peak VRAM ~43GB with VAE slicing/tiling enabled."
