@@ -151,6 +151,7 @@ def main():
         "trainer=gpu",
         "extras.enforce_tags=false",
         "++model.calc_nll=false",
+        "test=false",
     ]
 
     file_path = resolve_file_path(args.dataset)
@@ -215,7 +216,17 @@ def main():
             "experiment=lm1b_dit",
             f"data.batch_size={batch_size}",
             f"trainer.min_steps={steps}",
+            f"++trainer.max_steps={steps}",
             f"trainer.val_check_interval=10000",
+            # Skip sanity check — validation sampling with 30K vocab is very slow
+            f"++trainer.num_sanity_val_steps=0",
+            # Reduce validation sample count (default 1000 is too slow with 30K vocab)
+            f"++model.nll_samples=64",
+            f"++model.nll_sampling_batch_size=32",
+            # Disable self-distillation by default: SD uses Triton JVP flash
+            # attention kernels that require Hopper-class shared memory.
+            # Re-enable with: ++model.sd_prop=0.25
+            f"++model.sd_prop=0.0",
             f"tags=[semicat,lm1b,cvl]",
         ]
 
@@ -245,7 +256,13 @@ def main():
             f"model.net.vocab_size={vocab_size}",
             f"model.net.length={seq_len}",
             f"trainer.min_steps={steps}",
+            f"++trainer.max_steps={steps}",
             f"trainer.val_check_interval=10000",
+            f"++trainer.num_sanity_val_steps=0",
+            f"++model.nll_samples=64",
+            f"++model.nll_sampling_batch_size=32",
+            # Disable self-distillation by default (see lm1b comment above)
+            f"++model.sd_prop=0.0",
             f"tags=[semicat,openwebtext,cvl]",
         ]
 
