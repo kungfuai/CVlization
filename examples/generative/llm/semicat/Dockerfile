@@ -15,8 +15,7 @@ RUN --mount=type=cache,mode=0777,target=/root/.cache pip install \
     rich==13.9.4 \
     rootutils==1.0.7 \
     einops==0.8.1 \
-    "numpy<2" \
-    datasets==2.19.2 \
+    datasets==4.5.0 \
     transformers==4.41.0 \
     jaxtyping==0.3.5 \
     timm==1.0.8 \
