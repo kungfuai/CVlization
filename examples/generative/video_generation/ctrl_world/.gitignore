@@ -1,0 +1,8 @@
+outputs/
+ctrl_world_outputs/
+sample_data/
+dataset_meta_info/
+models/action_adapter/
+__pycache__/
+*.pyc
+.DS_Store
