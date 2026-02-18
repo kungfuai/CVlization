@@ -170,6 +170,42 @@ output_path = resolve_output_path(args.output)  # Resolves against CVL_OUTPUTS
 args.output_dir = resolve_output_path(args.output_dir.rstrip('/') + '/').rstrip('/')
 ```
 
+### 4b. README Clarity — "What to Expect" (CRITICAL)
+
+The README must give a first-time user a clear picture of what will happen when
+they run `cvl run <name> predict`. Read the README and verify it answers all of
+the following questions. If any are missing or unclear, update the README before
+proceeding.
+
+**Required information:**
+
+1. **First-run cost**: Does the README mention model downloads and their total
+   size? (e.g. "~17 GB download on first run, cached afterward")
+2. **What it does**: Does the README concisely describe the inference task?
+   (e.g. "replays 1 trajectory through 12 interaction steps")
+3. **Where output goes**: Does the README state the output directory relative to
+   the user's working directory? (e.g. "saves to `ctrl_world_outputs/` in your
+   current directory")
+4. **Output format**: Does the README describe what the output file looks like?
+   (e.g. "MP4 video with 6-panel grid: 3 views × ground-truth / prediction")
+5. **Runtime estimate**: Does the README give rough wall-clock time on at least
+   one common GPU? (e.g. "~6 min on A100")
+
+**How to verify:**
+```bash
+# Read the README and check for each item above
+cat README.md
+
+# Cross-check against predict.py defaults — the README should match
+grep -E "default=" predict.py | head -20
+```
+
+**What to fix if missing:**
+- Add a "What to expect" (or equivalent) section near the top of the README.
+- Keep it factual — state defaults, sizes, and times; avoid marketing language.
+- Make sure the section stays consistent with argparse defaults in predict.py
+  (e.g. if default trajectory count or step count changes, README must match).
+
 ### 5. Model Caching Verification
 
 Verify that pretrained models are cached properly:
@@ -387,7 +423,7 @@ An inference example passes verification when:
 6. ✅ **Input Resolution**: Input files from user's cwd are correctly found via `resolve_input_path()`
 7. ✅ **Model Caching**: Models cached to `~/.cache/` (typically `~/.cache/huggingface/`), avoiding repeated downloads
 8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and predict presets work
-9. ✅ **Documentation**: README explains how to use the example
+9. ✅ **Documentation**: README explains how to use the example **and** clearly describes what to expect from `cvl run <name> predict` (first-run cost, what it does, output location/format, runtime estimate)
 10. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
 
 ## Related Files
