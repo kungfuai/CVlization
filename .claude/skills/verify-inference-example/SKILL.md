@@ -52,6 +52,71 @@ cd examples/<capability>/<task>/<framework>/
 - `predict.py` - Main inference script
 - `examples/` - Directory with sample input files
 
+### 1b. Sample Data Management (CRITICAL)
+
+Sample input files (images, videos, annotations, small weights) **must NOT be
+committed to the git repo**. They are hosted on HuggingFace and lazy-downloaded
+at runtime.
+
+**Where sample data lives:**
+- HuggingFace dataset repo: `zzsi/cvl` (centralized for all CVL examples)
+- Files are organized under a per-example prefix: `<example_name>/...`
+- Example: `ctrl_world/sample_data/droid_subset/videos/val/899/0.mp4`
+
+**Required pattern in predict.py:**
+```python
+from huggingface_hub import hf_hub_download
+
+HF_DATA_REPO = "zzsi/cvl"
+HF_DATA_PREFIX = "<example_name>"
+
+def ensure_sample_data(cache_root=None):
+    """Download sample data from HuggingFace if not cached."""
+    if cache_root is None:
+        cache_root = Path(os.environ.get(
+            "HF_HOME", Path.home() / ".cache" / "huggingface"
+        )) / "cvl_data" / "<example_name>"
+
+    # Check if already downloaded
+    if (cache_root / "some_marker_file").exists():
+        return str(cache_root)
+
+    for rel_path in FILES_TO_DOWNLOAD:
+        downloaded = hf_hub_download(
+            repo_id=HF_DATA_REPO,
+            filename=f"{HF_DATA_PREFIX}/{rel_path}",
+            repo_type="dataset",
+        )
+        # Copy from HF cache to organized layout
+        local_target = cache_root / rel_path
+        local_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(downloaded, local_target)
+
+    return str(cache_root)
+```
+
+**What to verify:**
+- `.gitignore` excludes `sample_data/`, `dataset_meta_info/`, and any local
+  weight files (e.g. `*.pth`, `*.pt` patterns)
+- `predict.py` has an `ensure_sample_data()` (or similar) function that
+  downloads from `zzsi/cvl` with `repo_type="dataset"`
+- Files are cached in `~/.cache/huggingface/cvl_data/<example_name>/` (inside
+  the container this maps to the mounted HF cache)
+- Second run skips download (check for "already cached" or no download messages)
+- No sample data files are staged in git (`git status` shows no data files)
+
+**Uploading new sample data:**
+```python
+from huggingface_hub import HfApi
+api = HfApi()
+api.upload_file(
+    path_or_fileobj="local/path/to/file.jpg",
+    path_in_repo="<example_name>/path/in/repo/file.jpg",
+    repo_id="zzsi/cvl",
+    repo_type="dataset",
+)
+```
+
 ### 2. Build Verification
 
 ```bash
@@ -169,6 +234,42 @@ output_path = resolve_output_path(args.output)  # Resolves against CVL_OUTPUTS
 # For output directories
 args.output_dir = resolve_output_path(args.output_dir.rstrip('/') + '/').rstrip('/')
 ```
+
+### 4b. README Clarity — "What to Expect" (CRITICAL)
+
+The README must give a first-time user a clear picture of what will happen when
+they run `cvl run <name> predict`. Read the README and verify it answers all of
+the following questions. If any are missing or unclear, update the README before
+proceeding.
+
+**Required information:**
+
+1. **First-run cost**: Does the README mention model downloads and their total
+   size? (e.g. "~17 GB download on first run, cached afterward")
+2. **What it does**: Does the README concisely describe the inference task?
+   (e.g. "replays 1 trajectory through 12 interaction steps")
+3. **Where output goes**: Does the README state the output directory relative to
+   the user's working directory? (e.g. "saves to `ctrl_world_outputs/` in your
+   current directory")
+4. **Output format**: Does the README describe what the output file looks like?
+   (e.g. "MP4 video with 6-panel grid: 3 views × ground-truth / prediction")
+5. **Runtime estimate**: Does the README give rough wall-clock time on at least
+   one common GPU? (e.g. "~6 min on A100")
+
+**How to verify:**
+```bash
+# Read the README and check for each item above
+cat README.md
+
+# Cross-check against predict.py defaults — the README should match
+grep -E "default=" predict.py | head -20
+```
+
+**What to fix if missing:**
+- Add a "What to expect" (or equivalent) section near the top of the README.
+- Keep it factual — state defaults, sizes, and times; avoid marketing language.
+- Make sure the section stays consistent with argparse defaults in predict.py
+  (e.g. if default trajectory count or step count changes, README must match).
 
 ### 5. Model Caching Verification
 
@@ -380,6 +481,7 @@ cvl run granite-docling predict
 An inference example passes verification when:
 
 1. ✅ **Structure**: All required files present, example.yaml valid
+1b. ✅ **Sample Data**: Hosted on `zzsi/cvl` HuggingFace dataset repo, lazy-downloaded at runtime, not committed to git
 2. ✅ **Build**: Docker image builds without errors (both `./build.sh` and `cvl run <name> build`)
 3. ✅ **Inference**: Runs successfully on sample inputs (both `./predict.sh` and `cvl run <name> predict`)
 4. ✅ **Outputs**: Valid output files generated in expected format
@@ -387,7 +489,7 @@ An inference example passes verification when:
 6. ✅ **Input Resolution**: Input files from user's cwd are correctly found via `resolve_input_path()`
 7. ✅ **Model Caching**: Models cached to `~/.cache/` (typically `~/.cache/huggingface/`), avoiding repeated downloads
 8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and predict presets work
-9. ✅ **Documentation**: README explains how to use the example
+9. ✅ **Documentation**: README explains how to use the example **and** clearly describes what to expect from `cvl run <name> predict` (first-run cost, what it does, output location/format, runtime estimate)
 10. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
 
 ## Related Files

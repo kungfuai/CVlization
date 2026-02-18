@@ -1,0 +1,53 @@
+name: ctrl_world
+capability: generative/video_generation
+modalities:
+  - vision
+  - video
+  - text
+datasets:
+  - cadene/droid_1.0.1
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 32
+  disk_gb: 20
+image: cvlization/ctrl-world:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Replay recorded robot trajectories through the world model
+    path_args:
+      - flag: "--output"
+        type: directory
+  test:
+    script: test.sh
+    description: Run smoke test (1 trajectory, 3 interaction steps)
+tags:
+  - world-model
+  - robotics
+  - diffusion
+  - stable-video-diffusion
+  - action-conditioned
+  - droid
+  - manipulation
+tasks:
+  - video_generation
+  - world_model
+frameworks:
+  - pytorch
+  - diffusers
+  - transformers
+description: >
+  Action-conditioned world model for robot manipulation that replays recorded
+  trajectories through a learned video diffusion model, generating predicted
+  video alongside ground truth for visual comparison.
+verification:
+  last_verified: "2026-02-18"
+  last_verification_note: >
+    Verified build, inference (1 trajectory, 2 interaction steps), model caching,
+    and MP4 output on RTX PRO 6000 Blackwell (96GB VRAM). Model loads ~8GB bf16.
+    ~30s per diffusion step (50 steps per interaction). Models auto-download
+    ~17GB on first run, cached in centralized HF cache.
