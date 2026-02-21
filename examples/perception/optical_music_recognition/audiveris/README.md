@@ -4,6 +4,30 @@ Rule-based Optical Music Recognition using [Audiveris 5.9.0](https://github.com/
 
 No GPU required. Useful as a **baseline** against learned OMR models such as `smt-omr`.
 
+## Sample
+
+**Input** — full-page piano scan (~300 DPI, auto-downloaded from HuggingFace):
+
+![Sample score](https://huggingface.co/datasets/zzsi/cvl/resolve/main/audiveris/sample_page.png)
+
+**Output** — MusicXML (excerpt, measure 1):
+
+```xml
+<attributes>
+  <key><fifths>2</fifths></key>          <!-- D major -->
+  <time><beats>2</beats><beat-type>4</beat-type></time>
+  <staves>2</staves>
+  <clef number="1"><sign>G</sign><line>2</line></clef>
+  <clef number="2"><sign>G</sign><line>2</line></clef>
+</attributes>
+<note>
+  <pitch><step>D</step><octave>4</octave></pitch>
+  <type>eighth</type>
+  <beam number="1">begin</beam>
+</note>
+<!-- 17 measures, dynamics (f/p), staccato, tenuto, slurs, ties all captured -->
+```
+
 ## Quick Start
 
 ```bash
