@@ -2,6 +2,37 @@
 
 End-to-end Optical Music Recognition (OMR) for pianoform sheet music. Takes a scanned score image and outputs **ekern notation** (`**ekern_1.0`) — a structured encoding of the musical content (pitches, durations, voices, dynamics, and structure) compatible with the Humdrum **kern format.
 
+## Sample
+
+**Input** — system-level piano scan (auto-downloaded from HuggingFace):
+
+![Sample score](https://huggingface.co/datasets/zzsi/cvl/resolve/main/smt_omr/sample_score.jpg)
+
+**Output** — ekern notation (CER 0.28% vs ground truth):
+
+```
+**ekern_1.0	**ekern_1.0
+*clefF4	*clefG2
+*k[b-]	*k[b-]
+*M2/4	*M2/4
+=-	=-
+8FL	16r
+.	16ffLL
+8cJ 8A	16ee
+.	16ddJJ
+8CL	16ccLL
+.	16bn
+8cJ 8A	16cc
+.	16aJJ
+=	=
+8GL	8.aaL 8.b-
+8eJ 8c 8B-	.
+...
+*-	*-
+```
+
+Each line is a beat position. The two tab-separated columns are bass staff | treble staff, compatible with Humdrum **kern.
+
 ## Models
 
 Use models from the [PRAIG collection](https://huggingface.co/collections/PRAIG/sheet-music-transformer-6853c4ca1bd7980a91677dfd) — these match the current SMT codebase weight naming.
