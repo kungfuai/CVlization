@@ -1,5 +1,5 @@
 name: smt-omr
-capability: perception/music_recognition
+capability: perception/optical_music_recognition
 modalities:
   - vision
   - text
@@ -45,4 +45,4 @@ description: Sheet Music Transformer (SMT) — end-to-end OMR for pianoform shee
 
 verification:
   last_verified: "2026-02-21"
-  last_verification_note: "Verified build (55s) and inference on NVIDIA RTX PRO 6000 Blackwell (98GB VRAM). Model PRAIG/smt-grandstaff loads correctly; produces valid two-column bekern notation (clef, key sig, time sig, notes, barlines) from a 672x256 GrandStaff system image. Output persists to host cwd. ~15MB VRAM idle after run (container exits cleanly). Note: antoniorv6/ checkpoints incompatible with current SMT codebase — use PRAIG/ models only."
+  last_verification_note: "Verified build (55s) and inference on NVIDIA RTX PRO 6000 Blackwell (98GB VRAM). Model PRAIG/smt-grandstaff loads correctly; produces valid two-column ekern notation (clef, key sig, time sig, notes, barlines) from a 672x256 GrandStaff system image. CER 0.28% / SER 0.65% / LER 0.83% vs ground truth. Output persists to host cwd. ~15MB VRAM idle after run (container exits cleanly). Note: antoniorv6/ checkpoints incompatible with current SMT codebase — use PRAIG/ models only."
