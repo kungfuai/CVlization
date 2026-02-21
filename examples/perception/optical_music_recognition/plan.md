@@ -144,6 +144,23 @@ Bucket 4 — general multimodal LLMs:
     * “interactive UX layer” explaining uncertainty and suggesting fixes
 * Example (open weights): LLaVA-OneVision: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-Instruct
 
+Bucket 5 — facsimile & restoration:
+
+Three distinct sub-tasks (can be tackled independently):
+
+1. Document restoration: deskew, dewarp, denoise, debind shadow — improve scan quality while preserving print style
+    * DocTr (geometric correction): https://github.com/mindee/doctr
+    * DiffBIR (diffusion-based blind image restoration): https://github.com/XPixelGroup/DiffBIR
+
+2. Zone/layout detection: locate systems, measures, and symbols in the image → emit MEI `<facsimile>` zone coordinates that link semantic events back to image regions
+    * Any object detection backbone (DINO, RT-DETR) fine-tuned on annotated score layouts
+    * Rendering output: Verovio (MEI → SVG with zone links): https://github.com/rism-digital/verovio
+
+3. Style-preserving re-engraving: from symbolic output (MusicXML/MEI), generate a clean notation image rendered in the original publisher's visual style (typography, spacing, ornamental elements)
+    * ControlNet + Stable Diffusion with a vintage LoRA (train LoRA on IMSLP-sourced scans grouped by era/printing technique)
+    * CycleGAN for unpaired domain transfer (clean engraving ↔ degraded vintage scan)
+    * Reference: style_transfer_idea.md in this directory
+
 
 Training strategy: how to make progress fast on “vintage”
 
@@ -283,6 +300,22 @@ Metrics:
 Expected outcome:
 
 * D1 wins fidelity; D3 is the “premium” version.
+
+Experiment group E — Facsimile & restoration pipeline
+
+* E1: restoration as preprocessing — does DocTr + DiffBIR denoising improve downstream OMR accuracy (SER/CER) on degraded vintage scans?
+* E2: zone detection — measure IoU of predicted system/measure bounding boxes vs. manual annotations; then link to MEI facsimile zones
+* E3: style-preserving re-engraving — ControlNet+LoRA conditioned on edge map extracted from MusicXML-rendered structure; evaluate with FID and LPIPS vs. held-out vintage pages from same era
+
+Metrics:
+
+* E1: SER/CER on vintage test set (with vs. without restoration)
+* E2: zone IoU, MEI facsimile validity
+* E3: FID, LPIPS, human preference score
+
+Expected outcome:
+
+* E1 gives free accuracy gains on degraded inputs; E3 is the “wow” demo differentiator for archival/publisher clients.
 
 
 Estimated cost (honest + actionable)
