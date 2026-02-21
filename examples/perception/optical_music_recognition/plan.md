@@ -142,7 +142,10 @@ Bucket 4 — general multimodal LLMs:
     * “correction assistant”
     * “consistency checker”
     * “interactive UX layer” explaining uncertainty and suggesting fixes
-* Example (open weights): LLaVA-OneVision: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-Instruct
+    * Zone/layout grounding (ask VLM to output bounding boxes for systems and measures)
+* Models (open weights):
+    * LLaVA-OneVision: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-Instruct
+    * Qwen2.5-VL (stronger on documents and grounding/bbox output): https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct
 
 Bucket 5 — facsimile & restoration:
 
@@ -157,6 +160,7 @@ Three distinct sub-tasks (can be tackled independently):
     * Rendering output: Verovio (MEI → SVG with zone links): https://github.com/rism-digital/verovio
 
 3. Style-preserving re-engraving: from symbolic output (MusicXML/MEI), generate a clean notation image rendered in the original publisher's visual style (typography, spacing, ornamental elements)
+    * FLUX.1-dev + ControlNet (open weights; better structural fidelity than SD 1.5 for fine notation detail): https://huggingface.co/black-forest-labs/FLUX.1-dev
     * ControlNet + Stable Diffusion with a vintage LoRA (train LoRA on IMSLP-sourced scans grouped by era/printing technique)
     * CycleGAN for unpaired domain transfer (clean engraving ↔ degraded vintage scan)
     * Reference: style_transfer_idea.md in this directory
