@@ -1,0 +1,38 @@
+name: audiveris
+capability: perception/optical_music_recognition
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 1
+image: cvlization/audiveris:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run Audiveris OMR on a sheet music image (outputs MusicXML .mxl)
+tags:
+  - omr
+  - music-recognition
+  - sheet-music
+  - musicxml
+  - classical
+  - rule-based
+  - baseline
+  - audiveris
+  - piano
+tasks:
+  - optical_music_recognition
+  - sheet_music_transcription
+frameworks:
+  - java
+description: "Audiveris 5.9.0 — classical rule-based OMR baseline. Transcribes sheet music images to MusicXML without a GPU. Useful as a comparison baseline against learned OMR models (e.g. smt-omr)."
+
+verification:
+  last_verified: 2026-02-21
+  last_verification_note: "Verified build and inference on CPU-only. Processes allegretto.png (2520x2183 full-page scan) in ~4s, outputs 4.3KB MusicXML .mxl. Tesseract OCR for text/lyrics is optional (skips gracefully if lang pack missing)."
