@@ -37,8 +37,8 @@ Use models from the [PRAIG collection](https://huggingface.co/collections/PRAIG/
 # Auto-download a sample from HuggingFace and transcribe it
 ./predict.sh
 
-# Use a specific model variant
-./predict.sh --model antoniorv6/smt-grandstaff --image score.jpg
+# Use the full-page model variant
+./predict.sh --model PRAIG/smt-fp-grandstaff --image score.jpg
 
 # Save as JSON with metadata
 ./predict.sh --image score.png --format json --output result.json
