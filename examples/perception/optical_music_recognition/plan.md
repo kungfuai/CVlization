@@ -133,6 +133,12 @@ Bucket 2 — OMR-native end-to-end transformers:
 
 Bucket 3 — general vision transformers (fine-tuned small vs. prompted large):
 
+Motivation: Buckets 1-2 cover semantic transcription reasonably well on moderately clean scans, but vintage material introduces gaps that OMR-specific models weren't designed for:
+
+* Image quality: foxing, bleed-through, severe fading, non-uniform illumination, and ornate typography confuse rule-based staff detectors (Audiveris) and degrade sequence model accuracy (SMT)
+* Unusual layouts: lyrics between staves, mixed text/music pages, decorative covers, non-standard ornamental notation
+* Zero-shot flexibility: can prompt a large VLM to extract only tempo markings, identify the printing era, or describe a decorative cover — without any fine-tuning
+
 Key question: does fine-tuning a small model beat prompting a large one for OMR?
 
 * Fine-tuned small models:
