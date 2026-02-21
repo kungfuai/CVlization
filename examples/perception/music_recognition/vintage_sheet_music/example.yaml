@@ -1,0 +1,48 @@
+name: smt-omr
+capability: perception/music_recognition
+modalities:
+  - vision
+  - text
+datasets:
+  - antoniorv6/grandstaff
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 4
+  disk_gb: 15
+image: cvlization/smt-omr:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run OMR inference on a sheet music image (outputs ekern notation); auto-computes CER/SER/LER against sample ground truth when no --image flag is given
+  train:
+    script: train.sh
+    description: Fine-tune SMT on GrandStaff dataset
+  test:
+    script: test.sh
+    description: Run smoke test (inference on auto-downloaded sample)
+tags:
+  - omr
+  - music-recognition
+  - sheet-music
+  - bekern
+  - transformers
+  - lightning
+  - piano
+  - vintage
+  - grandstaff
+tasks:
+  - optical_music_recognition
+  - sheet_music_transcription
+frameworks:
+  - pytorch
+  - transformers
+  - lightning
+description: Sheet Music Transformer (SMT) — end-to-end OMR for pianoform sheet music, from image to ekern notation
+
+verification:
+  last_verified: "2026-02-21"
+  last_verification_note: "Verified build (55s) and inference on NVIDIA RTX PRO 6000 Blackwell (98GB VRAM). Model PRAIG/smt-grandstaff loads correctly; produces valid two-column bekern notation (clef, key sig, time sig, notes, barlines) from a 672x256 GrandStaff system image. Output persists to host cwd. ~15MB VRAM idle after run (container exits cleanly). Note: antoniorv6/ checkpoints incompatible with current SMT codebase — use PRAIG/ models only."
