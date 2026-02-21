@@ -250,7 +250,60 @@ For fast verification during development:
 # Verify: Completes without errors, output generated
 ```
 
-### 8. Update Verification Metadata
+### 8. README Documentation Quality
+
+The README should showcase concrete evidence that the example works, so a reader can evaluate it without running it.
+
+**Required: Sample section** — add a `## Sample` section near the top with:
+
+1. **Example input** — show what the model receives:
+   - For image/video inputs: embed inline using a HuggingFace URL as the image source:
+     ```markdown
+     ![Sample input](https://huggingface.co/datasets/zzsi/cvl/resolve/main/<example-name>/sample_input.jpg)
+     ```
+   - Upload sample files to the `zzsi/cvl` HuggingFace dataset under `<example-name>/` if not already there
+   - For text inputs: show a short excerpt in a code block
+
+2. **Example output** — show a representative result:
+   - For text/ekern/JSON/XML outputs: paste a meaningful excerpt in a fenced code block
+   - For image/video outputs: embed with a HuggingFace URL (upload a sample output image to `zzsi/cvl`)
+   - Include any key metrics (e.g., CER, accuracy) if available
+
+**HuggingFace URL pattern** for raw file access (renders as `<img>` in GitHub Markdown):
+```
+https://huggingface.co/datasets/zzsi/cvl/resolve/main/<path-in-repo>
+```
+
+**Upload a file to zzsi/cvl:**
+```python
+from huggingface_hub import HfApi
+HfApi().upload_file(
+    path_or_fileobj="/local/path/to/file.jpg",
+    path_in_repo="<example-name>/sample_input.jpg",
+    repo_id="zzsi/cvl",
+    repo_type="dataset",
+)
+```
+
+**Example Sample section:**
+```markdown
+## Sample
+
+**Input** — piano score image (auto-downloaded):
+
+![Sample score](https://huggingface.co/datasets/zzsi/cvl/resolve/main/smt_omr/sample_score.jpg)
+
+**Output** — ekern notation (CER 0.28%):
+
+​```
+**ekern_1.0	**ekern_1.0
+*clefF4	*clefG2
+8FL	16r
+...
+​```
+```
+
+### 9. Update Verification Metadata
 
 After successful verification, update the example.yaml with verification metadata:
 
@@ -387,7 +440,7 @@ An inference example passes verification when:
 6. ✅ **Input Resolution**: Input files from user's cwd are correctly found via `resolve_input_path()`
 7. ✅ **Model Caching**: Models cached to `~/.cache/` (typically `~/.cache/huggingface/`), avoiding repeated downloads
 8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and predict presets work
-9. ✅ **Documentation**: README explains how to use the example
+9. ✅ **Documentation**: README has a `## Sample` section with inline example input (image embedded via HuggingFace URL if applicable) and example output excerpt
 10. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
 
 ## Related Files
