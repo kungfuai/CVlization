@@ -131,23 +131,19 @@ Bucket 2 — OMR-native end-to-end transformers:
 * SMT (Sheet Music Transformer) repo: https://github.com/antoniorv6/SMT
 * SMT paper (image-to-seq for complex scores): https://arxiv.org/abs/2402.07596
 
-Bucket 3 — document-parsing vision transformers repurposed:
+Bucket 3 — general vision transformers (fine-tuned small vs. prompted large):
 
-* Donut (OCR-free doc understanding): https://arxiv.org/abs/2111.15664
-* Pix2Struct (screenshot parsing pretraining): https://arxiv.org/abs/2210.03347
+Key question: does fine-tuning a small model beat prompting a large one for OMR?
 
-Bucket 4 — general multimodal LLMs:
-
-* Use as:
-    * “correction assistant”
-    * “consistency checker”
-    * “interactive UX layer” explaining uncertainty and suggesting fixes
-    * Zone/layout grounding (ask VLM to output bounding boxes for systems and measures)
-* Models (open weights):
+* Fine-tuned small models:
+    * Donut (OCR-free doc understanding): https://arxiv.org/abs/2111.15664
+    * Pix2Struct (screenshot parsing pretraining): https://arxiv.org/abs/2210.03347
+* Zero-shot / few-shot prompted large VLMs:
+    * Qwen2.5-VL (strong on documents and grounding/bbox output): https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct
     * LLaVA-OneVision: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-Instruct
-    * Qwen2.5-VL (stronger on documents and grounding/bbox output): https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct
+* Use as correction assistant, consistency checker, or interactive UX layer regardless of which wins on raw OMR accuracy
 
-Bucket 5 — facsimile & restoration:
+Bucket 4 — facsimile & restoration:
 
 Three distinct sub-tasks (can be tackled independently):
 
@@ -258,9 +254,9 @@ Expected outcome:
 
 Experiment group B — Model family comparison
 
-* B1: OMR-native transformer
-* B2: document-parsing transformer (OCR-free)
-* B3: baseline engine
+* B1: OMR-native transformer (SMT)
+* B2: general vision transformer — fine-tuned small (Donut/Pix2Struct) vs. prompted large (Qwen2.5-VL)
+* B3: baseline engine (Audiveris)
 
 Metrics:
 
