@@ -139,33 +139,88 @@ Motivation: Buckets 1-2 cover semantic transcription reasonably well on moderate
 * Unusual layouts: lyrics between staves, mixed text/music pages, decorative covers, non-standard ornamental notation
 * Zero-shot flexibility: can prompt a large VLM to extract only tempo markings, identify the printing era, or describe a decorative cover — without any fine-tuning
 
-Key question: does fine-tuning a small model beat prompting a large one for OMR?
+Comparison matrix:
 
-* Fine-tuned small models:
+|                | Small model        | Large model                        |
+|----------------|--------------------|------------------------------------|
+| Zero-shot      | —                  | Qwen3-VL prompted (no training)    |
+| SFT            | Donut fine-tuned   | Qwen3-VL-8B fine-tuned on OMR data |
+| RL             | optional           | GRPO with musical correctness reward |
+
+Models:
+
+* Small (fine-tune candidates):
     * Donut (OCR-free doc understanding): https://arxiv.org/abs/2111.15664
     * Pix2Struct (screenshot parsing pretraining): https://arxiv.org/abs/2210.03347
-* Zero-shot / few-shot prompted large VLMs:
-    * Qwen2.5-VL (strong on documents and grounding/bbox output): https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct
-    * LLaVA-OneVision: https://huggingface.co/lmms-lab/LLaVA-OneVision-1.5-4B-Instruct
+
+* Large VLMs (zero-shot or fine-tune, as of early 2026):
+    * Qwen3-VL (Oct 2025; 8B/32B; 256K context; 32-language OCR; grounding): https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct
+    * Qwen2.5-VL (Jan 2025; 7B/72B; strong DocVQA and bbox grounding): https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct
+    * DeepSeek-VL2 (Dec 2024; MoE 4.5B active; OCRBench 834, DocVQA 93.3%): https://huggingface.co/deepseek-ai/deepseek-vl2
+    * InternVL3.5 (Aug 2025; 1B–38B; strong reasoning): https://huggingface.co/OpenGVLab/InternVL3.5-8B
+    * Molmo 2 (2025; 8B; best-in-class grounding/bbox output — relevant for zone detection in Bucket 4): https://huggingface.co/allenai/Molmo-7B-D-0924
+
 * Use as correction assistant, consistency checker, or interactive UX layer regardless of which wins on raw OMR accuracy
 
-Bucket 4 — facsimile & restoration:
+Training data preparation:
 
-Three distinct sub-tasks (can be tackled independently):
+For SFT:
 
-1. Document restoration: deskew, dewarp, denoise, debind shadow — improve scan quality while preserving print style
-    * DocTr (geometric correction): https://github.com/mindee/doctr
-    * DiffBIR (diffusion-based blind image restoration): https://github.com/XPixelGroup/DiffBIR
+1. Clean labeled OMR pairs (system-level):
+    * GrandStaff (antoniorv6/grandstaff, ~14k piano system images + bekern labels): https://huggingface.co/datasets/antoniorv6/grandstaff — already used by SMT; direct reuse
+    * PrIMuS / Camera-PrIMuS (~87k incipits; Camera variant adds blur/perspective artifacts): https://grfia.dlsi.ua.es/primus/
+    * OLiMPiC (pianoform systems with MusicXML labels): https://github.com/ufal/olimpic-icdar24
 
-2. Zone/layout detection: locate systems, measures, and symbols in the image → emit MEI `<facsimile>` zone coordinates that link semantic events back to image regions
-    * Any object detection backbone (DINO, RT-DETR) fine-tuned on annotated score layouts
-    * Rendering output: Verovio (MEI → SVG with zone links): https://github.com/rism-digital/verovio
+2. Synthetic generation (unlimited scale):
+    * Render MusicXML → image via Verovio or LilyPond → free (image, label) pairs
+    * Apply vintage augmentation on top — two approaches:
+        A. Handcrafted transforms (fast baseline): paper texture, yellowing, foxing spots, ink fading, bleed-through, skew, scan noise via albumentations or custom PIL pipeline
+        B. Style transfer augmentation (more authentic): use real vintage IMSLP scans as style references → transfer their look onto clean Verovio renders. Same models as Bucket 4 Sub-task 2 (see below). More realistic than handcrafted transforms; converges with the user-facing rendering pipeline.
+    * Approach B and Bucket 4 Sub-task 2 are the SAME technical problem — solving one gives the other for free
 
-3. Style-preserving re-engraving: from symbolic output (MusicXML/MEI), generate a clean notation image rendered in the original publisher's visual style (typography, spacing, ornamental elements)
-    * FLUX.1-dev + ControlNet (open weights; better structural fidelity than SD 1.5 for fine notation detail): https://huggingface.co/black-forest-labs/FLUX.1-dev
-    * ControlNet + Stable Diffusion with a vintage LoRA (train LoRA on IMSLP-sourced scans grouped by era/printing technique)
-    * CycleGAN for unpaired domain transfer (clean engraving ↔ degraded vintage scan)
+3. Instruction-tuning format (for VLM SFT):
+    * Each example: system-prompt + image + "Transcribe this score to ekern notation" → ekern string
+    * Use chat template of target model (Qwen3-VL uses standard messages format with image tokens)
+
+For RL:
+
+* No labeled output required — reward comes from structural rules applied to model output
+* Reward signals (verifiable, no human annotation needed):
+    1. Syntactic validity: is output valid ekern / MusicXML? (parse with music21 or xmllint)
+    2. Duration correctness: do notes in each measure sum to the correct time signature?
+    3. Voice consistency: no overlapping notes within the same voice
+    4. Invariance reward: run augmented versions of the same image → outputs should agree (self-consistency across degradations)
+* Training images for RL: unlabeled vintage scans from IMSLP — no labels needed, reward is computed purely from output structure
+* Algorithm: GRPO (simpler than PPO, works well for structured output tasks; used by DeepSeek-R1)
+
+Bucket 4 — facsimile:
+
+Note: document restoration (deskew, denoise, etc.) is NOT a sub-task here. For OMR robustness on degraded vintage scans, the right approach is e2e training with vintage augmentation — not a separate preprocessing step. Restoration also conflicts with facsimile zone coordinates, which must reference original scan pixels.
+
+Two sub-tasks:
+
+1. Zone/layout detection + interactive viewer: locate systems, measures, and symbols in the image → emit MEI `<facsimile>` zone coordinates (ulx/uly/lrx/lry) that link semantic events back to pixel regions in the original scan. The output is an HTML viewer where the original scan is the visual base layer and semantic elements (notes, measures, voices) are overlaid as clickable SVG regions. Hovering a symbol highlights it and shows its semantic content; larger groups (measure, system) are selectable.
+    * Semantic format: MEI (not MusicXML or ekern) — MEI natively supports @facs zone linkage; MusicXML has no equivalent
+    * Zone detector: any object detection backbone (DINO, RT-DETR) fine-tuned on annotated score layouts; or Molmo 2 (best open-weight grounding/bbox output, see Bucket 3)
+    * Viewer rendering: Verovio (MEI → SVG overlay): https://github.com/rism-digital/verovio
+    * Reference viewer: mei-friend: https://github.com/mei-friend/mei-friend
+
+2. Legibility-enhanced alternative rendering: vintage scores are often hard to read (faded ink, degraded paper, ornate typography). This sub-task generates an alternative version that preserves the vintage color palette and background texture but replaces degraded or ornate symbols with cleaner, more legible notation — a middle ground between the raw scan and a fully modernized engraving. Useful as a reading aid alongside the original.
+    * Input: original scan pixels (style reference) + clean Verovio render of extracted semantics (content/structure)
+    * Output: image with vintage aesthetic (paper color, texture, background) but clearer symbols
+    * Note: this is a reference-image style transfer task — content from Verovio render, style from vintage scan
+
+    Open-weight models (as of early 2026), in order of suitability:
+    * QwenStyle (Jan 2026; built on Qwen-Image-Edit; content-preserving style transfer with reference images; state-of-the-art): https://github.com/witcherofresearch/Qwen-Image-Style-Transfer
+    * TeleStyle (Jan 2026; same as QwenStyle + video support; lightweight): https://huggingface.co/Tele-AI/TeleStyle
+    * FLUX.1 Kontext (Jun 2025; in-context multimodal editing with image+text prompts): https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev
+    * IP-Adapter (Style Only mode) + ControlNet (lightweight; structure from ControlNet, style from IP-Adapter reference image): https://huggingface.co/docs/diffusers/en/using-diffusers/ip_adapter
+    * InstantStyle-Plus (explicit 3-part decomposition: style injection + spatial preservation + semantic preservation): https://github.com/instantX-research/InstantStyle-Plus
+    * CycleGAN (unpaired domain transfer; no reference image needed; simpler but less controllable)
+    * NanoBanana = Gemini 2.5 Flash Image (Google API, NOT open weights — proprietary)
     * Reference: style_transfer_idea.md in this directory
+
+    Convergence with training data: these same models serve as the vintage augmentation pipeline for Bucket 3 SFT training — solving one solves both.
 
 
 Training strategy: how to make progress fast on “vintage”
@@ -261,7 +316,10 @@ Expected outcome:
 Experiment group B — Model family comparison
 
 * B1: OMR-native transformer (SMT)
-* B2: general vision transformer — fine-tuned small (Donut/Pix2Struct) vs. prompted large (Qwen2.5-VL)
+* B2a: general VLM zero-shot (Qwen3-VL prompted, no training)
+* B2b: general VLM SFT small (Donut fine-tuned on GrandStaff)
+* B2c: general VLM SFT large (Qwen3-VL-8B fine-tuned on GrandStaff + synthetic vintage)
+* B2d: general VLM RL (Qwen3-VL-8B + GRPO with musical correctness reward on unlabeled vintage)
 * B3: baseline engine (Audiveris)
 
 Metrics:
@@ -307,21 +365,19 @@ Expected outcome:
 
 * D1 wins fidelity; D3 is the “premium” version.
 
-Experiment group E — Facsimile & restoration pipeline
+Experiment group E — Facsimile pipeline
 
-* E1: restoration as preprocessing — does DocTr + DiffBIR denoising improve downstream OMR accuracy (SER/CER) on degraded vintage scans?
-* E2: zone detection — measure IoU of predicted system/measure bounding boxes vs. manual annotations; then link to MEI facsimile zones
-* E3: style-preserving re-engraving — ControlNet+LoRA conditioned on edge map extracted from MusicXML-rendered structure; evaluate with FID and LPIPS vs. held-out vintage pages from same era
+* E1: zone detection — measure IoU of predicted system/measure bounding boxes vs. manual annotations; validate MEI facsimile output by checking @facs linkage correctness in the interactive viewer
+* E2: legibility-enhanced rendering — FLUX/ControlNet+LoRA conditioned on clean symbol structure; evaluate (a) vintage aesthetic preservation: FID and LPIPS vs. held-out vintage pages from same era; (b) legibility: OMR accuracy on generated image vs. original scan (improvement = better legibility); (c) human preference: does it feel vintage but readable?
 
 Metrics:
 
-* E1: SER/CER on vintage test set (with vs. without restoration)
-* E2: zone IoU, MEI facsimile validity
-* E3: FID, LPIPS, human preference score
+* E1: zone IoU, MEI facsimile validity, viewer interaction correctness
+* E2: FID, LPIPS, OMR accuracy delta (generated vs. original scan), human preference score
 
 Expected outcome:
 
-* E1 gives free accuracy gains on degraded inputs; E3 is the “wow” demo differentiator for archival/publisher clients.
+* E1 enables the “click a note, highlight the scan region” demo; E2 is the reading-aid differentiator — vintage look preserved, symbols legible.
 
 
 Estimated cost (honest + actionable)
