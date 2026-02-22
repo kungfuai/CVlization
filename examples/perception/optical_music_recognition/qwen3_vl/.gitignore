@@ -1,6 +1,5 @@
 outputs/
 __pycache__/
 *.pyc
-*.omr
-*.mxl
+*.txt
 .env
