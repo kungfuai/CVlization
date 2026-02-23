@@ -1,5 +1,4 @@
 outputs/
-omr_comparison/
 __pycache__/
 *.pyc
 omr_results.json
