@@ -204,6 +204,20 @@ For clean labeled datasets (GrandStaff, PrIMuS) CER/SER is straightforward. For 
 
 This bottleneck directly motivates the RL approach above — it sidesteps the label requirement entirely.
 
+Bootstrapping ground truth with frontier APIs:
+
+Frontier VLMs (Gemini 2.5 Flash/Pro, GPT-4o, Claude Opus) can partially mitigate the bottleneck, but only for coarse metadata — not note-level transcription:
+
+* What works: key signature, time signature, tempo/expression markings, instrumentation, era/publisher — hallucination is low for these coarse visual questions. Our qwen3-omr experiment confirmed this (era and dynamics correct; key signature wrong).
+* What does not work: note-level transcription — frontier VLMs hallucinate articulations, ties, slurs, and accidentals that don't exist. MSU-Bench and MusiXQA benchmarks show purpose-built OMR models (SMT) significantly outperform them on CER. Not suitable for bootstrapping note-level ground truth.
+* ABC notation reduces hallucination: NOTA (arXiv 2502.14893, Feb 2026) shows that representing notation as ABC text (rather than ekern/MusicXML) improves grounding. Worth considering for the ekern transcription prompt design.
+* Cost is negligible: Gemini 2.5 Flash at ~$11–50 for 10k pages.
+
+Practical two-tier bootstrapping strategy:
+1. Frontier API (Gemini 2.5 Flash) → extract coarse metadata for 10k–100k vintage pages: key sig, time sig, tempo, era. Cheap, scalable, useful as weak supervision and evaluation metadata.
+2. SMT → note-level pseudo-labels on the same pages, filtered by confidence.
+3. Human correction (active learning) → fix the uncertain remainder (~200 pages).
+
 Bucket 4 — facsimile:
 
 Note: document restoration (deskew, denoise, etc.) is NOT a sub-task here. For OMR robustness on degraded vintage scans, the right approach is e2e training with vintage augmentation — not a separate preprocessing step. Restoration also conflicts with facsimile zone coordinates, which must reference original scan pixels.
