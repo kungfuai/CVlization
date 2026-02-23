@@ -193,6 +193,17 @@ For RL:
 * Training images for RL: unlabeled vintage scans from IMSLP — no labels needed, reward is computed purely from output structure
 * Algorithm: GRPO (simpler than PPO, works well for structured output tasks; used by DeepSeek-R1)
 
+Evaluation bottleneck — ground truth on vintage scans:
+
+For clean labeled datasets (GrandStaff, PrIMuS) CER/SER is straightforward. For real vintage scans there is no ground truth, which constrains how experiments can be evaluated:
+
+* Coarse metadata (key signature, time signature, era, publisher) can be verified against library catalog records — low cost, but only tests a fraction of OMR output
+* Full transcription accuracy on vintage requires human expert correction — hours per page, hard to scale
+* Proxy metrics (syntactic validity, duration correctness, self-consistency across augmentations) work without labels but measure structural plausibility, not exact correctness
+* Practical strategy: use labeled datasets to measure transcription accuracy on clean input; use proxy metrics and small hand-corrected samples (~200 pages, via active learning) to evaluate vintage robustness
+
+This bottleneck directly motivates the RL approach above — it sidesteps the label requirement entirely.
+
 Bucket 4 — facsimile:
 
 Note: document restoration (deskew, denoise, etc.) is NOT a sub-task here. For OMR robustness on degraded vintage scans, the right approach is e2e training with vintage augmentation — not a separate preprocessing step. Restoration also conflicts with facsimile zone coordinates, which must reference original scan pixels.
