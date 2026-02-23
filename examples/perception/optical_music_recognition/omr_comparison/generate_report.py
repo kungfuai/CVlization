@@ -92,6 +92,13 @@ ANNOTATIONS = {
         "dynamics_tempo": ("good", "Most structured"),
         "ekern_transcription": ("warn", "Partial notes — hallucinated"),
     },
+    "anthropic/claude-opus-4-6": {
+        "key_signature": ("warn", ""),
+        "time_signature": ("good", "3/4 ✓"),
+        "musical_era": ("good", "Romantic ✓"),
+        "dynamics_tempo": ("good", ""),
+        "ekern_transcription": ("warn", "4096-token attempt"),
+    },
     "Qwen/Qwen3-VL-8B-Instruct": {
         "key_signature": ("bad", "F# major (1♯) — wrong"),
         "time_signature": ("good", "3/4 ✓"),
@@ -109,8 +116,11 @@ SMT_ANNOTATIONS = {
 
 
 def load_records(comparison_dir: Path) -> list[dict]:
+    # Load primary per-model JSON files (exclude *_ekern4k.json overrides)
     records = []
     for f in sorted(comparison_dir.glob("*.json")):
+        if "_ekern4k" in f.name:
+            continue
         try:
             data = json.loads(f.read_text())
             if "results" in data:
@@ -118,6 +128,28 @@ def load_records(comparison_dir: Path) -> list[dict]:
                 records.append(data)
         except Exception:
             pass
+
+    # Merge higher-token ekern results where available
+    ekern_overrides: dict[str, str] = {}
+    for f in sorted(comparison_dir.glob("*_ekern4k.json")):
+        try:
+            data = json.loads(f.read_text())
+            model = data.get("model", "")
+            resp = data.get("results", {}).get("ekern_transcription", {}).get("response", "")
+            if model and resp:
+                ekern_overrides[model] = resp
+        except Exception:
+            pass
+
+    for rec in records:
+        mid = rec["model"]
+        if mid in ekern_overrides:
+            rec.setdefault("results", {}).setdefault("ekern_transcription", {})
+            rec["results"]["ekern_transcription"]["response"] = (
+                ekern_overrides[mid] + "\n\n[re-run with max_tokens=4096]"
+            )
+            rec["_ekern_upgraded"] = True
+
     return records
 
 
