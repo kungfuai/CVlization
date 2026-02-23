@@ -123,15 +123,19 @@ def encode_image_base64(image_path: str) -> tuple[str, str]:
     return b64, "image/jpeg"
 
 
-def make_message(prompt_text: str, b64: str, mime_type: str) -> dict:
+def _is_openai_model(model: str) -> bool:
+    return model.startswith("gpt-") or model.startswith("o1") or model.startswith("o3")
+
+
+def make_message(prompt_text: str, b64: str, mime_type: str, model: str = "") -> dict:
     """Build a LiteLLM-compatible user message with image + text."""
+    image_url: dict = {"url": f"data:{mime_type};base64,{b64}"}
+    if _is_openai_model(model):
+        image_url["detail"] = "high"
     return {
         "role": "user",
         "content": [
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime_type};base64,{b64}"},
-            },
+            {"type": "image_url", "image_url": image_url},
             {"type": "text", "text": prompt_text},
         ],
     }
@@ -223,7 +227,7 @@ def run_single(args) -> None:
     results = {}
     for i, prompt in enumerate(selected):
         print(f"[{i+1}/{len(selected)}] {prompt['label']} ...")
-        msg = make_message(prompt["text"], b64, mime)
+        msg = make_message(prompt["text"], b64, mime, args.model)
         try:
             response = run_prompt(args.model, msg, args.max_tokens)
         except Exception as e:
@@ -298,7 +302,7 @@ def run_batch(args) -> None:
 
             results = {}
             for prompt in selected:
-                msg = make_message(prompt["text"], b64, mime)
+                msg = make_message(prompt["text"], b64, mime, args.model)
                 try:
                     response = run_prompt(args.model, msg, args.max_tokens)
                 except Exception as e:
