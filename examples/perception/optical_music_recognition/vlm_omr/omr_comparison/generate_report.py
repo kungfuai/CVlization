@@ -157,7 +157,9 @@ def load_smt(comparison_dir: Path) -> dict | None:
     p = comparison_dir / "smt_omr.json"
     if not p.exists():
         return None
-    return {"_file": "smt_omr.json", "model": "smt", "ekern": p.read_text()}
+    data = json.loads(p.read_text())
+    ekern = data.get("bekern", p.read_text())
+    return {"_file": "smt_omr.json", "model": "smt", "ekern": ekern}
 
 
 def encode_image(image_path: Path) -> str | None:
