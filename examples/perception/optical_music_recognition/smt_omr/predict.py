@@ -6,7 +6,7 @@ Transcribes scanned sheet music images into bekern notation, a structured
 token encoding that captures pitches, durations, voices, dynamics, and structure.
 The output can be converted to MusicXML or rendered to SVG via Verovio.
 
-Model: PRAIG/smt-grandstaff (default — system-level piano, matches current SMT codebase)
+Model: PRAIG/smt-fp-grandstaff (default — full-page piano; system-level: PRAIG/smt-grandstaff)
 Repository: https://github.com/antoniorv6/SMT
 Paper: https://arxiv.org/abs/2402.07596
 License: MIT
@@ -60,7 +60,9 @@ except ImportError:
         return path if os.path.isabs(path) else os.path.join(base_dir, path)
 
 
-DEFAULT_MODEL = "PRAIG/smt-grandstaff"
+DEFAULT_MODEL = "PRAIG/smt-fp-grandstaff"
+# Full-page model max input dimensions (from SMTConfig defaults)
+MAX_W, MAX_H = 2480, 3508
 # CACHE_DIR parent is used as local_dir for hf_hub_download so that the file
 # lands at CACHE_DIR/sample_score.jpg (hf_hub_download preserves filename subdirs)
 CACHE_DIR = Path.home() / ".cache" / "huggingface" / "cvl_data" / "smt_omr"
@@ -178,6 +180,19 @@ def run_inference(model, image: np.ndarray, device: str) -> str:
         Bekern notation string with human-readable newlines/tabs substituted.
     """
     from data_augmentation.data_augmentation import convert_img_to_tensor
+    # Read actual max dims from model's baked positional encoding
+    STRIDE = 16
+    if hasattr(model, 'pos2D') and hasattr(model.pos2D, 'pe'):
+        _, max_h_fm, max_w_fm = model.pos2D.pe.shape
+        max_h, max_w = max_h_fm * STRIDE, max_w_fm * STRIDE
+    else:
+        max_h, max_w = MAX_H, MAX_W
+    h, w = image.shape[:2]
+    if w > max_w or h > max_h:
+        scale = min(max_w / w, max_h / h)
+        new_w, new_h = int(w * scale), int(h * scale)
+        print(f"Resizing image {w}x{h} → {new_w}x{new_h} to fit model PE ({max_w}x{max_h})")
+        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
     tensor = convert_img_to_tensor(image).unsqueeze(0).to(device)
     with torch.no_grad():
         predictions, _ = model.predict(tensor, convert_to_str=True)
@@ -329,7 +344,7 @@ Examples:
         default=DEFAULT_MODEL,
         help=(
             f"HuggingFace model ID (default: {DEFAULT_MODEL}). "
-            "Alternatives: PRAIG/smt-fp-grandstaff (full-page), "
+            "Alternatives: PRAIG/smt-grandstaff (system-level), "
             "PRAIG/smt-fp-mozarteum, PRAIG/smt-fp-polish-scores"
         ),
     )
