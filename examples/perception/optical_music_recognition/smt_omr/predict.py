@@ -70,37 +70,35 @@ CACHE_DIR = Path.home() / ".cache" / "huggingface" / "cvl_data" / "smt_omr"
 
 def ensure_sample_data() -> Path:
     """
-    Download a sample piano score image for testing.
+    Download a full-page sample piano score for testing.
 
-    Tries zzsi/cvl first, then falls back to the antoniorv6/grandstaff test split.
+    Fetches smt_omr/sample_score_fp.jpg from zzsi/cvl (full-page GrandStaff sample).
+    Falls back to antoniorv6/full-page-grandstaff test split if unavailable.
     Caches locally so subsequent calls are instant.
     """
-    cache_path = CACHE_DIR / "sample_score.jpg"
+    cache_path = CACHE_DIR / "sample_score_fp.jpg"
     if cache_path.exists():
         return cache_path
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Try zzsi/cvl (uploaded sample for this example).
-    # Use CACHE_DIR.parent as local_dir so that filename="smt_omr/sample_score.jpg"
-    # resolves to CACHE_DIR/sample_score.jpg on disk.
     try:
         from huggingface_hub import hf_hub_download
         local = hf_hub_download(
             repo_id="zzsi/cvl",
             repo_type="dataset",
-            filename="smt_omr/sample_score.jpg",
+            filename="smt_omr/sample_score_fp.jpg",
             local_dir=str(CACHE_DIR.parent),
         )
         return Path(local)
     except Exception:
         pass
 
-    # Fallback: pull first image from antoniorv6/grandstaff test split
-    print("Fetching sample from antoniorv6/grandstaff test split...")
+    # Fallback: pull first image from antoniorv6/full-page-grandstaff test split
+    print("Fetching sample from antoniorv6/full-page-grandstaff test split...")
     import datasets as hf_datasets
     ds = hf_datasets.load_dataset(
-        "antoniorv6/grandstaff", split="test[:1]", trust_remote_code=False
+        "antoniorv6/full-page-grandstaff", split="test[:1]", trust_remote_code=False
     )
     sample = ds[0]
     img_array = np.array(sample["image"])
@@ -111,12 +109,12 @@ def ensure_sample_data() -> Path:
 
 def ensure_sample_gt() -> Path:
     """
-    Download the ground truth for the sample piano score image.
+    Download the ground truth for the full-page sample score.
 
-    Fetches smt_omr/sample_score_gt.txt from zzsi/cvl on HuggingFace.
+    Fetches smt_omr/sample_score_fp_gt.txt from zzsi/cvl on HuggingFace.
     Caches locally so subsequent calls are instant.
     """
-    cache_path = CACHE_DIR / "sample_score_gt.txt"
+    cache_path = CACHE_DIR / "sample_score_fp_gt.txt"
     if cache_path.exists():
         return cache_path
 
@@ -127,7 +125,7 @@ def ensure_sample_gt() -> Path:
         local = hf_hub_download(
             repo_id="zzsi/cvl",
             repo_type="dataset",
-            filename="smt_omr/sample_score_gt.txt",
+            filename="smt_omr/sample_score_fp_gt.txt",
             local_dir=str(CACHE_DIR.parent),
         )
         return Path(local)
