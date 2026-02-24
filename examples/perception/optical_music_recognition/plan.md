@@ -204,6 +204,27 @@ For clean labeled datasets (GrandStaff, PrIMuS) CER/SER is straightforward. For 
 
 This bottleneck directly motivates the RL approach above — it sidesteps the label requirement entirely.
 
+Strategies for building ground truth without heavy human expert effort (roughly ordered by cost):
+
+Zero human effort:
+* Cross-model consensus as pseudo-GT: run multiple architecturally diverse models (rule-based Audiveris + fine-tuned SMT + zero-shot VLMs); where they all agree on a token → high confidence pseudo-label; where they disagree → flag for review. Architectural diversity means correlated errors are unlikely.
+* IMSLP clean edition → OMR → GT: many 1880s public-domain pieces were later re-engraved as clean modern editions on IMSLP. If the same piece exists as a clean typeset PDF, run SMT on it (CER ~4%) for effectively free GT, then compare vintage scan output against the clean edition transcription.
+* Render-and-compare via VLM judge: render ekern output back to score image using Verovio, then ask a VLM "do these two images of measure N show the same notes?" Less brittle than pixel comparison because it asks for musical equivalence, not pixel equality.
+* Error injection / degradation simulation: take clean scores + known GT, apply vintage-style degradation (ink bleed, yellowing, paper texture, skew). Gives calibrated evaluation of degradation sensitivity without new GT.
+
+Light human effort (minutes per page):
+* Symbolic feature GT: a non-expert verifies key signature, time signature, measure count, repeat signs, dynamics in ~5 minutes per page. Lightweight "partial GT" fast to collect, meaningful to evaluate against.
+* Crowdsourcing simple tasks: tasks like "how many flats in the key signature?" or "is this note above or below the staff?" are answerable by anyone with basic music literacy. Aggregate via majority vote.
+* Measure-level alignment: use omr-layout-analysis to segment both a clean modern edition and the vintage scan into systems; match corresponding measures. Clean edition GT applies at measure granularity.
+
+Moderate human effort (targeted, not per-page):
+* Active learning / disagreement sampling: run all models, compute pairwise disagreement score per measure, present only the top-K most contested measures to an expert for adjudication. Focuses expensive expert time on genuinely ambiguous cases.
+* MIDI alignment: if a MIDI performance of the piece exists (Petrucci, Mutopia, score-following recordings), audio-to-score alignment gives pitch + duration GT. Doesn't cover beaming/stems/slurs but covers melodic accuracy.
+
+Empirical findings from our comparison on vintage_score_1884.jpg:
+* All four models (SMT, Gemini 3.1 Pro, Claude Opus, GPT-5.2 Pro) disagree on key signature — C major, G major, B♭ major all proposed. Cross-model consensus doesn't help here; coarse metadata from library catalog records would resolve it cheaply.
+* Gemini 3.1 Pro produced the most musically usable transcription (clean syntax, correct waltz bass-chord-chord texture). Claude Opus identified structural sections (INTRO/WALTZ) and ornaments but stopped early. SMT transcribed the most structural detail (repeat signs, beaming) but with invalid syntax in the opening. GPT-5.2 Pro declined entirely.
+
 Bootstrapping ground truth with frontier APIs:
 
 Frontier VLMs (Gemini 2.5 Flash/Pro, GPT-4o, Claude Opus) can partially mitigate the bottleneck, but only for coarse metadata — not note-level transcription:
@@ -227,8 +248,10 @@ Two sub-tasks:
 1. Zone/layout detection + interactive viewer: locate systems, measures, and symbols in the image → emit MEI `<facsimile>` zone coordinates (ulx/uly/lrx/lry) that link semantic events back to pixel regions in the original scan. The output is an HTML viewer where the original scan is the visual base layer and semantic elements (notes, measures, voices) are overlaid as clickable SVG regions. Hovering a symbol highlights it and shows its semantic content; larger groups (measure, system) are selectable.
     * Semantic format: MEI (not MusicXML or ekern) — MEI natively supports @facs zone linkage; MusicXML has no equivalent
     * Zone detector: any object detection backbone (DINO, RT-DETR) fine-tuned on annotated score layouts; or Molmo 2 (best open-weight grounding/bbox output, see Bucket 3)
+    * Implemented: omr-layout-analysis YOLOv8 (OLA v2.0) — detects systems, grand_staff, staves, system_measures, stave_measures; 5 grand staff systems correctly detected on vintage_score_1884.jpg in ~4s; pretrained weights ~40MB; CVlization example at examples/perception/optical_music_recognition/omr_layout_analysis/
     * Viewer rendering: Verovio (MEI → SVG overlay): https://github.com/rism-digital/verovio
     * Reference viewer: mei-friend: https://github.com/mei-friend/mei-friend
+    * Proposed pipeline: omr-layout-analysis (grand_staff crops) → SMT system-level model (PRAIG/smt-grandstaff) → bekern per system → concatenate. Likely outperforms full-page model on vintage scans because each system crop is smaller and closer to the system-level training distribution.
 
 2. Legibility-enhanced alternative rendering: vintage scores are often hard to read (faded ink, degraded paper, ornate typography). This sub-task generates an alternative version that preserves the vintage color palette and background texture but replaces degraded or ornate symbols with cleaner, more legible notation — a middle ground between the raw scan and a fully modernized engraving. Useful as a reading aid alongside the original.
     * Input: original scan pixels (style reference) + clean Verovio render of extracted semantics (content/structure)
@@ -316,6 +339,26 @@ Success criteria:
 
 * “Preservation-grade + searchable + explainable.”
 
+
+What's been implemented (CVlization examples)
+
+All examples are under examples/perception/optical_music_recognition/:
+
+| Example | Bucket | Status | Notes |
+|---|---|---|---|
+| audiveris/ | B1 (rule-based) | Done | MusicXML output; fails badly on vintage_score_1884.jpg — spurious key changes, sparse notes |
+| smt_omr/ | B2 (OMR transformer) | Done | ekern output; full-page model (PRAIG/smt-fp-grandstaff); CER 4.05% on clean GrandStaff sample; noisy on vintage scan |
+| qwen3_vl/ | B2a (VLM zero-shot, local) | Done | Qwen3-VL-8B 4-bit; 5 structured prompts (key sig, time sig, era, dynamics, ekern) |
+| vlm_omr/ | B2a (VLM zero-shot, API) | Done | LiteLLM wrapper; Gemini 2.5 Flash, Gemini 3.1 Pro, GPT-4o, GPT-5.2, GPT-5.2 Pro, Claude Sonnet 4.6, Claude Opus 4.6; omr_comparison/ subfolder with HTML report |
+| omr_layout_analysis/ | B4 E1 (zone detection) | Done | omr-layout-analysis YOLOv8 (OLA v2.0); 5 classes; 5 grand staff systems detected on vintage waltz in ~4s |
+
+Key findings from the multi-model comparison on vintage_score_1884.jpg (Biddle's Piano Waltz, 1884):
+* Gemini 3.1 Pro: best ekern output — clean syntax, correct waltz bass-chord-chord texture, 36 measures; key wrong (G major)
+* Claude Opus 4.6: best musical awareness — identifies INTRO/WALTZ sections, ornaments, key change; partial transcription (16 measures), key wrong (C major)
+* SMT (full-page): most structural detail (repeat signs, beaming); invalid mixed-duration chords in opening; noisy
+* Audiveris: essentially fails — sparse notes, multiple spurious key changes within one page, beat counts wrong
+* GPT-5.2 Pro: declines to transcribe, citing resolution; useful signal that the scan is genuinely challenging
+* All models disagree on key signature — C, G, B♭ major all proposed; music expert suggested C major → F major
 
 Experiments to run (a concrete matrix)
 
