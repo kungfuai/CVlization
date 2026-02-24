@@ -100,16 +100,19 @@ def find_images_dir(extract_dir: Path, ds_subdir: str) -> Path:
     raise FileNotFoundError(f"Could not locate images directory in {extract_dir}")
 
 
-def find_annotation_jsons(extract_dir: Path) -> dict[str, Path]:
-    """Return {split: path} for each annotation JSON found."""
-    splits = {}
+def find_annotation_jsons(extract_dir: Path) -> dict[str, list[Path]]:
+    """Return {split: [path, ...]} for each annotation JSON found.
+    Handles both single-file (dense) and multi-shard (complete) layouts.
+    """
+    splits: dict[str, list[Path]] = {"train": [], "test": []}
     for json_path in sorted(extract_dir.rglob("*.json")):
         name = json_path.stem.lower()
         if "train" in name:
-            splits["train"] = json_path
+            splits["train"].append(json_path)
         elif "test" in name or "val" in name:
-            splits["test"] = json_path
-    return splits
+            splits["test"].append(json_path)
+    # Drop empty splits
+    return {k: v for k, v in splits.items() if v}
 
 
 def parse_categories(raw: dict | list) -> dict[int, dict]:
@@ -134,74 +137,78 @@ def a_bbox_to_coco(a_bbox: list) -> list:
     return [x1, y1, x2 - x1, y2 - y1]
 
 
-def build_split(coco_json: Path, images_dir: Path, split: str,
+def build_split(coco_jsons: list[Path], images_dir: Path, split: str,
                 annotation_set: str = "deepscores"):
     """
-    Convert one DeepScoresV2 JSON into a list of row dicts.
+    Convert one or more DeepScoresV2 JSON shards into a list of row dicts.
 
     DeepScoresV2 format differences from standard COCO:
     - images use 'filename' (not 'file_name') and have 'ann_ids' list
     - annotations is a dict keyed by string ann_id
     - each annotation has 'a_bbox' [x1,y1,x2,y2] instead of 'bbox' [x,y,w,h]
     - 'cat_id' is a list of string IDs (one per annotation set)
+    - complete variant is split across many shards
     """
-    print(f"  Loading {coco_json.name} ({coco_json.stat().st_size // 1_000_000} MB) ...")
-    with open(coco_json) as f:
-        coco = json.load(f)
-
-    all_cats = parse_categories(coco["categories"])
+    # Read categories from first shard (same across all shards)
+    with open(coco_jsons[0]) as f:
+        first = json.load(f)
+    all_cats = parse_categories(first["categories"])
     cat_id_to_name: dict[str, str] = {
         str(cid): info["name"]
         for cid, info in all_cats.items()
         if info.get("annotation_set", "deepscores") == annotation_set
     }
 
-    all_anns: dict = coco["annotations"]
-
     rows = []
     missing = 0
-    for img_info in tqdm(coco["images"], desc=f"  {split}"):
-        filename = img_info.get("filename") or img_info.get("file_name", "")
-        img_path = images_dir / filename
-        if not img_path.exists():
-            img_path = images_dir / Path(filename).name
-        if not img_path.exists():
-            missing += 1
-            continue
+    for coco_json in coco_jsons:
+        print(f"  Loading {coco_json.name} ({coco_json.stat().st_size // 1_000_000} MB) ...")
+        with open(coco_json) as f:
+            coco = json.load(f)
+        all_anns: dict = coco["annotations"]
 
-        ann_ids = img_info.get("ann_ids", [])
-        objs = {"id": [], "bbox": [], "category_id": [], "category": [], "area": []}
-        for ann_id in ann_ids:
-            ann = all_anns.get(str(ann_id))
-            if ann is None:
+        for img_info in tqdm(coco["images"], desc=f"  {coco_json.stem}", leave=False):
+            filename = img_info.get("filename") or img_info.get("file_name", "")
+            img_path = images_dir / filename
+            if not img_path.exists():
+                img_path = images_dir / Path(filename).name
+            if not img_path.exists():
+                missing += 1
                 continue
-            matched_cat_id = None
-            for cid in ann.get("cat_id", []):
-                if str(cid) in cat_id_to_name:
-                    matched_cat_id = str(cid)
-                    break
-            if matched_cat_id is None:
-                continue
-            objs["id"].append(int(ann_id))
-            objs["bbox"].append(a_bbox_to_coco(ann["a_bbox"]))
-            objs["category_id"].append(int(matched_cat_id))
-            objs["category"].append(cat_id_to_name[matched_cat_id])
-            objs["area"].append(float(ann.get("area", 0)))
 
-        rows.append({
-            "image_id":       img_info["id"],
-            "file_name":      filename,
-            "font":           font_from_filename(filename),
-            "image":          str(img_path),
-            "width":          img_info["width"],
-            "height":         img_info["height"],
-            "annotation_set": annotation_set,
-            "objects":        objs,
-        })
+            ann_ids = img_info.get("ann_ids", [])
+            objs = {"id": [], "bbox": [], "category_id": [], "category": [], "area": []}
+            for ann_id in ann_ids:
+                ann = all_anns.get(str(ann_id))
+                if ann is None:
+                    continue
+                matched_cat_id = None
+                for cid in ann.get("cat_id", []):
+                    if str(cid) in cat_id_to_name:
+                        matched_cat_id = str(cid)
+                        break
+                if matched_cat_id is None:
+                    continue
+                objs["id"].append(int(ann_id))
+                objs["bbox"].append(a_bbox_to_coco(ann["a_bbox"]))
+                objs["category_id"].append(int(matched_cat_id))
+                objs["category"].append(cat_id_to_name[matched_cat_id])
+                objs["area"].append(float(ann.get("area", 0)))
+
+            rows.append({
+                "image_id":       img_info["id"],
+                "file_name":      filename,
+                "font":           font_from_filename(filename),
+                "image":          str(img_path),
+                "width":          img_info["width"],
+                "height":         img_info["height"],
+                "annotation_set": annotation_set,
+                "objects":        objs,
+            })
 
     if missing:
         print(f"  WARNING: {missing} images not found on disk")
-    print(f"  {len(rows)} rows, {sum(len(r['objects']['id']) for r in rows):,} annotations")
+    print(f"  {split}: {len(rows)} rows, {sum(len(r['objects']['id']) for r in rows):,} annotations")
     return rows
 
 
@@ -211,13 +218,13 @@ def build_dataset(extract_dir: Path, ds_subdir: str, annotation_set: str = "deep
     images_dir = find_images_dir(extract_dir, ds_subdir)
     split_jsons = find_annotation_jsons(extract_dir)
     print(f"Images dir      : {images_dir}")
-    print(f"Splits          : {list(split_jsons.keys())}")
+    print(f"Splits          : { {k: len(v) for k, v in split_jsons.items()} }")
     print(f"Annotation set  : {annotation_set}")
 
     split_datasets = {}
-    for split, json_path in split_jsons.items():
-        print(f"\nBuilding split: {split}  ({json_path.name})")
-        rows = build_split(json_path, images_dir, split, annotation_set)
+    for split, json_paths in split_jsons.items():
+        print(f"\nBuilding split: {split}  ({len(json_paths)} shard(s))")
+        rows = build_split(json_paths, images_dir, split, annotation_set)
         ds = Dataset.from_list(rows)
         ds = ds.cast_column("image", HFImage())
         split_datasets[split] = ds
