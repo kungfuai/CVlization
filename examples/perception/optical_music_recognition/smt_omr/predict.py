@@ -225,7 +225,14 @@ def _levenshtein(a, b):
 
 
 def _normalize_bekern(s: str) -> str:
-    """Strip extra whitespace around tab separators and line boundaries."""
+    """Normalize bekern string for comparison.
+
+    Strips whitespace and removes dataset-specific encoding artifacts:
+    - '@' intra-token separators (full-page dataset encodes '4B-' as '4@B@-')
+    - '·' beam/tie markers (dataset uses '·[' and '·L' instead of '[' and 'L')
+    These are encoding differences, not musical errors.
+    """
+    s = s.replace("@", "").replace("·", "")
     lines = []
     for line in s.strip().split("\n"):
         cols = [col.strip() for col in line.split("\t")]
