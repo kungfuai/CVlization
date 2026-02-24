@@ -118,6 +118,84 @@ def strip_bekern(kern: str) -> str:
 # Conversion: kern / MusicXML → LilyPond .ly
 # ---------------------------------------------------------------------------
 
+def _inject_kern_metadata(ly_path: Path, kern_text: str) -> None:
+    """
+    Inject kern metadata that music21 silently drops into the generated .ly:
+      - !!!COM:  → composer field in \\header
+      - !!!OMD:  → \\tempo marking before measure 1
+      - *>Label  → \\mark \\markup { "Label" } before each section's first measure
+    """
+    ly = ly_path.read_text()
+    kern_lines = kern_text.split("\n")
+
+    # --- composer ---
+    for line in kern_lines:
+        if line.startswith("!!!COM:"):
+            composer = line[7:].strip().replace('"', '\\"')
+            ly = re.sub(r'(\\header\s*\{)',
+                        r'\1\n  composer = "' + composer + '"',
+                        ly, count=1)
+            break
+
+    # --- tempo (!!!OMD:) and section labels (*>Label) ---
+    # First pass: collect (measure_number, label) pairs and tempo text.
+    # A *> record appearing before =N means "inject before measure N".
+    tempo_text = None
+    pending_label = None
+    current_measure = 0
+    section_marks = []   # list of (measure_num, label)
+
+    for line in kern_lines:
+        col = line.split("\t")[0].strip()
+        if col.startswith("!!!OMD:"):
+            tempo_text = col[7:].strip().rstrip(".").replace('"', '\\"')
+        m = re.match(r"^=(\d+)", col)
+        if m:
+            current_measure = int(m.group(1))
+            if pending_label is not None:
+                section_marks.append((current_measure, pending_label))
+                pending_label = None
+        elif col.startswith("*>") and col[2:]:
+            pending_label = col[2:]
+
+    # Second pass: inject marks into the .ly.
+    # Marks before measure 1 go after the first \time X/X line.
+    # Marks before measure N>1 go after the comment "%{ end measure N-1 %}".
+    for mnum, label in section_marks:
+        mark = f'\\mark \\markup {{ "{label}" }}'
+        if mnum == 1:
+            # build insertion: tempo (if any) + section mark
+            inserts = []
+            if tempo_text:
+                inserts.append(f'\\tempo "{tempo_text}"')
+                tempo_text = None   # only emit once
+            inserts.append(mark)
+            insert_str = "\n             ".join(inserts)
+            ly = re.sub(
+                r'(\\time \d+/\d+\n)',
+                lambda m: m.group(1) + "             " + insert_str + "\n",
+                ly, count=1,
+            )
+        else:
+            prev = mnum - 1
+            tag = f"%{{{{ end measure {prev} %}}}}"
+            ly = re.sub(
+                r'(%\{ end measure ' + str(prev) + r' %\})',
+                lambda m, lbl=label: m.group(1) + f'\n             \\mark \\markup {{ "{lbl}" }}',
+                ly,
+            )
+
+    # If tempo was set but no section mark preceded measure 1, inject it alone
+    if tempo_text:
+        ly = re.sub(
+            r'(\\time \d+/\d+\n)',
+            lambda m: m.group(1) + f'             \\tempo "{tempo_text}"\n',
+            ly, count=1,
+        )
+
+    ly_path.write_text(ly)
+
+
 def kern_to_ly(kern_text: str, tmpdir: Path) -> Path:
     """Parse **kern text and write a LilyPond .ly file."""
     kern_clean = strip_bekern(kern_text)
@@ -127,6 +205,7 @@ def kern_to_ly(kern_text: str, tmpdir: Path) -> Path:
     score = converter.parse(str(krn_path), format="humdrum")
     ly_path = tmpdir / "score.ly"
     score.write("lily", fp=str(ly_path))
+    _inject_kern_metadata(ly_path, kern_clean)
     return ly_path
 
 
@@ -145,13 +224,19 @@ def musicxml_to_ly(xml_path: Path, tmpdir: Path) -> Path:
 def patch_ly(ly_path: Path) -> None:
     """
     Fix music21-generated LilyPond syntax for compatibility with LilyPond 2.19+.
-    music21 9.x emits some deprecated constructs that newer LilyPond rejects.
+    music21 9.x emits some deprecated constructs that newer LilyPond rejects,
+    and includes lilypond-book-preamble.ly which causes a title-only first page.
     """
     text = ly_path.read_text()
     # Renamed in LilyPond 2.19
     text = text.replace(r"\RemoveEmptyStaffContext", r"\RemoveEmptyStaves")
     # Old property syntax: #'foo → .foo (in \override / \set contexts)
     text = re.sub(r"(\\(?:override|set)\s+\S+)\s+#'(\S+)", r"\1.\2", text)
+    # music21 includes lilypond-book-preamble.ly which forces a title-only
+    # first page (book layout).  Removing it keeps the title inline with music.
+    text = text.replace('\\include "lilypond-book-preamble.ly"', "")
+    # Compact layout: smaller staff so more measures fit per line/page
+    text = text.replace('\\version', '#(set-global-staff-size 16)\n\n\\version', 1)
     ly_path.write_text(text)
 
 

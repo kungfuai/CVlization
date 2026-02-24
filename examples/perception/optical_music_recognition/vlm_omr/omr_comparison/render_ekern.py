@@ -5,11 +5,13 @@ Render ekern/bekern transcriptions from comparison JSONs to PNG images.
 Usage:
     python render_ekern.py
     python render_ekern.py --models smt gemini3 claude_opus
+    python render_ekern.py --models gemini3 --renderer lilypond
 """
 
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -162,6 +164,51 @@ def render_kern_to_png(kern_text: str, out_path: Path, page_width: int = 2100):
 
 
 # ---------------------------------------------------------------------------
+# LilyPond rendering (via cvlization/lilypond Docker image)
+# ---------------------------------------------------------------------------
+
+LILYPOND_IMAGE = "cvlization/lilypond:latest"
+
+
+def render_kern_to_png_lilypond(kern_text: str, out_path: Path):
+    """
+    Render **kern to PNG using the cvlization/lilypond Docker container.
+    The container has music21 + lilypond pre-installed; kern_to_ly() converts
+    kern → .ly, then LilyPond engraves with its Emmentaler font.
+    Multi-page outputs are saved as out_stem_p01.png, out_stem_p02.png, etc.
+    """
+    with tempfile.TemporaryDirectory() as _tmp:
+        tmp = Path(_tmp)
+        krn_file = tmp / "score.krn"
+        krn_file.write_text(kern_text)
+
+        cmd = [
+            "docker", "run", "--rm",
+            "--mount", f"type=bind,src={tmp},dst=/mnt/work",
+            LILYPOND_IMAGE,
+            "python3", "/workspace/predict.py",
+            "--input", "/mnt/work/score.krn",
+            "--output", "/mnt/work",
+            "--format", "png",
+        ]
+        result = subprocess.run(cmd, capture_output=False)
+        if result.returncode != 0:
+            raise RuntimeError("LilyPond Docker container failed")
+
+        pngs = sorted(tmp.glob("score*.png"))
+        if not pngs:
+            raise RuntimeError("No PNG produced by LilyPond")
+
+        if len(pngs) == 1:
+            shutil.copy(pngs[0], out_path)
+        else:
+            for i, pg in enumerate(pngs, 1):
+                dest = out_path.with_stem(out_path.stem + f"_p{i:02d}")
+                shutil.copy(pg, dest)
+                print(f"  Saved: {dest}", flush=True)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -173,10 +220,14 @@ def main():
         help="Which models to render (default: all)"
     )
     parser.add_argument(
-        "--page-width", type=int, default=2100,
-        help="Verovio page width (default: 2100)"
+        "--renderer", choices=["verovio", "lilypond"], default="verovio",
+        help="Rendering backend (default: verovio)"
     )
-    # Internal: worker mode (called by subprocess)
+    parser.add_argument(
+        "--page-width", type=int, default=2100,
+        help="Verovio page width in px (default: 2100; ignored for lilypond)"
+    )
+    # Internal: worker mode (called by subprocess for verovio isolation)
     parser.add_argument("--worker", nargs=3, metavar=("KERN_FILE", "OUT_PATH", "PAGE_WIDTH"),
                         help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -195,16 +246,20 @@ def main():
             print(f"[SKIP] {key}: {e}")
             continue
 
-        print(f"\n[{key}] Rendering...")
+        print(f"\n[{key}] Rendering with {args.renderer}...")
         kern = ekern_to_kern(raw)
 
         # Dump kern for inspection
         debug_path = COMPARISON_DIR / f"{name}_debug.kern"
         debug_path.write_text(kern)
 
-        out_path = COMPARISON_DIR / f"{name}_rendered.png"
+        suffix = "_ly" if args.renderer == "lilypond" else ""
+        out_path = COMPARISON_DIR / f"{name}_rendered{suffix}.png"
         try:
-            render_kern_to_png(kern, out_path, page_width=args.page_width)
+            if args.renderer == "lilypond":
+                render_kern_to_png_lilypond(kern, out_path)
+            else:
+                render_kern_to_png(kern, out_path, page_width=args.page_width)
         except Exception as e:
             print(f"  ERROR: {e}")
             print(f"  Kern dumped to: {debug_path}")
