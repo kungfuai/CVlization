@@ -4,3 +4,4 @@ __pycache__/
 omr_results.json
 omr_results.jsonl
 .env
+*_rich_kern.json

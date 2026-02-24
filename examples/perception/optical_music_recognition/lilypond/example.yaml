@@ -1,0 +1,41 @@
+name: lilypond
+description: >
+  Render sheet music notation (kern, MusicXML, or native LilyPond) to
+  engraved score images (PNG/PDF/SVG) using LilyPond's Emmentaler font —
+  the same style as 19th-century printed scores. Converts kern via music21.
+capability: perception/optical_music_recognition
+modalities:
+  - text
+stability: experimental
+resources:
+  gpu: 0
+  disk_gb: 1
+image: cvlization/lilypond:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Render a kern/MusicXML/LilyPond file to PNG (default) or PDF/SVG
+  test:
+    script: test.sh
+    description: Smoke test — render embedded sample and verify PNG output
+tags:
+  - engraving
+  - sheet-music
+  - rendering
+  - lilypond
+  - music21
+  - kern
+  - musicxml
+  - omr
+tasks:
+  - score_rendering
+  - optical_music_recognition
+frameworks:
+  - lilypond
+  - music21
+model:
+  name: LilyPond 2.22 (Emmentaler font)
+  source: https://lilypond.org

@@ -1,3 +1,10 @@
 report.html
 __pycache__/
 *.pyc
+# Rendered outputs and source images (large binary files)
+*_rendered*.png
+*_debug.kern
+*.jpg
+# Rich kern re-runs (generated, not source)
+gemini_rich_kern.json
+gemini3_rich_kern.json
