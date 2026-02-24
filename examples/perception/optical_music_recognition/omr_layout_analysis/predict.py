@@ -36,8 +36,8 @@ MODEL_URL   = ("https://github.com/v-dvorak/omr-layout-analysis/releases/"
 MODEL_CACHE = CACHE_DIR / "ola-layout-analysis-2.0.pt"
 
 SAMPLE_IMAGE_URL = ("https://huggingface.co/datasets/zzsi/cvl/resolve/main/"
-                    "qwen3_omr/vintage_score_1884.jpg")
-SAMPLE_IMAGE_CACHE = Path("/root/.cache/huggingface/cvl_data/qwen3_omr/vintage_score_1884.jpg")
+                    "omr_layout_analysis/sample_page.jpg")
+SAMPLE_IMAGE_CACHE = Path("/root/.cache/huggingface/cvl_data/omr_layout_analysis/sample_page.jpg")
 
 CLASSES = ["system_measures", "stave_measures", "staves", "systems", "grand_staff"]
 
@@ -65,8 +65,8 @@ def ensure_sample_image() -> Path:
     hf_hub_download(
         repo_id="zzsi/cvl",
         repo_type="dataset",
-        filename="qwen3_omr/vintage_score_1884.jpg",
-        local_dir=SAMPLE_IMAGE_CACHE.parent.parent,
+        filename="omr_layout_analysis/sample_page.jpg",
+        local_dir=CACHE_DIR.parent,
     )
     return SAMPLE_IMAGE_CACHE
 
