@@ -76,8 +76,14 @@ def inspect(extract_dir: Path) -> None:
             data = json.load(f)
         for key in data:
             val = data[key]
-            sample = val[:2] if isinstance(val, list) else val
-            print(f"  {key}: ({len(val)} items) {sample}")
+            if isinstance(val, list):
+                sample = val[:2]
+                print(f"  {key}: (list, {len(val)} items) {sample}")
+            elif isinstance(val, dict):
+                first_keys = list(val.keys())[:2]
+                print(f"  {key}: (dict, {len(val)} items) first keys={first_keys}")
+            else:
+                print(f"  {key}: {val}")
 
 
 # ---------------------------------------------------------------------------
@@ -85,9 +91,14 @@ def inspect(extract_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def find_images_dir(extract_dir: Path) -> Path:
-    """Locate the images directory inside the extracted archive."""
-    for p in extract_dir.rglob("*.png"):
-        return p.parent
+    """Locate the 'images' directory inside the extracted archive."""
+    candidate = extract_dir / "ds2_dense" / "images"
+    if candidate.is_dir():
+        return candidate
+    # Fallback: first directory containing PNGs without '_seg' in name
+    for p in sorted(extract_dir.rglob("*.png")):
+        if "_seg" not in p.name:
+            return p.parent
     raise FileNotFoundError(f"Could not locate images directory in {extract_dir}")
 
 
@@ -120,10 +131,23 @@ def font_from_filename(file_name: str) -> str:
     return m.group(1) if m else "unknown"
 
 
+def a_bbox_to_coco(a_bbox: list) -> list:
+    """Convert DeepScoresV2 a_bbox [x1, y1, x2, y2] to COCO [x, y, w, h]."""
+    x1, y1, x2, y2 = a_bbox
+    return [x1, y1, x2 - x1, y2 - y1]
+
+
 def build_split(coco_json: Path, images_dir: Path, split: str,
                 annotation_set: str = "deepscores"):
     """
     Convert one DeepScoresV2 JSON into a list of row dicts.
+
+    DeepScoresV2 format differences from standard COCO:
+    - images use 'filename' (not 'file_name') and have 'ann_ids' list
+    - annotations is a dict keyed by string ann_id
+    - each annotation has 'a_bbox' [x1,y1,x2,y2] instead of 'bbox' [x,y,w,h]
+    - 'cat_id' is a list of string IDs (one per annotation set)
+    - 'img_id' is a string
 
     annotation_set: "deepscores" (default) or "muscima++"
     Each image gets one row; objects are filtered to the chosen annotation set.
@@ -135,43 +159,57 @@ def build_split(coco_json: Path, images_dir: Path, split: str,
 
     # Categories: dict with string keys in DeepScoresV2
     all_cats = parse_categories(coco["categories"])
-    # Keep only the requested annotation set
-    cats = {cid: info for cid, info in all_cats.items()
-            if info.get("annotation_set", "deepscores") == annotation_set}
-    cat_id_to_name = {cid: info["name"] for cid, info in cats.items()}
+    # Keep only the requested annotation set; build str_id → name map
+    cat_id_to_name: dict[str, str] = {
+        str(cid): info["name"]
+        for cid, info in all_cats.items()
+        if info.get("annotation_set", "deepscores") == annotation_set
+    }
 
-    anns_by_image: dict[int, list] = defaultdict(list)
-    for ann in coco["annotations"]:
-        if ann["category_id"] in cat_id_to_name:
-            anns_by_image[ann["image_id"]].append(ann)
+    # annotations is a dict: {str_ann_id: {...}}
+    all_anns: dict = coco["annotations"]
 
     rows = []
     missing = 0
     for img_info in tqdm(coco["images"], desc=f"  {split}"):
-        img_path = images_dir / img_info["file_name"]
+        filename = img_info.get("filename") or img_info.get("file_name", "")
+        img_path = images_dir / filename
         if not img_path.exists():
-            img_path = images_dir / Path(img_info["file_name"]).name
+            img_path = images_dir / Path(filename).name
         if not img_path.exists():
             missing += 1
             continue
 
-        anns = anns_by_image[img_info["id"]]
+        # Collect annotations for this image
+        ann_ids = img_info.get("ann_ids", [])
+        objs = {"id": [], "bbox": [], "category_id": [], "category": [], "area": []}
+        for ann_id in ann_ids:
+            ann = all_anns.get(str(ann_id))
+            if ann is None:
+                continue
+            # cat_id is a list; pick the one matching our annotation_set
+            matched_cat_id = None
+            for cid in ann.get("cat_id", []):
+                if str(cid) in cat_id_to_name:
+                    matched_cat_id = str(cid)
+                    break
+            if matched_cat_id is None:
+                continue
+            objs["id"].append(int(ann_id))
+            objs["bbox"].append(a_bbox_to_coco(ann["a_bbox"]))  # [x, y, w, h]
+            objs["category_id"].append(int(matched_cat_id))
+            objs["category"].append(cat_id_to_name[matched_cat_id])
+            objs["area"].append(float(ann.get("area", 0)))
+
         rows.append({
             "image_id":       img_info["id"],
-            "file_name":      img_info["file_name"],
-            "font":           font_from_filename(img_info["file_name"]),
+            "file_name":      filename,
+            "font":           font_from_filename(filename),
             "image":          str(img_path),
             "width":          img_info["width"],
             "height":         img_info["height"],
             "annotation_set": annotation_set,
-            "objects": {
-                "id":          [a["id"] for a in anns],
-                "bbox":        [a["bbox"] for a in anns],  # [x, y, w, h] COCO
-                "category_id": [a["category_id"] for a in anns],
-                "category":    [cat_id_to_name[a["category_id"]] for a in anns],
-                "area":        [float(a.get("area", 0)) for a in anns],
-                "iscrowd":     [int(a.get("iscrowd", 0)) for a in anns],
-            },
+            "objects":        objs,
         })
 
     if missing:
