@@ -180,13 +180,17 @@ def make_message(prompt_text: str, b64: str, mime_type: str, model: str = "") ->
 # LiteLLM call
 # ---------------------------------------------------------------------------
 
-def run_prompt(model: str, message: dict, max_tokens: int = 1024) -> str:
-    response = litellm.completion(
-        model=model,
-        messages=[message],
-        max_tokens=max_tokens,
-    )
-    return (response.choices[0].message.content or "").strip()
+def run_prompt(model: str, message: dict, max_tokens: int = 1024,
+               thinking_budget: int = 0) -> str:
+    kwargs = dict(model=model, messages=[message], max_tokens=max_tokens)
+    if thinking_budget > 0 and "anthropic" in model:
+        kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
+    response = litellm.completion(**kwargs)
+    # With thinking enabled, content may be a list of blocks; extract text blocks
+    content = response.choices[0].message.content
+    if isinstance(content, list):
+        content = "".join(b.get("text", "") for b in content if b.get("type") == "text")
+    return (content or "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +268,7 @@ def run_single(args) -> None:
         print(f"[{i+1}/{len(selected)}] {prompt['label']} ...")
         msg = make_message(prompt["text"], b64, mime, args.model)
         try:
-            response = run_prompt(args.model, msg, args.max_tokens)
+            response = run_prompt(args.model, msg, args.max_tokens, args.thinking_budget)
         except Exception as e:
             response = f"ERROR: {e}"
         results[prompt["id"]] = {
@@ -339,7 +343,7 @@ def run_batch(args) -> None:
             for prompt in selected:
                 msg = make_message(prompt["text"], b64, mime, args.model)
                 try:
-                    response = run_prompt(args.model, msg, args.max_tokens)
+                    response = run_prompt(args.model, msg, args.max_tokens, args.thinking_budget)
                 except Exception as e:
                     response = f"ERROR: {e}"
                 results[prompt["id"]] = {"label": prompt["label"], "response": response}
@@ -388,6 +392,8 @@ API keys (set in host environment, forwarded by predict.sh):
         help="Max tokens per response (default: 1024)")
     parser.add_argument("--prompts", nargs="+", choices=PROMPT_IDS, default=None,
         help="Run only specific prompts (default: all 5)")
+    parser.add_argument("--thinking-budget", type=int, default=0,
+        help="Claude extended thinking token budget (0 = disabled, e.g. 5000)")
     parser.add_argument("--resume", action="store_true",
         help="Batch mode: skip files already in output JSONL")
     return parser.parse_args()
