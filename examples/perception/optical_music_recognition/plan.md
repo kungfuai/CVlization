@@ -351,14 +351,57 @@ All examples are under examples/perception/optical_music_recognition/:
 | qwen3_vl/ | B2a (VLM zero-shot, local) | Done | Qwen3-VL-8B 4-bit; 5 structured prompts (key sig, time sig, era, dynamics, ekern) |
 | vlm_omr/ | B2a (VLM zero-shot, API) | Done | LiteLLM wrapper; Gemini 2.5 Flash, Gemini 3.1 Pro, GPT-4o, GPT-5.2, GPT-5.2 Pro, Claude Sonnet 4.6, Claude Opus 4.6; omr_comparison/ subfolder with HTML report |
 | omr_layout_analysis/ | B4 E1 (zone detection) | Done | omr-layout-analysis YOLOv8 (OLA v2.0); 5 classes; 5 grand staff systems detected on vintage waltz in ~4s |
+| lilypond/ | Synthetic data (renderer) | Done | kern/MusicXML/LilyPond → PNG/PDF/SVG via LilyPond Emmentaler font; injects metadata (title, composer, section labels, tempo) dropped by music21; foundation for synthetic GT pipeline |
 
 Key findings from the multi-model comparison on vintage_score_1884.jpg (Biddle's Piano Waltz, 1884):
-* Gemini 3.1 Pro: best ekern output — clean syntax, correct waltz bass-chord-chord texture, 36 measures; key wrong (G major)
-* Claude Opus 4.6: best musical awareness — identifies INTRO/WALTZ sections, ornaments, key change; partial transcription (16 measures), key wrong (C major)
-* SMT (full-page): most structural detail (repeat signs, beaming); invalid mixed-duration chords in opening; noisy
+
+Rendering pipeline: ekern → LilyPond (cvlization/lilypond:latest) → PNG. Uses music21-native kern (*> section labels, !!!OMD: tempo, !!!OTL:/!!!COM: metadata) injected after music21 export. LilyPond Emmentaler font gives better vintage look than verovio Leipzig. patch_ly() removes lilypond-book-preamble.ly include (was causing title-only first page) and sets global staff size 16 for compact single-page layout.
+
+Visual ranking (LilyPond renders): Gemini 3.1 Pro > Claude Opus 4.6 (w/ thinking) > SMT
+
+* Gemini 3.1 Pro: best overall — correct key (G major, 1 sharp), ~41 measures, INTRO./WALTZ. section labels, stable 3/4; intro pitches simplified (block chords vs original ornamental figures)
+* Claude Opus 4.6 (5k thinking budget): wrong key (C major → scattered accidentals), 38 measures with thinking vs 14 without; thinking budget doubled coverage but didn't fix key error; section labels correct
+* SMT (full-page): wrong key (B♭ major), note collisions, missing staves in some systems — degrades badly on full-page vintage scan; works well on clean system-level crops (CER 4.05%)
 * Audiveris: essentially fails — sparse notes, multiple spurious key changes within one page, beat counts wrong
 * GPT-5.2 Pro: declines to transcribe, citing resolution; useful signal that the scan is genuinely challenging
-* All models disagree on key signature — C, G, B♭ major all proposed; music expert suggested C major → F major
+* All models get intro ornamental figures wrong — chromatic runs and grace notes are beyond what any current model transcribes correctly from a vintage scan
+
+Critical implication: even the best frontier model (Gemini 3.1 Pro) produces a musically plausible but inaccurate transcription of a vintage scan. This directly motivates the synthetic+augment approach as the primary path forward (see Stage 2 below and Immediate next step).
+
+Immediate next focus: synthetic GT + augmentation pipeline
+
+Given that all frontier models are significantly inaccurate on vintage scans even after prompt engineering, the fastest path to a useful evaluation benchmark is:
+
+1. Generate clean rendered score images with exact ground truth
+   * Source: existing kern files (KernScores corpus ~10k piano pieces, GrandStaff dataset)
+   * Renderer: cvlization/lilypond:latest (already built and verified)
+   * GT: the kern file itself — perfect, free, no human annotation
+   * Output: clean PNG + kern pairs
+
+2. Apply augmentation to simulate vintage scan characteristics
+   * New CVlization example: score_augmentation/ (or similar)
+   * Key transforms (ranked by impact on vintage appearance):
+       - Morphological dilation/erosion (ink spread / fading) — OpenCV
+       - Salt-and-pepper + Gaussian noise (dust, film grain) — albumentations
+       - Staff line degradation (random gaps/thickness variation) — custom
+       - Rotation ±1–5° + slight perspective skew — albumentations
+       - Paper texture overlay (aged yellow/brown base, foxing spots) — PIL composite
+       - Bleed-through simulation (faint ghost from reverse side) — PIL opacity blend
+       - JPEG compression artifacts (low-quality scan simulation)
+   * Libraries: albumentations, OpenCV (cv2), PIL/Pillow
+   * Petaluma or Bravura font variant for style diversity (vs default Emmentaler)
+
+3. Evaluate all models against augmented GT
+   * Fixed benchmark: same kern files rendered clean + augmented → CER/SER per model
+   * Measures degradation sensitivity: how much does each augmentation hurt each model?
+   * Directly feeds Experiment group C (C1: augmentations only baseline)
+
+Why this is the right next step:
+* LilyPond renderer is ready — Step 1 is already done
+* Augmentation is straightforward to implement (well-understood transforms, good libraries)
+* Gives rigorous quantitative evaluation vs current qualitative visual comparison
+* Directly produces training data for SMT fine-tuning on vintage domain
+* Convergence: same augmented images serve as training data (Stage 2) and evaluation benchmark
 
 Experiments to run (a concrete matrix)
 
