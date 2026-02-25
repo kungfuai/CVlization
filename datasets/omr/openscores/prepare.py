@@ -9,6 +9,7 @@ Corpora
 -------
   lieder    OpenScore Lieder corpus — 1,460 voice + piano songs (.mxl)
   quartets  OpenScore String Quartets — 122 quartets (.mscx)
+  orchestra OpenScore Orchestra / Hauptstimme — 94 orchestral movements (.mxl)
 
 The script runs in two modes:
 
@@ -24,9 +25,10 @@ The script runs in two modes:
 Usage
 -----
     python prepare.py --inspect
-    python prepare.py --corpus lieder   --push-to-hub zzsi/openscore
-    python prepare.py --corpus quartets --push-to-hub zzsi/openscore
-    python prepare.py --corpus all      --push-to-hub zzsi/openscore
+    python prepare.py --corpus lieder    --push-to-hub zzsi/openscore
+    python prepare.py --corpus quartets  --push-to-hub zzsi/openscore
+    python prepare.py --corpus orchestra --push-to-hub zzsi/openscore
+    python prepare.py --corpus all       --push-to-hub zzsi/openscore
 """
 
 import argparse
@@ -51,17 +53,33 @@ CORPORA = {
         "url":         "https://github.com/OpenScore/Lieder/archive/refs/heads/main.zip",
         "zip_subdir":  "Lieder-main",
         "score_glob":  "scores/**/*.mxl",
+        "scores_root": "scores",   # relative to corpus_root
         "fmt":         "mxl",
         "description": "OpenScore Lieder corpus — voice + piano",
         "instruments": ["voice", "piano"],
+        "exclude":     [],
     },
     "quartets": {
         "url":         "https://github.com/OpenScore/StringQuartets/archive/refs/heads/main.zip",
         "zip_subdir":  "StringQuartets-main",
         "score_glob":  "scores/**/*.mscx",
+        "scores_root": "scores",
         "fmt":         "mscx",
         "description": "OpenScore String Quartets — violin I/II + viola + cello",
         "instruments": ["violin", "violin", "viola", "cello"],
+        "exclude":     [],
+    },
+    "orchestra": {
+        # MarkGotham/Hauptstimme — same team as OpenScore, CC0
+        "url":         "https://github.com/MarkGotham/Hauptstimme/archive/refs/heads/main.zip",
+        "zip_subdir":  "Hauptstimme-main",
+        "score_glob":  "data/**/*.mxl",
+        "scores_root": "data",
+        "fmt":         "mxl",
+        "description": "OpenScore Orchestra (Hauptstimme) — 94 orchestral movements",
+        "instruments": ["orchestra"],
+        # Each movement also ships a *_melody.mxl extract — skip those
+        "exclude":     ["_melody.mxl"],
     },
 }
 
@@ -100,18 +118,22 @@ def download_zip(url: str, dest_dir: Path, zip_subdir: str) -> Path:
     return extracted
 
 
-def parse_path_metadata(score_path: Path, corpus_root: Path) -> dict:
+def parse_path_metadata(score_path: Path, corpus_root: Path,
+                        scores_root: str = "scores") -> dict:
     """
     Extract composer / opus / title / score_id from the relative path.
 
     Lieder layout:    scores/{Composer}/{Opus}/{Title}/{id}.mxl
     Quartets layout:  scores/{Composer}/{Title}/{id}.mscx
+    Orchestra layout: data/{Composer}/{Work}/{movement_num}/{id}.mxl
+                      → title = "{Work} / {movement_num}"
     """
-    rel = score_path.relative_to(corpus_root / "scores")
-    parts = rel.parts           # ('Composer', 'Op', 'Title', 'id.ext')  or 3-deep
+    rel = score_path.relative_to(corpus_root / scores_root)
+    parts = rel.parts   # depth varies by corpus
     score_id = score_path.stem
     composer = parts[0].replace("_", " ") if len(parts) >= 1 else ""
     if len(parts) >= 4:
+        # Lieder: Op / Title / id  OR  Orchestra: Work / mvt / id
         opus  = parts[1].replace("_", " ")
         title = parts[2].replace("_", " ")
     elif len(parts) >= 3:
@@ -127,7 +149,8 @@ def parse_path_metadata(score_path: Path, corpus_root: Path) -> dict:
 # Batch-render mode  (runs INSIDE the cvlization/lilypond Docker container)
 # ---------------------------------------------------------------------------
 
-def batch_render(raw_dir: Path, render_dir: Path, score_glob: str) -> None:
+def batch_render(raw_dir: Path, render_dir: Path, score_glob: str,
+                 exclude: list[str] | None = None) -> None:
     """
     Render every score file found under raw_dir → render_dir/<score_id>/*.png.
     This function is called when --batch-render is active (inside Docker).
@@ -136,8 +159,12 @@ def batch_render(raw_dir: Path, render_dir: Path, score_glob: str) -> None:
     sys.path.insert(0, "/workspace")
     from predict import run as lilypond_run   # noqa: PLC0415
 
-    score_files = sorted(raw_dir.glob(score_glob))
-    print(f"  batch-render: {len(score_files)} files under {raw_dir}", flush=True)
+    exclude = exclude or []
+    all_files = sorted(raw_dir.glob(score_glob))
+    score_files = [f for f in all_files
+                   if not any(pat in f.name for pat in exclude)]
+    print(f"  batch-render: {len(score_files)} files under {raw_dir}"
+          f" ({len(all_files) - len(score_files)} excluded)", flush=True)
     ok = err = skipped = 0
 
     for sf in tqdm(score_files, desc="  rendering"):
@@ -169,11 +196,11 @@ def batch_render(raw_dir: Path, render_dir: Path, score_glob: str) -> None:
 # ---------------------------------------------------------------------------
 
 def render_corpus_via_docker(corpus_root: Path, render_dir: Path,
-                             score_glob: str, corpus_name: str) -> None:
+                             score_glob: str, corpus_name: str,
+                             exclude: list[str] | None = None) -> None:
     """Mount corpus_root + render_dir into Docker and run batch_render."""
     render_dir.mkdir(parents=True, exist_ok=True)
 
-    # Pass this script to Docker as the batch-render entrypoint
     script_path = Path(__file__).resolve()
 
     cmd = [
@@ -191,6 +218,8 @@ def render_corpus_via_docker(corpus_root: Path, render_dir: Path,
         "--render-dir", "/rendered",
         "--score-glob", score_glob,
     ]
+    for pat in (exclude or []):
+        cmd += ["--exclude", pat]
 
     print(f"  Running Docker batch-render for {corpus_name} …")
     result = subprocess.run(cmd, text=True)
@@ -205,7 +234,11 @@ def render_corpus_via_docker(corpus_root: Path, render_dir: Path,
 def collect_rows(corpus_name: str, corpus_root: Path, render_dir: Path,
                  score_glob: str, meta: dict) -> list[dict]:
     """Walk rendered PNGs and build one row per page."""
-    score_files = sorted(corpus_root.glob(score_glob))
+    exclude      = meta.get("exclude", [])
+    scores_root  = meta.get("scores_root", "scores")
+    all_files    = sorted(corpus_root.glob(score_glob))
+    score_files  = [f for f in all_files
+                    if not any(pat in f.name for pat in exclude)]
     rows = []
     missing_renders = 0
 
@@ -217,7 +250,7 @@ def collect_rows(corpus_name: str, corpus_root: Path, render_dir: Path,
             missing_renders += 1
             continue
 
-        path_meta = parse_path_metadata(sf, corpus_root)
+        path_meta = parse_path_metadata(sf, corpus_root, scores_root)
 
         for page_idx, png in enumerate(pages):
             rows.append({
@@ -310,6 +343,7 @@ corpora via [LilyPond](https://lilypond.org), paired with source MusicXML.
 |--------|--------|---------------|--------|
 | Lieder | ~1,460 | 3 (voice + piano) | [OpenScore/Lieder](https://github.com/OpenScore/Lieder) |
 | Quartets | ~122 | 4 (violin I/II + viola + cello) | [OpenScore/StringQuartets](https://github.com/OpenScore/StringQuartets) |
+| Orchestra | ~94 movements | 10–20+ (full orchestra) | [MarkGotham/Hauptstimme](https://github.com/MarkGotham/Hauptstimme) |
 
 ## Format
 
@@ -345,6 +379,7 @@ LilyPond renders: same license as source scores.
 
 - OpenScore Lieder corpus: https://github.com/OpenScore/Lieder
 - OpenScore String Quartets: https://github.com/OpenScore/StringQuartets
+- OpenScore Orchestra (Hauptstimme): https://github.com/MarkGotham/Hauptstimme
 """
 
 
@@ -358,7 +393,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--corpus", default="all",
-        choices=["lieder", "quartets", "all"],
+        choices=["lieder", "quartets", "orchestra", "all"],
         help="Which corpus to process (default: all)")
     parser.add_argument("--inspect", action="store_true",
         help="Download only, print structure, then exit")
@@ -375,6 +410,8 @@ def main():
     parser.add_argument("--raw-dir",    default=None, help=argparse.SUPPRESS)
     parser.add_argument("--render-dir", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--score-glob", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--exclude", action="append", default=[],
+        help=argparse.SUPPRESS)
 
     args = parser.parse_args()
     random.seed(args.seed)
@@ -387,6 +424,7 @@ def main():
             raw_dir    = Path(args.raw_dir),
             render_dir = Path(args.render_dir),
             score_glob = args.score_glob,
+            exclude    = args.exclude,
         )
         return
 
@@ -409,11 +447,16 @@ def main():
         corpus_root = download_zip(meta["url"], raw_dir, meta["zip_subdir"])
 
         if args.inspect:
-            score_files = sorted(corpus_root.glob(meta["score_glob"]))
-            print(f"  Score files: {len(score_files)}")
+            exclude     = meta.get("exclude", [])
+            scores_root = meta.get("scores_root", "scores")
+            all_files   = sorted(corpus_root.glob(meta["score_glob"]))
+            score_files = [f for f in all_files
+                           if not any(pat in f.name for pat in exclude)]
+            print(f"  Score files: {len(score_files)}"
+                  f" ({len(all_files) - len(score_files)} excluded)")
             for sf in score_files[:5]:
-                pm = parse_path_metadata(sf, corpus_root)
-                print(f"    {pm['composer']} / {pm['title']} ({pm['score_id']})")
+                pm = parse_path_metadata(sf, corpus_root, scores_root)
+                print(f"    {pm['composer']} / {pm['opus']} / {pm['title']} ({pm['score_id']})")
             continue
 
         # 2. Render via LilyPond Docker
@@ -423,6 +466,7 @@ def main():
             render_dir  = render_dir,
             score_glob  = meta["score_glob"],
             corpus_name = corpus_name,
+            exclude     = meta.get("exclude", []),
         )
 
         # 3. Collect rows
