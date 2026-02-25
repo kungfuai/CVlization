@@ -62,9 +62,11 @@ CORPORA = {
     "quartets": {
         "url":         "https://github.com/OpenScore/StringQuartets/archive/refs/heads/main.zip",
         "zip_subdir":  "StringQuartets-main",
-        "score_glob":  "scores/**/*.mscx",
+        # .mscx files are converted to .mxl before rendering (requires MuseScore 3.6.x)
+        "score_glob":  "scores/**/*.mxl",
+        "mscx_glob":   "scores/**/*.mscx",   # source format before conversion
         "scores_root": "scores",
-        "fmt":         "mscx",
+        "fmt":         "mxl",
         "description": "OpenScore String Quartets — violin I/II + viola + cello",
         "instruments": ["violin", "violin", "viola", "cello"],
         "exclude":     [],
@@ -88,9 +90,30 @@ REPO_ROOT   = Path(__file__).resolve().parent.parent.parent.parent
 LILYPOND_DIR = (REPO_ROOT / "examples" / "perception" /
                 "optical_music_recognition" / "lilypond")
 
+# MuseScore 3.6.2 AppImage — downloaded on demand for .mscx → .mxl conversion
+MSCORE_APPIMAGE_URL = (
+    "https://github.com/musescore/MuseScore/releases/download/v3.6.2/"
+    "MuseScore-3.6.2.548021370-x86_64.AppImage"
+)
+MSCORE_DIR = CACHE_DIR / "musescore"
+
+
 # ---------------------------------------------------------------------------
 # Download helpers
 # ---------------------------------------------------------------------------
+
+def download(url: str, dest: Path) -> None:
+    """Download url to dest with a progress bar."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    print(f"  Downloading {url} …")
+    r = requests.get(url, stream=True)
+    r.raise_for_status()
+    total = int(r.headers.get("content-length", 0))
+    with open(dest, "wb") as f, tqdm(total=total, unit="B", unit_scale=True) as bar:
+        for chunk in r.iter_content(chunk_size=65536):
+            f.write(chunk)
+            bar.update(len(chunk))
+
 
 def download_zip(url: str, dest_dir: Path, zip_subdir: str) -> Path:
     """Download a GitHub zip archive and extract it; return extracted root."""
@@ -116,6 +139,74 @@ def download_zip(url: str, dest_dir: Path, zip_subdir: str) -> Path:
         zf.extractall(dest_dir)
 
     return extracted
+
+
+# ---------------------------------------------------------------------------
+# MuseScore .mscx → .mxl conversion
+# ---------------------------------------------------------------------------
+
+def find_or_install_mscore() -> Path:
+    """
+    Return path to a working mscore binary (≥3.6).
+    Preference order:
+      1. Already-extracted AppImage under MSCORE_DIR/squashfs-root/
+      2. System binary if version ≥ 3.6
+      3. Download + extract AppImage
+    """
+    extracted = MSCORE_DIR / "squashfs-root" / "usr" / "bin" / "mscore-portable"
+    if extracted.exists():
+        return extracted
+
+    # Check system binary version
+    for candidate in ("mscore3", "mscore", "musescore3"):
+        path = subprocess.run(["which", candidate], capture_output=True, text=True).stdout.strip()
+        if path:
+            ver = subprocess.run([path, "--version"], capture_output=True, text=True).stdout
+            # Accept if version string contains 3.6 or 4.x
+            if any(f".{v}." in ver or ver.startswith(f"MuseScore {v}") for v in ("3.6", "4.")):
+                return Path(path)
+
+    # Download and extract AppImage
+    MSCORE_DIR.mkdir(parents=True, exist_ok=True)
+    appimage = MSCORE_DIR / "mscore.AppImage"
+    if not appimage.exists():
+        download(MSCORE_APPIMAGE_URL, appimage)
+    appimage.chmod(0o755)
+    print("  Extracting MuseScore AppImage …")
+    subprocess.run([str(appimage), "--appimage-extract"],
+                   cwd=str(MSCORE_DIR), check=True, capture_output=True)
+    return extracted
+
+
+def convert_mscx_to_mxl(corpus_root: Path, mscx_glob: str) -> int:
+    """
+    Convert all .mscx files to sibling .mxl files in-place.
+    Skips files whose .mxl already exists.
+    Returns number of files converted.
+    """
+    mscx_files = sorted(corpus_root.glob(mscx_glob))
+    to_convert = [f for f in mscx_files if not f.with_suffix(".mxl").exists()]
+    if not to_convert:
+        print(f"  All {len(mscx_files)} .mscx already converted to .mxl")
+        return 0
+
+    print(f"  Converting {len(to_convert)} .mscx → .mxl via MuseScore …")
+    mscore = find_or_install_mscore()
+
+    converted = 0
+    for mscx in tqdm(to_convert, desc="  mscx→mxl"):
+        mxl = mscx.with_suffix(".mxl")
+        result = subprocess.run(
+            ["xvfb-run", "-a", str(mscore), "--export-to", str(mxl), str(mscx)],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0 and mxl.exists():
+            converted += 1
+        else:
+            print(f"    WARN: failed to convert {mscx.name}: {result.stderr[-200:]}")
+
+    print(f"  Converted {converted}/{len(to_convert)}")
+    return converted
 
 
 def parse_path_metadata(score_path: Path, corpus_root: Path,
@@ -459,7 +550,11 @@ def main():
                 print(f"    {pm['composer']} / {pm['opus']} / {pm['title']} ({pm['score_id']})")
             continue
 
-        # 2. Render via LilyPond Docker
+        # 2. Convert .mscx → .mxl if needed (quartets corpus)
+        if meta.get("mscx_glob"):
+            convert_mscx_to_mxl(corpus_root, meta["mscx_glob"])
+
+        # 3. Render via LilyPond Docker
         render_dir = CACHE_DIR / "rendered" / corpus_name
         render_corpus_via_docker(
             corpus_root = corpus_root,
