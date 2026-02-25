@@ -1,0 +1,11 @@
+name: ocr_reading
+description: OCR text reading benchmark on SROIE receipts
+dataset: arvindrajan92/sroie_document_understanding
+task: lines_reading
+metrics:
+  - CER
+  - WER
+  - ANLS
+  - bbox_f1
+models:
+  - qwen25_vl_7b
