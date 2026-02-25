@@ -243,7 +243,12 @@ def patch_ly(ly_path: Path, hide_empty_staves: bool = False) -> None:
             '\n  \\context {\n    \\Staff\n    \\RemoveEmptyStaves\n  }'
         )
         if r'\layout' in text:
-            text = re.sub(r'(\\layout\s*\{)', r'\1' + context_block, text)
+            # Use lambda to avoid re.sub interpreting backslashes in replacement
+            text = re.sub(
+                r'\\layout\s*\{',
+                lambda m: m.group(0) + context_block,
+                text,
+            )
         else:
             text += (
                 '\n\\layout {\n  \\context {\n'
