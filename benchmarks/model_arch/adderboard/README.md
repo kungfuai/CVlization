@@ -2,7 +2,20 @@
 
 Minimal benchmark for evaluating autoregressive transformer submissions on 10-digit integer addition.
 
-This benchmark is adapted from the public AdderBoard challenge and packaged for CVlization benchmarking workflows.
+This benchmark is directly copied/adapted from Dimitris Papailiopoulos's AdderBoard work and packaged in this repository for CVlization benchmarking workflows. The core task framing, qualification setup, and verifier interface come from that original work.
+
+## References
+
+- Original challenge/repo: AdderBoard by Dimitris Papailiopoulos  
+  https://github.com/anadim/AdderBoard
+- Included solution source (N8python gist):  
+  https://gist.github.com/N8python/02e41d156ec615328cde2e1e5c0e9d53
+- Included solution source (xangma gist):  
+  https://gist.github.com/xangma/c538a7a9d415f16e61f7bb26ae5cf6b0
+
+Local files preserving these sources:
+- [submissions/n8python_02e41d15.py](/home/zsi/projects/worktrees/CVlization/model-arch/benchmarks/model_arch/adderboard/submissions/n8python_02e41d15.py)
+- [submissions/xangma_c538a7a.py](/home/zsi/projects/worktrees/CVlization/model-arch/benchmarks/model_arch/adderboard/submissions/xangma_c538a7a.py)
 
 ## Task
 
