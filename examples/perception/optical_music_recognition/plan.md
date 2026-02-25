@@ -179,7 +179,7 @@ For SFT:
     * Rendering pipeline (now implemented): MusicXML/kern → `cvlization/lilypond:latest` → PNG
         - Produces pixel-perfect (image, kern) pairs with no annotation cost
         - System-level crops preferred (closer to SMT training distribution, smaller VLM context)
-        - See `datasets/omr/deepscores_v2/` for pattern; equivalent `datasets/omr/openscores/` to build
+        - See `datasets/omr/deepscores_v2/` for pattern; equivalent `datasets/omr/openscore/` to build
     * Apply vintage augmentation on top — two approaches:
         A. Handcrafted transforms (fast baseline): paper texture, yellowing, foxing spots, ink fading, bleed-through, skew, scan noise via albumentations or custom PIL pipeline
         B. Style transfer augmentation (more authentic): use real vintage IMSLP scans as style references → transfer their look onto clean LilyPond renders. Same models as Bucket 4 Sub-task 2 (see below). More realistic than handcrafted transforms; converges with the user-facing rendering pipeline.
