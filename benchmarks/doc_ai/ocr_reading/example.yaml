@@ -1,0 +1,58 @@
+name: ocr_reading
+capability: benchmarks/doc_ai
+modalities:
+  - vision
+  - text
+datasets:
+  - arvindrajan92/sroie_document_understanding
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 5
+
+presets:
+  build:
+    script: adapters/qwen25_vl_7b.sh build
+    docker: false
+    description: Build the Docker image for Qwen2.5-VL-7B inference
+
+  run:
+    script: run_benchmark.sh
+    docker: false
+    description: Run full OCR benchmark on SROIE test set
+
+  download:
+    script: dataset_builder.py
+    docker: false
+    description: Download SROIE dataset and build TAR shards
+
+tags:
+  - benchmark
+  - ocr
+  - receipt
+  - document-ai
+  - vlm
+  - evaluation
+
+tasks:
+  - ocr
+  - text_reading
+  - document_understanding
+
+frameworks:
+  - pytorch
+  - vllm
+
+description: |
+  OCR text reading benchmark evaluating VLMs on SROIE receipt dataset.
+  Uses vllm-ocr-eval framework (vendored) to assess CER, WER, ANLS, and bbox metrics.
+
+  Quick start:
+    python dataset_builder.py --split test --output-dir data/shards/
+    ./adapters/qwen25_vl_7b.sh build
+    ./run_benchmark.sh --model qwen25_vl_7b
+
+  Primary model: Qwen2.5-VL-7B-Instruct via vLLM
+
+license: Apache-2.0
