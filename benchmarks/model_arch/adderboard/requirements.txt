@@ -1,0 +1,2 @@
+# Core benchmark harness has no strict third-party dependency.
+# Keep this file for consistent build tooling.
