@@ -1,7 +1,7 @@
 # vLLM Serve + Predict (auto-tuned)
 
 Dockerized vLLM preset with sensible defaults and optional auto-tuning based on your GPU. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
-- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.14.0, OpenAI SDK 2.12.0).
+- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.15.1, OpenAI SDK 2.12.0).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible server with heuristics for tensor-parallel size, max context, dtype, and GPU memory utilization (overridable).
 - `predict.sh`/`predict.py`: runs a quick test. Default mode is **chat** (loads the model inside the container with vLLM, no server needed). Supports VLMs via `--image` flag. `embed` and `rerank` modes use transformers locally (not vLLM) for encoder models.
 
@@ -42,6 +42,22 @@ VLLM_EXTRA_ARGS="--trust-remote-code --gpu-memory-utilization 0.96" \
 bash examples/generative/llm/vllm/serve.sh
 ```
 
+## Model-specific overrides
+
+Some models require non-default settings to fit in GPU memory:
+
+```bash
+# allenai/OLMo-2-1124-7B-Instruct-preview — needs lower context to avoid OOM on ≤24GB GPUs
+MODEL_ID=allenai/OLMo-2-1124-7B-Instruct-preview \
+VLLM_MAX_MODEL_LEN=1024 VLLM_GPU_MEMORY_UTILIZATION=0.88 \
+bash examples/generative/llm/vllm/predict.sh
+
+# 7B/8B models on ≤24GB GPUs — reduce context from auto-tuned default
+MODEL_ID=Qwen/Qwen3-8B \
+VLLM_MAX_MODEL_LEN=2048 VLLM_GPU_MEMORY_UTILIZATION=0.88 \
+bash examples/generative/llm/vllm/predict.sh
+```
+
 ## Client usage
 ```bash
 # Chat local (no server) - text-only LLM
@@ -73,7 +89,7 @@ python examples/generative/llm/vllm/predict.py --mode rerank \
 ```
 
 ## Supported VLMs
-Any VLM supported by vLLM 0.14.0 with stable transformers should work:
+Any VLM supported by vLLM 0.15.1 with stable transformers should work:
 - `Qwen/Qwen2-VL-2B-Instruct`, `Qwen/Qwen2-VL-7B-Instruct`
 - `llava-hf/llava-v1.6-mistral-7b-hf`
 - `microsoft/Phi-3-vision-128k-instruct`
@@ -85,17 +101,32 @@ Any VLM supported by vLLM 0.14.0 with stable transformers should work:
 - If you disable Docker build caching, set `VLLM_IMAGE` to reuse a prebuilt image.
 - CPU-only will work for small models but uses conservative defaults (`max_model_len=4096`, `dtype=float32`).
 
-## Quick verification notes (A10, Dec 2025)
-- ✅ `Qwen/Qwen2.5-1.5B-Instruct` (local vLLM, bf16, max_len=4096, gpu_mem_util=0.9, enforce_eager=1) works; output in `outputs/result.txt`.
-- ⚠️ Llama 3.x / Llama 4 / GPT-OSS-20B / RNJ-1 not run here: Llama3/4 are gated; GPT-OSS-20B likely exceeds single A10 without aggressive quant/multi-GPU; RNJ-1 repo unknown—needs exact HF id.
-- ✅ `allenai/Olmo-3-7B-Instruct` (bf16, max_len=2048, gpu_mem_util=0.88, enforce_eager=1) works.
-- ✅ `allenai/Olmo-3-7B-Think` works (bf16, 2048 context).
-- ✅ `allenai/OLMo-2-1124-7B-Instruct-preview` works (bf16, 1024 context, gpu_mem_util=0.85).
-- ✅ `microsoft/Phi-4-mini-instruct` works (bf16, 2048 context).
-- ✅ `Qwen/Qwen3-8B` works (bf16, 2048 context); uses ~15GB VRAM.
-- ✅ `LiquidAI/LFM2-1.2B` works.
-- ✅ `internlm/internlm3-8b-instruct` works (bf16, 2048 context); uses ~16GB VRAM.
-- ❌ `tencent/Hunyuan-A13B-Instruct-FP8` OOM on A10 during MoE init even with max_len=1024, gpu_mem_util=0.85, enforce_eager=1.
-- ✅ `google/gemma-3-1b-it` works (bf16, 2048 context).
-- ✅ Embedding/rerank paths (tested via dedicated modes): `google/embeddinggemma-300m` (embed mode, ~1024d), `sentence-transformers/all-roberta-large-v1` (embed mode, ~768d), `mixedbread-ai/mxbai-rerank-base-v2` (rerank mode; cross-encoder query vs document score).
-- Not attempted here (likely need bigger GPUs, special access, or different runtimes): `meta-llama/*Llama-3*/Llama-4*` (gated), `openai/gpt-oss-20b`, `nvidia/Llama-3.1-Nemotron-Nano-VL-8B-V1`, `microsoft/Phi-4-multimodal-instruct`, `mistralai/Ministral-3-3B-Instruct-2512`, `SmolVLM2-2.2B-Instruct`, `openai/whisper-small`, `openai/whisper-large-v3-turbo`, `mistralai/Voxtral-Mini-3B-2507`, `ibm-granite/granite-speech-3.3-8b`, `baidu/ERNIE-4.5-0.3B-PT`, `RNJ-1` (HF id unknown).
+## Verification (RTX PRO 6000 / Blackwell SM120, Feb 2026)
+vLLM 0.15.1, PyTorch 2.9.1+CUDA 12.8, 2× RTX PRO 6000 Blackwell Max-Q (95GB VRAM each), SM120. FLASH_ATTN backend auto-selected.
+- ✅ `allenai/Olmo-3-7B-Instruct` (bf16, max_len=2048, mem_util=0.88) ~13.6GB model
+- ✅ `allenai/Olmo-3-7B-Think` (bf16, max_len=2048, mem_util=0.88) ~13.6GB model
+- ✅ `microsoft/Phi-4-mini-instruct` (bf16, max_len=2048, mem_util=0.88)
+- ✅ `LiquidAI/LFM2-1.2B` (bf16, max_len=2048, mem_util=0.88)
+- ✅ `internlm/internlm3-8b-instruct` (bf16, max_len=2048, mem_util=0.88)
+- ✅ `Qwen/Qwen3-8B` (bf16, max_len=2048, mem_util=0.88) ~15.3GB model
+- ✅ `google/gemma-3-1b-it` (bf16, max_len=2048, mem_util=0.88) ~1.9GB model
+- ✅ `allenai/OLMo-2-1124-7B-Instruct-preview` (bf16, max_len=1024, mem_util=0.88) ~13.6GB model
+- ✅ embed: `google/embeddinggemma-300m` (~1024d), `sentence-transformers/all-roberta-large-v1` (~768d)
+- ✅ rerank: `mixedbread-ai/mxbai-rerank-base-v2` (cross-encoder)
+- ✅ `tencent/Hunyuan-A13B-Instruct-FP8` (bf16, max_len=4096, mem_util=0.88) — loads 75.4 GB, only ~0.82 GB KV cache remaining; use the lowest practical context length
+
+## Verification (A10, Dec 2025)
+vLLM 0.14.0, PyTorch 2.9.1+CUDA 12.8, A10 (24GB VRAM), SM86.
+- ✅ `Qwen/Qwen2.5-1.5B-Instruct` (bf16, max_len=4096, mem_util=0.9)
+- ✅ `allenai/Olmo-3-7B-Instruct` (bf16, max_len=2048, mem_util=0.88)
+- ✅ `allenai/Olmo-3-7B-Think` (bf16, max_len=2048)
+- ✅ `allenai/OLMo-2-1124-7B-Instruct-preview` (bf16, max_len=1024, mem_util=0.85)
+- ✅ `microsoft/Phi-4-mini-instruct` (bf16, max_len=2048)
+- ✅ `Qwen/Qwen3-8B` (bf16, max_len=2048) ~15GB VRAM
+- ✅ `LiquidAI/LFM2-1.2B`
+- ✅ `internlm/internlm3-8b-instruct` (bf16, max_len=2048) ~16GB VRAM
+- ✅ `google/gemma-3-1b-it` (bf16, max_len=2048)
+- ✅ embed: `google/embeddinggemma-300m`, `sentence-transformers/all-roberta-large-v1`
+- ✅ rerank: `mixedbread-ai/mxbai-rerank-base-v2`
+- ❌ `tencent/Hunyuan-A13B-Instruct-FP8` OOM on A10 (24GB); works on ≥80GB GPUs (see Blackwell section)
+- ⚠️ `meta-llama/*Llama-3*/Llama-4*` (gated), `openai/gpt-oss-20b` and others not attempted (need bigger GPUs or special access)

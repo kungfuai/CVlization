@@ -11,7 +11,7 @@ image: cvl-vllm
 presets:
   build:
     script: build.sh
-    description: Build vLLM container (torch 2.9.1 + vLLM 0.12.0)
+    description: Build vLLM container (torch 2.9.1 + vLLM 0.15.1)
   predict:
     script: predict.sh
     description: "Run a local vLLM inference (no server required). Default model: allenai/Olmo-3-7B-Instruct."
@@ -22,5 +22,6 @@ tags: [vllm, openai-api, llm, serving, text-generation]
 tasks: [text_generation, serving]
 
 verification:
-  last_verified: "2026-01-01"
-  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. vLLM 0.12.0 on Blackwell. Qwen2.5-0.5B verified with enforce_eager=1. FlashAttention v2 auto-detected for SM 120."
+  last_verified: "2026-02-25"
+  last_verification_note: "vLLM 0.15.1, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell Max-Q (SM120, 95GB VRAM). All 8 chat models + Hunyuan-A13B-Instruct-FP8 confirmed (9 total). Hunyuan loads 75.4 GB, leaves only 0.82 GB KV cache. OLMo-2-1124-7B-Instruct-preview needs max_len=1024. Embed/rerank modes confirmed. FLASH_ATTN backend auto-selected. torch.compile + CUDA graph capture confirmed."
+  status: VERIFIED
