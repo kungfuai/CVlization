@@ -18,7 +18,6 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO_ROOT="$(cd "$BENCHMARK_DIR/../../../.." && pwd)"
 
 # Defaults
 SHARDS_DIR=""
@@ -90,15 +89,14 @@ fi
 SHARDS_ABS="$(realpath "$SHARDS_DIR")"
 OUTPUT_ABS="$(realpath -m "$OUTPUT_CSV")"
 OUTPUT_DIR="$(dirname "$OUTPUT_ABS")"
-OUTPUT_NAME="$(basename "$OUTPUT_ABS")"
 
 mkdir -p "$OUTPUT_DIR"
 
 HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
 mkdir -p "$HF_CACHE_DIR"
 
-# Find all shard tarballs, sort them
-SHARDS_LIST=($(ls "$SHARDS_ABS"/shard-*.tar 2>/dev/null | sort))
+# Find all shard tarballs, sorted
+mapfile -t SHARDS_LIST < <(find "$SHARDS_ABS" -maxdepth 1 -name 'shard-*.tar' | sort)
 NUM_SHARDS="${#SHARDS_LIST[@]}"
 
 if [ "$NUM_SHARDS" -eq 0 ]; then
@@ -115,7 +113,7 @@ echo "Output: $OUTPUT_ABS"
 # --shard-path at a time, so we iterate and merge CSVs.
 
 TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 MERGED_PRED_CSV="$TEMP_DIR/all_predictions.csv"
 HEADER_WRITTEN=false

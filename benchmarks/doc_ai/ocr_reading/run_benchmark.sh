@@ -42,7 +42,7 @@ ADAPTER="./adapters/${MODEL}.sh"
 if [ ! -f "$ADAPTER" ]; then
     echo "Error: Adapter not found: $ADAPTER"
     echo "Available adapters:"
-    ls adapters/*.sh 2>/dev/null | sed 's|adapters/||; s|\.sh||'
+    find adapters -maxdepth 1 -name '*.sh' | sed 's|adapters/||; s|\.sh||'
     exit 1
 fi
 
@@ -83,7 +83,7 @@ else
 fi
 
 # Check shards exist
-SHARD_COUNT=$(ls "$WORK_DIR"/shard-*.tar 2>/dev/null | wc -l)
+SHARD_COUNT=$(find "$WORK_DIR" -maxdepth 1 -name 'shard-*.tar' 2>/dev/null | wc -l)
 if [ "$SHARD_COUNT" -eq 0 ]; then
     echo "Error: No shards found in $WORK_DIR"
     exit 1
