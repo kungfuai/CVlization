@@ -35,6 +35,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import music21
@@ -209,11 +211,88 @@ def kern_to_ly(kern_text: str, tmpdir: Path) -> Path:
     return ly_path
 
 
+def _inject_musicxml_metadata(ly_path: Path, xml_path: Path) -> None:
+    """
+    Inject MusicXML metadata into the LilyPond \\header that music21 silently drops:
+      - composer  → \\composer
+      - work-number (opus/catalog) → \\opus
+      - movement-number + movement-title → \\piece  (shown above first system)
+      - lyricist  → \\poet  (vocal works)
+    """
+    # Read raw XML (MXL = zip, .xml/.musicxml = plain text)
+    try:
+        if xml_path.suffix.lower() == ".mxl":
+            with zipfile.ZipFile(xml_path) as z:
+                xml_names = [n for n in z.namelist()
+                             if n.endswith(".xml") and "META" not in n]
+                if not xml_names:
+                    return
+                xml_text = z.read(xml_names[0]).decode("utf-8", errors="replace")
+        else:
+            xml_text = xml_path.read_text(errors="replace")
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return
+
+    def find_text(tag: str) -> str | None:
+        el = root.find(f".//{tag}")
+        return el.text.strip() if el is not None and el.text else None
+
+    composer = lyricist = None
+    for creator in root.findall(".//creator"):
+        ctype = creator.get("type", "")
+        text = creator.text.strip() if creator.text else None
+        if ctype == "composer" and text:
+            composer = text
+        elif ctype == "lyricist" and text:
+            lyricist = text
+
+    opus            = find_text("work-number")
+    movement_number = find_text("movement-number")
+    movement_title  = find_text("movement-title")
+
+    # Build movement label: "1. Allegro non troppo"
+    piece = None
+    if movement_number or movement_title:
+        parts = []
+        if movement_number:
+            parts.append(movement_number + ".")
+        if movement_title:
+            parts.append(movement_title)
+        piece = " ".join(parts)
+
+    def ly_str(s: str) -> str:
+        return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+    inserts = []
+    if composer:
+        inserts.append(f"  composer = {ly_str(composer)}")
+    if opus:
+        inserts.append(f"  opus = {ly_str(opus)}")
+    if lyricist and lyricist != composer:
+        inserts.append(f"  poet = {ly_str(lyricist)}")
+    if piece:
+        inserts.append(f"  piece = {ly_str(piece)}")
+
+    if not inserts:
+        return
+
+    ly = ly_path.read_text()
+    insert_str = "\n".join(inserts)
+    ly = re.sub(
+        r"(\\header\s*\{)",
+        lambda m: m.group(0) + "\n" + insert_str,
+        ly, count=1,
+    )
+    ly_path.write_text(ly)
+
+
 def musicxml_to_ly(xml_path: Path, tmpdir: Path) -> Path:
     """Parse MusicXML and write a LilyPond .ly file."""
     score = converter.parse(str(xml_path))
     ly_path = tmpdir / "score.ly"
     score.write("lily", fp=str(ly_path))
+    _inject_musicxml_metadata(ly_path, xml_path)
     return ly_path
 
 
