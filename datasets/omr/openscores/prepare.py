@@ -82,6 +82,8 @@ CORPORA = {
         "instruments": ["orchestra"],
         # Each movement also ships a *_melody.mxl extract — skip those
         "exclude":     ["_melody.mxl"],
+        # Standard orchestral engraving: hide staves with only rests
+        "hide_empty_staves": True,
     },
 }
 
@@ -241,7 +243,8 @@ def parse_path_metadata(score_path: Path, corpus_root: Path,
 # ---------------------------------------------------------------------------
 
 def batch_render(raw_dir: Path, render_dir: Path, score_glob: str,
-                 exclude: list[str] | None = None) -> None:
+                 exclude: list[str] | None = None,
+                 hide_empty_staves: bool = False) -> None:
     """
     Render every score file found under raw_dir → render_dir/<score_id>/*.png.
     This function is called when --batch-render is active (inside Docker).
@@ -255,7 +258,8 @@ def batch_render(raw_dir: Path, render_dir: Path, score_glob: str,
     score_files = [f for f in all_files
                    if not any(pat in f.name for pat in exclude)]
     print(f"  batch-render: {len(score_files)} files under {raw_dir}"
-          f" ({len(all_files) - len(score_files)} excluded)", flush=True)
+          f" ({len(all_files) - len(score_files)} excluded)"
+          f"{' [hide-empty-staves]' if hide_empty_staves else ''}", flush=True)
     ok = err = skipped = 0
 
     for sf in tqdm(score_files, desc="  rendering"):
@@ -269,7 +273,8 @@ def batch_render(raw_dir: Path, render_dir: Path, score_glob: str,
             continue
 
         try:
-            pages = lilypond_run(sf, "png", out_dir)
+            pages = lilypond_run(sf, "png", out_dir,
+                                 hide_empty_staves=hide_empty_staves)
             if pages:
                 ok += 1
             else:
@@ -288,7 +293,8 @@ def batch_render(raw_dir: Path, render_dir: Path, score_glob: str,
 
 def render_corpus_via_docker(corpus_root: Path, render_dir: Path,
                              score_glob: str, corpus_name: str,
-                             exclude: list[str] | None = None) -> None:
+                             exclude: list[str] | None = None,
+                             hide_empty_staves: bool = False) -> None:
     """Mount corpus_root + render_dir into Docker and run batch_render."""
     render_dir.mkdir(parents=True, exist_ok=True)
 
@@ -311,6 +317,8 @@ def render_corpus_via_docker(corpus_root: Path, render_dir: Path,
     ]
     for pat in (exclude or []):
         cmd += ["--exclude", pat]
+    if hide_empty_staves:
+        cmd += ["--hide-empty-staves"]
 
     print(f"  Running Docker batch-render for {corpus_name} …")
     result = subprocess.run(cmd, text=True)
@@ -503,6 +511,8 @@ def main():
     parser.add_argument("--score-glob", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--exclude", action="append", default=[],
         help=argparse.SUPPRESS)
+    parser.add_argument("--hide-empty-staves", action="store_true",
+        help=argparse.SUPPRESS)
 
     args = parser.parse_args()
     random.seed(args.seed)
@@ -512,10 +522,11 @@ def main():
     # -----------------------------------------------------------------
     if args.batch_render:
         batch_render(
-            raw_dir    = Path(args.raw_dir),
-            render_dir = Path(args.render_dir),
-            score_glob = args.score_glob,
-            exclude    = args.exclude,
+            raw_dir            = Path(args.raw_dir),
+            render_dir         = Path(args.render_dir),
+            score_glob         = args.score_glob,
+            exclude            = args.exclude,
+            hide_empty_staves  = args.hide_empty_staves,
         )
         return
 
@@ -557,11 +568,12 @@ def main():
         # 3. Render via LilyPond Docker
         render_dir = CACHE_DIR / "rendered" / corpus_name
         render_corpus_via_docker(
-            corpus_root = corpus_root,
-            render_dir  = render_dir,
-            score_glob  = meta["score_glob"],
-            corpus_name = corpus_name,
-            exclude     = meta.get("exclude", []),
+            corpus_root        = corpus_root,
+            render_dir         = render_dir,
+            score_glob         = meta["score_glob"],
+            corpus_name        = corpus_name,
+            exclude            = meta.get("exclude", []),
+            hide_empty_staves  = meta.get("hide_empty_staves", False),
         )
 
         # 3. Collect rows

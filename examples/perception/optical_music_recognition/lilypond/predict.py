@@ -221,7 +221,7 @@ def musicxml_to_ly(xml_path: Path, tmpdir: Path) -> Path:
 # Rendering: LilyPond .ly → PNG / PDF / SVG
 # ---------------------------------------------------------------------------
 
-def patch_ly(ly_path: Path) -> None:
+def patch_ly(ly_path: Path, hide_empty_staves: bool = False) -> None:
     """
     Fix music21-generated LilyPond syntax for compatibility with LilyPond 2.19+.
     music21 9.x emits some deprecated constructs that newer LilyPond rejects,
@@ -237,15 +237,28 @@ def patch_ly(ly_path: Path) -> None:
     text = text.replace('\\include "lilypond-book-preamble.ly"', "")
     # Compact layout: smaller staff so more measures fit per line/page
     text = text.replace('\\version', '#(set-global-staff-size 16)\n\n\\version', 1)
+    # Hide staves that contain only rests (standard for orchestral scores)
+    if hide_empty_staves:
+        context_block = (
+            '\n  \\context {\n    \\Staff\n    \\RemoveEmptyStaves\n  }'
+        )
+        if r'\layout' in text:
+            text = re.sub(r'(\\layout\s*\{)', r'\1' + context_block, text)
+        else:
+            text += (
+                '\n\\layout {\n  \\context {\n'
+                '    \\Staff\n    \\RemoveEmptyStaves\n  }\n}\n'
+            )
     ly_path.write_text(text)
 
 
-def render_ly(ly_path: Path, output_format: str, tmpdir: Path) -> list[Path]:
+def render_ly(ly_path: Path, output_format: str, tmpdir: Path,
+              hide_empty_staves: bool = False) -> list[Path]:
     """
     Run LilyPond on a .ly file and return paths to output files.
     LilyPond writes output alongside the input file by default.
     """
-    patch_ly(ly_path)
+    patch_ly(ly_path, hide_empty_staves=hide_empty_staves)
 
     stem = ly_path.stem
     flag = f"--{output_format}"
@@ -275,7 +288,8 @@ def render_ly(ly_path: Path, output_format: str, tmpdir: Path) -> list[Path]:
 # Main pipeline
 # ---------------------------------------------------------------------------
 
-def run(input_path: Path | None, output_format: str, output_dir: Path) -> list[Path]:
+def run(input_path: Path | None, output_format: str, output_dir: Path,
+        hide_empty_staves: bool = False) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as _tmp:
@@ -301,7 +315,8 @@ def run(input_path: Path | None, output_format: str, output_dir: Path) -> list[P
         print(f"Format: {output_format.upper()}")
 
         # --- Render ---
-        rendered = render_ly(ly_path, output_format, tmpdir)
+        rendered = render_ly(ly_path, output_format, tmpdir,
+                             hide_empty_staves=hide_empty_staves)
         if not rendered:
             raise RuntimeError("LilyPond produced no output files.")
 
@@ -338,6 +353,8 @@ Examples:
         help="Output directory (default: current working directory)")
     parser.add_argument("--format", default="png", choices=["png", "pdf", "svg"],
         help="Output format (default: png)")
+    parser.add_argument("--hide-empty-staves", action="store_true",
+        help="Hide staves with only rests (standard for orchestral full scores)")
     args = parser.parse_args()
 
     input_path = None
@@ -354,7 +371,8 @@ Examples:
     print("LilyPond Score Renderer")
     print("=" * 50)
 
-    saved = run(input_path, args.format, out_dir)
+    saved = run(input_path, args.format, out_dir,
+                hide_empty_staves=args.hide_empty_staves)
 
     print("=" * 50)
     print(f"Done — {len(saved)} file(s) written.")
