@@ -172,10 +172,17 @@ For SFT:
     * OLiMPiC (pianoform systems with MusicXML labels): https://github.com/ufal/olimpic-icdar24
 
 2. Synthetic generation (unlimited scale):
-    * Render MusicXML → image via Verovio or LilyPond → free (image, label) pairs
+    * Music source corpora (MusicXML or kern → render for free GT):
+        - OpenScore (public domain MusicXML on HuggingFace): https://huggingface.co/OpenScore — Lieder corpus, string quartets, piano works
+        - KernScores (humdrum kern; CCARH): https://kern.humdrum.org — large piano repertoire
+        - MuseScore Hub (large but requires scraping; use with care re: licensing)
+    * Rendering pipeline (now implemented): MusicXML/kern → `cvlization/lilypond:latest` → PNG
+        - Produces pixel-perfect (image, kern) pairs with no annotation cost
+        - System-level crops preferred (closer to SMT training distribution, smaller VLM context)
+        - See `datasets/omr/deepscores_v2/` for pattern; equivalent `datasets/omr/openscores/` to build
     * Apply vintage augmentation on top — two approaches:
         A. Handcrafted transforms (fast baseline): paper texture, yellowing, foxing spots, ink fading, bleed-through, skew, scan noise via albumentations or custom PIL pipeline
-        B. Style transfer augmentation (more authentic): use real vintage IMSLP scans as style references → transfer their look onto clean Verovio renders. Same models as Bucket 4 Sub-task 2 (see below). More realistic than handcrafted transforms; converges with the user-facing rendering pipeline.
+        B. Style transfer augmentation (more authentic): use real vintage IMSLP scans as style references → transfer their look onto clean LilyPond renders. Same models as Bucket 4 Sub-task 2 (see below). More realistic than handcrafted transforms; converges with the user-facing rendering pipeline.
     * Approach B and Bucket 4 Sub-task 2 are the SAME technical problem — solving one gives the other for free
 
 3. Instruction-tuning format (for VLM SFT):
