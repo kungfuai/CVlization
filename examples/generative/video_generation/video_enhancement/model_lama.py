@@ -480,13 +480,21 @@ class LamaWithMask(nn.Module):
         Note: LaMa checkpoints have different structure, this maps weights appropriately.
         Mask decoder is initialized randomly (not in original LaMa).
         """
-        state_dict = torch.load(checkpoint_path, map_location='cpu')
-
-        # Handle different checkpoint formats
-        if 'state_dict' in state_dict:
-            state_dict = state_dict['state_dict']
-        if 'generator' in state_dict:
-            state_dict = state_dict['generator']
+        # Try loading as TorchScript first, then as regular checkpoint
+        try:
+            # LaMa big-lama.pt is a TorchScript archive
+            scripted_model = torch.jit.load(checkpoint_path, map_location='cpu')
+            state_dict = scripted_model.state_dict()
+            print(f"Loaded TorchScript model with {len(state_dict)} parameters")
+        except Exception:
+            # Fall back to regular torch.load
+            state_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+            # Handle different checkpoint formats
+            if isinstance(state_dict, dict):
+                if 'state_dict' in state_dict:
+                    state_dict = state_dict['state_dict']
+                if 'generator' in state_dict:
+                    state_dict = state_dict['generator']
 
         # Map LaMa keys to our model keys
         # LaMa uses: model.encoder, model.decoder, model.ffc_blocks
