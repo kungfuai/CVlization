@@ -86,6 +86,27 @@ With `--format json`, `outputs/proof.json` contains:
 }
 ```
 
+## Training
+
+### SFT (`train_sft.sh`)
+
+Fine-tunes Qwen3-4B on FineProofs-SFT using LoRA. Single GPU, ~8 min for a smoke test. Works on any GPU supported by CUDA 12.8 (including Blackwell SM120).
+
+```bash
+bash train_sft.sh                    # smoke test: 100 samples, 30 steps
+bash train_sft.sh --max-steps 2000   # full run
+```
+
+### RL (`train_rl.sh`)
+
+GRPO reinforcement learning via [PipelineRL](https://github.com/CMU-AIRe/QED-Nano). Requires 4+ GPUs and an OpenAI-compatible API for proof grading.
+
+```bash
+OPENAI_API_KEY=sk-... bash train_rl.sh --build   # build image, then run (4 GPUs)
+```
+
+**Known limitation — SM120 (Blackwell) not supported.** PipelineRL pins `vllm==0.8.5.post1`, which in turn hard-pins `torch==2.6.0`. PyTorch 2.6.0 has no CUDA 12.8 wheels, so there is no path to SM120 kernel support in this dependency chain. RL training runs on Ampere (A100) or Hopper (H100) GPUs. A future RL pipeline built on a newer vLLM (without PipelineRL's internal API coupling) would unblock Blackwell.
+
 ## Notes
 
 - The model targets **informal natural-language proofs**, not formal Lean proofs. For formal theorem proving with Lean, see `examples/agentic/formal/nanoproof/`.
