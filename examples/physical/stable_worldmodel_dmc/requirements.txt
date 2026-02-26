@@ -1,0 +1,7 @@
+huggingface_hub>=0.20.0
+hdf5plugin==4.4.0
+scikit-learn==1.6.1
+matplotlib==3.9.4
+imageio==2.37.2
+imageio-ffmpeg==0.5.1
+stable-baselines3==2.4.1
