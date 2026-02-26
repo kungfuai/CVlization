@@ -1,0 +1,43 @@
+name: qed-nano
+capability: agentic/formal
+modalities:
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 10
+  disk_gb: 15
+image: qed-nano
+
+presets:
+  build:
+    script: build.sh
+    description: Build the QED-Nano inference container (vLLM 0.15.1, torch 2.9.1+CUDA 12.8)
+  predict:
+    script: predict.sh
+    description: Generate a proof for a given Olympiad math problem
+  test:
+    script: test.sh
+    description: Smoke test with a simple induction problem
+
+tags:
+  - math
+  - proof
+  - reasoning
+  - qwen3
+  - olympiad
+  - vllm
+  - rl
+
+tasks:
+  - reasoning
+  - text_generation
+
+frameworks:
+  - pytorch
+  - vllm
+
+description: >
+  4B-parameter Qwen3-based model trained with SFT + GRPO RL to generate
+  natural-language proofs for Olympiad-level mathematical competition problems.
+  Approaches Gemini 3 Pro on IMOProofBench despite being 30x smaller.
