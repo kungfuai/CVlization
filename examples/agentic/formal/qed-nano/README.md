@@ -9,7 +9,7 @@ The model outputs a chain-of-thought reasoning trace (inside `<think>...</think>
 ## Requirements
 
 - Docker with NVIDIA GPU support (`--gpus all`)
-- ~10 GB VRAM (A100 40GB, H100, or similar)
+- ~10 GB VRAM — works on consumer GPUs (RTX 3090/4090/5090) as well as data-centre GPUs (A100, H100). Verified on Blackwell SM120.
 - A Hugging Face token is **not required** — the model is public
 
 ## Quick start
@@ -17,10 +17,10 @@ The model outputs a chain-of-thought reasoning trace (inside `<think>...</think>
 ```bash
 cd examples/agentic/formal/qed-nano
 
-# Build
+# Build (~5 min on first run)
 bash build.sh
 
-# Prove the default example problem
+# Prove the default example problem (AM-GM inequality)
 bash predict.sh
 
 # Prove your own problem
@@ -32,9 +32,45 @@ bash predict.sh --problem "Prove that sqrt(2) is irrational." --show-thinking
 # Output as JSON
 bash predict.sh --problem "..." --format json --output outputs/result.json
 
-# Smoke test (short 2048-token generation)
+# Smoke test
 bash test.sh
 ```
+
+## Example output
+
+Running `bash predict.sh` on the default problem produces output like:
+
+```
+=== Proof ===
+We are asked to prove that for positive real numbers a, b, c,
+
+    (a + b)(b + c)(c + a) ≥ 8abc.
+
+Proof.
+For any two positive numbers x, y the arithmetic–geometric mean inequality gives
+
+    (x + y) / 2 ≥ sqrt(xy)  ⟺  x + y ≥ 2·sqrt(xy).
+
+Apply this to the three pairs (a, b), (b, c), (c, a):
+
+    a + b ≥ 2·sqrt(ab),    b + c ≥ 2·sqrt(bc),    c + a ≥ 2·sqrt(ca).
+
+All quantities are positive, so multiply the three inequalities:
+
+    (a + b)(b + c)(c + a) ≥ 8·sqrt(ab)·sqrt(bc)·sqrt(ca).
+
+Now compute the product under the square roots:
+
+    sqrt(ab)·sqrt(bc)·sqrt(ca) = sqrt(a²b²c²) = abc.
+
+Consequently,
+
+    (a + b)(b + c)(c + a) ≥ 8abc.
+
+Equality holds exactly when a = b = c.  ∎
+```
+
+First run downloads the model (~8 GB) and takes 2–3 min. Subsequent runs start in ~30 s.
 
 ## Arguments
 
