@@ -1,0 +1,21 @@
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    CUDA_HOME=/usr/local/cuda
+
+WORKDIR /workspace
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git build-essential ninja-build && \
+    rm -rf /var/lib/apt/lists/*
+
+# Note: flash-attn 2.x does not support SM120 (Blackwell). We rely on torch
+# SDPA (attn_implementation="sdpa") which natively supports all GPU generations.
+
+COPY requirements.sft.txt .
+RUN pip install --no-cache-dir -r requirements.sft.txt
+
+CMD ["python", "train_sft.py", "--help"]
