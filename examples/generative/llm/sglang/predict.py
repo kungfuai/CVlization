@@ -23,7 +23,7 @@ from typing import List, Optional
 
 import requests
 from cvlization.paths import resolve_input_path, resolve_output_path
-from gpu_utils import get_optimal_attention_backend
+from gpu_utils import get_model_attention_backend_override, get_optimal_attention_backend
 from openai import OpenAI
 from PIL import Image
 
@@ -113,11 +113,16 @@ def launch_server(args) -> subprocess.Popen:
         cmd.append("--trust-remote-code")
     if args.extra_args:
         cmd.extend(args.extra_args.split())
-    # Auto-detect attention backend if not explicitly specified
+    # Select attention backend (skipped if user already passed --attention-backend)
     if "--attention-backend" not in " ".join(cmd):
-        backend = get_optimal_attention_backend()
+        override = get_model_attention_backend_override(args.model)
+        if override:
+            backend = override
+            print(f"Model-specific attention backend: {backend} ({args.model})")
+        else:
+            backend = get_optimal_attention_backend()
+            print(f"Auto-selected attention backend: {backend}")
         cmd.extend(["--attention-backend", backend])
-        print(f"Auto-selected attention backend: {backend}")
     print("Starting SGLang server:", " ".join(cmd))
     return subprocess.Popen(cmd, env=os.environ.copy())
 
