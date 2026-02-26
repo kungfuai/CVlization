@@ -168,9 +168,9 @@ def parse_args():
         help="Mathematical problem statement to prove.",
     )
     parser.add_argument(
-        "--preset",
+        "--named-problem",
         choices=list(PROBLEMS.keys()),
-        help=f"Use a named preset problem ({', '.join(PROBLEMS.keys())}).",
+        help=f"Use a named problem ({', '.join(PROBLEMS.keys())}).",
     )
     parser.add_argument(
         "--model",
@@ -241,8 +241,8 @@ def main() -> int:
             logging.getLogger(name).setLevel(logging.ERROR)
         os.environ.setdefault("VLLM_LOGGING_LEVEL", "ERROR")
 
-    if args.preset:
-        args.problem = PROBLEMS[args.preset]
+    if args.named_problem:
+        args.problem = PROBLEMS[args.named_problem]
 
     configure_flash_attn()
 
