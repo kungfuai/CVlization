@@ -6,7 +6,7 @@ stability: experimental
 resources:
   gpu: 1
   vram_gb: 10
-  disk_gb: 15
+  disk_gb: 20
 image: qed-nano
 
 presets:
@@ -19,6 +19,18 @@ presets:
   test:
     script: test.sh
     description: Smoke test with a simple induction problem
+  train_sft:
+    script: train_sft.sh
+    description: >
+      SFT fine-tune Qwen3-4B on FineProofs-SFT using LoRA.
+      Single GPU capable. Pass --max-steps / --max-samples to scale.
+      Builds qed-nano-sft image automatically if not present.
+  train_rl:
+    script: train_rl.sh
+    description: >
+      GRPO reinforcement learning via PipelineRL (4+ GPUs).
+      Requires OPENAI_API_KEY for proof grading.
+      Run with --build on first use to build the qed-nano-train image.
 
 tags:
   - math
@@ -27,17 +39,25 @@ tags:
   - qwen3
   - olympiad
   - vllm
+  - sft
   - rl
+  - grpo
+  - pipelinerl
 
 tasks:
   - reasoning
   - text_generation
+  - fine_tuning
 
 frameworks:
   - pytorch
   - vllm
+  - trl
+  - peft
+  - deepspeed
 
 description: >
   4B-parameter Qwen3-based model trained with SFT + GRPO RL to generate
   natural-language proofs for Olympiad-level mathematical competition problems.
   Approaches Gemini 3 Pro on IMOProofBench despite being 30x smaller.
+  Includes inference, SFT fine-tuning, and full RL training pipelines.
