@@ -3,6 +3,23 @@
 import torch
 
 
+# SSM/Mamba-based models have no attention layers and are rejected by the
+# triton attention backend at startup (SGLang raises AssertionError).
+# Mapped to the backend that works for them.
+_MODEL_ATTENTION_BACKEND_OVERRIDES: dict[str, str] = {
+    "lfm2": "torch_native",  # LiquidAI/LFM2-* (pure Mamba SSM)
+}
+
+
+def get_model_attention_backend_override(model_id: str) -> str | None:
+    """Return a required attention backend for known SSM/Mamba models, or None."""
+    lower = model_id.lower()
+    for pattern, backend in _MODEL_ATTENTION_BACKEND_OVERRIDES.items():
+        if pattern in lower:
+            return backend
+    return None
+
+
 def get_optimal_attention_backend() -> str:
     """Auto-detect optimal attention backend based on GPU architecture.
 

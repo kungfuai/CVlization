@@ -15,7 +15,7 @@ from typing import List, Optional
 
 import torch
 
-from gpu_utils import get_optimal_attention_backend
+from gpu_utils import get_model_attention_backend_override, get_optimal_attention_backend
 
 
 DEFAULT_MODEL = os.getenv("MODEL_ID", "allenai/Olmo-3-7B-Instruct")
@@ -116,11 +116,16 @@ def build_command(cfg: ServeConfig) -> List[str]:
         cmd.append("--trust-remote-code")
     if cfg.extra_args:
         cmd.extend(shlex.split(cfg.extra_args))
-    # Auto-detect attention backend if not explicitly specified
+    # Select attention backend (skipped if user already passed --attention-backend)
     if "--attention-backend" not in " ".join(cmd):
-        backend = get_optimal_attention_backend()
+        override = get_model_attention_backend_override(cfg.model_id)
+        if override:
+            backend = override
+            print(f"Model-specific attention backend: {backend} ({cfg.model_id})")
+        else:
+            backend = get_optimal_attention_backend()
+            print(f"Auto-selected attention backend: {backend}")
         cmd.extend(["--attention-backend", backend])
-        print(f"Auto-selected attention backend: {backend}")
     return cmd
 
 
