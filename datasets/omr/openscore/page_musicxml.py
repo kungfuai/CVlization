@@ -27,6 +27,7 @@ import tempfile
 import warnings
 import xml.etree.ElementTree as ET
 import zipfile
+from collections import Counter
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
@@ -175,13 +176,12 @@ def extract_bar_nums_from_svg(svg_path: Path) -> list[int]:
 
     Strategy:
     1. Collect all numeric text elements with their font sizes.
-    2. If multiple font sizes present, the SMALLEST is the bar-number size
-       (LilyPond renders bar numbers smaller than page numbers).
+    2. The bar-number font-size class is the one with the most elements.
+       When tied, prefer the class whose candidates have the highest value
+       (bar numbers grow through the score; time-sig denominators are small).
     3. After collecting candidate bar numbers, remove isolated outliers:
        keep the largest consecutive-integer cluster (allowing single gaps).
     """
-    from collections import Counter
-
     tree = ET.parse(svg_path)
     root = tree.getroot()
 
@@ -193,14 +193,21 @@ def extract_bar_nums_from_svg(svg_path: Path) -> list[int]:
     if not numeric_items:
         return []
 
-    # Identify bar-number font size: smallest among distinct sizes,
-    # or the most common if only one size is present.
-    all_fs = sorted(set(fs for fs, _ in numeric_items))
-    if len(all_fs) == 1:
-        bar_fs = all_fs[0]
+    # Identify bar-number font size: the size class with the MOST elements.
+    # Bar numbers are numerous (one per measure per staff); page numbers and
+    # annotation markers appear only once or twice, so they lose the vote.
+    size_counts = Counter(fs for fs, _ in numeric_items)
+    max_count = max(size_counts.values())
+    tied = [fs for fs, cnt in size_counts.items() if cnt == max_count]
+    if len(tied) == 1:
+        bar_fs = tied[0]
     else:
-        # Bar numbers = smallest font size class
-        bar_fs = all_fs[0]
+        # Tie-break: bar numbers grow through the score (easily > 20) while
+        # time-signature denominators are small (2, 4, 8, 16).  Pick the font
+        # size whose candidates include the highest value.
+        def _max_val(fs: float) -> int:
+            return max(v for f, v in numeric_items if abs(f - fs) < 0.1)
+        bar_fs = max(tied, key=_max_val)
 
     candidates = sorted({v for fs, v in numeric_items if abs(fs - bar_fs) < 0.1})
 
@@ -267,10 +274,11 @@ def read_musicxml(mxl_path: Path) -> str:
         return z.read(xml_names[0]).decode("utf-8", errors="replace")
 
 
-def slice_musicxml(mxl_path: Path, bar_start: int, bar_end: int | None) -> str:
-    """
-    Return MusicXML string for measures bar_start..bar_end (inclusive).
-    If bar_end is None, extracts to end of score.
+def _load_score(mxl_path: Path):
+    """Parse an .mxl file and return (music21 Score, pickup_offset).
+
+    pickup_offset is 1 when measure 0 exists (LilyPond bar N = music21 measure N-1),
+    0 otherwise.
     """
     from music21 import converter
 
@@ -279,39 +287,43 @@ def slice_musicxml(mxl_path: Path, bar_start: int, bar_end: int | None) -> str:
                      if n.endswith(".xml") and "META" not in n]
         xml_bytes = z.read(xml_names[0])
 
-    # music21 needs a file path, not bytes; write to a temp file
     with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as f:
         f.write(xml_bytes)
         tmp_xml = Path(f.name)
-
     try:
         score = converter.parse(str(tmp_xml), format="musicxml")
-        sliced = score.measures(bar_start, bar_end)
-        with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as f:
-            out_path = Path(f.name)
-        sliced.write("musicxml", fp=str(out_path))
-        return out_path.read_text(encoding="utf-8")
     finally:
         tmp_xml.unlink(missing_ok=True)
+
+    measures = list(score.parts[0].getElementsByClass("Measure"))
+    first_num = measures[0].number if measures else 1
+    pickup_offset = 1 if first_num == 0 else 0
+    return score, pickup_offset
+
+
+def slice_musicxml(mxl_path: Path, bar_start: int, bar_end: int | None) -> str:
+    """
+    Return MusicXML string for LilyPond bars bar_start..bar_end (inclusive).
+    If bar_end is None, extracts to end of score.
+
+    Handles pickup bars: when the first measure is numbered 0, LilyPond bar N
+    maps to music21 measure N-1, so bar_start/bar_end are adjusted accordingly.
+    """
+    score, offset = _load_score(mxl_path)
+    actual_start = bar_start - offset
+    actual_end   = None if bar_end is None else bar_end - offset
+
+    sliced = score.measures(actual_start, actual_end)
+    with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as f:
+        out_path = Path(f.name)
+    sliced.write("musicxml", fp=str(out_path))
+    return out_path.read_text(encoding="utf-8")
 
 
 def total_measures_in_mxl(mxl_path: Path) -> int:
     """Return the total number of measures in the first part of an .mxl file."""
-    from music21 import converter
-
-    with zipfile.ZipFile(mxl_path) as z:
-        xml_names = [n for n in z.namelist()
-                     if n.endswith(".xml") and "META" not in n]
-        xml_bytes = z.read(xml_names[0])
-
-    with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as f:
-        f.write(xml_bytes)
-        tmp_xml = Path(f.name)
-    try:
-        score = converter.parse(str(tmp_xml), format="musicxml")
-        return len(list(score.parts[0].getElementsByClass("Measure")))
-    finally:
-        tmp_xml.unlink(missing_ok=True)
+    score, _ = _load_score(mxl_path)
+    return len(list(score.parts[0].getElementsByClass("Measure")))
 
 
 # ---------------------------------------------------------------------------
