@@ -25,6 +25,21 @@ RUN pip install --no-cache-dir nvidia-cudnn-cu12==9.16.0.29
 RUN sed -i 's/get_device_capability(device)\[0\] == 10/get_device_capability(device)[0] >= 10/' \
     /opt/conda/lib/python3.11/site-packages/sglang/srt/utils/common.py
 
+# Fix SGLang v_head_dim=null bug: HunYuan-A13B config.json sets "v_head_dim": null explicitly,
+# causing getattr(..., self.head_dim) to return None (present key beats the default),
+# which then crashes get_cell_size_per_token with TypeError: int + NoneType.
+# Replace the bare getattr with a None-safe fallback.
+RUN python - <<'EOF'
+import pathlib
+p = pathlib.Path("/opt/conda/lib/python3.11/site-packages/sglang/srt/configs/model_config.py")
+old = '        self.v_head_dim = getattr(\n            self.hf_text_config,\n            "v_head_dim",\n            self.head_dim,\n        )'
+new = '        _v_head_dim = getattr(self.hf_text_config, "v_head_dim", None)\n        self.v_head_dim = _v_head_dim if _v_head_dim is not None else self.head_dim'
+text = p.read_text()
+assert old in text, f"v_head_dim patch target not found in {p} -- update patch for new SGLang version"
+p.write_text(text.replace(old, new, 1))
+print("SGLang v_head_dim null-safety patch applied")
+EOF
+
 COPY . .
 
 CMD ["python3", "serve.py"]
