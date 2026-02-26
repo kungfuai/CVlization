@@ -12,10 +12,16 @@ This benchmark is directly copied/adapted from Dimitris Papailiopoulos's AdderBo
   https://gist.github.com/N8python/02e41d156ec615328cde2e1e5c0e9d53
 - Included solution source (xangma gist):  
   https://gist.github.com/xangma/c538a7a9d415f16e61f7bb26ae5cf6b0
+- Included solution source (alexlitz gist):  
+  https://gist.github.com/alexlitz/0d5efbccf443fb0e8136b8f5bd85140a
 
 Local files preserving these sources:
 - [submissions/n8python_02e41d15.py](/home/zsi/projects/worktrees/CVlization/model-arch/benchmarks/model_arch/adderboard/submissions/n8python_02e41d15.py)
 - [submissions/xangma_c538a7a.py](/home/zsi/projects/worktrees/CVlization/model-arch/benchmarks/model_arch/adderboard/submissions/xangma_c538a7a.py)
+- [submissions/alexlitz_0d5efbcc.py](/home/zsi/projects/worktrees/CVlization/model-arch/benchmarks/model_arch/adderboard/submissions/alexlitz_0d5efbcc.py)
+
+Current best known included solution in this benchmark folder:
+- Alex Litzenberger's TinyAdder (`36` params), verified at `100.00%` on the benchmark's `10,010`-case run.
 
 ## Task
 
