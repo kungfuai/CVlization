@@ -28,8 +28,9 @@ bash predict.sh --named-problem imo1988p6   # IMO 1988 P6 (Vieta jumping)
 bash predict.sh --named-problem imo2000p2   # IMO 2000 P2 (abc=1 inequality)
 bash predict.sh --named-problem amgm        # AM-GM inequality (default)
 
-# Prove your own problem
+# Prove your own problem (inline or from a file)
 bash predict.sh --problem "Prove that there are infinitely many prime numbers."
+bash predict.sh --problem @my_problem.txt
 
 # Show the chain-of-thought alongside the proof
 bash predict.sh --problem "Prove that sqrt(2) is irrational." --show-thinking
