@@ -41,10 +41,24 @@ MODEL_ID = os.getenv("MODEL_ID", "lm-provers/QED-Nano")
 # Prompt template used during QED-Nano training (from conf/qed_nano_rl.yaml)
 PROOF_PROMPT_TEMPLATE = "Generate a rigorous proof to the following question:\n\n{problem}"
 
-SAMPLE_PROBLEM = (
-    "Let a, b, c be positive real numbers. "
-    "Prove that (a + b)(b + c)(c + a) ≥ 8abc."
-)
+PROBLEMS = {
+    "amgm": (
+        "Let a, b, c be positive real numbers. "
+        "Prove that (a + b)(b + c)(c + a) ≥ 8abc."
+    ),
+    "imo1988p6": (
+        "Let a and b be positive integers such that ab + 1 divides a² + b². "
+        "Prove that (a² + b²) / (ab + 1) is the square of an integer. "
+        "(IMO 1988, Problem 6)"
+    ),
+    "imo2000p2": (
+        "Let a, b, c be positive real numbers such that abc = 1. "
+        "Prove that (a − 1 + 1/b)(b − 1 + 1/c)(c − 1 + 1/a) ≤ 1. "
+        "(IMO 2000, Problem 2)"
+    ),
+}
+
+SAMPLE_PROBLEM = PROBLEMS["amgm"]
 
 
 def configure_flash_attn() -> None:
@@ -154,6 +168,11 @@ def parse_args():
         help="Mathematical problem statement to prove.",
     )
     parser.add_argument(
+        "--preset",
+        choices=list(PROBLEMS.keys()),
+        help=f"Use a named preset problem ({', '.join(PROBLEMS.keys())}).",
+    )
+    parser.add_argument(
         "--model",
         default=MODEL_ID,
         help=f"HuggingFace model ID (default: {MODEL_ID}).",
@@ -221,6 +240,9 @@ def main() -> int:
         for name in ["transformers", "vllm", "torch"]:
             logging.getLogger(name).setLevel(logging.ERROR)
         os.environ.setdefault("VLLM_LOGGING_LEVEL", "ERROR")
+
+    if args.preset:
+        args.problem = PROBLEMS[args.preset]
 
     configure_flash_attn()
 
