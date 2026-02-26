@@ -165,7 +165,7 @@ def parse_args():
     parser.add_argument(
         "--problem",
         default=SAMPLE_PROBLEM,
-        help="Mathematical problem statement to prove.",
+        help="Problem statement to prove, or @filename to read from a file.",
     )
     parser.add_argument(
         "--named-problem",
@@ -243,6 +243,8 @@ def main() -> int:
 
     if args.named_problem:
         args.problem = PROBLEMS[args.named_problem]
+    elif args.problem.startswith("@"):
+        args.problem = Path(args.problem[1:]).read_text().strip()
 
     configure_flash_attn()
 
