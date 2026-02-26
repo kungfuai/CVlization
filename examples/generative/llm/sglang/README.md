@@ -101,6 +101,8 @@ sglang 0.5.9, PyTorch 2.9.1+CUDA 12.8, 2× RTX PRO 6000 Blackwell Max-Q (95GB VR
 - ✅ `internlm/internlm3-8b-instruct` (bf16, ctx=2048, mem_frac=0.88)
 - ✅ `Qwen/Qwen3-8B` (bf16, ctx=2048, mem_frac=0.88) ~15.3GB model
 - ✅ `google/gemma-3-1b-it` (bf16, ctx=4096, mem_frac=0.9) smoke-tested ~2GB VRAM
+- ✅ `meta-llama/Llama-3.1-8B-Instruct` (bf16, ctx=4096, mem_frac=0.9) — requires `HF_TOKEN` (gated)
+- ❌ `openai/gpt-oss-20b` (MXFP4): FlashInfer MXFP4 MoE kernel crashes (`assert K % 4 == 0`); bf16 variant `lmsys/gpt-oss-20b-bf16` also fails — Triton MoE kernel uses `.tile::gather4 .shared::cluster` TMA instruction not available on SM120a (consumer Blackwell); use vLLM instead
 - ❌ `tencent/Hunyuan-A13B-Instruct-FP8` two SM120 blockers: (1) `v_head_dim=null` in config.json crashes KV-cache profiler — patched in Dockerfile; (2) FP8 MoE Triton kernel requires 147 KB shared memory, SM120 limit is 101 KB (H100 has 228 KB) — use vLLM instead
 
 ## Verification (A10, Dec 2025)
@@ -114,4 +116,5 @@ sglang 0.5.6.post2, PyTorch 2.9.1+CUDA 12.8, A10 (24GB VRAM), SM86.
 - ✅ `internlm/internlm3-8b-instruct` (bf16, ctx=2048, mem_frac=0.88)
 - ✅ `Qwen/Qwen3-8B` (bf16, ctx=2048, mem_frac=0.88)
 - ❌ `tencent/Hunyuan-A13B-Instruct-FP8` OOM on A10 (24GB) — model is 75.4 GB, requires ≥80GB GPU
+- ⚠️ `openai/gpt-oss-20b`, `meta-llama/Llama-3.1-8B-Instruct` not tested on A10
   - For larger 7B/8B models, reducing context (e.g., 2048) and mem_fraction_static (e.g., 0.88) helps fit on A10.
