@@ -51,7 +51,7 @@ HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}"
 if [[ "${1:-}" == "--build" ]]; then
   shift
   echo "Building ${IMAGE} (this takes ~10 min on first build due to flash-attn)..."
-  docker build -t "${IMAGE}" -f "${SCRIPT_DIR}/Dockerfile.train" "${SCRIPT_DIR}"
+  docker build -t "${IMAGE}" -f "${SCRIPT_DIR}/Dockerfile.rl" "${SCRIPT_DIR}"
 fi
 
 if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
