@@ -23,6 +23,11 @@ bash build.sh
 # Prove the default example problem (AM-GM inequality)
 bash predict.sh
 
+# Run a named preset problem
+bash predict.sh --preset imo1988p6   # IMO 1988 P6 (Vieta jumping)
+bash predict.sh --preset imo2000p2   # IMO 2000 P2 (Nesbitt-style inequality)
+bash predict.sh --preset amgm        # AM-GM inequality (default)
+
 # Prove your own problem
 bash predict.sh --problem "Prove that there are infinitely many prime numbers."
 
