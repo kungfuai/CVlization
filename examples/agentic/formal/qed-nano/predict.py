@@ -29,7 +29,11 @@ except ImportError:
     CVL_AVAILABLE = False
 
     def resolve_output_path(path: str) -> str:
-        return path
+        if path.startswith("/"):
+            return path
+        out = Path("outputs")
+        out.mkdir(exist_ok=True)
+        return str(out / path)
 
 
 MODEL_ID = os.getenv("MODEL_ID", "lm-provers/QED-Nano")
@@ -38,8 +42,8 @@ MODEL_ID = os.getenv("MODEL_ID", "lm-provers/QED-Nano")
 PROOF_PROMPT_TEMPLATE = "Generate a rigorous proof to the following question:\n\n{problem}"
 
 SAMPLE_PROBLEM = (
-    "Let n be a positive integer. "
-    "Prove that 1 + 2 + ... + n = n(n+1)/2."
+    "Let a, b, c be positive real numbers. "
+    "Prove that (a + b)(b + c)(c + a) ≥ 8abc."
 )
 
 
@@ -222,8 +226,7 @@ def main() -> int:
 
     ext = "json" if args.format == "json" else "txt"
     if args.output is None:
-        default = f"outputs/proof.{ext}"
-        args.output = Path(resolve_output_path(default))
+        args.output = Path(resolve_output_path(f"proof.{ext}"))
 
     print(f"Model  : {args.model}")
     print(f"Problem: {args.problem[:120]}{'...' if len(args.problem) > 120 else ''}")
