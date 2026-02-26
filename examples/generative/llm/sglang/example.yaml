@@ -22,6 +22,6 @@ tags: [sglang, openai-api, llm, serving, text-generation]
 tasks: [text_generation, serving]
 
 verification:
-  last_verified: "2026-02-25"
-  last_verification_note: "sglang 0.5.9, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell Max-Q (SM120, 95GB VRAM). All 8 previously-verified models confirmed: Olmo-3-7B-Instruct, Phi-4-mini-instruct, Olmo-3-7B-Think, OLMo-2-1124-7B-Instruct-preview, internlm3-8b-instruct, Qwen3-8B, gemma-3-1b-it all pass. LFM2-1.2B passes with SGLANG_EXTRA_ARGS='--attention-backend torch_native' (triton backend rejected for Mamba models on SM120). SM100 sed workaround still needed. CuDNN 9.16 pin still needed."
+  last_verified: "2026-02-26"
+  last_verification_note: "sglang 0.5.9, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell Max-Q (SM120, 95GB VRAM). All 8 chat models confirmed. LFM2-1.2B auto-selects torch_native backend (Mamba model). Hunyuan-A13B-Instruct-FP8 fails: v_head_dim=null bug patched in Dockerfile; FP8 MoE Triton kernel still fails (147KB shared mem required > 101KB SM120 limit); use vLLM instead."
   status: VERIFIED
