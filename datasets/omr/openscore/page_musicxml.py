@@ -170,90 +170,130 @@ def _svg_page_index(svg_path: Path) -> int:
     return int(m.group(1)) if m else 0
 
 
-def extract_bar_nums_from_svg(svg_path: Path) -> list[int]:
-    """
-    Return sorted list of unique bar numbers visible in an SVG page.
-
-    Strategy:
-    1. Collect all numeric text elements with their font sizes.
-    2. The bar-number font-size class is the one with the most elements.
-       When tied, prefer the class whose candidates have the highest value
-       (bar numbers grow through the score; time-sig denominators are small).
-    3. After collecting candidate bar numbers, remove isolated outliers:
-       keep the largest consecutive-integer cluster (allowing single gaps).
-    """
+def _collect_numeric_items(svg_path: Path) -> list[tuple[float, int]]:
+    """Return (font_size, value) for every numeric <text> element in the SVG."""
     tree = ET.parse(svg_path)
     root = tree.getroot()
-
-    numeric_items: list[tuple[float, int]] = []  # (font_size, value)
+    items: list[tuple[float, int]] = []
     for text, fs, y in _walk_text(root):
         if re.match(r"^\d+$", text):
-            numeric_items.append((fs, int(text)))
+            items.append((fs, int(text)))
+    return items
 
-    if not numeric_items:
-        return []
 
-    # Identify bar-number font size: the size class with the MOST elements.
-    # Bar numbers are numerous (one per measure per staff); page numbers and
-    # annotation markers appear only once or twice, so they lose the vote.
-    size_counts = Counter(fs for fs, _ in numeric_items)
+def _largest_consecutive_cluster(nums: list[int]) -> list[int]:
+    """
+    Return the largest run of consecutive integers in a sorted list.
+    Gaps of ≤ 1 are treated as consecutive (allows a single missing bar number).
+    When two clusters tie in length, the LATER (larger) one is preferred,
+    since bar numbers grow through the score and contaminating values
+    (page numbers, multimeasure-rest counts) are typically small.
+    """
+    best, current = [nums[0]], [nums[0]]
+    for v in nums[1:]:
+        if v - current[-1] <= 1:
+            current.append(v)
+        else:
+            if len(current) >= len(best):  # >= to prefer later cluster on tie
+                best = current
+            current = [v]
+    if len(current) >= len(best):
+        best = current
+    return best
+
+
+def extract_bar_nums_from_svgs(svg_files: list[Path]) -> dict[int, list[int]]:
+    """
+    Extract bar numbers from all SVG pages of ONE score, returning
+    {page_index: [sorted bar numbers]} with [] for pages that have no
+    extractable bar numbers.
+
+    Uses a cross-page canonical font size to robustly separate bar numbers
+    (small font, appear many times across all pages) from page numbers and
+    other numerals (larger font, appear only once per page).
+
+    Strategy:
+    1. Parse every page's SVG and collect (font_size, value) pairs.
+    2. Determine the canonical bar-number font size by counting occurrences
+       ACROSS ALL PAGES: bar numbers dominate by count (one per system per page
+       × many pages), while page numbers appear exactly once per page.
+    3. For each page, extract candidates at the canonical font size, then
+       remove outliers via largest-consecutive-cluster filtering.
+    4. Pages with no elements at the canonical font size get [].
+    """
+    # ── pass 1: collect all numeric items per page ────────────────────────
+    page_items: dict[int, list[tuple[float, int]]] = {}
+    for svg_f in svg_files:
+        idx = _svg_page_index(svg_f)
+        page_items[idx] = _collect_numeric_items(svg_f)
+
+    all_items = [item for items in page_items.values() for item in items]
+    if not all_items:
+        return {idx: [] for idx in page_items}
+
+    # ── determine canonical bar-number font size across all pages ─────────
+    # Bar numbers appear 1×/system × many_systems × many_pages ≫ n_pages
+    # Page numbers appear exactly once per page (= n_pages times total).
+    # So the most-common font size across all pages is the bar-number size.
+    size_counts = Counter(fs for fs, _ in all_items)
     max_count = max(size_counts.values())
     tied = [fs for fs, cnt in size_counts.items() if cnt == max_count]
     if len(tied) == 1:
         bar_fs = tied[0]
     else:
-        # Tie-break: bar numbers grow through the score (easily > 20) while
-        # time-signature denominators are small (2, 4, 8, 16).  Pick the font
-        # size whose candidates include the highest value.
-        def _max_val(fs: float) -> int:
-            return max(v for f, v in numeric_items if abs(f - fs) < 0.1)
-        bar_fs = max(tied, key=_max_val)
+        # Rare tie: prefer smaller font (bar nums are smaller than page nums)
+        bar_fs = min(tied)
 
-    candidates = sorted({v for fs, v in numeric_items if abs(fs - bar_fs) < 0.1})
-
-    if len(candidates) <= 1:
-        return candidates  # too few to filter
-
-    # Remove isolated outliers: keep the largest consecutive cluster.
-    # "Consecutive" allows gaps of ≤ 1 (occasional missing bar number).
-    def largest_consecutive_cluster(nums: list[int]) -> list[int]:
-        best, current = [nums[0]], [nums[0]]
-        for v in nums[1:]:
-            if v - current[-1] <= 1:
-                current.append(v)
+    # ── pass 2: extract per-page bar numbers using canonical bar_fs ───────
+    result: dict[int, list[int]] = {}
+    for idx, items in page_items.items():
+        candidates = sorted({v for fs, v in items if abs(fs - bar_fs) < 0.1})
+        if not candidates:
+            result[idx] = []
+        elif len(candidates) == 1:
+            result[idx] = candidates
+        else:
+            cluster = _largest_consecutive_cluster(candidates)
+            # Safety: if cluster is tiny vs all candidates, skip filtering
+            if len(cluster) < len(candidates) * 0.3 and len(candidates) > 5:
+                result[idx] = candidates
             else:
-                if len(current) > len(best):
-                    best = current
-                current = [v]
-        if len(current) > len(best):
-            best = current
-        return best
+                result[idx] = cluster
 
-    cluster = largest_consecutive_cluster(candidates)
+    return result
 
-    # If the cluster is much smaller than all candidates, something is off.
-    # Fall back to the full candidate list (skip outlier filtering).
-    if len(cluster) < len(candidates) * 0.3 and len(candidates) > 5:
-        return candidates
 
-    return cluster
+def extract_bar_nums_from_svg(svg_path: Path) -> list[int]:
+    """Single-page wrapper around extract_bar_nums_from_svgs (for inspect/testing)."""
+    return extract_bar_nums_from_svgs([svg_path]).get(_svg_page_index(svg_path), [])
 
 
 def compute_page_ranges(bar_nums_per_page: dict[int, list[int]],
                         total_measures: int) -> dict[int, tuple[int, int]]:
     """
-    Given {page: [sorted bar numbers]}, return {page: (bar_start, bar_end)}.
+    Given {page: [sorted bar numbers]} ([] = no bar nums on that page),
+    return {page: (bar_start, bar_end)} for pages WITH bar numbers only.
 
     bar_start = min(bar nums on page N)
-    bar_end   = min(bar nums on page N+1) - 1   (or total_measures for last page)
+    bar_end   = min(bar nums on next page WITH bar nums) - 1
+              (or total_measures for the last such page)
+
+    Pages with [] bar numbers are omitted from the output — their bars will
+    be absorbed into the adjacent pages' ranges.
     """
-    pages = sorted(bar_nums_per_page)
+    # Only work with pages that have extractable bar numbers
+    active = {p: nums for p, nums in bar_nums_per_page.items() if nums}
+    pages = sorted(active)
     ranges = {}
     for i, page in enumerate(pages):
-        bar_start = min(bar_nums_per_page[page])
+        bar_start = min(active[page])
+        # Skip pages whose bar_start exceeds the score length — LilyPond
+        # sometimes emits a "phantom" bar number after the final measure.
+        if bar_start > total_measures:
+            break
         if i + 1 < len(pages):
             next_page = pages[i + 1]
-            bar_end = min(bar_nums_per_page[next_page]) - 1
+            bar_end = min(active[next_page]) - 1
         else:
             bar_end = total_measures
         ranges[page] = (bar_start, bar_end)
@@ -316,7 +356,15 @@ def slice_musicxml(mxl_path: Path, bar_start: int, bar_end: int | None) -> str:
     sliced = score.measures(actual_start, actual_end)
     with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as f:
         out_path = Path(f.name)
-    sliced.write("musicxml", fp=str(out_path))
+    try:
+        sliced.write("musicxml", fp=str(out_path))
+    except (TypeError, AttributeError):
+        # music21 bug: arpeggio spanners that cross page boundaries cause
+        # len() to be called on a Note instead of a collection.  Retry
+        # without cross-boundary spanners — loses some expression marks at
+        # page edges but is otherwise correct.
+        sliced = score.measures(actual_start, actual_end, gatherSpanners=False)
+        sliced.write("musicxml", fp=str(out_path))
     return out_path.read_text(encoding="utf-8")
 
 
@@ -355,14 +403,12 @@ def process_score(mxl_path: Path, svg_dir: Path, score_id: str,
             return []
         return [{"page": 1, "bar_start": 1, "bar_end": None, "musicxml": musicxml}]
 
-    # Multi-page: extract bar numbers per page
-    bar_nums_per_page: dict[int, list[int]] = {}
-    for i, svg_f in enumerate(svg_files, 1):
-        nums = extract_bar_nums_from_svg(svg_f)
-        if not nums:
-            print(f"    WARN {score_id} page {i}: no bar numbers extracted", flush=True)
-            return []
-        bar_nums_per_page[i] = nums
+    # Multi-page: extract bar numbers using cross-page canonical font size
+    bar_nums_per_page = extract_bar_nums_from_svgs(svg_files)
+    empty_pages = [p for p, nums in bar_nums_per_page.items() if not nums]
+    if empty_pages:
+        print(f"    INFO {score_id}: {len(empty_pages)} pages have no bar nums "
+              f"(page-number only) — will be skipped: {empty_pages}", flush=True)
 
     # Get total measures
     try:
@@ -582,8 +628,7 @@ def _run_inspect(corpus_name: str) -> None:
         print(f"  {svg_f.name}: bars {nums[:5]}...{nums[-5:]} (min={nums[0]}, max={nums[-1]})")
 
     total = total_measures_in_mxl(test_mxl)
-    bar_nums_per_page = {_svg_page_index(f): extract_bar_nums_from_svg(f)
-                         for f in svg_files}
+    bar_nums_per_page = extract_bar_nums_from_svgs(svg_files)
     page_ranges = compute_page_ranges(bar_nums_per_page, total)
     print(f"\nPage ranges (total measures={total}):")
     for page, (start, end) in page_ranges.items():
