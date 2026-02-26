@@ -22,6 +22,6 @@ tags: [vllm, openai-api, llm, serving, text-generation]
 tasks: [text_generation, serving]
 
 verification:
-  last_verified: "2026-02-25"
-  last_verification_note: "vLLM 0.15.1, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell Max-Q (SM120, 95GB VRAM). All 8 chat models + Hunyuan-A13B-Instruct-FP8 confirmed (9 total). Hunyuan loads 75.4 GB, leaves only 0.82 GB KV cache. OLMo-2-1124-7B-Instruct-preview needs max_len=1024. Embed/rerank modes confirmed. FLASH_ATTN backend auto-selected. torch.compile + CUDA graph capture confirmed."
+  last_verified: "2026-02-26"
+  last_verification_note: "vLLM 0.15.1, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell Max-Q (SM120, 95GB VRAM). 11 models confirmed: 8 chat + Hunyuan-A13B-Instruct-FP8 + openai/gpt-oss-20b (MXFP4/Marlin, 13.72GB) + Llama-3.1-8B-Instruct (gated, needs HF_TOKEN). Embed/rerank confirmed. FLASH_ATTN backend auto-selected."
   status: VERIFIED

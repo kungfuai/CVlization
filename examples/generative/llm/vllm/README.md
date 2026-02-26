@@ -114,6 +114,8 @@ vLLM 0.15.1, PyTorch 2.9.1+CUDA 12.8, 2× RTX PRO 6000 Blackwell Max-Q (95GB VRA
 - ✅ embed: `google/embeddinggemma-300m` (~1024d), `sentence-transformers/all-roberta-large-v1` (~768d)
 - ✅ rerank: `mixedbread-ai/mxbai-rerank-base-v2` (cross-encoder)
 - ✅ `tencent/Hunyuan-A13B-Instruct-FP8` (bf16, max_len=4096, mem_util=0.88) — loads 75.4 GB, only ~0.82 GB KV cache remaining; use the lowest practical context length
+- ✅ `openai/gpt-oss-20b` (MXFP4, max_len=4096, mem_util=0.95) — 13.72 GB loaded via Marlin kernel (no native FP4 on SM120, uses weight-only compression); 64.27 GB KV cache
+- ✅ `meta-llama/Llama-3.1-8B-Instruct` (bf16, max_len=4096) — 14.99 GB; requires `HF_TOKEN` (gated)
 
 ## Verification (A10, Dec 2025)
 vLLM 0.14.0, PyTorch 2.9.1+CUDA 12.8, A10 (24GB VRAM), SM86.
@@ -128,5 +130,4 @@ vLLM 0.14.0, PyTorch 2.9.1+CUDA 12.8, A10 (24GB VRAM), SM86.
 - ✅ `google/gemma-3-1b-it` (bf16, max_len=2048)
 - ✅ embed: `google/embeddinggemma-300m`, `sentence-transformers/all-roberta-large-v1`
 - ✅ rerank: `mixedbread-ai/mxbai-rerank-base-v2`
-- ❌ `tencent/Hunyuan-A13B-Instruct-FP8` OOM on A10 (24GB); works on ≥80GB GPUs (see Blackwell section)
-- ⚠️ `meta-llama/*Llama-3*/Llama-4*` (gated), `openai/gpt-oss-20b` and others not attempted (need bigger GPUs or special access)
+- ❌ `tencent/Hunyuan-A13B-Instruct-FP8` OOM on A10 (24GB) — model is 75.4 GB, requires ≥80GB GPU
