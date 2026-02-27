@@ -106,6 +106,9 @@ def push_pages_transcribed(musicxml_dir: Path, repo_id: str, corpus: str = "lied
             print(f"    WARN: {missing} rows with no matching PNG — dropping")
             ds = ds.filter(lambda r: r["image"] is not None)
         ds = ds.cast_column("image", HFImage())
+        # Sort by corpus so parquet row groups are homogeneous → efficient
+        # predicate pushdown when streaming with filter(corpus=="lieder") etc.
+        ds = ds.sort("corpus")
         new_splits[split_name] = ds
 
     result = DatasetDict(new_splits)
@@ -165,6 +168,7 @@ def push_pages(repo_id: str, corpora: list[str] | None = None) -> None:
             print(f"  WARN {split_name}: {missing} rows with no PNG")
         ds = Dataset.from_list(rows)
         ds = ds.cast_column("image", HFImage())
+        ds = ds.sort("corpus")
         split_dicts[split_name] = ds
         print(f"  {split_name}: {len(ds)} rows")
 
