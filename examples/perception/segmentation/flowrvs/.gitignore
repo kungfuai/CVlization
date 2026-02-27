@@ -1,4 +1,5 @@
 outputs/
+Wan-AI/
 __pycache__/
 **/__pycache__/
 **/*.pyc
