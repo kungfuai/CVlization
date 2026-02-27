@@ -1,6 +1,6 @@
 # CVlization: Curated AI Training and Inference Recipes That Just Work
 
-A curated collection of 190+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need.
+A curated collection of 195+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need.
 
 *CVlization stands on the shoulders of giants - we package and test amazing open source projects so you can use them with confidence.*
 
@@ -80,9 +80,9 @@ examples/
 
 | Capability | Example Directory | Implementations | Status |
 |------------|-------------------|-----------------|--------|
-| ![LLMs](./doc/images/llm.png) LLMs (text generation) | [`examples/generative/llm`](./examples/generative/llm) | Pretraining (nanogpt, modded_nanogpt, nanomamba), Full pipeline (nanochat: pretrain, sft, rl), Fine-tuning (peft_mistral7b_sft, trl_sft, miles_grpo, unsloth: gpt_oss_grpo, gpt_oss_sft, llama_3b_sft, qwen_7b_sft, gemma3_4b_sft), Inference (mixtral8x7b, sglang, vllm, dllm, nanbeige4_3b_thinking, nomos_1, rnj_1_instruct), Interpretability (gemma_scope_2_270m_it) | ✅ |
+| ![LLMs](./doc/images/llm.png) LLMs (text generation) | [`examples/generative/llm`](./examples/generative/llm) | Pretraining (nanogpt, modded_nanogpt, nanomamba), Full pipeline (nanochat: pretrain, sft, rl), Fine-tuning (peft_mistral7b_sft, trl_sft, miles_grpo, unsloth: gpt_oss_grpo, gpt_oss_sft, llama_3b_sft, qwen_7b_sft, gemma3_4b_sft), Inference (mixtral8x7b, sglang, vllm, dllm, nanbeige4_3b_thinking, nomos_1, rnj_1_instruct), Diffusion LLM (semicat), Interpretability (gemma_scope_2_270m_it) | ✅ |
 | ![Image Generation](./doc/images/controlnet.png) Image Generation | [`examples/generative/image_generation`](./examples/generative/image_generation) | cfm, ddpm, diffuser_unconditional, dit, dreambooth, edm2, flux, next_scene_qwen, qwen_image_layered, rae, repa, stable_diffusion, uva_energy (experimental), vqgan | ✅ |
-| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_diff_cog, animate_x, cogvideox, deforum, flashvsr, framepack, hunyuan_video_1_5, kandinsky_5, krea_realtime_scope (experimental), longcat_video, ltx2, mimic_motion, minisora, phantom (experimental), propainter, real_video, reward_forcing, skyreals, svd_cog, svd_comfy, turbodiffusion, vace, vace_comfy (experimental), video2x, video_enhancement, video_in_between, wan2gp, wan2gp_wan, wan_animate, wan_comfy, worldcanvas | ✅ |
+| ![Video Generation](./doc/images/sora.gif) Video Generation | [`examples/generative/video_generation`](./examples/generative/video_generation) | animate_diff, animate_diff_cog, animate_x, cogvideox, ctrl_world, deforum, dove, flashvsr, framepack, hunyuan_video_1_5, kandinsky_5, krea_realtime_scope (experimental), longcat_video, ltx2, mimic_motion, minisora, phantom (experimental), propainter, real_video, reward_forcing, skyreals, svd_cog, svd_comfy, turbodiffusion, vace, vace_comfy (experimental), video2x, video_enhancement, video_in_between, wan2gp, wan2gp_wan, wan_animate, wan_comfy, worldcanvas | ✅ |
 | Text-to-Speech (TTS) | [`examples/generative/audio`](./examples/generative/audio) | cosyvoice3, vibevoice_realtime, voxcpm | ✅ |
 | Avatar & Talking Head | [`examples/generative/video_generation/avatar`](./examples/generative/video_generation/avatar) | anytalker, egstalker, fastavatar, flashportrait, hunyuanvideo_avatar, imtalker, lite_avatar, live_avatar, livetalk, longcat_video_avatar, personalive, wan_s2v | ✅ |
 
@@ -101,6 +101,7 @@ examples/
 | Capability | Example Directory | Implementations | Status |
 |------------|-------------------|-----------------|--------|
 | **Vision-Language-Action Models** | [`examples/physical`](./examples/physical) | openvla_single_step, openvla_simplerenv | 🧪 |
+| **World Models** | [`examples/physical`](./examples/physical) | stable_worldmodel_dmc | 🧪 |
 
 #### 🤖 Agentic (AI Agents & Workflows) - Experimental
 
@@ -110,7 +111,7 @@ examples/
 | **LlamaIndex Agents** | [`examples/agentic/llamaindex`](./examples/agentic/llamaindex) | graph_rag_cognee, jsonalyze_structured_qa, react_finance_query_agent | 🧪 |
 | **Prompt Optimization** | [`examples/agentic/optimization`](./examples/agentic/optimization) | dspy_gepa_promptops, mcts_prompt_agent | 🧪 |
 | **Tool Use & Coding** | [`examples/agentic`](./examples/agentic) | Code (autogen_pair_programmer), Data analysis (smolagents_data_analyst), Data preparation (physio_signal_prep), Local AI (llamacpp_assistant) | 🧪 |
-| **Formal Reasoning** | [`examples/agentic/formal`](./examples/agentic/formal) | nanoproof (Lean theorem proving) | 🧪 |
+| **Formal Reasoning** | [`examples/agentic/formal`](./examples/agentic/formal) | nanoproof (Lean theorem proving), qed-nano (Olympiad level math proof generation) | 🧪 |
 
 Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. We recommend starting with the nanogpt example.
 
