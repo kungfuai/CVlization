@@ -52,14 +52,11 @@ def ensure_sample_input(name: str, token: Optional[str]) -> tuple[Path, list[str
     return Path(path).resolve(), default_prompts
 
 
-def ensure_wan_base_model(repo_dir: Path, token: Optional[str]) -> None:
-    local_dir = repo_dir / "Wan-AI" / "Wan2.1-T2V-1.3B-Diffusers"
-    local_dir.mkdir(parents=True, exist_ok=True)
-    snapshot_download(
+def ensure_wan_base_model(token: Optional[str]) -> str:
+    return snapshot_download(
         repo_id="Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
         repo_type="model",
         token=token,
-        local_dir=str(local_dir),
     )
 
 
@@ -100,7 +97,7 @@ def main() -> None:
 
     cache_dir = Path(args.weights_cache)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    ensure_wan_base_model(repo_dir, hf_token)
+    wan_model_path = ensure_wan_base_model(hf_token)
 
     dit_ckpt = args.dit_ckpt
     vae_ckpt = args.vae_ckpt
@@ -111,6 +108,7 @@ def main() -> None:
         print(f"Input:          {input_path}")
         print(f"Output:         {output_path}")
         print(f"Repo:           {repo_dir}")
+        print(f"Wan model:      {wan_model_path}")
         print(f"DiT checkpoint: {dit_ckpt}")
         print(f"VAE checkpoint: {vae_ckpt}")
         return
@@ -128,6 +126,7 @@ def main() -> None:
         "--output_dir", str(tmp_output_dir),
         "--dit_ckpt", str(dit_ckpt),
         "--vae_ckpt", str(vae_ckpt),
+        "--wan_model_path", wan_model_path,
     ]
 
     print("Running FlowRVS inference:")

@@ -27,6 +27,7 @@ def get_args_parser():
                         help='Whether to cache images/videos on memory.')
     parser.add_argument('--use_gradient_ckpt', default=True, help='enable_gradient_checkpointing for DiT')
     parser.add_argument('--use_dvi', default=False, help='Use DVI strategy')
+    parser.add_argument('--wan_model_path', default='Wan-AI/Wan2.1-T2V-1.3B-Diffusers', help='Local path or HF repo ID for Wan2.1 base model')
 
     # --- Distributed Training Parameters ---
     parser.add_argument('--world_size', default=1, type=int, help='Number of distributed processes.')
