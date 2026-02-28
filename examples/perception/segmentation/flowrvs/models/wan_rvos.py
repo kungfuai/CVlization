@@ -60,7 +60,7 @@ def adapt_dit_for_concat_input(transformer: WanTransformer3DModel, video_latent_
 def build_dit(args):
     device = torch.device(args.device)
 
-    model_id = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+    model_id = args.wan_model_path
     config = WanTransformer3DModel.load_config(model_id, subfolder="transformer")
     config["use_dvi"] = args.use_dvi  # 假设 args 里有这个布尔值
 
