@@ -13,8 +13,12 @@ if [[ -z "${QUERY:-}" ]]; then
   exit 1
 fi
 
-# Resolve document to absolute path and mount its directory
-DOC_ABS="$(realpath "$DOCUMENT_PATH")"
+# Resolve document to absolute path (portable: works on Linux and macOS)
+if command -v realpath &>/dev/null; then
+  DOC_ABS="$(realpath "$DOCUMENT_PATH")"
+else
+  DOC_ABS="$(cd "$(dirname "$DOCUMENT_PATH")" && pwd)/$(basename "$DOCUMENT_PATH")"
+fi
 DOC_DIR="$(dirname "$DOC_ABS")"
 DOC_NAME="$(basename "$DOC_ABS")"
 
