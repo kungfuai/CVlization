@@ -1,0 +1,42 @@
+name: rlm-claude-code
+capability: agentic/long_context
+modalities:
+  - text
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 2
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image (node:20-slim + Claude Code CLI)
+  predict:
+    script: predict.sh
+    description: Answer a question about a large document (set DOCUMENT_PATH and QUERY)
+tags:
+  - rlm
+  - recursive-language-model
+  - long-context
+  - claude-code
+  - document-qa
+  - anthropic
+tasks:
+  - long_context_understanding
+  - question_answering
+  - document_understanding
+frameworks:
+  - anthropic
+description: >
+  Long document QA using Claude Code CLI running inside Docker.
+  The example directory is mounted as /workspace so Claude Code discovers
+  the RLM skill and rlm-subcall subagent automatically. Claude orchestrates
+  chunking and sub-LLM delegation natively, without a custom RLM loop.
+  Requires ANTHROPIC_API_KEY. No GPU needed.
+verification:
+  status: VERIFIED
+  last_verified: 2026-03-01
+  last_verification_note: >
+    Verified claude --print --dangerously-skip-permissions with /rlm skill
+    on a 1.9MB (50K-line) context. Correctly found hidden needle BLUE_WHALE_42.
+    Claude Code used Bash grep rather than rlm_repl.py for this search task.
