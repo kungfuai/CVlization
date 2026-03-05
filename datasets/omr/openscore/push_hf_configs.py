@@ -3,16 +3,16 @@
 Push HuggingFace configs for zzsi/openscore.
 
 Builds and pushes the following configs:
-  pages_transcribed  — (image, per-page-musicxml) pairs for SFT, lieder corpus
-  pages              — image-only rows, all corpora (rename of current 'default')
+  pages_transcribed  — (image, per-page-musicxml) pairs for SFT, all corpora
+  pages              — image-only rows, all corpora
 
 Usage:
     python push_hf_configs.py --pages-transcribed --repo zzsi/openscore
     python push_hf_configs.py --pages            --repo zzsi/openscore
     python push_hf_configs.py --all              --repo zzsi/openscore
 
-The 'default' config is left unchanged.  After verifying the new configs,
-delete 'default' manually from the HF Hub UI if desired.
+Musicxml dirs default to /tmp/openscore_pages_{corpus}/{corpus}.
+Override with --musicxml-dirs lieder:/path/to/lieder quartets:/path/to/quartets ...
 """
 
 import argparse
@@ -70,46 +70,71 @@ def build_png_lookup(corpus_name: str) -> dict:
 
 # ── pages_transcribed ─────────────────────────────────────────────────────────
 
-def push_pages_transcribed(musicxml_dir: Path, repo_id: str, corpus: str = "lieder") -> None:
-    from datasets import load_from_disk, DatasetDict
+DEFAULT_MUSICXML_DIRS = {
+    "lieder":    Path("/tmp/openscore_pages_lieder/lieder"),
+    "quartets":  Path("/tmp/openscore_pages_quartets/quartets"),
+    "orchestra": Path("/tmp/openscore_pages_orchestra/orchestra"),
+}
+
+
+def push_pages_transcribed(musicxml_dirs: dict, repo_id: str) -> None:
+    """Build pages_transcribed from multiple corpora and push to HF.
+
+    Args:
+        musicxml_dirs: {corpus_name: Path} pointing to page_musicxml.py outputs
+        repo_id: HuggingFace repo id
+    """
+    from datasets import concatenate_datasets, load_from_disk, DatasetDict
     from datasets import Image as HFImage
 
-    print(f"\nBuilding pages_transcribed for {corpus} ...")
-    print(f"  Loading musicxml dataset from {musicxml_dir} ...")
-    dd = load_from_disk(str(musicxml_dir))
-    print(f"  {dd}")
+    print(f"\nBuilding pages_transcribed for corpora: {list(musicxml_dirs.keys())} ...")
 
-    png_lookup = build_png_lookup(corpus)
-    print(f"  PNG lookup: {len(png_lookup)} entries")
+    all_splits: dict[str, list] = {}  # split_name -> list of per-corpus datasets
 
-    def add_image_and_meta(row):
-        key = (row["score_id"], row["page"])
-        entry = png_lookup.get(key)
-        if entry:
-            row["image"]    = str(entry["path"])
-            row["composer"] = entry["composer"]
-            row["opus"]     = entry["opus"]
-            row["title"]    = entry["title"]
-        else:
-            row["image"]    = None
-            row["composer"] = ""
-            row["opus"]     = ""
-            row["title"]    = ""
-        return row
+    for corpus, musicxml_dir in musicxml_dirs.items():
+        if not Path(musicxml_dir).exists():
+            print(f"  WARN: musicxml dir not found for {corpus}: {musicxml_dir} — skipping")
+            continue
 
+        print(f"\n  [{corpus}] Loading from {musicxml_dir} ...")
+        dd = load_from_disk(str(musicxml_dir))
+        print(f"  {dd}")
+
+        png_lookup = build_png_lookup(corpus)
+        print(f"  PNG lookup: {len(png_lookup)} entries")
+
+        def add_image_and_meta(row, lookup=png_lookup):
+            key = (row["score_id"], row["page"])
+            entry = lookup.get(key)
+            if entry:
+                row["image"]    = str(entry["path"])
+                row["composer"] = entry["composer"]
+                row["opus"]     = entry["opus"]
+                row["title"]    = entry["title"]
+            else:
+                row["image"]    = None
+                row["composer"] = ""
+                row["opus"]     = ""
+                row["title"]    = ""
+            return row
+
+        for split_name, ds in dd.items():
+            print(f"  Mapping {split_name} ({len(ds)} rows) ...")
+            ds = ds.map(add_image_and_meta, desc=f"  {corpus}/{split_name}")
+            missing = sum(1 for r in ds if r["image"] is None)
+            if missing:
+                print(f"    WARN: {missing} rows with no matching PNG — dropping")
+                ds = ds.filter(lambda r: r["image"] is not None)
+            ds = ds.cast_column("image", HFImage())
+            all_splits.setdefault(split_name, []).append(ds)
+
+    # Concatenate corpora within each split, sort by corpus for efficient streaming
     new_splits = {}
-    for split_name, ds in dd.items():
-        print(f"  Mapping {split_name} ({len(ds)} rows) ...")
-        ds = ds.map(add_image_and_meta, desc=f"  {split_name}")
-        missing = sum(1 for r in ds if r["image"] is None)
-        if missing:
-            print(f"    WARN: {missing} rows with no matching PNG — dropping")
-            ds = ds.filter(lambda r: r["image"] is not None)
-        ds = ds.cast_column("image", HFImage())
-        # Sort by corpus so parquet row groups are homogeneous → efficient
-        # predicate pushdown when streaming with filter(corpus=="lieder") etc.
-        ds = ds.sort("corpus")
-        new_splits[split_name] = ds
+    for split_name, ds_list in all_splits.items():
+        merged = concatenate_datasets(ds_list) if len(ds_list) > 1 else ds_list[0]
+        merged = merged.sort("corpus")
+        new_splits[split_name] = merged
+        print(f"  {split_name}: {len(merged)} rows total")
 
     result = DatasetDict(new_splits)
     print(f"\n  Final dataset:\n{result}")
@@ -131,9 +156,9 @@ def push_pages(repo_id: str, corpora: list[str] | None = None) -> None:
 
     print(f"\nBuilding pages config for corpora: {corpora} ...")
 
-    # Load split assignments from existing default config (no images)
-    print("  Loading split assignments from default config ...")
-    source = load_dataset("zzsi/openscore", "default",
+    # Load split assignments from pages config (image paths not needed here)
+    print("  Loading split assignments from pages config ...")
+    source = load_dataset("zzsi/openscore", "pages",
                           columns=["score_id", "corpus", "page", "n_pages"])
 
     # Build PNG lookups
@@ -186,9 +211,11 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repo",               default="zzsi/openscore")
     parser.add_argument("--pages-transcribed",  action="store_true",
-                        help="Build and push pages_transcribed config (lieder)")
-    parser.add_argument("--musicxml-dir",       default="/tmp/openscore_pages_lieder/lieder",
-                        help="Directory with the page_musicxml.py output DatasetDict")
+                        help="Build and push pages_transcribed config (all corpora)")
+    parser.add_argument("--musicxml-dirs",      nargs="*", default=None,
+                        metavar="CORPUS:PATH",
+                        help="corpus:path pairs, e.g. lieder:/tmp/... quartets:/tmp/... "
+                             "(default: /tmp/openscore_pages_{corpus}/{corpus})")
     parser.add_argument("--pages",              action="store_true",
                         help="Rebuild and push image-only pages config (all corpora)")
     parser.add_argument("--all",                action="store_true",
@@ -200,7 +227,14 @@ def main():
         sys.exit(1)
 
     if args.pages_transcribed or args.all:
-        push_pages_transcribed(Path(args.musicxml_dir), args.repo)
+        if args.musicxml_dirs:
+            dirs = {}
+            for item in args.musicxml_dirs:
+                corpus, path = item.split(":", 1)
+                dirs[corpus] = Path(path)
+        else:
+            dirs = {k: v for k, v in DEFAULT_MUSICXML_DIRS.items() if v.exists()}
+        push_pages_transcribed(dirs, args.repo)
 
     if args.pages or args.all:
         push_pages(args.repo)
