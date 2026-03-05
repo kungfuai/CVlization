@@ -1,0 +1,44 @@
+# Gemma-3 OMR SFT Configuration
+# Fine-tune Gemma-3 on zzsi/openscore pages_transcribed (image → MusicXML)
+
+model:
+  name: "unsloth/gemma-3-4b-pt"
+  load_in_4bit: true
+  use_gradient_checkpointing: "unsloth"
+  max_length: 4096  # MusicXML per page can be long
+  chat_template: "gemma-3"
+
+lora:
+  r: 16
+  alpha: 16
+  dropout: 0
+  finetune_vision_layers: true
+  finetune_language_layers: true
+  finetune_attention_modules: true
+  finetune_mlp_modules: true
+
+dataset:
+  repo: "zzsi/openscore"
+  config: "pages_transcribed"
+  split: "train"
+  corpora: ["lieder"]  # lieder only for smoke test; add "quartets", "orchestra" for full run
+  max_samples: 100     # Remove for full training
+  val_split_ratio: 0.1
+
+training:
+  output_dir: "outputs"
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
+  max_grad_norm: 0.3
+  warmup_ratio: 0.03
+  max_steps: 30        # Quick smoke test; use num_train_epochs for full training
+  # num_train_epochs: 2
+  learning_rate: 2.0e-4
+  logging_steps: 1
+  save_steps: 30
+  val_steps: 10
+  optim: "adamw_torch_fused"
+  weight_decay: 0.001
+  lr_scheduler_type: "cosine"
+  seed: 3407
+  test_after_training: true
