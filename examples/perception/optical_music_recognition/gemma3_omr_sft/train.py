@@ -9,21 +9,94 @@ Fine-tunes Gemma-3 on the zzsi/openscore pages_transcribed dataset:
 Based on the gemma3_vision_sft example; adapted for OMR with the openscore dataset.
 
 Usage:
-  python train.py                        # uses config.yaml defaults (smoke test)
+  python train.py                           # uses config.yaml defaults (smoke test)
   python train.py --corpus lieder quartets  # override corpus filter
-  python train.py --epochs 2             # full training run
+  python train.py --epochs 2               # full training run
 """
 
 import argparse
+import os
 import yaml
 import torch
 from datasets import load_dataset
+from transformers import TrainerCallback
 from unsloth import FastVisionModel, get_chat_template
 from unsloth.trainer import UnslothVisionDataCollator
 from trl import SFTTrainer, SFTConfig
 
 INSTRUCTION = "Transcribe this sheet music page to MusicXML."
 
+
+# ── WandB inference callback ───────────────────────────────────────────────────
+
+class WandbInferenceCallback(TrainerCallback):
+    """Runs inference on fixed held-out samples every N steps and logs to WandB.
+
+    Logs a wandb.Table with columns:
+      step | image | score_id | corpus | page | bars | reference | prediction
+    """
+
+    def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512):
+        self.model         = model
+        self.processor     = processor
+        self.samples       = samples       # list of raw dataset rows (PIL images + metadata)
+        self.every_n_steps = every_n_steps
+        self.max_new_tokens = max_new_tokens
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step == 0 or state.global_step % self.every_n_steps != 0:
+            return
+
+        import wandb
+        if wandb.run is None:
+            return
+
+        FastVisionModel.for_inference(self.model)
+        self.model.eval()
+
+        rows = []
+        for sample in self.samples:
+            image = sample["image"]
+            messages = [{"role": "user", "content": [
+                {"type": "image"}, {"type": "text", "text": INSTRUCTION},
+            ]}]
+            input_text = self.processor.apply_chat_template(messages, add_generation_prompt=True)
+            inputs = self.processor(
+                image, input_text, add_special_tokens=False, return_tensors="pt"
+            ).to("cuda")
+
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=self.max_new_tokens,
+                    use_cache=True,
+                    do_sample=False,
+                )
+            pred_tokens = outputs[0][inputs["input_ids"].shape[1]:]
+            prediction  = self.processor.decode(pred_tokens, skip_special_tokens=True).strip()
+
+            rows.append([
+                state.global_step,
+                wandb.Image(image, caption=f"{sample['score_id']} p{sample['page']}"),
+                sample["score_id"],
+                sample["corpus"],
+                sample["page"],
+                f"{sample['bar_start']}-{sample['bar_end']}",
+                sample["musicxml"][:500],
+                prediction[:500],
+            ])
+
+        table = wandb.Table(
+            columns=["step", "image", "score_id", "corpus", "page",
+                     "bars", "reference", "prediction"],
+            data=rows,
+        )
+        wandb.log({"inference_examples": table}, step=state.global_step)
+
+        FastVisionModel.for_training(self.model)
+
+
+# ── Args ───────────────────────────────────────────────────────────────────────
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__,
@@ -38,6 +111,8 @@ def parse_args():
     return parser.parse_args()
 
 
+# ── Main ───────────────────────────────────────────────────────────────────────
+
 def main():
     args = parse_args()
 
@@ -49,6 +124,7 @@ def main():
     model_config    = config["model"]
     lora_config     = config["lora"]
     training_config = config["training"]
+    wandb_config    = config.get("wandb", {})
 
     # CLI overrides
     corpora = args.corpus or dataset_config.get("corpora", None)
@@ -57,6 +133,26 @@ def main():
         training_config["max_steps"] = -1
     if args.max_samples is not None:
         dataset_config["max_samples"] = args.max_samples
+
+    # ── WandB init ─────────────────────────────────────────────────────────────
+    use_wandb = bool(os.environ.get("WANDB_API_KEY") and wandb_config.get("project"))
+    if use_wandb:
+        import wandb
+        wandb.init(
+            project=wandb_config["project"],
+            name=wandb_config.get("run_name", None),
+            config={
+                "model":    model_config,
+                "lora":     lora_config,
+                "dataset":  {**dataset_config, "corpora": corpora},
+                "training": training_config,
+            },
+        )
+        print(f"WandB run: {wandb.run.url}")
+    else:
+        if wandb_config.get("project"):
+            print("WARN: wandb.project set in config but WANDB_API_KEY not found — logging disabled.")
+        print("WandB logging disabled.")
 
     # ── Model ──────────────────────────────────────────────────────────────────
     print(f"Loading model: {model_config['name']} ...")
@@ -105,7 +201,6 @@ def main():
           f"corpus={dataset[0]['corpus']} "
           f"page={dataset[0]['page']}/{dataset[0]['n_pages']} "
           f"bars={dataset[0]['bar_start']}-{dataset[0]['bar_end']}")
-    print(f"MusicXML snippet: {dataset[0]['musicxml'][:80].strip()} ...")
 
     # ── Chat format ────────────────────────────────────────────────────────────
     def convert_to_conversation(sample):
@@ -142,6 +237,13 @@ def main():
     print(f"Setting up {chat_template} chat template ...")
     processor = get_chat_template(processor, chat_template)
 
+    # ── Held-out inference samples for WandB ───────────────────────────────────
+    n_examples = wandb_config.get("n_examples", 4)
+    # Pick evenly-spaced samples from across the dataset for diversity
+    total = len(dataset)
+    example_idxs = [int(i * total / n_examples) for i in range(n_examples)]
+    inference_samples = [dataset[i] for i in example_idxs]
+
     # ── Training ───────────────────────────────────────────────────────────────
     FastVisionModel.for_training(model)
 
@@ -171,7 +273,7 @@ def main():
         lr_scheduler_type=training_config["lr_scheduler_type"],
         seed=training_config["seed"],
         output_dir=training_config["output_dir"],
-        report_to="none",
+        report_to="wandb" if use_wandb else "none",
         remove_unused_columns=False,
         dataset_text_field="",
         dataset_kwargs={"skip_prepare_dataset": True},
@@ -183,6 +285,16 @@ def main():
     max_mem   = round(gpu_stats.total_memory / 1024 ** 3, 3)
     print(f"\nGPU: {gpu_stats.name}  |  {max_mem} GB total  |  {start_mem} GB reserved")
 
+    callbacks = []
+    if use_wandb:
+        callbacks.append(WandbInferenceCallback(
+            model=model,
+            processor=processor,
+            samples=inference_samples,
+            every_n_steps=wandb_config.get("log_examples_every_n_steps", 100),
+            max_new_tokens=wandb_config.get("inference_max_new_tokens", 512),
+        ))
+
     trainer = SFTTrainer(
         model=model,
         train_dataset=train_data,
@@ -190,6 +302,7 @@ def main():
         processing_class=processor.tokenizer,
         data_collator=UnslothVisionDataCollator(model, processor),
         args=training_args,
+        callbacks=callbacks,
     )
 
     print("\nStarting training ...")
@@ -203,27 +316,29 @@ def main():
     print('='*70)
 
     # ── Save ───────────────────────────────────────────────────────────────────
-    output_dir    = training_config["output_dir"]
-    final_dir     = f"{output_dir}/final_model"
+    output_dir = training_config["output_dir"]
+    final_dir  = f"{output_dir}/final_model"
     print(f"\nSaving model to {final_dir} ...")
     model.save_pretrained(final_dir)
     processor.save_pretrained(final_dir)
     print("Model saved.")
+
+    if use_wandb:
+        import wandb
+        wandb.finish()
 
     # ── Post-training inference test ───────────────────────────────────────────
     if training_config.get("test_after_training", True) and len(dataset) >= 2:
         print("\nPost-training inference test ...")
         FastVisionModel.for_inference(model)
 
-        sample  = dataset[min(10, len(dataset) - 1)]
-        image   = sample["image"]
-        messages = [{
-            "role": "user",
-            "content": [{"type": "image"}, {"type": "text", "text": INSTRUCTION}],
-        }]
+        sample = inference_samples[0]
+        messages = [{"role": "user", "content": [
+            {"type": "image"}, {"type": "text", "text": INSTRUCTION},
+        ]}]
         input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
         inputs = processor(
-            image, input_text, add_special_tokens=False, return_tensors="pt"
+            sample["image"], input_text, add_special_tokens=False, return_tensors="pt"
         ).to("cuda")
 
         from transformers import TextStreamer

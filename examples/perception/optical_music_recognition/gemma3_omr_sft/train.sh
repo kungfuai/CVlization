@@ -18,6 +18,7 @@ docker run --rm --gpus=all \
   --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
   --env "PYTHONPATH=/cvlization_repo" \
   --env "PYTHONUNBUFFERED=1" \
+  ${WANDB_API_KEY:+--env "WANDB_API_KEY=${WANDB_API_KEY}"} \
   --shm-size=16g \
   "$IMG" python3 train.py "$@"
 
