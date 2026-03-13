@@ -65,11 +65,12 @@ class WandbInferenceCallback(TrainerCallback):
     """
 
     def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512):
-        self.model         = model
-        self.processor     = processor
-        self.samples       = samples       # list of raw dataset rows (PIL images + metadata)
-        self.every_n_steps = every_n_steps
+        self.model          = model
+        self.processor      = processor
+        self.samples        = samples       # list of raw dataset rows (PIL images + metadata)
+        self.every_n_steps  = every_n_steps
         self.max_new_tokens = max_new_tokens
+        self._images_logged = False         # log images + ground truth only once
 
     def _run_inference(self, step):
         import wandb
@@ -124,16 +125,25 @@ class WandbInferenceCallback(TrainerCallback):
         )
 
         import html as _html
-        s0 = self.samples[0]
-        ref0, pred0 = rows[0][6], rows[0][7]
-        caption = f"{s0['score_id']} p{s0['page']} bars {s0['bar_start']}-{s0['bar_end']}"
-        wandb.log({
-            "inference_examples":    table,
-            "sample/image":          wandb.Image(s0["image"], caption=caption),
-            "sample/reference":      wandb.Html(f"<pre>{_html.escape(ref0)}</pre>"),
-            "sample/prediction":     wandb.Html(f"<pre>{_html.escape(pred0)}</pre>"),
+        log_dict = {
+            "inference_examples":     table,
             "inference/duration_sec": time.time() - t0,
-        })
+        }
+
+        # Log images + ground truth once; predictions every step
+        n_panels = min(3, len(self.samples))
+        for i in range(n_panels):
+            s = self.samples[i]
+            ref_i = rows[i][6]
+            pred_i = rows[i][7]
+            caption = f"{s['score_id']} p{s['page']} bars {s['bar_start']}-{s['bar_end']}"
+            if not self._images_logged:
+                log_dict[f"sample_{i}/image"]        = wandb.Image(s["image"], caption=caption)
+                log_dict[f"sample_{i}/ground_truth"] = wandb.Html(f"<pre>{_html.escape(ref_i)}</pre>")
+            log_dict[f"sample_{i}/prediction"] = wandb.Html(f"<pre>{_html.escape(pred_i)}</pre>")
+
+        self._images_logged = True
+        wandb.log(log_dict)
 
         FastVisionModel.for_training(self.model)
 
