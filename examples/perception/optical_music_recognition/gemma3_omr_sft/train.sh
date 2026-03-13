@@ -19,6 +19,7 @@ docker run --rm --gpus=all \
   --env "PYTHONPATH=/cvlization_repo" \
   --env "PYTHONUNBUFFERED=1" \
   ${WANDB_API_KEY:+--env "WANDB_API_KEY=${WANDB_API_KEY}"} \
+  ${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"} \
   --shm-size=16g \
   "$IMG" python3 train.py "$@"
 

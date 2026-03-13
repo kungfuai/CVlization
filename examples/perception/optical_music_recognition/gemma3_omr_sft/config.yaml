@@ -21,16 +21,16 @@ dataset:
   repo: "zzsi/openscore"
   config: "pages_transcribed"
   split: "train"
-  corpora: ["lieder"]  # lieder only for smoke test; add "quartets", "orchestra" for full run
-  max_samples: 100     # Remove for full training
-  val_split_ratio: 0.1
+  corpora: ["lieder"]
+  # max_samples: 100
+  shuffle: true
 
 wandb:
   project: "openscore-omr"
   run_name: null              # auto-generated if null
   log_examples_every_n_steps: 100   # how often to run inference + log examples
   n_examples: 4              # number of held-out pages to show
-  inference_max_new_tokens: 512
+  inference_max_new_tokens: 2048
 
 training:
   output_dir: "outputs"
@@ -38,12 +38,12 @@ training:
   gradient_accumulation_steps: 4
   max_grad_norm: 0.3
   warmup_ratio: 0.03
-  max_steps: 30        # Quick smoke test; use num_train_epochs for full training
-  # num_train_epochs: 2
+  # max_steps: 30
+  num_train_epochs: 2
   learning_rate: 2.0e-4
   logging_steps: 1
-  save_steps: 30
-  val_steps: 10
+  save_steps: 500
+  val_steps: 250
   optim: "adamw_torch_fused"
   weight_decay: 0.001
   lr_scheduler_type: "cosine"

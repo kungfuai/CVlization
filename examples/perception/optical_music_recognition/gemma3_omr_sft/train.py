@@ -27,6 +27,34 @@ from trl import SFTTrainer, SFTConfig
 INSTRUCTION = "Transcribe this sheet music page to MusicXML."
 
 
+def strip_musicxml_header(xml: str) -> str:
+    """Remove noisy boilerplate from MusicXML, keeping only musically useful content.
+
+    Strips:
+      - XML declaration and DOCTYPE
+      - <movement-title> when it looks like a temp filename (tmp*.xml)
+      - <identification> block (IMSLP URLs, transcriber names, encoding software)
+      - <defaults> block (scaling params, always identical)
+
+    Keeps:
+      - <work><work-title> (actual piece title)
+      - <movement-number> and real <movement-title> (orchestra movements)
+      - <part-list> (instrument names)
+      - <part> elements (actual music)
+    """
+    import re
+    # Strip XML declaration and DOCTYPE
+    xml = re.sub(r'<\?xml[^?]*\?>\s*', '', xml)
+    xml = re.sub(r'<!DOCTYPE[^>]*>\s*', '', xml)
+    # Strip <identification>...</identification> block
+    xml = re.sub(r'\s*<identification>.*?</identification>', '', xml, flags=re.DOTALL)
+    # Strip <defaults>...</defaults> block
+    xml = re.sub(r'\s*<defaults>.*?</defaults>', '', xml, flags=re.DOTALL)
+    # Strip <movement-title> if it's a temp filename (e.g. tmp6abc.xml)
+    xml = re.sub(r'\s*<movement-title>tmp[^<]*</movement-title>', '', xml)
+    return xml.strip()
+
+
 # ── WandB inference callback ───────────────────────────────────────────────────
 
 class WandbInferenceCallback(TrainerCallback):
@@ -75,6 +103,8 @@ class WandbInferenceCallback(TrainerCallback):
             pred_tokens = outputs[0][inputs["input_ids"].shape[1]:]
             prediction  = self.processor.decode(pred_tokens, skip_special_tokens=True).strip()
 
+            ref = strip_musicxml_header(sample["musicxml"])
+
             rows.append([
                 state.global_step,
                 wandb.Image(image, caption=f"{sample['score_id']} p{sample['page']}"),
@@ -82,8 +112,8 @@ class WandbInferenceCallback(TrainerCallback):
                 sample["corpus"],
                 sample["page"],
                 f"{sample['bar_start']}-{sample['bar_end']}",
-                sample["musicxml"][:500],
-                prediction[:500],
+                ref,
+                prediction,
             ])
 
         table = wandb.Table(
@@ -91,7 +121,18 @@ class WandbInferenceCallback(TrainerCallback):
                      "bars", "reference", "prediction"],
             data=rows,
         )
-        wandb.log({"inference_examples": table}, step=state.global_step)
+
+        # Also log the first sample as standalone panels for easy viewing
+        s0 = self.samples[0]
+        ref0 = rows[0][6]   # stripped reference
+        pred0 = rows[0][7]  # prediction
+        caption = f"{s0['score_id']} p{s0['page']} bars {s0['bar_start']}-{s0['bar_end']}"
+        wandb.log({
+            "inference_examples": table,
+            "sample/image":       wandb.Image(s0["image"], caption=caption),
+            "sample/reference":   wandb.Html(f"<pre>{ref0}</pre>"),
+            "sample/prediction":  wandb.Html(f"<pre>{pred0}</pre>"),
+        })
 
         FastVisionModel.for_training(self.model)
 
@@ -215,23 +256,32 @@ def main():
                 },
                 {
                     "role": "assistant",
-                    "content": [{"type": "text", "text": sample["musicxml"]}],
+                    "content": [{"type": "text", "text": strip_musicxml_header(sample["musicxml"])}],
                 },
             ]
         }
 
-    print("Converting to conversation format ...")
-    converted = [convert_to_conversation(s) for s in dataset]
+    if dataset_config.get("shuffle", False):
+        dataset = dataset.shuffle(seed=training_config["seed"])
+        print(f"Dataset shuffled (seed={training_config['seed']})")
 
-    val_ratio = dataset_config.get("val_split_ratio", 0.0)
-    if val_ratio > 0:
-        split_idx = int(len(converted) * (1 - val_ratio))
-        train_data = converted[:split_idx]
-        val_data   = converted[split_idx:]
-        print(f"Split: {len(train_data)} train, {len(val_data)} val")
+    print("Converting to conversation format ...")
+    train_data = [convert_to_conversation(s) for s in dataset]
+
+    # ── Validation split: prefer HF dev split, fall back to manual carve-out ──
+    val_data = None
+    val_raw  = None
+    dev_split = load_dataset(repo, cfg, split="dev")
+    if corpora:
+        dev_split = dev_split.filter(lambda r: r["corpus"] in set(corpora))
+    if len(dev_split) > 0:
+        val_data = [convert_to_conversation(s) for s in dev_split]
+        val_raw  = dev_split
+        print(f"Validation: {len(val_data)} rows from HF dev split")
     else:
-        train_data = converted
-        val_data   = None
+        print("No dev split rows found for selected corpora — skipping validation")
+
+    print(f"Train: {len(train_data)}  Val: {len(val_data) if val_data else 0}")
 
     chat_template = model_config.get("chat_template", "gemma-3")
     print(f"Setting up {chat_template} chat template ...")
@@ -239,10 +289,13 @@ def main():
 
     # ── Held-out inference samples for WandB ───────────────────────────────────
     n_examples = wandb_config.get("n_examples", 4)
-    # Pick evenly-spaced samples from across the dataset for diversity
-    total = len(dataset)
+    if val_raw is not None and len(val_raw) >= n_examples:
+        src = val_raw
+    else:
+        src = dataset
+    total = len(src)
     example_idxs = [int(i * total / n_examples) for i in range(n_examples)]
-    inference_samples = [dataset[i] for i in example_idxs]
+    inference_samples = [src[i] for i in example_idxs]
 
     # ── Training ───────────────────────────────────────────────────────────────
     FastVisionModel.for_training(model)
