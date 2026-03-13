@@ -71,13 +71,14 @@ class WandbInferenceCallback(TrainerCallback):
         self.every_n_steps = every_n_steps
         self.max_new_tokens = max_new_tokens
 
-    def on_step_end(self, args, state, control, **kwargs):
-        if state.global_step == 0 or state.global_step % self.every_n_steps != 0:
-            return
-
+    def _run_inference(self, step):
         import wandb
         if wandb.run is None:
             return
+
+        import time
+        wandb.log({"inference/started_at_step": step})
+        t0 = time.time()
 
         FastVisionModel.for_inference(self.model)
         self.model.eval()
@@ -106,7 +107,7 @@ class WandbInferenceCallback(TrainerCallback):
             ref = strip_musicxml_header(sample["musicxml"])
 
             rows.append([
-                state.global_step,
+                step,
                 wandb.Image(image, caption=f"{sample['score_id']} p{sample['page']}"),
                 sample["score_id"],
                 sample["corpus"],
@@ -122,19 +123,27 @@ class WandbInferenceCallback(TrainerCallback):
             data=rows,
         )
 
-        # Also log the first sample as standalone panels for easy viewing
+        import html as _html
         s0 = self.samples[0]
-        ref0 = rows[0][6]   # stripped reference
-        pred0 = rows[0][7]  # prediction
+        ref0, pred0 = rows[0][6], rows[0][7]
         caption = f"{s0['score_id']} p{s0['page']} bars {s0['bar_start']}-{s0['bar_end']}"
         wandb.log({
-            "inference_examples": table,
-            "sample/image":       wandb.Image(s0["image"], caption=caption),
-            "sample/reference":   wandb.Html(f"<pre>{ref0}</pre>"),
-            "sample/prediction":  wandb.Html(f"<pre>{pred0}</pre>"),
+            "inference_examples":    table,
+            "sample/image":          wandb.Image(s0["image"], caption=caption),
+            "sample/reference":      wandb.Html(f"<pre>{_html.escape(ref0)}</pre>"),
+            "sample/prediction":     wandb.Html(f"<pre>{_html.escape(pred0)}</pre>"),
+            "inference/duration_sec": time.time() - t0,
         })
 
         FastVisionModel.for_training(self.model)
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self._run_inference(step=0)
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step == 0 or state.global_step % self.every_n_steps != 0:
+            return
+        self._run_inference(step=state.global_step)
 
 
 # ── Args ───────────────────────────────────────────────────────────────────────
