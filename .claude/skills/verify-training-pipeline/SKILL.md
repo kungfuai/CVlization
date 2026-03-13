@@ -49,7 +49,8 @@ cd examples/<capability>/<task>/<framework>/
 - `example.yaml` - Must have: name, capability, stability, presets (build, train)
 - `Dockerfile` - Should copy necessary files and install dependencies
 - `build.sh` - Must set `SCRIPT_DIR` and call `docker build`
-- `train.sh` - Must mount volumes correctly and pass environment variables
+- `train.sh` - Must mount volumes correctly, pass environment variables, and forward `CUDA_VISIBLE_DEVICES` to the container (use `${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"}` so it's only set when the host has it set)
+- `.gitignore` - Must cover all runtime artifacts (weights, checkpoints, results). Note: `CVL_OUTPUTS` maps to the workspace root (the example dir itself), NOT `outputs/`, so files like `*.pt`, `result.txt` etc. will land in the example directory directly. Verify with `git status` after a test run.
 
 ### 2. Build Verification
 
@@ -408,7 +409,7 @@ A training pipeline passes verification when:
 4. ✅ **Metrics Improve**: Training loss decreases OR model accuracy/mAP/IoU improves over epochs
 5. ✅ **Central Caching**: Training data cached to `~/.cache/cvlization/data/` (NOT to local `./data/`), pretrained weights cached to framework-specific locations (`~/.cache/torch/`, `~/.cache/huggingface/`)
 6. ✅ **Lazy Downloading**: Datasets and pretrained weights download only when needed, avoiding repeated downloads on subsequent runs
-7. ✅ **Outputs**: Checkpoints/adapters/logs saved to outputs/
+7. ✅ **Outputs**: Checkpoints/adapters/logs saved correctly; `.gitignore` covers all runtime artifacts (weights land in example dir root via CVL_OUTPUTS, not `outputs/`)
 8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
 9. ✅ **Documentation**: README explains how to use the example
 10. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`

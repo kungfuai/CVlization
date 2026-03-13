@@ -1,0 +1,44 @@
+name: tiny-dllm
+capability: generative/llm
+modalities:
+  - text
+datasets:
+  - tiny-shakespeare
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 1
+  cpu_cores: 4
+  disk_gb: 2
+image: cvlization/tiny-dllm:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train diffusion LM on Tiny Shakespeare (~20min A100)
+  predict:
+    script: predict.sh
+    description: Generate text with trained model
+  test:
+    script: test.sh
+    description: Run smoke test (100 iters train + 100 token generate)
+tags:
+  - diffusion
+  - character-level
+  - tiny-shakespeare
+  - training
+  - inference
+  - pytorch
+tasks:
+  - text_generation
+frameworks:
+  - pytorch
+description: >
+  Tiny diffusion language model (~10.7M params) for character-level text
+  generation on Tiny Shakespeare. Uses confidence-based parallel decoding
+  instead of autoregressive generation. Based on nathan-barry/tiny-diffusion.
+verification:
+  last_verified: "2026-03-13"
+  last_verification_note: "Build, train (100 iters, loss 4.12->2.76), and predict verified on RTX PRO 6000 Blackwell (98GB VRAM). ~1GB VRAM usage. PyTorch 2.9.1+CUDA 12.8."

@@ -1,0 +1,8 @@
+outputs/
+weights/
+data.txt
+__pycache__/
+*.pyc
+*.pt
+result.txt
+result.json
