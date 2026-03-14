@@ -416,6 +416,22 @@ def main():
 
     if use_wandb:
         import wandb
+        # Upload final LoRA adapter as a WandB artifact
+        artifact = wandb.Artifact(
+            name=f"lora-adapter-{wandb.run.id}",
+            type="model",
+            description=f"LoRA adapter for {model_config['name']} trained on {corpora}",
+            metadata={
+                "model": model_config["name"],
+                "corpora": corpora,
+                "epochs": training_config.get("num_train_epochs"),
+                "train_loss": round(stats.metrics.get("train_loss", 0), 4),
+                "peak_vram_gb": used_mem,
+            },
+        )
+        artifact.add_dir(final_dir)
+        wandb.log_artifact(artifact)
+        print(f"WandB artifact logged: {artifact.name}")
         wandb.finish()
 
     # ── Post-training inference test ───────────────────────────────────────────
