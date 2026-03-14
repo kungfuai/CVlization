@@ -41,6 +41,48 @@ CHECKPOINT_GDRIVE_ID = "15nw5NhEIf7VvetEtQI1cnrLNWPi_9FGj"
 CHECKPOINT_FILENAME = "v3.pkl"
 V3_REPO_DIR = "/opt/v3"
 
+# Built-in sample clips (hosted on zzsi/cvl HuggingFace dataset)
+SAMPLES = {
+    "vid4_city": {
+        "hf_prefix": "v3_vsr/vid4_city",
+        "num_frames": 34,
+        "description": "Vid4 'city' clip (34 frames, 704x576)",
+    },
+}
+
+
+def ensure_sample_input(name: str, cache_dir: Path) -> tuple[Path, str]:
+    """Download a built-in sample clip from HuggingFace."""
+    from huggingface_hub import hf_hub_download
+
+    sample = SAMPLES[name]
+    eval_set = name
+    # HFEvalVideoFolder expects: data_dir/eval_set/<video_subdir>/<frame>.png
+    frames_dir = cache_dir / "samples" / eval_set / "000"
+
+    if frames_dir.exists() and len(list(frames_dir.glob("*.png"))) >= sample["num_frames"]:
+        print(f"Sample '{name}' found in cache: {frames_dir}")
+        return cache_dir / "samples", eval_set
+
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading sample '{name}' ({sample['description']})...")
+    token = os.environ.get("HF_TOKEN")
+
+    for i in range(sample["num_frames"]):
+        fname = f"{i:08d}.png"
+        downloaded = hf_hub_download(
+            repo_id="zzsi/cvl",
+            repo_type="dataset",
+            filename=f"{sample['hf_prefix']}/{fname}",
+            token=token,
+        )
+        # Copy to expected directory structure
+        import shutil
+        shutil.copy2(downloaded, frames_dir / fname)
+
+    print(f"Sample saved to: {frames_dir}")
+    return cache_dir / "samples", eval_set
+
 
 def ensure_checkpoint(cache_dir: Path) -> Path:
     """Download V3 checkpoint from Google Drive if not cached."""
@@ -60,58 +102,14 @@ def ensure_checkpoint(cache_dir: Path) -> Path:
     return ckpt_path
 
 
-def ensure_sample_data(cache_dir: Path) -> tuple[Path, str]:
-    """Create sample data for testing.
-
-    Generates 29 frames at 256x256 so the model has enough source frames
-    (the encoder expects up to SEQ_LEN_ENC=14 source frames; with time_scale=2
-    we need at least (14-1)*2+1=27 target frames).
-
-    Returns (data_dir, eval_set_name) where data_dir/eval_set_name/ contains the PNGs.
-    This matches how HFEvalVideoFolder expects: each subdirectory is one video.
-    """
-    NUM_FRAMES = 29
-    FRAME_SIZE = 256
-    EVAL_SET = "sample_clip"
-    data_dir = cache_dir / "sample_data"
-    # HFEvalVideoFolder expects: root/<video_dir>/<frame>.png
-    # So frames go in data_dir/EVAL_SET/000/
-    frames_dir = data_dir / EVAL_SET / "000"
-    if frames_dir.exists() and len(list(frames_dir.glob("*.png"))) >= NUM_FRAMES:
-        return data_dir, EVAL_SET
-
-    frames_dir.mkdir(parents=True, exist_ok=True)
-    print("Generating sample frames for testing...")
-
-    from PIL import Image
-    import numpy as np
-
-    rng = np.random.RandomState(42)
-    for i in range(NUM_FRAMES):
-        # Textured frames with slow motion to simulate a real video
-        y, x = np.mgrid[0:FRAME_SIZE, 0:FRAME_SIZE].astype(np.float32)
-        phase = 2 * np.pi * i / NUM_FRAMES
-        r = np.clip(128 + 80 * np.sin(x / 20.0 + phase), 0, 255)
-        g = np.clip(128 + 80 * np.sin(y / 25.0 + phase * 0.7), 0, 255)
-        b = np.clip(128 + 80 * np.cos((x + y) / 30.0 + phase * 1.3), 0, 255)
-        arr = np.stack([r, g, b], axis=-1).astype(np.uint8)
-        # Add slight noise for texture
-        noise = rng.randint(-10, 11, arr.shape, dtype=np.int16)
-        arr = np.clip(arr.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-        Image.fromarray(arr).save(frames_dir / f"{i:04d}.png")
-
-    print(f"Sample frames saved to: {frames_dir}")
-    return data_dir, EVAL_SET
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="V3: Continuous Space-Time Video Super-Resolution",
     )
     parser.add_argument(
-        "--input", default=None,
-        help="Path to input video directory (folder of PNG frames or a video file). "
-             "If omitted, generates sample test frames.",
+        "--input", default="vid4_city",
+        help="Path to input video directory, or a built-in sample name: "
+             f"{list(SAMPLES.keys())}. Default: vid4_city",
     )
     parser.add_argument(
         "--output", default="v3_result",
@@ -150,8 +148,8 @@ def main():
         ckpt_path = ensure_checkpoint(cache_dir / "checkpoints")
 
     # Resolve input
-    if args.input is None:
-        data_dir, eval_set = ensure_sample_data(cache_dir)
+    if args.input in SAMPLES:
+        data_dir, eval_set = ensure_sample_input(args.input, cache_dir)
         data_dir_arg = str(data_dir)
     else:
         input_path = Path(resolve_input_path(args.input, INP))

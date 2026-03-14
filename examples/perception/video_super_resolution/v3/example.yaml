@@ -41,6 +41,6 @@ verification:
   last_verification_note: |
     Verified build and inference on NVIDIA RTX PRO 6000 Blackwell (CC 12.0).
     CUDA 12.8.1 devel base, JAX 0.7.1, Flax 0.12.0. Multi-arch CUDA extension
-    (sm_80, sm_89, PTX for compute_90). Inference runs end-to-end: encoding +
-    16 decode patches, 29 output frames, ~80s. Decoder produces NaN on synthetic
-    test data (patched to zero); expect clean results with real video input.
+    (sm_80, sm_89, PTX for compute_90). Clean inference on Vid4 city clip
+    (34 frames, 704x576, 2x temporal): 62 output frames, ~3 min, no NaN.
+    First run downloads ~54MB checkpoint + ~22MB sample data.
