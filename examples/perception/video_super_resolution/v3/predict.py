@@ -45,6 +45,7 @@ V3_REPO_DIR = "/opt/v3"
 SAMPLES = {
     "vid4_city": {
         "hf_prefix": "v3_vsr/vid4_city",
+        "hf_gt_prefix": "v3_vsr/vid4_city_gt",
         "num_frames": 34,
         "description": "Vid4 'city' clip (34 frames, 704x576)",
     },
@@ -82,6 +83,34 @@ def ensure_sample_input(name: str, cache_dir: Path) -> tuple[Path, str]:
 
     print(f"Sample saved to: {frames_dir}")
     return cache_dir / "samples", eval_set
+
+
+def ensure_gt(name: str, cache_dir: Path) -> Path:
+    """Download ground-truth frames for a built-in sample (for evaluation)."""
+    from huggingface_hub import hf_hub_download
+    import shutil
+
+    sample = SAMPLES[name]
+    gt_dir = cache_dir / "gt" / name / "000"
+
+    if gt_dir.exists() and len(list(gt_dir.glob("*.png"))) >= sample["num_frames"]:
+        return gt_dir.parent  # return parent so eval_imgs sees the 000/ subdir
+
+    gt_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading GT for '{name}'...")
+    token = os.environ.get("HF_TOKEN")
+
+    for i in range(sample["num_frames"]):
+        fname = f"{i:08d}.png"
+        downloaded = hf_hub_download(
+            repo_id="zzsi/cvl",
+            repo_type="dataset",
+            filename=f"{sample['hf_gt_prefix']}/{fname}",
+            token=token,
+        )
+        shutil.copy2(downloaded, gt_dir / fname)
+
+    return gt_dir.parent
 
 
 def ensure_checkpoint(cache_dir: Path) -> Path:
@@ -130,6 +159,11 @@ def main():
     parser.add_argument(
         "--cache-dir", default="/root/.cache/cvlization/v3",
         help="Cache directory for checkpoint and sample data.",
+    )
+    parser.add_argument(
+        "--eval", action="store_true",
+        help="Run evaluation (PSNR/SSIM) against GT after inference. "
+             "Only works with built-in samples that have GT available.",
     )
     parser.add_argument(
         "--verbose", action="store_true",
@@ -186,6 +220,25 @@ def main():
     # Count output frames
     out_frames = list(output_path.rglob("*.png"))
     print(f"Done. {len(out_frames)} frames saved to: {output_path}")
+
+    # Run evaluation if requested
+    if args.eval:
+        if args.input not in SAMPLES:
+            print("Warning: --eval only works with built-in samples. Skipping.")
+        elif "hf_gt_prefix" not in SAMPLES[args.input]:
+            print(f"Warning: no GT available for '{args.input}'. Skipping eval.")
+        else:
+            gt_dir = ensure_gt(args.input, cache_dir)
+            # eval_imgs.py expects: gt_dir/<video_subdir>/ and out_dir/<video_subdir>/
+            eval_out_dir = output_path / eval_set / f"x{args.space_scale}"
+            eval_cmd = [
+                sys.executable, os.path.join(V3_REPO_DIR, "eval_imgs.py"),
+                str(gt_dir), str(eval_out_dir),
+                "--time-scale", str(args.time_scale),
+            ]
+            print(f"\nEvaluating against GT (time_scale={args.time_scale}):")
+            subprocess.run(eval_cmd, cwd=V3_REPO_DIR)
+
     return 0
 
 
