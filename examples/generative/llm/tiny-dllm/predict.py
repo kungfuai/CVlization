@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate text with a trained tiny diffusion language model.
+"""Generate text with a trained tiny diffusion or GPT language model.
 
-Uses confidence-based parallel decoding: all tokens in a block are denoised
-simultaneously, with high-confidence positions decoded first. This is faster
-than autoregressive generation for the same sequence length.
+Two generation strategies:
+- diffusion: confidence-based parallel decoding (all tokens denoised at once)
+- gpt: standard autoregressive left-to-right generation
 
 Based on: https://github.com/nathan-barry/tiny-diffusion
 """
@@ -16,7 +16,7 @@ import time
 
 import torch
 
-from model import DiffusionLM, CharTokenizer, generate
+from model import TinyLM, CharTokenizer, generate_diffusion, generate_gpt
 
 try:
     from cvlization.paths import get_input_dir, get_output_dir, resolve_output_path
@@ -49,12 +49,15 @@ def download_data(path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate text with tiny diffusion LM",
+        description="Generate text with tiny diffusion or GPT LM",
     )
+    parser.add_argument("--model", choices=["diffusion", "gpt"],
+                        default="diffusion",
+                        help="Model type (default: diffusion)")
     parser.add_argument("--weights", default=None,
-                        help="Path to model weights (default: outputs/diffusion.pt)")
+                        help="Path to model weights (default: auto)")
     parser.add_argument("--tokenizer", default=None,
-                        help="Path to tokenizer (default: outputs/tokenizer.pt)")
+                        help="Path to tokenizer (default: auto)")
     parser.add_argument("--data", default="data.txt",
                         help="Path to text data for seed/tokenizer fallback")
     parser.add_argument("--prompt", default=None,
@@ -66,29 +69,32 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.8,
                         help="Sampling temperature (default: 0.8)")
     parser.add_argument("--confidence", type=float, default=0.95,
-                        help="Confidence threshold for decoding (default: 0.95)")
+                        help="Confidence threshold for diffusion decoding (default: 0.95)")
     parser.add_argument("--top-k", type=int, default=2,
-                        help="Top-k sampling (default: 2)")
+                        help="Top-k sampling for diffusion (default: 2)")
     parser.add_argument("--seed", type=int, default=1337,
                         help="Random seed (default: 1337)")
     parser.add_argument("--output", default=None,
-                        help="Output file path (default: outputs/result.txt)")
+                        help="Output file path (default: auto)")
     parser.add_argument("--format", choices=["txt", "json"], default="txt",
                         help="Output format (default: txt)")
     args = parser.parse_args()
+
+    mode = args.model
+    is_diffusion = mode == "diffusion"
 
     device = (
         "cuda" if torch.cuda.is_available()
         else ("mps" if torch.backends.mps.is_available() else "cpu")
     )
     print(f"Device: {device}")
+    print(f"Mode: {mode}")
     torch.manual_seed(args.seed)
 
     # Resolve paths
-    IN = get_input_dir()
     OUT = get_output_dir()
-    weights_path = args.weights or os.path.join(OUT, "diffusion.pt")
-    tokenizer_path = args.tokenizer or os.path.join(OUT, "tokenizer.pt")
+    weights_path = args.weights or os.path.join(OUT, f"{mode}.pt")
+    tokenizer_path = args.tokenizer or os.path.join(OUT, f"tokenizer_{mode}.pt")
 
     # Load tokenizer
     if os.path.exists(tokenizer_path):
@@ -98,17 +104,17 @@ def main():
         download_data(args.data)
         with open(args.data, "r", encoding="utf-8") as f:
             text = f.read()
-        tokenizer = CharTokenizer(text)
+        tokenizer = CharTokenizer(text, add_mask_token=is_diffusion)
 
     print(f"Vocabulary: {tokenizer.vocab_size} characters")
 
     # Load model
     if not os.path.exists(weights_path):
         print(f"Error: weights not found at {weights_path}")
-        print("Run train.py first or specify --weights")
+        print(f"Run train.py --model {mode} first or specify --weights")
         return 1
 
-    model = DiffusionLM(tokenizer.vocab_size).to(device)
+    model = TinyLM(tokenizer.vocab_size, is_causal=not is_diffusion).to(device)
     model.load_state_dict(torch.load(weights_path, map_location=device))
     param_count = sum(p.numel() for p in model.parameters())
     print(f"Loaded model ({param_count / 1e6:.1f}M params) from {weights_path}")
@@ -122,20 +128,28 @@ def main():
             seed_text = f.read()[:args.prompt_len]
 
     print(f"Seed: {repr(seed_text[:50])}")
-    print(f"Generating {args.max_tokens} characters (temp={args.temperature}, "
-          f"confidence={args.confidence}, top_k={args.top_k})")
+    print(f"Generating {args.max_tokens} characters (temp={args.temperature})")
 
     # Generate
     start = time.time()
-    output = generate(
-        model, tokenizer, device,
-        seed_text=seed_text,
-        max_new_tokens=args.max_tokens,
-        prompt_len=args.prompt_len,
-        temp=args.temperature,
-        confidence_threshold=args.confidence,
-        top_k=args.top_k,
-    )
+    if is_diffusion:
+        output = generate_diffusion(
+            model, tokenizer, device,
+            seed_text=seed_text,
+            max_new_tokens=args.max_tokens,
+            prompt_len=args.prompt_len,
+            temp=args.temperature,
+            confidence_threshold=args.confidence,
+            top_k=args.top_k,
+        )
+    else:
+        output = generate_gpt(
+            model, tokenizer, device,
+            seed_text=seed_text,
+            max_new_tokens=args.max_tokens,
+            prompt_len=args.prompt_len,
+            temp=args.temperature,
+        )
     elapsed = time.time() - start
     print(f"Generation time: {elapsed:.2f}s")
 
@@ -146,19 +160,18 @@ def main():
     # Save
     if args.output is None:
         ext = "json" if args.format == "json" else "txt"
-        output_path = resolve_output_path(f"result.{ext}", OUT)
+        output_path = resolve_output_path(f"result_{mode}.{ext}", OUT)
     else:
         output_path = resolve_output_path(args.output, OUT)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     if args.format == "json":
         data = {
+            "model": mode,
             "text": output,
             "seed": seed_text[:args.prompt_len],
             "max_tokens": args.max_tokens,
             "temperature": args.temperature,
-            "confidence": args.confidence,
-            "top_k": args.top_k,
             "generation_time_s": round(elapsed, 2),
         }
         with open(output_path, "w") as f:

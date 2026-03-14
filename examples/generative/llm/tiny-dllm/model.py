@@ -1,8 +1,9 @@
-"""Tiny diffusion language model architecture.
+"""Tiny diffusion and GPT language model architectures.
 
-A character-level diffusion transformer (~10.7M params) that generates text
-via iterative denoising rather than autoregressive decoding. Trained on
-Tiny Shakespeare.
+Character-level transformers (~10.7M params) trained on Tiny Shakespeare.
+Two modes:
+- diffusion: bidirectional attention, generates via iterative denoising
+- gpt: causal attention, generates autoregressively
 
 Based on: https://github.com/nathan-barry/tiny-diffusion
 """
@@ -34,8 +35,9 @@ def apply_rotary_emb(x, cos, sin):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self):
+    def __init__(self, is_causal=False):
         super().__init__()
+        self.is_causal = is_causal
         self.c_q = nn.Linear(N_EMBD, N_EMBD, bias=False)
         self.c_k = nn.Linear(N_EMBD, N_EMBD, bias=False)
         self.c_v = nn.Linear(N_EMBD, N_EMBD, bias=False)
@@ -50,7 +52,7 @@ class MultiHeadAttention(nn.Module):
         q, k = apply_rotary_emb(q, cos, sin), apply_rotary_emb(k, cos, sin)
         q, k = norm(q), norm(k)
         q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
-        y = F.scaled_dot_product_attention(q, k, v, is_causal=False)
+        y = F.scaled_dot_product_attention(q, k, v, is_causal=self.is_causal)
         y = y.transpose(1, 2).contiguous().view(B, T, -1)
         return self.c_proj(y)
 
@@ -68,9 +70,9 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self):
+    def __init__(self, is_causal=False):
         super().__init__()
-        self.attn = MultiHeadAttention()
+        self.attn = MultiHeadAttention(is_causal=is_causal)
         self.mlp = MLP()
 
     def forward(self, x, cos_sin):
@@ -79,16 +81,21 @@ class Block(nn.Module):
         return x
 
 
-class DiffusionLM(nn.Module):
-    def __init__(self, vocab_size):
+class TinyLM(nn.Module):
+    """Shared transformer for both diffusion and GPT modes."""
+
+    def __init__(self, vocab_size, is_causal=False):
         super().__init__()
         self.vocab_size = vocab_size
+        self.is_causal = is_causal
         self.token_emb = nn.Embedding(vocab_size, N_EMBD)
         self.rotary_seq_len = BLOCK_SIZE * 2
         cos, sin = self._precompute_rotary(self.rotary_seq_len)
         self.register_buffer("cos", cos, persistent=False)
         self.register_buffer("sin", sin, persistent=False)
-        self.blocks = nn.ModuleList([Block() for _ in range(N_LAYER)])
+        self.blocks = nn.ModuleList(
+            [Block(is_causal=is_causal) for _ in range(N_LAYER)]
+        )
         self.lm_head = nn.Linear(N_EMBD, vocab_size, bias=False)
         self.apply(self._init_weights)
 
@@ -136,16 +143,24 @@ class DiffusionLM(nn.Module):
         return logits, loss
 
 
-class CharTokenizer:
-    """Character-level tokenizer with mask token."""
+# Keep backward compat alias
+DiffusionLM = TinyLM
 
-    def __init__(self, text):
+
+class CharTokenizer:
+    """Character-level tokenizer. Optionally includes a mask token."""
+
+    def __init__(self, text, add_mask_token=True):
         chars = sorted(list(set(text)))
-        self.chars = ["_"] + chars  # underscore as mask token
+        if add_mask_token:
+            self.chars = ["_"] + chars  # underscore as mask token
+        else:
+            self.chars = chars
+        self.has_mask_token = add_mask_token
         self.vocab_size = len(self.chars)
         self.stoi = {ch: i for i, ch in enumerate(self.chars)}
         self.itos = {i: ch for i, ch in enumerate(self.chars)}
-        self.mask_token_id = self.stoi["_"]
+        self.mask_token_id = self.stoi.get("_", None)
 
     def encode(self, s):
         return [self.stoi[ch] for ch in s]
@@ -154,29 +169,35 @@ class CharTokenizer:
         return "".join([self.itos[i] for i in ids])
 
     def save(self, path):
-        torch.save({"chars": self.chars}, path)
+        torch.save({"chars": self.chars, "has_mask_token": self.has_mask_token}, path)
 
     @classmethod
     def load(cls, path):
         data = torch.load(path, weights_only=True)
         tok = cls.__new__(cls)
         tok.chars = data["chars"]
+        tok.has_mask_token = data.get("has_mask_token", True)
         tok.vocab_size = len(tok.chars)
         tok.stoi = {ch: i for i, ch in enumerate(tok.chars)}
         tok.itos = {i: ch for i, ch in enumerate(tok.chars)}
-        tok.mask_token_id = tok.stoi["_"]
+        tok.mask_token_id = tok.stoi.get("_", None)
         return tok
 
 
+# ---------------------------------------------------------------------------
+# Generation: diffusion (parallel confidence-based decoding)
+# ---------------------------------------------------------------------------
+
 @torch.no_grad()
-def generate(model, tokenizer, device, seed_text=None, max_new_tokens=2000,
-             prompt_len=16, temp=0.8, confidence_threshold=0.95, top_k=2):
+def generate_diffusion(model, tokenizer, device, seed_text=None,
+                       max_new_tokens=2000, prompt_len=16, temp=0.8,
+                       confidence_threshold=0.95, top_k=2):
     """Generate text using confidence-based parallel decoding."""
     model.eval()
 
     if seed_text is not None:
         all_tokens = tokenizer.encode(seed_text[:prompt_len])
-        prompt_len = len(all_tokens)  # adjust if seed is shorter
+        prompt_len = len(all_tokens)
     else:
         all_tokens = [tokenizer.mask_token_id] * prompt_len
 
@@ -219,3 +240,40 @@ def generate(model, tokenizer, device, seed_text=None, max_new_tokens=2000,
     print(f"Steps: {total_steps} for {tokens_generated} tokens "
           f"({tokens_generated / total_steps:.1f} tokens/step)")
     return tokenizer.decode(all_tokens)
+
+
+# Keep backward compat alias
+generate = generate_diffusion
+
+
+# ---------------------------------------------------------------------------
+# Generation: GPT (autoregressive)
+# ---------------------------------------------------------------------------
+
+@torch.no_grad()
+def generate_gpt(model, tokenizer, device, seed_text=None,
+                 max_new_tokens=2000, prompt_len=16, temp=0.8):
+    """Generate text autoregressively, one token at a time."""
+    model.eval()
+
+    if seed_text is not None:
+        tokens = tokenizer.encode(seed_text[:prompt_len])
+    else:
+        tokens = [0] * prompt_len  # fallback
+
+    x = torch.tensor([tokens], dtype=torch.long, device=device)
+
+    for _ in range(max_new_tokens):
+        ctx = x[:, -BLOCK_SIZE:]
+        logits, _ = model(ctx)
+        logits = logits[:, -1, :]
+        if temp == 0:
+            next_token = torch.argmax(logits, dim=-1, keepdim=True)
+        else:
+            probs = F.softmax(logits / temp, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+        x = torch.cat((x, next_token), dim=1)
+
+    print(f"Steps: {max_new_tokens} for {max_new_tokens} tokens "
+          f"(1.0 tokens/step)")
+    return tokenizer.decode(x[0].tolist())
