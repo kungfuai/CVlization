@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-IMG="${CVL_IMAGE:-cvlization/gemma3-omr-sft:latest}"
+IMG="${CVL_IMAGE:-cvlization/vlm-omr-sft:latest}"
 
 mkdir -p "${HOME}/.cache/huggingface"
 mkdir -p "${SCRIPT_DIR}/outputs"

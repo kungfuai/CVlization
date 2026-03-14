@@ -1,4 +1,4 @@
-name: gemma3-omr-sft
+name: vlm-omr-sft
 capability: perception/optical_music_recognition
 modalities:
   - vision
@@ -10,7 +10,7 @@ resources:
   gpu: 1
   vram_gb: 16
   disk_gb: 25
-image: cvlization/gemma3-omr-sft:latest
+image: cvlization/vlm-omr-sft:latest
 presets:
   build:
     script: build.sh

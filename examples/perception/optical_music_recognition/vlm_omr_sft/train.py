@@ -168,6 +168,10 @@ def parse_args():
                         help="Override num_train_epochs (disables max_steps)")
     parser.add_argument("--max-samples", type=int, default=None,
                         help="Override max_samples")
+    parser.add_argument("--model", default=None,
+                        help="Override model name (e.g. unsloth/Qwen2-VL-7B-Instruct)")
+    parser.add_argument("--chat-template", default=None,
+                        help="Override chat template (e.g. qwen-2.5, llama-3.2)")
     return parser.parse_args()
 
 
@@ -193,6 +197,10 @@ def main():
         training_config["max_steps"] = -1
     if args.max_samples is not None:
         dataset_config["max_samples"] = args.max_samples
+    if args.model is not None:
+        model_config["name"] = args.model
+    if args.chat_template is not None:
+        model_config["chat_template"] = args.chat_template
 
     # ── WandB init ─────────────────────────────────────────────────────────────
     use_wandb = bool(os.environ.get("WANDB_API_KEY") and wandb_config.get("project"))
