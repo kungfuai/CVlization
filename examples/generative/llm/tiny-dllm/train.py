@@ -130,6 +130,7 @@ def main():
     data = torch.tensor(tokenizer.encode(text), dtype=torch.long)
     n = int(0.9 * len(data))
     train_data, val_data = data[:n], data[n:]
+    val_text = text[n:]
 
     # Model
     model = TinyLM(tokenizer.vocab_size, is_causal=not is_diffusion).to(device)
@@ -158,11 +159,11 @@ def main():
             if step > 0:
                 if is_diffusion:
                     sample = generate_diffusion(model, tokenizer, device,
-                                                seed_text=text[:16],
+                                                seed_text=val_text[:16],
                                                 max_new_tokens=240)
                 else:
                     sample = generate_gpt(model, tokenizer, device,
-                                          seed_text=text[:16],
+                                          seed_text=val_text[:16],
                                           max_new_tokens=240)
                 print(f"Sample: {sample[:200]}...")
 
