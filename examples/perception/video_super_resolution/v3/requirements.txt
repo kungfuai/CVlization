@@ -15,6 +15,7 @@ opencv-python-headless==4.11.0.86
 jmp==0.0.4
 natsort==8.4.0
 gdown==5.2.0
+huggingface_hub==1.7.1
 # cpu-only for data loading
 torch==2.8.0
 torchvision==0.23.0

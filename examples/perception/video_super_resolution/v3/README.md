@@ -4,10 +4,11 @@ V3 uses 3D Fourier Fields for continuous space-time video super-resolution, supp
 
 ## What to Expect
 
-- **First run**: downloads ~200MB checkpoint from Google Drive, cached to `~/.cache/cvlization/v3/`
+- **First run**: downloads ~54MB checkpoint from Google Drive + ~22MB Vid4 sample from HuggingFace, cached to `~/.cache/cvlization/v3/`
 - **What it does**: upsamples video frames spatially (e.g., 4x) and temporally (e.g., 2x-8x)
+- **Default sample**: Vid4 "city" clip (34 frames, 704x576) with 2x spatial + 2x temporal upsampling
 - **Output**: PNG frames in the output directory
-- **Runtime**: depends on video length and upsampling factors
+- **Runtime**: ~3 min for the default sample on Blackwell GPU
 
 ## Requirements
 
@@ -42,7 +43,7 @@ bash examples/perception/video_super_resolution/v3/predict.sh \
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--input` | (sample frames) | Input video directory (folder of PNGs or video file) |
+| `--input` | `vid4_city` | Input video directory or built-in sample name |
 | `--output` | `outputs/v3_result` | Output directory for super-resolved frames |
 | `--space-scale` | `4` | Spatial upsampling factor |
 | `--time-scale` | `2` | Temporal upsampling factor |
