@@ -1,0 +1,46 @@
+name: v3-vsr
+capability: perception/video_super_resolution
+modalities:
+  - vision
+  - video
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 10
+image: cvlization/v3-vsr:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the V3 Docker image (includes CUDA kernel compilation)
+  predict:
+    script: predict.sh
+    description: Run space-time video super-resolution inference
+  test:
+    script: test.sh
+    description: Run smoke test with generated sample frames
+tags:
+  - video-super-resolution
+  - fourier-fields
+  - jax
+  - flax
+  - iclr-2026
+  - continuous-representation
+frameworks:
+  - jax
+  - flax
+tasks:
+  - video_super_resolution
+  - temporal_interpolation
+description: >-
+  V3: Continuous Space-Time Video Super-Resolution with 3D Fourier Fields.
+  JAX/Flax implementation supporting arbitrary spatial and temporal upsampling.
+
+verification:
+  last_verified: 2026-03-14
+  last_verification_note: |
+    Verified build and inference on NVIDIA RTX PRO 6000 Blackwell (CC 12.0).
+    CUDA 12.8.1 devel base, JAX 0.7.1, Flax 0.12.0. Multi-arch CUDA extension
+    (sm_80, sm_89, PTX for compute_90). Inference runs end-to-end: encoding +
+    16 decode patches, 29 output frames, ~80s. Decoder produces NaN on synthetic
+    test data (patched to zero); expect clean results with real video input.
