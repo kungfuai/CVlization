@@ -225,7 +225,9 @@ def main():
             },
         )
         print(f"WandB run: {wandb.run.url}")
+        wandb_run_id = wandb.run.id
     else:
+        wandb_run_id = None
         if wandb_config.get("project"):
             print("WARN: wandb.project set in config but WANDB_API_KEY not found — logging disabled.")
         print("WandB logging disabled.")
@@ -414,11 +416,14 @@ def main():
     processor.save_pretrained(final_dir)
     print("Model saved.")
 
-    if use_wandb:
+    if use_wandb and wandb_run_id:
         import wandb
+        # Re-open run if Trainer already closed it (report_to="wandb" calls finish internally)
+        if wandb.run is None:
+            wandb.init(project=wandb_config["project"], id=wandb_run_id, resume="must")
         # Upload final LoRA adapter as a WandB artifact
         artifact = wandb.Artifact(
-            name=f"lora-adapter-{wandb.run.id}",
+            name=f"lora-adapter-{wandb_run_id}",
             type="model",
             description=f"LoRA adapter for {model_config['name']} trained on {corpora}",
             metadata={
@@ -433,6 +438,10 @@ def main():
         wandb.log_artifact(artifact)
         print(f"WandB artifact logged: {artifact.name}")
         wandb.finish()
+    elif use_wandb:
+        import wandb
+        if wandb.run is not None:
+            wandb.finish()
 
     # ── Post-training inference test ───────────────────────────────────────────
     if training_config.get("test_after_training", True) and len(dataset) >= 2:
