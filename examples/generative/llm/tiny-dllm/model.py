@@ -176,6 +176,7 @@ def generate(model, tokenizer, device, seed_text=None, max_new_tokens=2000,
 
     if seed_text is not None:
         all_tokens = tokenizer.encode(seed_text[:prompt_len])
+        prompt_len = len(all_tokens)  # adjust if seed is shorter
     else:
         all_tokens = [tokenizer.mask_token_id] * prompt_len
 
