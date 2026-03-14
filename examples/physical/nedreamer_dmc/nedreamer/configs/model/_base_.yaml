@@ -1,0 +1,237 @@
+act_entropy: 3e-4
+kl_free: 1.0
+imag_horizon: 15
+horizon_discount: 0.85
+horizon: 333
+lamb: 0.95
+compile: True
+log_grads: False
+device: ${device}
+
+# Saliency map configuration for evaluation visualization
+# Based on Greydanus et al., 2018 "Visualizing and Understanding Atari Agents"
+saliency:
+  enabled: False              # Enable saliency computation during eval
+  stride: 4                   # Grid stride for perturbation centers (lower = more detail, higher cost)
+  mask_sigma: 5.0             # Gaussian mask sigma (perturbation region size)
+  blur_sigma: 3.0             # Gaussian blur sigma for perturbation
+  saliency_every_n: 1         # Compute saliency every N frames (1 = all frames)
+  overlay_alpha: 0.5          # Blending factor for overlay visualization
+  colormap: "hot"             # Colormap for saliency visualization (hot, jet, viridis)
+
+# Post-hoc decoder for decoder-free Dreamer interpretation
+# Trains a separate decoder to render latent states to images (no gradients to world model)
+posthoc_decoder:
+  enabled: False              # Enable post-hoc decoder training and visualization
+  hidden_dim: 256             # Hidden layer dimension in decoder
+  depth: 32                   # Base channel depth for conv layers
+  lr: 1e-4                    # Learning rate for decoder training
+  train_steps_per_eval: 100   # Number of decoder training steps per eval period
+  imagination_horizon: 15     # Horizon for imagination rendering
+  render_counterfactuals: False  # Render counterfactual action comparisons
+  num_counterfactual_actions: 3  # Number of random action sequences to compare
+
+# Open-loop imagination decoding visualization
+# Shows: [Context frames] → [Open-loop predicted future] vs [Ground truth future]
+# Useful for debugging world model predictions and understanding what agent "imagines"
+imagination_decoding:
+  enabled: True              # Enable imagination decoding visualization
+  every_k_evals: 100          # Run imagination decoding every K eval steps (K is large, expensive)
+  context_length: 5           # Number of context frames to condition on
+  prediction_horizon: 100      # Number of future frames to predict
+  num_samples: 3              # Number of different trajectory samples to visualize
+  show_uncertainty: False      # Show multiple samples per trajectory (visualize uncertainty)
+  num_uncertainty_samples: 4  # Number of samples to show for uncertainty visualization
+
+lr: 4e-5
+agc: 0.3
+pmin: 1e-3
+eps: 1e-20
+beta1: 0.9
+beta2: 0.999
+warmup: 1000
+loss_scales:
+  barlow: 0.05
+  recon: 1.0
+  rew: 1.0
+  con: 1.0
+  dyn: 1.0
+  rep: 0.1
+  policy: 1.0
+  value: 1.0
+  repval: 0.3
+  swav: 1.0
+  temp: 1.0
+  norm: 1.0
+  ne_dreamer: 1.0      # NE-Dreamer loss (temporal transformer on feat → predict embed)
+
+rep_loss: "r2dreamer" # r2dreamer/dreamer/dreamerpro/ne_dreamer
+
+r2dreamer:
+  lambd: 5e-4
+
+ne_dreamer:
+  # NE-Dreamer (Next Embedding Dreamer): Temporal transformer on RSSM feat → predict embeddings
+  # Uses feat from RSSM as input to temporal transformer
+  # Configurable heads:
+  #   - head_same: predict embed[t] from feat[t] (same-timestep grounding, like R2Dreamer)
+  #   - head_next: predict embed[t+k] from feat[t] (next-timestep prediction, k = 1..predict_horizon)
+  # Key: Can enable either or both heads for different learning signals
+  hidden_dim: 256        # Transformer hidden dimension
+  num_layers: 2          # Number of transformer layers
+  num_heads: 4           # Number of attention heads
+  dropout: 0.0           # Dropout rate
+  use_actions: True      # Whether to use actions in temporal transformer
+  use_projector: True    # Project feat to embed_size before transformer (False = use feat directly)
+  use_same: False         # Enable same-timestep prediction (embed[t] from feat[t])
+  use_next: True         # Enable next-timestep prediction (embed[t+k] from feat[t])
+  predict_horizon: 1     # Multi-token prediction: predict next k embeddings (1 = just t+1, k = t+1..t+k)
+  horizon_discount: 0.9  # Discount factor for multi-horizon loss (γ^(k-1) weighting)
+  loss_type: "barlow"    # "cosine" (cosine similarity) or "barlow" (Barlow Twins)
+  lambd: 5e-4            # Barlow Twins redundancy coefficient (only used if loss_type="barlow")
+  weight_same: 1.0       # Weight for same-timestep loss (grounding)
+  weight_next: 1.0       # Weight for next-timestep loss (prediction)
+
+dreamer_pro:
+  warm_up: 1
+  num_prototypes: 2500
+  proto_dim: 32
+  temperature: 0.1
+  sinkhorn_eps: 0.05
+  sinkhorn_iters: 3
+  ema_update_every: 1
+  ema_update_fraction: 0.05
+  freeze_prototypes_iters: 10000
+  aug:
+    max_delta: 3.0
+    same_across_time: True
+    bilinear: True
+
+world_model:
+  rssm:
+    stoch: 32
+    deter: ${model.deter}
+    hidden: ${model.hidden}
+    discrete: ${model.discrete}
+    img_layers: 2
+    obs_layers: 1
+    dyn_layers: 1
+    blocks: 8
+    act: ${model.act}
+    norm: ${model.norm}
+    unimix_ratio: 0.01
+    initial: 'learned'
+    device: ${device}
+  encoder:
+    mlp_keys: ${env.encoder.mlp_keys}
+    cnn_keys: ${env.encoder.cnn_keys}
+    mlp:
+      shape: null
+      layers: 3
+      units: ${model.units}
+      act: ${model.act}
+      norm: ${model.norm}
+      device: ${device}
+      outscale: null
+      symlog_inputs: True
+      name: 'mlp_encoder'
+    cnn:
+      act: ${model.act}
+      norm: ${model.norm}
+      kernel_size: 5
+      minres: 4
+      depth: ${model.depth}
+      mults: [2, 3, 4, 4]
+
+  decoder:
+    mlp_keys: ${env.decoder.mlp_keys}
+    cnn_keys: ${env.decoder.cnn_keys}
+    mlp_dist:
+      name: 'symlog_mse'
+    cnn_dist:
+      name: 'mse'
+    mlp:
+      shape: null
+      layers: 3
+      units: ${model.units}
+      act: ${model.act}
+      norm: ${model.norm}
+      dist:
+        name: 'identity'
+      device: ${device}
+      outscale: 1.0
+      symlog_inputs: False
+      name: 'mlp_decoder'
+    cnn:
+      depth: ${model.depth}
+      units: ${model.units}
+      bspace: 8
+      mults: [2, 3, 4, 4]
+      act: ${model.act}
+      norm: ${model.norm}
+      kernel_size: 5
+      minres: 4
+      outscale: 1.0
+  reward_head:
+    shape: [255,]
+    layers: 1
+    units: ${model.units}
+    act: ${model.act}
+    norm: ${model.norm}
+    dist:
+      name: 'symexp_twohot'
+      bin_num: 255
+    outscale: 0.0
+    device: ${device}
+    symlog_inputs: False
+    name: 'reward'
+  cont_head:
+    shape: [1,]
+    layers: 1
+    units: ${model.units}
+    act: ${model.act}
+    norm: ${model.norm}
+    dist:
+      name: 'binary'
+    outscale: 1.0
+    device: ${device}
+    symlog_inputs: False
+    name: 'cont'
+
+behavior:
+  slow_target_update: 1
+  slow_target_fraction: 0.02
+  actor:
+    shape: null
+    layers: 3
+    units: ${model.units}
+    act: ${model.act}
+    norm: ${model.norm}
+    device: ${device}
+    dist:
+      cont:
+        name: 'bounded_normal'
+        min_std: 0.1
+        max_std: 1.0
+      disc:
+        name: 'onehot'
+        unimix_ratio: 0.01
+      multi_disc:
+        name: 'multi_onehot'
+        unimix_ratio: 0.01
+    outscale: 0.01
+    symlog_inputs: False
+    name: 'actor'
+  critic:
+    shape: [255,]
+    layers: 3
+    units: ${model.units}
+    act: ${model.act}
+    norm: ${model.norm}
+    device: ${device}
+    dist:
+      name: 'symexp_twohot'
+      bin_num: 255
+    outscale: 0.0
+    symlog_inputs: False
+    name: 'value'

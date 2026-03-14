@@ -1,0 +1,63 @@
+defaults:
+  - env: dmc_vision
+  - model: size200M
+  - _self_
+
+logdir: null
+seed: 0
+deterministic_run: False
+device: 'cuda:0'
+precision: 32
+debug: False
+
+batch_size: 16
+batch_length: 64
+
+buffer:
+  batch_size: ${batch_size}
+  batch_length: ${batch_length}
+  max_size: 5e5
+  device: ${device}
+  storage_device: 'cpu'
+
+trainer:
+  steps: ${env.steps}
+  pretrain: 0
+  eval_every: 1e4
+  eval_episode_num: ${env.eval_episode_num}
+  batch_size: ${batch_size}
+  batch_length: ${batch_length}
+  train_ratio: ${env.train_ratio}
+  video_pred_log: False
+  params_hist_log: False
+  update_log_every: 5e3
+  action_repeat: ${env.action_repeat}
+  # Eval video logging and S3 upload settings
+  eval_video_every: 100  # Log eval video every k eval steps (1 = every eval, 0 = disabled)
+  s3_bucket: "trs-gbredis"  # S3 bucket name for video upload (null = disabled)
+  s3_prefix: "ne_dreamer"  # S3 prefix path for videos
+  # Saliency map settings (only computed when eval_video_every triggers)
+  saliency_enabled: ${model.saliency.enabled}
+  saliency_stride: ${model.saliency.stride}
+  saliency_mask_sigma: ${model.saliency.mask_sigma}
+  saliency_blur_sigma: ${model.saliency.blur_sigma}
+  saliency_every_n: ${model.saliency.saliency_every_n}
+  saliency_alpha: ${model.saliency.overlay_alpha}
+  saliency_colormap: ${model.saliency.colormap}
+  # Post-hoc decoder settings (for decoder-free Dreamer interpretation)
+  posthoc_decoder_enabled: ${model.posthoc_decoder.enabled}
+  posthoc_decoder_hidden_dim: ${model.posthoc_decoder.hidden_dim}
+  posthoc_decoder_depth: ${model.posthoc_decoder.depth}
+  posthoc_decoder_lr: ${model.posthoc_decoder.lr}
+  posthoc_decoder_train_steps: ${model.posthoc_decoder.train_steps_per_eval}
+  posthoc_decoder_imag_horizon: ${model.posthoc_decoder.imagination_horizon}
+  posthoc_decoder_counterfactuals: ${model.posthoc_decoder.render_counterfactuals}
+  posthoc_decoder_num_cf_actions: ${model.posthoc_decoder.num_counterfactual_actions}
+  # Imagination decoding settings (open-loop prediction visualization)
+  imag_decoding_enabled: ${model.imagination_decoding.enabled}
+  imag_decoding_every_k: ${model.imagination_decoding.every_k_evals}
+  imag_decoding_context_len: ${model.imagination_decoding.context_length}
+  imag_decoding_pred_horizon: ${model.imagination_decoding.prediction_horizon}
+  imag_decoding_num_samples: ${model.imagination_decoding.num_samples}
+  imag_decoding_show_uncertainty: ${model.imagination_decoding.show_uncertainty}
+  imag_decoding_uncertainty_samples: ${model.imagination_decoding.num_uncertainty_samples}

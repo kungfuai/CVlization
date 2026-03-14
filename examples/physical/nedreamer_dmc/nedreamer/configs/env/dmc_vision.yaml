@@ -1,0 +1,17 @@
+task: 'dmc_walker_walk'
+steps: 1.01e6
+size: [64, 64]
+action_repeat: 2
+env_num: 16
+eval_episode_num: 8
+train_ratio: 512
+encoder:
+  mlp_keys: '$^'
+  cnn_keys: 'image'
+decoder:
+  mlp_keys: '$^'
+  cnn_keys: 'image'
+time_limit: 1000
+seed: ${seed}
+vectorized: False
+device: ${device}
