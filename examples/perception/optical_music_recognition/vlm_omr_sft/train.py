@@ -27,6 +27,20 @@ from trl import SFTTrainer, SFTConfig
 INSTRUCTION = "Transcribe this sheet music page to MusicXML."
 
 
+def prepare_inference_inputs(processor, image):
+    """Prepare model inputs for inference.
+
+    Works for Gemma-3, Qwen3-VL, and other unsloth-supported VLMs.
+    For Qwen3-VL: ensure get_chat_template is NOT called (set chat_template: null
+    in config), so the model's built-in vision-aware template is preserved.
+    """
+    messages = [{"role": "user", "content": [
+        {"type": "image"}, {"type": "text", "text": INSTRUCTION},
+    ]}]
+    input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
+    return processor(image, input_text, add_special_tokens=False, return_tensors="pt")
+
+
 def strip_musicxml_header(xml: str) -> str:
     """Remove noisy boilerplate from MusicXML, keeping only musically useful content.
 
@@ -87,13 +101,7 @@ class WandbInferenceCallback(TrainerCallback):
         rows = []
         for sample in self.samples:
             image = sample["image"]
-            messages = [{"role": "user", "content": [
-                {"type": "image"}, {"type": "text", "text": INSTRUCTION},
-            ]}]
-            input_text = self.processor.apply_chat_template(messages, add_generation_prompt=True)
-            inputs = self.processor(
-                image, input_text, add_special_tokens=False, return_tensors="pt"
-            ).to("cuda")
+            inputs = prepare_inference_inputs(self.processor, image).to("cuda")
 
             with torch.no_grad():
                 outputs = self.model.generate(
@@ -311,8 +319,11 @@ def main():
     print(f"Train: {len(train_data)}  Val: {len(val_data) if val_data else 0}")
 
     chat_template = model_config.get("chat_template", "gemma-3")
-    print(f"Setting up {chat_template} chat template ...")
-    processor = get_chat_template(processor, chat_template)
+    if chat_template:
+        print(f"Setting up {chat_template} chat template ...")
+        processor = get_chat_template(processor, chat_template)
+    else:
+        print("Using model's built-in chat template (skipping get_chat_template)")
 
     # ── Held-out inference samples for WandB ───────────────────────────────────
     n_examples = wandb_config.get("n_examples", 4)
@@ -413,13 +424,7 @@ def main():
         FastVisionModel.for_inference(model)
 
         sample = inference_samples[0]
-        messages = [{"role": "user", "content": [
-            {"type": "image"}, {"type": "text", "text": INSTRUCTION},
-        ]}]
-        input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
-        inputs = processor(
-            sample["image"], input_text, add_special_tokens=False, return_tensors="pt"
-        ).to("cuda")
+        inputs = prepare_inference_inputs(processor, sample["image"]).to("cuda")
 
         from transformers import TextStreamer
         streamer = TextStreamer(processor, skip_prompt=True)
