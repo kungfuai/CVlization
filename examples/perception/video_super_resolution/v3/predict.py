@@ -113,6 +113,66 @@ def ensure_gt(name: str, cache_dir: Path) -> Path:
     return gt_dir.parent
 
 
+def make_comparison_video(
+    input_frames_dir: Path,
+    sr_frames_dir: Path,
+    output_video: Path,
+    space_scale: int,
+    fps: int = 12,
+):
+    """Create a side-by-side MP4: bicubic-upsampled input (left) vs SR output (right)."""
+    from PIL import Image
+    import numpy as np
+    import tempfile
+
+    sr_frames = sorted(sr_frames_dir.glob("*.png"), key=lambda p: int(p.stem))
+    input_frames = sorted(input_frames_dir.glob("*.png"), key=lambda p: int(p.stem))
+
+    if not sr_frames:
+        print("Warning: no SR frames found, skipping video.")
+        return
+
+    # Get SR output size
+    sr_sample = np.array(Image.open(sr_frames[0]))
+    h, w = sr_sample.shape[:2]
+
+    # Create temp directory for comparison frames
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        for i, sr_path in enumerate(sr_frames):
+            sr_img = Image.open(sr_path)
+
+            # Find matching input frame (nearest, accounting for temporal upsampling)
+            input_idx = min(i * len(input_frames) // len(sr_frames), len(input_frames) - 1)
+            input_img = Image.open(input_frames[input_idx])
+            # Bicubic upscale input to match SR resolution
+            input_up = input_img.resize((w, h), Image.BICUBIC)
+
+            # Side by side with label bar
+            canvas = Image.new("RGB", (w * 2, h))
+            canvas.paste(input_up, (0, 0))
+            canvas.paste(sr_img, (w, 0))
+            canvas.save(tmpdir / f"{i:06d}.png")
+
+        # Stitch with ffmpeg
+        output_video.parent.mkdir(parents=True, exist_ok=True)
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-framerate", str(fps),
+            "-i", str(tmpdir / "%06d.png"),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-crf", "18",
+            str(output_video),
+        ]
+        result = subprocess.run(ffmpeg_cmd, capture_output=True)
+        if result.returncode == 0:
+            print(f"Comparison video saved: {output_video}")
+            print(f"  Layout: [Bicubic {space_scale}x upscale] | [V3 SR output]")
+            print(f"  Frames: {len(sr_frames)}, FPS: {fps}, Resolution: {w*2}x{h}")
+        else:
+            print(f"Warning: ffmpeg failed: {result.stderr.decode()[:200]}")
+
+
 def ensure_checkpoint(cache_dir: Path) -> Path:
     """Download V3 checkpoint from Google Drive if not cached."""
     ckpt_path = cache_dir / CHECKPOINT_FILENAME
@@ -159,6 +219,15 @@ def main():
     parser.add_argument(
         "--cache-dir", default="/root/.cache/cvlization/v3",
         help="Cache directory for checkpoint and sample data.",
+    )
+    parser.add_argument(
+        "--output-video", default=None,
+        help="Path for side-by-side comparison MP4 (bicubic input vs SR output). "
+             "e.g. --output-video comparison.mp4",
+    )
+    parser.add_argument(
+        "--fps", type=int, default=12,
+        help="FPS for output video (default: 12)",
     )
     parser.add_argument(
         "--eval", action="store_true",
@@ -220,6 +289,21 @@ def main():
     # Count output frames
     out_frames = list(output_path.rglob("*.png"))
     print(f"Done. {len(out_frames)} frames saved to: {output_path}")
+
+    # Generate comparison video if requested
+    if args.output_video:
+        # Find the SR frames directory (output_path/eval_set/x{scale}/0/)
+        sr_frames_dir = output_path / eval_set / f"x{args.space_scale}" / "0"
+        # Find the input frames directory
+        input_frames_dir = Path(data_dir_arg) / eval_set / "000"
+        if not input_frames_dir.exists():
+            # Try without the 000 subdirectory
+            input_frames_dir = Path(data_dir_arg) / eval_set
+        video_path = Path(resolve_output_path(args.output_video, OUT))
+        make_comparison_video(
+            input_frames_dir, sr_frames_dir, video_path,
+            space_scale=args.space_scale, fps=args.fps,
+        )
 
     # Run evaluation if requested
     if args.eval:
