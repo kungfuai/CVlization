@@ -19,7 +19,7 @@ import os
 import yaml
 import torch
 from datasets import load_dataset
-from transformers import TrainerCallback
+from transformers import TrainerCallback, AutoModel
 from unsloth import FastVisionModel, get_chat_template
 from unsloth.trainer import UnslothVisionDataCollator
 from trl import SFTTrainer, SFTConfig
@@ -233,11 +233,39 @@ def main():
         print("WandB logging disabled.")
 
     # ── Model ──────────────────────────────────────────────────────────────────
-    print(f"Loading model: {model_config['name']} ...")
+    model_name = model_config["name"]
+    print(f"Loading model: {model_name} ...")
+
+    # Some models (e.g. DeepSeek-OCR-2) require snapshot_download to a local path first
+    if model_config.get("snapshot_download", False):
+        from huggingface_hub import snapshot_download
+        import glob as _glob
+        print(f"  Pre-downloading {model_name} to HF cache ...")
+        model_name = snapshot_download(model_name)
+        print(f"  Downloaded to: {model_name}")
+        # Patch compatibility: transformers 5.x renamed DeepseekV2MoE → DeepseekV2Moe
+        for py_file in _glob.glob(f"{model_name}/*.py"):
+            with open(py_file, "r") as f:
+                content = f.read()
+            if "DeepseekV2MoE" in content:
+                patched = content.replace("DeepseekV2MoE", "DeepseekV2Moe")
+                with open(py_file, "w") as f:
+                    f.write(patched)
+                print(f"  Patched {py_file}: DeepseekV2MoE → DeepseekV2Moe")
+
+    extra_kwargs = {}
+    if model_config.get("trust_remote_code", False):
+        extra_kwargs["trust_remote_code"] = True
+    if model_config.get("unsloth_force_compile", False):
+        extra_kwargs["unsloth_force_compile"] = True
+    if model_config.get("auto_model", False):
+        extra_kwargs["auto_model"] = AutoModel
+
     model, processor = FastVisionModel.from_pretrained(
-        model_config["name"],
+        model_name,
         load_in_4bit=model_config["load_in_4bit"],
         use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
+        **extra_kwargs,
     )
 
     model = FastVisionModel.get_peft_model(
@@ -388,11 +416,14 @@ def main():
             max_new_tokens=wandb_config.get("inference_max_new_tokens", 512),
         ))
 
+    # Handle models where FastVisionModel returns tokenizer directly (e.g. DeepSeek-OCR-2)
+    processing_class = getattr(processor, "tokenizer", processor)
+
     trainer = SFTTrainer(
         model=model,
         train_dataset=train_data,
         eval_dataset=val_data,
-        processing_class=processor.tokenizer,
+        processing_class=processing_class,
         data_collator=UnslothVisionDataCollator(model, processor),
         args=training_args,
         callbacks=callbacks,
