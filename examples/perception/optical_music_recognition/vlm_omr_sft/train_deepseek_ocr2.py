@@ -324,9 +324,10 @@ class DeepSeekOCR2DataCollator:
 class WandbInferenceCallback(TrainerCallback):
     """Logs held-out inference samples to WandB every N steps."""
 
-    def __init__(self, model, tokenizer, samples, every_n_steps=100, max_new_tokens=512):
+    def __init__(self, model, tokenizer, data_collator, samples, every_n_steps=100, max_new_tokens=512):
         self.model          = model
         self.tokenizer      = tokenizer
+        self.data_collator  = data_collator
         self.samples        = samples
         self.every_n_steps  = every_n_steps
         self.max_new_tokens = max_new_tokens
@@ -343,20 +344,36 @@ class WandbInferenceCallback(TrainerCallback):
         rows = []
 
         for sample in self.samples:
-            image = sample["image"]
-            # DeepSeek-OCR-2 uses conversation-based inference via model.chat()
-            messages = [{"role": "<|User|>", "content": f"<image>\n{INSTRUCTION}", "images": [image]}]
             try:
+                feature = {
+                    "messages": [
+                        {"role": "<|User|>", "content": f"<image>\n{INSTRUCTION}",
+                         "images": [sample["image"]]},
+                        {"role": "<|Assistant|>", "content": ""},
+                    ]
+                }
+                batch = self.data_collator([feature])
+                # Use only the prompt tokens (labels == -100 means prompt or image)
+                prompt_len = int((batch["labels"][0] == -100).sum())
+                input_ids      = batch["input_ids"][:, :prompt_len].to("cuda")
+                attention_mask = batch["attention_mask"][:, :prompt_len].to("cuda")
+                images         = batch["images"]
+                images_seq_mask = batch["images_seq_mask"][:, :prompt_len].to("cuda")
+                images_spatial  = batch["images_spatial_crop"].to("cuda")
                 with torch.no_grad():
-                    pred = self.model.chat(
-                        self.tokenizer,
-                        messages,
+                    out = self.model.generate(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        images=images,
+                        images_seq_mask=images_seq_mask,
+                        images_spatial_crop=images_spatial,
                         max_new_tokens=self.max_new_tokens,
                         do_sample=False,
+                        use_cache=True,
                     )
-                if isinstance(pred, (list, tuple)):
-                    pred = pred[0] if pred else ""
-                prediction = str(pred).strip()
+                prediction = self.tokenizer.decode(
+                    out[0][input_ids.shape[1]:], skip_special_tokens=True
+                ).strip()
             except Exception as e:
                 prediction = f"[inference error: {e}]"
 
@@ -601,6 +618,7 @@ def main():
         callbacks.append(WandbInferenceCallback(
             model=model,
             tokenizer=tokenizer,
+            data_collator=data_collator,
             samples=inference_samples,
             every_n_steps=wandb_config.get("log_examples_every_n_steps", 100),
             max_new_tokens=wandb_config.get("inference_max_new_tokens", 512),
