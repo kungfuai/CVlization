@@ -379,7 +379,7 @@ class WandbInferenceCallback(TrainerCallback):
 
             rows.append([
                 step,
-                wandb.Image(image, caption=f"{sample['score_id']} p{sample['page']}"),
+                wandb.Image(sample["image"], caption=f"{sample['score_id']} p{sample['page']}"),
                 sample["score_id"],
                 sample["corpus"],
                 sample["page"],
