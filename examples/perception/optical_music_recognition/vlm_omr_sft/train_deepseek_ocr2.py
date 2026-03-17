@@ -357,7 +357,7 @@ class WandbInferenceCallback(TrainerCallback):
                 prompt_len = int((batch["labels"][0] == -100).sum())
                 input_ids      = batch["input_ids"][:, :prompt_len].to("cuda")
                 attention_mask = batch["attention_mask"][:, :prompt_len].to("cuda")
-                images         = batch["images"]
+                images         = [(c.to("cuda"), o.to("cuda")) for c, o in batch["images"]]
                 images_seq_mask = batch["images_seq_mask"][:, :prompt_len].to("cuda")
                 images_spatial  = batch["images_spatial_crop"].to("cuda")
                 with torch.no_grad():
@@ -694,7 +694,7 @@ def main():
             batch = data_collator([test_feature])
             input_ids     = batch["input_ids"][:, :batch["labels"][0].eq(-100).sum()].to("cuda")
             attention_mask = batch["attention_mask"][:, :input_ids.shape[1]].to("cuda")
-            images        = batch["images"]
+            images        = [(c.to("cuda"), o.to("cuda")) for c, o in batch["images"]]
             images_seq_mask = batch["images_seq_mask"][:, :input_ids.shape[1]].to("cuda")
             images_spatial  = batch["images_spatial_crop"].to("cuda")
             with torch.no_grad():
