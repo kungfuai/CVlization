@@ -66,6 +66,10 @@ def strip_musicxml_header(xml: str) -> str:
     xml = re.sub(r'\s*<defaults>.*?</defaults>', '', xml, flags=re.DOTALL)
     # Strip <movement-title> if it's a temp filename (e.g. tmp6abc.xml)
     xml = re.sub(r'\s*<movement-title>tmp[^<]*</movement-title>', '', xml)
+    # Strip non-musical metadata: <score-instrument>, <midi-instrument>, <midi-device>
+    xml = re.sub(r'\s*<score-instrument[^>]*>.*?</score-instrument>', '', xml, flags=re.DOTALL)
+    xml = re.sub(r'\s*<midi-instrument[^>]*>.*?</midi-instrument>', '', xml, flags=re.DOTALL)
+    xml = re.sub(r'\s*<midi-device[^>]*/?>', '', xml)
     return xml.strip()
 
 
