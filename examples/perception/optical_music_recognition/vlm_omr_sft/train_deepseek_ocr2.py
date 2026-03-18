@@ -39,6 +39,8 @@ DEFAULT_CONFIG = "config_deepseek_ocr2.yaml"
 # ── MusicXML cleanup ───────────────────────────────────────────────────────────
 
 def strip_musicxml_header(xml: str) -> str:
+    """Remove non-visible boilerplate from MusicXML, keeping only content
+    that is visible on the sheet music image."""
     xml = re.sub(r'<\?xml[^?]*\?>\s*', '', xml)
     xml = re.sub(r'<!DOCTYPE[^>]*>\s*', '', xml)
     xml = re.sub(r'\s*<identification>.*?</identification>', '', xml, flags=re.DOTALL)
@@ -48,6 +50,19 @@ def strip_musicxml_header(xml: str) -> str:
     xml = re.sub(r'\s*<score-instrument[^>]*>.*?</score-instrument>', '', xml, flags=re.DOTALL)
     xml = re.sub(r'\s*<midi-instrument[^>]*>.*?</midi-instrument>', '', xml, flags=re.DOTALL)
     xml = re.sub(r'\s*<midi-device[^>]*/?>', '', xml)
+    # Strip XML comments (e.g. <!--=== Part 1 ===-->)
+    xml = re.sub(r'\s*<!--.*?-->', '', xml, flags=re.DOTALL)
+    # Strip <sound .../> elements (invisible numeric metadata like tempo="92")
+    xml = re.sub(r'\s*<sound\b[^/]*/>', '', xml)
+    # Strip <direction> blocks that contain only <sound> or empty <words/>
+    xml = re.sub(
+        r'\s*<direction[^>]*>\s*<direction-type>\s*<words\s*/>\s*</direction-type>\s*(?:<sound\b[^/]*/>\s*)?</direction>',
+        '', xml, flags=re.DOTALL)
+    xml = re.sub(
+        r'\s*<direction[^>]*>\s*<direction-type>\s*</direction-type>\s*<sound\b[^/]*/>\s*</direction>',
+        '', xml, flags=re.DOTALL)
+    # Strip implicit="no" (always "no", adds nothing)
+    xml = xml.replace(' implicit="no"', '')
     return xml.strip()
 
 

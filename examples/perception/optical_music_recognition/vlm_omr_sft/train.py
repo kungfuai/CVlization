@@ -42,19 +42,9 @@ def prepare_inference_inputs(processor, image):
 
 
 def strip_musicxml_header(xml: str) -> str:
-    """Remove noisy boilerplate from MusicXML, keeping only musically useful content.
-
-    Strips:
-      - XML declaration and DOCTYPE
-      - <movement-title> when it looks like a temp filename (tmp*.xml)
-      - <identification> block (IMSLP URLs, transcriber names, encoding software)
-      - <defaults> block (scaling params, always identical)
-
-    Keeps:
-      - <work><work-title> (actual piece title)
-      - <movement-number> and real <movement-title> (orchestra movements)
-      - <part-list> (instrument names)
-      - <part> elements (actual music)
+    """Remove non-visible boilerplate from MusicXML, keeping only content
+    that is visible on the sheet music image (notes, rests, stems, beams,
+    lyrics, accidentals, barlines, directions with visible text, etc.).
     """
     import re
     # Strip XML declaration and DOCTYPE
@@ -70,6 +60,19 @@ def strip_musicxml_header(xml: str) -> str:
     xml = re.sub(r'\s*<score-instrument[^>]*>.*?</score-instrument>', '', xml, flags=re.DOTALL)
     xml = re.sub(r'\s*<midi-instrument[^>]*>.*?</midi-instrument>', '', xml, flags=re.DOTALL)
     xml = re.sub(r'\s*<midi-device[^>]*/?>', '', xml)
+    # Strip XML comments (e.g. <!--=== Part 1 ===-->)
+    xml = re.sub(r'\s*<!--.*?-->', '', xml, flags=re.DOTALL)
+    # Strip <sound .../> elements (invisible numeric metadata like tempo="92")
+    xml = re.sub(r'\s*<sound\b[^/]*/>', '', xml)
+    # Strip <direction> blocks that contain only <sound> or empty <words/>
+    xml = re.sub(
+        r'\s*<direction[^>]*>\s*<direction-type>\s*<words\s*/>\s*</direction-type>\s*(?:<sound\b[^/]*/>\s*)?</direction>',
+        '', xml, flags=re.DOTALL)
+    xml = re.sub(
+        r'\s*<direction[^>]*>\s*<direction-type>\s*</direction-type>\s*<sound\b[^/]*/>\s*</direction>',
+        '', xml, flags=re.DOTALL)
+    # Strip implicit="no" (always "no", adds nothing)
+    xml = xml.replace(' implicit="no"', '')
     return xml.strip()
 
 
