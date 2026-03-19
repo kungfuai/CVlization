@@ -24,18 +24,21 @@ from unsloth import FastVisionModel, get_chat_template
 from unsloth.trainer import UnslothVisionDataCollator
 from trl import SFTTrainer, SFTConfig
 
-INSTRUCTION = "Transcribe this sheet music page to MusicXML."
+INSTRUCTION_XML = "Transcribe this sheet music page to MusicXML."
+INSTRUCTION_MXC = "Transcribe this sheet music page to MXC (compact MusicXML)."
 
 
-def prepare_inference_inputs(processor, image):
+def prepare_inference_inputs(processor, image, instruction=None):
     """Prepare model inputs for inference.
 
     Works for Gemma-3, Qwen3-VL, and other unsloth-supported VLMs.
     For Qwen3-VL: ensure get_chat_template is NOT called (set chat_template: null
     in config), so the model's built-in vision-aware template is preserved.
     """
+    if instruction is None:
+        instruction = INSTRUCTION_XML
     messages = [{"role": "user", "content": [
-        {"type": "image"}, {"type": "text", "text": INSTRUCTION},
+        {"type": "image"}, {"type": "text", "text": instruction},
     ]}]
     input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
     return processor(image, input_text, add_special_tokens=False, return_tensors="pt")
@@ -89,12 +92,13 @@ class WandbInferenceCallback(TrainerCallback):
       step | image | score_id | corpus | page | bars | reference | prediction
     """
 
-    def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512):
+    def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512, target_format="xml"):
         self.model          = model
         self.processor      = processor
         self.samples        = samples       # list of raw dataset rows (PIL images + metadata)
         self.every_n_steps  = every_n_steps
         self.max_new_tokens = max_new_tokens
+        self.target_format  = target_format
         self._images_logged = False         # log images + ground truth only once
 
     def _run_inference(self, step):
@@ -112,7 +116,8 @@ class WandbInferenceCallback(TrainerCallback):
         rows = []
         for sample in self.samples:
             image = sample["image"]
-            inputs = prepare_inference_inputs(self.processor, image).to("cuda")
+            instr = INSTRUCTION_MXC if self.target_format == "mxc" else INSTRUCTION_XML
+            inputs = prepare_inference_inputs(self.processor, image, instr).to("cuda")
 
             with torch.no_grad():
                 outputs = self.model.generate(
@@ -125,6 +130,12 @@ class WandbInferenceCallback(TrainerCallback):
             prediction  = self.processor.decode(pred_tokens, skip_special_tokens=True).strip()
 
             ref = strip_musicxml_header(sample["musicxml"])
+            if self.target_format == "mxc":
+                try:
+                    from mxc import xml_to_mxc
+                    ref = xml_to_mxc(ref)
+                except Exception:
+                    pass
 
             rows.append([
                 step,
@@ -320,19 +331,34 @@ def main():
           f"bars={dataset[0]['bar_start']}-{dataset[0]['bar_end']}")
 
     # ── Chat format ────────────────────────────────────────────────────────────
+    target_format = dataset_config.get("target_format", "xml")
+    if target_format == "mxc":
+        from mxc import xml_to_mxc
+        instruction = INSTRUCTION_MXC
+        print(f"Target format: MXC (compact)")
+    else:
+        instruction = INSTRUCTION_XML
+        print(f"Target format: XML")
+
     def convert_to_conversation(sample):
+        text = strip_musicxml_header(sample["musicxml"])
+        if target_format == "mxc":
+            try:
+                text = xml_to_mxc(text)
+            except Exception:
+                pass  # fall back to cleaned XML for malformed samples
         return {
             "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text",  "text": INSTRUCTION},
+                        {"type": "text",  "text": instruction},
                         {"type": "image", "image": sample["image"]},
                     ],
                 },
                 {
                     "role": "assistant",
-                    "content": [{"type": "text", "text": strip_musicxml_header(sample["musicxml"])}],
+                    "content": [{"type": "text", "text": text}],
                 },
             ]
         }
@@ -425,6 +451,7 @@ def main():
             samples=inference_samples,
             every_n_steps=wandb_config.get("log_examples_every_n_steps", 100),
             max_new_tokens=wandb_config.get("inference_max_new_tokens", 512),
+            target_format=target_format,
         ))
 
     # Handle models where FastVisionModel returns tokenizer directly (e.g. DeepSeek-OCR-2)
@@ -491,7 +518,8 @@ def main():
         FastVisionModel.for_inference(model)
 
         sample = inference_samples[0]
-        inputs = prepare_inference_inputs(processor, sample["image"]).to("cuda")
+        instr = INSTRUCTION_MXC if target_format == "mxc" else INSTRUCTION_XML
+        inputs = prepare_inference_inputs(processor, sample["image"], instr).to("cuda")
 
         from transformers import TextStreamer
         streamer = TextStreamer(processor, skip_prompt=True)
