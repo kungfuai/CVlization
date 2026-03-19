@@ -43,6 +43,15 @@ def xml_to_mxc(xml: str) -> str:
         wt = work.findtext("work-title")
         if wt:
             lines.append(f'header work-title="{wt}"')
+    # Identification (composer, lyricist)
+    ident = root.find("identification")
+    if ident is not None:
+        for creator in ident.findall("creator"):
+            ctype = creator.get("type", "")
+            ctext = (creator.text or "").strip()
+            if ctype in ("composer", "lyricist") and ctext:
+                lines.append(f'header {ctype}="{ctext}"')
+
     mn = root.findtext("movement-number")
     if mn:
         lines.append(f"header movement-number={mn}")
@@ -398,6 +407,15 @@ def _parse_header(line, root):
             if work is None:
                 work = ET.SubElement(root, "work")
             ET.SubElement(work, "work-title").text = m.group(1)
+    elif "composer=" in line or "lyricist=" in line:
+        for ctype in ("composer", "lyricist"):
+            m = re.search(rf'{ctype}="([^"]*)"', line)
+            if m:
+                ident = root.find("identification")
+                if ident is None:
+                    ident = ET.SubElement(root, "identification")
+                creator = ET.SubElement(ident, "creator", type=ctype)
+                creator.text = m.group(1)
     elif "movement-number=" in line:
         m = re.search(r'movement-number=(\S+)', line)
         if m:

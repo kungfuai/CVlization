@@ -145,3 +145,35 @@ from datasets import load_dataset
 ds = load_dataset("zzsi/openscore", "pages_transcribed", streaming=True, split="train")
 lieder_only = ds.filter(lambda r: r["corpus"] == "lieder")
 ```
+
+---
+
+## Known Data Quality Issues
+
+Found during MXC round-trip testing on 500 lieder samples (2026-03-19):
+
+### Malformed XML (~0.6% of samples)
+
+3 out of 500 lieder samples contain MusicXML with mismatched tags that fail
+`xml.etree.ElementTree.fromstring()`. Known bad score IDs:
+
+- `lc6564767` page 1
+- `lc5729178` page 1
+- `lc8712648` page 1
+
+**Root cause:** Likely music21 export bugs during `slice_musicxml`. The full-score
+MXL is valid, but the per-page slice produces malformed XML.
+
+**Workaround:** Filter at training time — skip samples that fail XML parsing.
+
+**Fix:** Re-run `page_musicxml.py` for these specific scores with a patched music21,
+or post-process slices with an XML validator/repairer.
+
+### Non-breaking spaces in lyrics (cosmetic)
+
+~7 out of 27,632 lyric `<text>` elements contain `\xa0` (non-breaking space)
+instead of regular spaces. Example: `"1.\xa0Thou"` instead of `"1. Thou"`.
+
+**Workaround:** Normalize `\xa0` → ` ` during preprocessing.
+
+**Fix:** Add a text normalization pass in `page_musicxml.py` after music21 export.

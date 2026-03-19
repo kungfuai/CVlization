@@ -43,7 +43,11 @@ def strip_musicxml_header(xml: str) -> str:
     that is visible on the sheet music image."""
     xml = re.sub(r'<\?xml[^?]*\?>\s*', '', xml)
     xml = re.sub(r'<!DOCTYPE[^>]*>\s*', '', xml)
-    xml = re.sub(r'\s*<identification>.*?</identification>', '', xml, flags=re.DOTALL)
+    # Strip <identification> but keep composer/lyricist (visible on page)
+    xml = re.sub(r'\s*<rights>[^<]*</rights>', '', xml)
+    xml = re.sub(r'\s*<encoding>.*?</encoding>', '', xml, flags=re.DOTALL)
+    xml = re.sub(r'\s*<creator type="arranger">[^<]*</creator>', '', xml)
+    xml = re.sub(r'\s*<identification>\s*</identification>', '', xml, flags=re.DOTALL)
     xml = re.sub(r'\s*<defaults>.*?</defaults>', '', xml, flags=re.DOTALL)
     xml = re.sub(r'\s*<movement-title>tmp[^<]*</movement-title>', '', xml)
     # Strip non-musical metadata: <score-instrument>, <midi-instrument>, <midi-device>

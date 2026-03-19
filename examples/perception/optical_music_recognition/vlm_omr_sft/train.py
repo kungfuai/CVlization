@@ -50,8 +50,12 @@ def strip_musicxml_header(xml: str) -> str:
     # Strip XML declaration and DOCTYPE
     xml = re.sub(r'<\?xml[^?]*\?>\s*', '', xml)
     xml = re.sub(r'<!DOCTYPE[^>]*>\s*', '', xml)
-    # Strip <identification>...</identification> block
-    xml = re.sub(r'\s*<identification>.*?</identification>', '', xml, flags=re.DOTALL)
+    # Strip <identification> but keep composer/lyricist (visible on page)
+    xml = re.sub(r'\s*<rights>[^<]*</rights>', '', xml)
+    xml = re.sub(r'\s*<encoding>.*?</encoding>', '', xml, flags=re.DOTALL)
+    xml = re.sub(r'\s*<creator type="arranger">[^<]*</creator>', '', xml)
+    # Remove empty <identification> tags left behind
+    xml = re.sub(r'\s*<identification>\s*</identification>', '', xml, flags=re.DOTALL)
     # Strip <defaults>...</defaults> block
     xml = re.sub(r'\s*<defaults>.*?</defaults>', '', xml, flags=re.DOTALL)
     # Strip <movement-title> if it's a temp filename (e.g. tmp6abc.xml)

@@ -7,7 +7,11 @@ def strip_musicxml_header(xml: str) -> str:
     """Copy of the function from train.py (avoids torch import)."""
     xml = re.sub(r'<\?xml[^?]*\?>\s*', '', xml)
     xml = re.sub(r'<!DOCTYPE[^>]*>\s*', '', xml)
-    xml = re.sub(r'\s*<identification>.*?</identification>', '', xml, flags=re.DOTALL)
+    # Strip <identification> but keep composer/lyricist (visible on page)
+    xml = re.sub(r'\s*<rights>[^<]*</rights>', '', xml)
+    xml = re.sub(r'\s*<encoding>.*?</encoding>', '', xml, flags=re.DOTALL)
+    xml = re.sub(r'\s*<creator type="arranger">[^<]*</creator>', '', xml)
+    xml = re.sub(r'\s*<identification>\s*</identification>', '', xml, flags=re.DOTALL)
     xml = re.sub(r'\s*<defaults>.*?</defaults>', '', xml, flags=re.DOTALL)
     xml = re.sub(r'\s*<movement-title>tmp[^<]*</movement-title>', '', xml)
     xml = re.sub(r'\s*<score-instrument[^>]*>.*?</score-instrument>', '', xml, flags=re.DOTALL)
@@ -37,11 +41,20 @@ def test_strips_doctype():
     assert strip_musicxml_header(xml) == '<score-partwise/>'
 
 
-def test_strips_identification():
-    xml = '<root>\n  <identification>\n    <creator>Test</creator>\n  </identification>\n  <note/>\n</root>'
+def test_strips_identification_encoding_and_rights():
+    xml = '<root>\n  <identification>\n    <creator type="composer">Bach</creator>\n    <creator type="arranger">IMSLP</creator>\n    <rights>CC0</rights>\n    <encoding><software>music21</software></encoding>\n  </identification>\n  <note/>\n</root>'
     result = strip_musicxml_header(xml)
-    assert '<identification>' not in result
-    assert '<note/>' in result
+    assert '<creator type="composer">Bach</creator>' in result
+    assert 'arranger' not in result
+    assert '<rights>' not in result
+    assert '<encoding>' not in result
+
+
+def test_keeps_composer_and_lyricist():
+    xml = '<root>\n  <identification>\n    <creator type="composer">Mozart</creator>\n    <creator type="lyricist">Da Ponte</creator>\n  </identification>\n</root>'
+    result = strip_musicxml_header(xml)
+    assert 'Mozart' in result
+    assert 'Da Ponte' in result
 
 
 def test_strips_defaults():
