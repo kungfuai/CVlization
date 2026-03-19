@@ -113,6 +113,61 @@ Some predictions at early steps showed hallucinated octaves (A10, B16, C17) — 
 | DeepSeek-OCR-2, 2ep | XML | 0.312 | 0.197 | Rests only | — |
 | **Ministral-3 r=8, MXC, 2ep** | **MXC** | **0.142** | **0.109** | **Yes (up to 94)** | No (monotone) |
 | **Ministral-3 r=8, MXC, 4ep** | **MXC** | **0.106** | **0.117** | **Yes (up to 109)** | No (monotone) |
+| **Ministral-3 r=32, MXC, 2ep** | **MXC** | **0.121** | **0.109** | **Yes (up to 91)** | Transient only |
+
+## Experiment 3: Ministral-3 r=32, MXC, 2 epochs
+
+**WandB run**: `nr2suw9c` — https://wandb.ai/zzsi_kungfu/openscore-omr/runs/nr2suw9c
+
+| Setting | Value |
+|---|---|
+| Model | Ministral-3 3B (QLoRA 4-bit, r=32) |
+| Target format | MXC |
+| Trainable params | 67.5M (1.72%) — 4× more than r=8 |
+| train_loss / eval_loss | 0.121 / 0.109 |
+| Runtime | 1h 50m |
+
+### Eval loss — nearly identical to r=8
+
+| Epoch | r=8 eval_loss | r=32 eval_loss |
+|-------|--------------|----------------|
+| 0.33 | 0.136 | 0.133 |
+| 0.67 | 0.120 | 0.120 |
+| 1.00 | 0.114 | 0.114 |
+| 1.34 | 0.112 | 0.111 |
+| 1.67 | 0.109 | 0.109 |
+
+### Pitch variety — transient then collapsed
+
+Mid-training (steps 800-1000) showed up to **10 unique real pitches** with a
+coherent descending scale pattern (C#5 → B4 → A4 → G4 → F#4 → E4 → D4 → C#4).
+This was the first time any model produced varied pitches.
+
+However, by step 1200+ the pitch variety **collapsed back to monotone** (1 unique
+pitch per sample). The model briefly explored pitch diversity but converged to the
+single-pitch solution that minimizes loss.
+
+### Key finding
+
+Higher LoRA rank does NOT solve pitch variety. The identical eval_loss curves for
+r=8 and r=32 confirm that adapter capacity is not the bottleneck — the model
+converges to the same solution regardless of rank. The pitch problem is upstream,
+likely in the vision encoder's ability to discriminate note positions on staff lines.
+
+## Vision encoder analysis
+
+Training images are 835×1181 pixels (uniform). Vision encoder properties:
+
+| | Ministral-3 (Pixtral) | Qwen3.5-9B |
+|---|---|---|
+| Patch size | 14px | 16px |
+| Spatial merge | none | 2×2 |
+| Effective resolution | 14×14 per token | 32×32 per token |
+| Vision tokens per page | ~5,040 | ~962 |
+
+Ministral-3 has 5× more visual detail per image, but still cannot discriminate
+pitch. This suggests the bottleneck may not be resolution but the model's ability
+to learn the position→pitch mapping (a fine-grained spatial reasoning task).
 
 ## Conclusions
 
@@ -120,25 +175,29 @@ Some predictions at early steps showed hallucinated octaves (A10, B16, C17) — 
    XML format never reaches note content within inference token budget.
 
 2. **Ministral-3 3B can learn rhythm, lyrics, and structure but NOT pitch** from images.
-   This is likely a vision encoder resolution limitation — the 3B model cannot resolve
-   which staff line a note head sits on.
+   This holds across r=8 and r=32. The model converges to a single-pitch solution
+   regardless of adapter capacity.
 
-3. **2 epochs is optimal** for this model/data combination. More epochs overfit without
-   improving pitch discrimination.
+3. **2 epochs is optimal** for Ministral-3 on this data. Both r=8 and r=32 produce
+   nearly identical eval_loss curves. 4 epochs overfits.
 
-4. **Data cleaning helps** — stripping non-visible metadata reduced eval_loss from 0.158
-   (raw XML) to 0.048 (clean XML). MXC further focuses learning on musical content.
+4. **LoRA rank is not the bottleneck** — r=8 and r=32 reach the same eval_loss (0.109)
+   and the same pitch behavior (monotone).
+
+5. **The pitch problem is upstream** — either the vision encoder cannot provide
+   sufficient spatial signal, or the 3B language model lacks capacity to learn
+   the position→pitch mapping from ~3K training examples.
 
 ## Next steps
 
-1. **Larger model with MXC** — Qwen3.5-9B has a stronger vision encoder that may resolve
-   pitch from staff positions. The 2-epoch sweet spot means this is a ~2h experiment.
+1. **Vision diagnostic** — run inference on an out-of-distribution image (e.g., quartet
+   page with 4 parts, no lyrics) to test if the model conditions on the image at all.
 
-2. **Pitch-focused evaluation** — build an automated metric comparing predicted vs reference
-   pitches per measure (not just counting notes).
+2. **Larger model with MXC** — Qwen3.5-9B has a 3× larger language model. Despite
+   coarser vision (962 vs 5040 tokens), the larger LM may learn pitch mapping better.
 
-3. **Curriculum learning** — train first on simple monophonic lines (voice-only pages)
-   before full voice+piano scores.
+3. **Simplified task** — strip MXC targets to pitch+duration only (remove lyrics,
+   beams, stems) to reduce task complexity and focus learning on note reading.
 
-4. **Image augmentation** — the model may need zoomed/cropped views of individual staves
-   rather than full-page images to learn fine-grained pitch discrimination.
+4. **More training data** — add quartets + orchestra (14K total vs 3K lieder)
+   for more pitch variety in training distribution.
