@@ -202,6 +202,8 @@ def parse_args():
                         help="Override model name (e.g. unsloth/Qwen2-VL-7B-Instruct)")
     parser.add_argument("--chat-template", default=None,
                         help="Override chat template (e.g. qwen-2.5, llama-3.2)")
+    parser.add_argument("--resume-adapter", default=None,
+                        help="Path to a LoRA adapter to load before training (resets scheduler/optimizer)")
     return parser.parse_args()
 
 
@@ -305,6 +307,20 @@ def main():
         loftq_config=None,
         target_modules="all-linear",
     )
+
+    # Optionally load pre-trained LoRA weights (fresh scheduler/optimizer)
+    if args.resume_adapter:
+        from peft import set_peft_model_state_dict
+        import safetensors.torch
+        adapter_path = args.resume_adapter
+        print(f"Loading LoRA adapter from {adapter_path} ...")
+        adapter_file = os.path.join(adapter_path, "adapter_model.safetensors")
+        if os.path.exists(adapter_file):
+            state_dict = safetensors.torch.load_file(adapter_file)
+            set_peft_model_state_dict(model, state_dict)
+            print(f"  Loaded {len(state_dict)} tensors (scheduler/optimizer will be fresh)")
+        else:
+            print(f"  WARNING: {adapter_file} not found, starting from scratch")
 
     # ── Dataset ────────────────────────────────────────────────────────────────
     repo   = dataset_config["repo"]
