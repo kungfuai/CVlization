@@ -178,31 +178,58 @@ Compare against what's visible on the page image:
 - Time signature: correct beats/beat-type?
 - Tempo marking: correct text?
 
-## Aggregate metrics across WandB examples
+## Standardized evaluation with eval_mxc.py
 
-```python
-import json, glob, re
+Use `eval_mxc.py` for consistent, alignment-aware metrics across runs:
 
-tables = sorted(glob.glob('wandb/run-RUNID/files/media/table/*.table.json'))
+```bash
+# Evaluate latest WandB run (shows latest step + trend)
+python eval_mxc.py --latest
 
-for t in tables:
-    with open(t) as f:
-        data = json.load(f)
-    step_col = data['columns'].index('step')
-    pred_col = data['columns'].index('prediction')
-    ref_col = data['columns'].index('reference')
-    for row in data['data']:
-        step = row[step_col]
-        pred = row[pred_col]
-        ref = row[ref_col]
-        # Run checks here...
+# Evaluate a specific run
+python eval_mxc.py --wandb-run wandb/run-20260319_201235-3h8sdtea
+
+# Show per-step summary
+python eval_mxc.py --wandb-run wandb/run-XXXXX --by-step
+
+# Evaluate specific step only
+python eval_mxc.py --wandb-run wandb/run-XXXXX --step 1400
+
+# Compare two MXC files directly
+python eval_mxc.py --pred prediction.mxc --ref reference.mxc
 ```
 
-Key metrics to track across steps:
-1. **% samples with pitched notes** — should increase with training
-2. **Avg notes per sample** — should increase
-3. **Max unique pitches** — >1 means pitch discrimination is emerging
-4. **Cyclic pattern length** — shorter = more mechanical; None = potentially real
+### Metrics
+
+All metrics use `SequenceMatcher` for alignment-aware comparison (handles
+insertions/deletions without cascading positional mismatches):
+
+| Metric | What it measures |
+|---|---|
+| **Pitch similarity** | Are the right notes in the right order? |
+| **Rhythm similarity** | Are the durations/types correct? |
+| **Combined similarity** | Pitch + type together |
+| **Note coverage** | pred events / ref events |
+| **Longest pitch match** | Longest consecutive correct run |
+| **Unique pitches** | Pitch variety (pred vs ref) |
+| **Header accuracy** | Key, time signature, part structure |
+
+### Benchmark results (as of 2026-03-20)
+
+| Run | Avg pitch sim | Avg rhythm sim | Coverage | Unique pitches |
+|---|---|---|---|---|
+| Ministral-3 r=8 MXC ep2 | 7% | 10% | 35% | 0.8 |
+| Qwen3.5-9B MXC ep2 | 31% | 32% | 34% | 14.5 |
+| Qwen3.5-9B MXC ep4 | 32% | 30% | 33% | 13.8 |
+| Qwen3.5-9B MXC ep5+ (4096 tok) | 26% | 28% | 61% | 11.0 |
+
+### Interpreting results
+
+- **Pitch similarity < 10%**: model not reading pitch from image (monotone/random)
+- **Pitch similarity 20-40%**: model reading some pitches, with alignment drift
+- **Pitch similarity > 50%**: good pitch reading (check longest match for consistency)
+- **Coverage > 100%**: model hallucinating extra notes
+- **Coverage < 30%**: output token budget too small (increase `inference_max_new_tokens`)
 
 ## Red flags
 
