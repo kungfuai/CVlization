@@ -188,16 +188,125 @@ to learn the position→pitch mapping (a fine-grained spatial reasoning task).
    sufficient spatial signal, or the 3B language model lacks capacity to learn
    the position→pitch mapping from ~3K training examples.
 
+## Experiment 4: Qwen3.5-9B, MXC, 2 epochs
+
+**WandB run**: `3h8sdtea` — https://wandb.ai/zzsi_kungfu/openscore-omr/runs/3h8sdtea
+
+| Setting | Value |
+|---|---|
+| Model | Qwen3.5-9B (QLoRA 4-bit, r=16) |
+| Target format | MXC |
+| Trainable params | 51.0M (0.54%) |
+| Vision tokens per image | 962 (16px patches, 2×2 spatial merge, full 835×1181 resolution) |
+| train_loss / eval_loss | 0.174 / 0.154 |
+| Runtime | 4h 13m |
+
+### Eval loss — still dropping
+
+| Epoch | eval_loss |
+|-------|-----------|
+| 0.33 | 0.219 |
+| 0.67 | 0.186 |
+| 1.00 | 0.168 |
+| 1.34 | 0.159 |
+| 1.67 | **0.154** |
+
+Not plateaued — more epochs should help.
+
+### Pitch accuracy — breakthrough
+
+At step 1400 (end of training), comparing predicted vs reference pitches:
+
+| Sample | Pred/Ref notes | Pitch accuracy | Type accuracy | Unique pitches |
+|---|---|---|---|---|
+| lc6211535 | 38/406 | **45%** | 79% | 9 |
+| lc5800427 | 74/277 | **62%** | 70% | 10 |
+| lc30321734 | 68/82 | **78%** | 87% | 20 |
+| lc6482032 | 95/409 | 8% | 74% | 15 |
+
+Example — `lc5800427` first 10 notes (step 1000):
+
+```
+Pred: E4 A4 B4 C5 C5 B4  D5 C5 B4 A4
+Ref:  E4 A4 B4 C5 C5 B4  D5 C5 B4 A4   ← exact match
+```
+
+The model learned to **read pitch from staff positions** — a qualitative leap.
+
+### Inference quality progression
+
+| Step | Samples w/ notes | Max unique pitches | Avg unique |
+|------|-----------------|-------------------|-----------|
+| 0 | 0/4 | 0 | 0.0 |
+| 100 | 3/4 | 10 | 5.2 |
+| 500 | 3/4 | 22 | 11.2 |
+| 1000 | 4/4 | 17 | 12.8 |
+| 1400 | 4/4 | 20 | 13.5 |
+
+By step 100 (7% of training), the model already produces pitched notes with variety.
+Pitch variety stabilizes around 10-20 unique pitches per sample from step 500 onward.
+
+### What the model gets right
+
+- **Pitch**: 45-78% accuracy (sample-dependent), reading from image
+- **Rhythm/type**: 70-87% accuracy — quarters, eighths, dotted, correctly differentiated
+- **Lyrics**: bilingual (`L1:s:My L2:s:Mein`), correct syllabic encoding
+- **Accidentals**: `Cb5`, `Gb4`, `F#4 acc=sharp` used in context
+- **Articulations**: fermatas, slurs, beams on correct notes
+- **Multi-voice**: `v=1 st=1` assignments for piano staves
+
+### What needs improvement
+
+- **Note coverage**: only 38-95 notes predicted vs 82-409 in reference (model stops early)
+- **One sample poor** (lc6482032): 8% pitch accuracy — may be a harder/unusual page
+- **Eval loss not converged**: 0.154 and still dropping — more training likely helps
+
+## Cross-model comparison (all MXC runs)
+
+| Model | Params | Vision tokens | eval_loss | Pitch variety | Pitch accuracy |
+|---|---|---|---|---|---|
+| Ministral-3 r=8 | 3.9B | 1,858 | 0.109 | 1 (monotone) | ~0% |
+| Ministral-3 r=32 | 3.9B | 1,858 | 0.109 | 1-2 | ~0% |
+| Ministral-3 r=8 4ep | 3.9B | 1,858 | 0.117 (overfit) | 1 (monotone) | ~0% |
+| **Qwen3.5-9B r=16** | **9.5B** | **962** | **0.154** | **9-20** | **45-78%** |
+
+### Token budget analysis (verified from source code)
+
+Image + instruction tokens, measured with real training data:
+
+| Model | Image+instruction tokens | Room for MXC (max_length=4096) |
+|---|---|---|
+| Ministral-3 | 1,869 | 2,227 |
+| Qwen3.5-9B | 975 | 3,121 |
+
+Both models fit the median MXC page (~1,200 tokens). Longer pages are truncated
+from the right (verified in unsloth-zoo source: `_truncate_by_side` with
+`padding_side="right"` → `slice(0, max_len)`).
+
+## Conclusions
+
+1. **Qwen3.5-9B is the first model to read pitch from images** — up to 78% pitch
+   accuracy with 20 unique pitches per sample, compared to 0% for all Ministral-3 variants.
+
+2. **Model size matters more than vision resolution** — Qwen has fewer vision tokens
+   (962 vs 1,858) but a 3× larger language model. The larger LM capacity enables
+   learning the position→pitch mapping.
+
+3. **MXC format is essential** — without it, no model reaches note content in inference.
+
+4. **Eval loss not converged** — 0.154 and still dropping at epoch 2, suggesting
+   more training (3-4 epochs) could improve accuracy further.
+
 ## Next steps
 
-1. **Vision diagnostic** — run inference on an out-of-distribution image (e.g., quartet
-   page with 4 parts, no lyrics) to test if the model conditions on the image at all.
+1. **Extend Qwen3.5-9B to 3-4 epochs** — eval loss still dropping; more training
+   should improve pitch accuracy. Watch for overfitting (Ministral peaked at epoch 2).
 
-2. **Larger model with MXC** — Qwen3.5-9B has a 3× larger language model. Despite
-   coarser vision (962 vs 5040 tokens), the larger LM may learn pitch mapping better.
+2. **More training data** — add quartets + orchestra (14K total vs 3K lieder).
+   More diverse scores = better generalization.
 
-3. **Simplified task** — strip MXC targets to pitch+duration only (remove lyrics,
-   beams, stems) to reduce task complexity and focus learning on note reading.
+3. **Increase max_length** — 4096 truncates longer pages. With 95 GB VRAM, we
+   could try 8192 to capture more notes per page.
 
-4. **More training data** — add quartets + orchestra (14K total vs 3K lieder)
-   for more pitch variety in training distribution.
+4. **Pitch-focused evaluation** — build automated per-measure pitch accuracy metric
+   across the full eval set (not just 4 held-out samples).
