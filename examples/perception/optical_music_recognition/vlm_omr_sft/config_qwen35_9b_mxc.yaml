@@ -30,7 +30,7 @@ wandb:
   project: "openscore-omr"
   run_name: null
   log_examples_every_n_steps: 100
-  n_examples: 4
+  n_examples: 10
   inference_max_new_tokens: 2048
 
 training:
