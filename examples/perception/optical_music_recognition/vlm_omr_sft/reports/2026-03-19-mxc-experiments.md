@@ -345,30 +345,101 @@ an inference token budget issue:
 - This is an **inference-time setting**, not a model or training constraint
 - Increasing to 4096 should roughly double note coverage
 
+## Experiment 6: Qwen3.5-9B, MXC, continued epochs 5-6, inference 4096 tokens
+
+**WandB run**: `mzcdnaor` — https://wandb.ai/zzsi_kungfu/openscore-omr/runs/mzcdnaor
+
+| Setting | Value |
+|---|---|
+| Model | Qwen3.5-9B (resumed from epoch 4 adapter) |
+| inference_max_new_tokens | 4096 (doubled from 2048) |
+| train_loss / eval_loss | 0.086 / 0.159 |
+| Runtime | 5h 13m |
+
+### Eval loss — plateaued
+
+| Effective epoch | eval_loss |
+|---|---|
+| 5.0 | 0.164 |
+| 5.3 | 0.161 |
+| 5.7 | 0.157 |
+| 6.0 | 0.163 |
+| 6.3 | 0.159 |
+
+Oscillating around 0.157-0.163 — no longer improving. Model has converged on
+3K lieder samples.
+
+### Standardized metrics (eval_mxc.py)
+
+Final step comparison across all Qwen3.5-9B runs:
+
+| Effective epochs | Avg pitch sim | Avg rhythm | Avg combined | Coverage | Unique pitches |
+|---|---|---|---|---|---|
+| 2 | 31% | 32% | 38% | 34% | 14.5 |
+| 4 | 32% | 30% | 37% | 33% | 13.8 |
+| **6 (4096 tok)** | **33%** | **29%** | **38%** | **54%** | **18.8** |
+
+Best per-sample result: lc30321734 at **75% pitch similarity** (consistent across
+epochs 2-6).
+
+### Effect of doubling inference tokens
+
+| Metric | 2048 tokens | 4096 tokens |
+|---|---|---|
+| Avg coverage | 34% | **54%** |
+| Avg predicted events | 103 | **191** |
+| Max consecutive match | 44 | **105** |
+
+Doubling inference tokens increased coverage from 34% to 54% without hurting
+accuracy — confirming output length was a bottleneck.
+
 ## Conclusions
 
-1. **Qwen3.5-9B reads pitch from images** — up to 95% pitch accuracy on complex
-   pages, with 9-20 unique pitches per sample.
+1. **Qwen3.5-9B reads pitch from images** — 75% pitch similarity on best sample,
+   33% average across 4 held-out pages, with 19 unique pitches per sample.
 
-2. **Continued training helps** — pitch accuracy improved from 45→95% (lc6211535)
-   and 78→83% (lc30321734) with 2 more epochs. Eval loss still dropping (0.150).
+2. **Model has converged at ~33% avg pitch similarity** on 3K lieder samples.
+   Epochs 2→4→6 show marginal improvement (31→32→33%). Further training on the
+   same data will not help.
 
-3. **Model size matters more than vision resolution** — Qwen has fewer vision tokens
-   (962 vs 1,858) but a 3× larger language model that enables pitch learning.
+3. **MXC + Qwen3.5-9B is the winning combination:**
+   - MXC enables note generation (XML never reaches notes)
+   - Qwen3.5-9B learns pitch (Ministral-3 3B cannot, regardless of LoRA rank)
 
-4. **MXC format is essential** — without it, no model reaches note content in inference.
+4. **Inference token budget matters** — 4096 tokens gives 54% coverage vs 34%
+   with 2048. Longer budget = more notes, same accuracy.
 
-5. **Output length is the current bottleneck** — the model's pitch accuracy is good
-   but it only generates 36-95 notes per page due to the 2048 inference token limit.
-   Increasing `inference_max_new_tokens` to 4096 should help.
+5. **LoRA rank doesn't matter** (tested r=8 and r=32 on Ministral — identical
+   results). Model capacity comes from the base model, not the adapter.
+
+## What the model gets right vs wrong
+
+**Reliably correct:**
+- MXC format syntax (never produces invalid MXC)
+- Part structure (Voice + Piano, correct IDs)
+- Key signatures (4/4 correct)
+- Lyrics (bilingual, correct syllabic encoding)
+- Pitch on simpler passages (up to 75% similarity, 105 consecutive matches)
+
+**Struggles with:**
+- Dense piano passages (lc6482032: 10% pitch similarity)
+- Complex polyphony / multiple voices
+- Very long pages (coverage drops on pages with 400+ notes)
+- Time signature (2/4 correct)
 
 ## Next steps
 
-1. **Continue to epoch 6** — eval loss still dropping; use `inference_max_new_tokens: 4096`
-   to see more notes per sample.
+1. **More training data** — add quartets + orchestra (14K total vs 3K lieder).
+   The model has converged on lieder; more diverse data should push accuracy higher.
+   Quartets also test if the model can handle 4 parts (not just voice + piano).
 
-2. **More training data** — add quartets + orchestra (14K total vs 3K lieder).
+2. **Increase training max_length to 8192** — longer pages are truncated during
+   training. With 95 GB VRAM, 8192 should be feasible and would let the model
+   learn from more of each page.
 
-3. **Increase training max_length** — try 8192 to reduce truncation on long pages.
+3. **Evaluate on full dev set** — current metrics are on 4 held-out samples.
+   Run eval_mxc.py on the full 193-sample dev split for statistically meaningful
+   accuracy numbers.
 
-4. **Pitch-focused evaluation** — automated metric across the full eval set.
+4. **Try Qwen3-VL-32B** — if 9B gets 33% avg, the 32B model may push higher.
+   Would need 4-bit quantization to fit in 95 GB VRAM.
