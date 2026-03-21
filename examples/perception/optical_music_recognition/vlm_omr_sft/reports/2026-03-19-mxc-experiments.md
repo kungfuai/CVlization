@@ -429,17 +429,48 @@ accuracy — confirming output length was a bottleneck.
 
 ## Next steps
 
-1. **More training data** — add quartets + orchestra (14K total vs 3K lieder).
-   The model has converged on lieder; more diverse data should push accuracy higher.
-   Quartets also test if the model can handle 4 parts (not just voice + piano).
+### 1. Synthetic training data (highest priority)
 
-2. **Increase training max_length to 8192** — longer pages are truncated during
-   training. With 95 GB VRAM, 8192 should be feasible and would let the model
-   learn from more of each page.
+The model has converged on 3K lieder samples. More data from the same distribution
+(quartets, orchestra) is lower quality and may not help. Instead, generate
+**synthetic single-page music** with controlled complexity:
 
-3. **Evaluate on full dev set** — current metrics are on 4 held-out samples.
-   Run eval_mxc.py on the full 193-sample dev split for statistically meaningful
-   accuracy numbers.
+- **Simple monophonic melodies**: one staff, varied pitches/rhythms, no lyrics.
+  Isolates pitch learning from all other tasks. LilyPond can generate thousands
+  in minutes with programmatic MusicXML → render → MXC pipeline.
+- **Graduated complexity**: start with single-staff melodies, then add:
+  bass clef, chords, two-staff piano, lyrics, dynamics.
+- **Controlled pitch coverage**: ensure all pitches/octaves are represented
+  in the training set (current lieder data is biased toward voice range).
+- **Augmentation**: vary spacing, font size, staff distance to prevent
+  the model from memorizing pixel positions.
 
-4. **Try Qwen3-VL-32B** — if 9B gets 33% avg, the 32B model may push higher.
-   Would need 4-bit quantization to fit in 95 GB VRAM.
+This directly addresses the 33% pitch accuracy plateau — the model may need
+more diverse pitch examples than 3K lieder pages provide.
+
+### 2. LoRA rank on Qwen3.5-9B
+
+Only r=16 tested on Qwen. On Ministral, r=8 = r=32 (identical), but Ministral
+couldn't learn pitch at all. Since Qwen IS learning pitch, adapter capacity
+may matter:
+- r=32 (~102M params): may capture finer pitch distinctions
+- r=8 (~25M params): may underfit on pitch mapping
+Worth testing r=32 on Qwen to see if pitch similarity improves.
+
+### 3. Evaluate on full dev set
+
+Current metrics are on 4-10 held-out samples during training. Run `eval_mxc.py`
+on all 193 dev samples for statistically meaningful accuracy.
+
+### 4. Qwen3-VL-32B
+
+3.5× larger model, already cached. If 9B gets 33%, 32B may push higher.
+4-bit quantization fits in 95 GB VRAM.
+
+### Lower priority
+
+- **Increase training max_length to 8192** — marginal benefit. Median MXC
+  (~1200 tokens) fits in 4096 with Qwen's 975 image tokens. Only the long
+  tail benefits. Not the bottleneck.
+- **More lieder/quartets/orchestra data** — quartets and orchestra are lower
+  quality transcriptions. Synthetic data is better controlled.
