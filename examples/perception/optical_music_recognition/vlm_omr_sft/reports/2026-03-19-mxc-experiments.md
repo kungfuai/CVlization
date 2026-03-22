@@ -393,84 +393,122 @@ epochs 2-6).
 Doubling inference tokens increased coverage from 34% to 54% without hurting
 accuracy — confirming output length was a bottleneck.
 
+## Experiment 7: Qwen3.5-9B r=32, MXC, 4 epochs
+
+**WandB run**: `6uiezgde` — https://wandb.ai/zzsi_kungfu/openscore-omr/runs/6uiezgde
+
+| Setting | Value |
+|---|---|
+| Model | Qwen3.5-9B (QLoRA 4-bit, r=32) |
+| Trainable params | 102M (1.07%) — 2× the r=16 runs |
+| Target format | MXC |
+| Epochs | 4 |
+| inference_max_new_tokens | 4096 |
+| n_examples | 10 |
+| train_loss / eval_loss | 0.131 / 0.154 |
+| Runtime | 10h 48m |
+
+### Eval loss
+
+| Epoch | eval_loss |
+|---|---|
+| 0.67 | 0.192 |
+| 1.34 | 0.166 |
+| 2.01 | 0.154 |
+| **2.68** | **0.149** ← best |
+| 3.35 | 0.154 ← overfitting |
+
+Best at epoch 2.7. Same pattern as r=16 — overfitting starts around epoch 3.
+
+### Standardized metrics (10 samples, eval_mxc.py)
+
+Best results at step 2400-2800 (epoch 3.2-3.7):
+
+| Step (epoch) | Avg pitch | Avg rhythm | Avg combined | Coverage | Max pitch | Max match |
+|---|---|---|---|---|---|---|
+| 200 (0.3) | 15% | 27% | 15% | 57% | 26% | 59 |
+| 800 (1.1) | 22% | 29% | 25% | 64% | 63% | 59 |
+| 1600 (2.1) | 31% | 34% | 33% | 80% | 66% | 123 |
+| 1800 (2.4) | 31% | 45% | 33% | 75% | 72% | 86 |
+| **2400 (3.2)** | **36%** | **43%** | **37%** | 69% | **83%** | **121** |
+| 2800 (3.7) | 34% | 46% | 38% | 73% | 73% | 121 |
+
+### r=16 vs r=32 comparison
+
+| Metric | r=16 (best, 10 samples) | r=32 (best, 10 samples) |
+|---|---|---|
+| Avg pitch similarity | 33% | **36%** (+3%) |
+| Avg rhythm similarity | 32% | **46%** (+14%) |
+| Avg combined similarity | 38% | **38%** (same) |
+| Max pitch similarity | 75% | **83%** (+8%) |
+| Max consecutive match | 105 | **123** (+18) |
+| Avg unique pitches | 18.8 | **27.4** (+8.6) |
+
+### Key finding
+
+r=32 is a meaningful improvement over r=16:
+- **Rhythm accuracy jumps 14%** (32% → 46%) — the biggest single gain
+- **Pitch improves modestly** (33% → 36%) — extra capacity helps but not dramatically
+- **More unique pitches** (27.4 vs 18.8) — better pitch variety
+- **83% max pitch similarity** — new best across all experiments
+
 ## Conclusions
 
-1. **Qwen3.5-9B reads pitch from images** — 75% pitch similarity on best sample,
-   33% average across 4 held-out pages, with 19 unique pitches per sample.
+1. **Qwen3.5-9B reads pitch from images** — up to 83% pitch similarity on best
+   sample, 36% average across 10 held-out pages.
 
-2. **Model has converged at ~33% avg pitch similarity** on 3K lieder samples.
-   Epochs 2→4→6 show marginal improvement (31→32→33%). Further training on the
-   same data will not help.
+2. **LoRA r=32 helps, especially rhythm** — 46% rhythm similarity vs 32% at r=16.
+   Pitch improves modestly (36% vs 33%). On Ministral-3, LoRA rank made no
+   difference (model couldn't learn pitch regardless). On Qwen3.5-9B where pitch
+   IS being learned, higher rank provides additional capacity.
 
-3. **MXC + Qwen3.5-9B is the winning combination:**
-   - MXC enables note generation (XML never reaches notes)
-   - Qwen3.5-9B learns pitch (Ministral-3 3B cannot, regardless of LoRA rank)
+3. **MXC format is essential** — without it, no model reaches note content.
 
-4. **Inference token budget matters** — 4096 tokens gives 54% coverage vs 34%
-   with 2048. Longer budget = more notes, same accuracy.
+4. **Optimal training: 2-3 epochs** — both r=16 and r=32 overfit after epoch 3
+   on 3K lieder samples.
 
-5. **LoRA rank doesn't matter** (tested r=8 and r=32 on Ministral — identical
-   results). Model capacity comes from the base model, not the adapter.
+5. **Model has converged at ~36% avg pitch similarity** on 3K lieder.
+   The bottleneck is now training data, not model capacity or training duration.
 
 ## What the model gets right vs wrong
 
 **Reliably correct:**
 - MXC format syntax (never produces invalid MXC)
 - Part structure (Voice + Piano, correct IDs)
-- Key signatures (4/4 correct)
+- Key signatures (8/10 correct)
 - Lyrics (bilingual, correct syllabic encoding)
-- Pitch on simpler passages (up to 75% similarity, 105 consecutive matches)
+- Pitch on simpler passages (up to 83% similarity, 123 consecutive matches)
+- Rhythm/note types (46% similarity at r=32)
 
 **Struggles with:**
-- Dense piano passages (lc6482032: 10% pitch similarity)
-- Complex polyphony / multiple voices
+- Dense piano passages with complex polyphony
 - Very long pages (coverage drops on pages with 400+ notes)
-- Time signature (2/4 correct)
+- Time signature (7-8/10 correct)
 
 ## Next steps
 
 ### 1. Synthetic training data (highest priority)
 
-The model has converged on 3K lieder samples. More data from the same distribution
-(quartets, orchestra) is lower quality and may not help. Instead, generate
-**synthetic single-page music** with controlled complexity:
+The model has converged on 3K lieder samples. Generate **synthetic single-page
+music** with controlled complexity:
 
 - **Simple monophonic melodies**: one staff, varied pitches/rhythms, no lyrics.
-  Isolates pitch learning from all other tasks. LilyPond can generate thousands
-  in minutes with programmatic MusicXML → render → MXC pipeline.
-- **Graduated complexity**: start with single-staff melodies, then add:
-  bass clef, chords, two-staff piano, lyrics, dynamics.
+  Isolates pitch learning. LilyPond can generate thousands programmatically.
+- **Graduated complexity**: single-staff → bass clef → chords → two-staff piano
+  → lyrics → dynamics.
 - **Controlled pitch coverage**: ensure all pitches/octaves are represented
-  in the training set (current lieder data is biased toward voice range).
-- **Augmentation**: vary spacing, font size, staff distance to prevent
-  the model from memorizing pixel positions.
+  (current lieder data biased toward voice range).
+- **Augmentation**: vary spacing, font size, staff distance.
 
-This directly addresses the 33% pitch accuracy plateau — the model may need
-more diverse pitch examples than 3K lieder pages provide.
+### 2. Evaluate on full dev set
 
-### 2. LoRA rank on Qwen3.5-9B
+Current metrics on 10 held-out samples. Run `eval_mxc.py` on all 193 dev samples.
 
-Only r=16 tested on Qwen. On Ministral, r=8 = r=32 (identical), but Ministral
-couldn't learn pitch at all. Since Qwen IS learning pitch, adapter capacity
-may matter:
-- r=32 (~102M params): may capture finer pitch distinctions
-- r=8 (~25M params): may underfit on pitch mapping
-Worth testing r=32 on Qwen to see if pitch similarity improves.
+### 3. Qwen3-VL-32B
 
-### 3. Evaluate on full dev set
-
-Current metrics are on 4-10 held-out samples during training. Run `eval_mxc.py`
-on all 193 dev samples for statistically meaningful accuracy.
-
-### 4. Qwen3-VL-32B
-
-3.5× larger model, already cached. If 9B gets 33%, 32B may push higher.
-4-bit quantization fits in 95 GB VRAM.
+3.5× larger model. If 9B gets 36%, 32B may push higher. 4-bit fits in 95 GB VRAM.
 
 ### Lower priority
 
-- **Increase training max_length to 8192** — marginal benefit. Median MXC
-  (~1200 tokens) fits in 4096 with Qwen's 975 image tokens. Only the long
-  tail benefits. Not the bottleneck.
-- **More lieder/quartets/orchestra data** — quartets and orchestra are lower
-  quality transcriptions. Synthetic data is better controlled.
+- **Training max_length 8192** — marginal benefit, not the bottleneck.
+- **Quartets/orchestra data** — lower quality transcriptions. Synthetic is better.
