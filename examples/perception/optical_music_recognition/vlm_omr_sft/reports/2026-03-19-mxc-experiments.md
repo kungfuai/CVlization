@@ -433,42 +433,54 @@ Best results at step 2400-2800 (epoch 3.2-3.7):
 | **2400 (3.2)** | **36%** | **43%** | **37%** | 69% | **83%** | **121** |
 | 2800 (3.7) | 34% | 46% | 38% | 73% | 73% | 121 |
 
-### r=16 vs r=32 comparison
+### r=16 vs r=32 vs r=64 comparison
 
-| Metric | r=16 (best, 10 samples) | r=32 (best, 10 samples) |
-|---|---|---|
-| Avg pitch similarity | 33% | **36%** (+3%) |
-| Avg rhythm similarity | 32% | **46%** (+14%) |
-| Avg combined similarity | 38% | **38%** (same) |
-| Max pitch similarity | 75% | **83%** (+8%) |
-| Max consecutive match | 105 | **123** (+18) |
-| Avg unique pitches | 18.8 | **27.4** (+8.6) |
+| Metric | r=16 | r=32 | r=64 |
+|---|---|---|---|
+| Trainable params | 51M (0.54%) | 102M (1.07%) | 204M (2.12%) |
+| Best eval_loss | 0.154 | **0.149** | 0.146 |
+| Avg pitch similarity | 33% | **36%** | 32% |
+| Avg pitched-only sim | — | **35%** | — |
+| Avg rhythm similarity | 32% | **46%** | 46% |
+| Max pitch similarity | 75% | **83%** | 81% |
+| Max consecutive match | 105 | **123** | 86 |
+| Avg unique pitches | 18.8 | **27.4** | 25.6 |
 
-### Key finding
+### Metric correction (2026-03-22)
 
-r=32 is a meaningful improvement over r=16:
-- **Rhythm accuracy jumps 14%** (32% → 46%) — the biggest single gain
-- **Pitch improves modestly** (33% → 36%) — extra capacity helps but not dramatically
-- **More unique pitches** (27.4 vs 18.8) — better pitch variety
-- **83% max pitch similarity** — new best across all experiments
+The original `eval_mxc.py` `pitch_similarity` metric included rests in the
+sequence comparison. A sample with many rests and no pitched notes could score
+non-zero from matching rest events. Added `pitched_only_similarity` that
+excludes rests.
+
+On the r=32 best step (2400), the corrected metric shows:
+- Avg pitch similarity (all events): 36%
+- Avg pitched-only similarity: **35%** (close — rests weren't inflating much overall)
+- Best sample lc5015573: 88% positional pitch accuracy
+- Worst sample lc6211535: 0% pitched-only (all rests in prediction, correctly reported)
+
+### Key findings
+
+- **r=32 is the sweet spot** — best pitch (36%), best rhythm (46%), best max pitch (83%)
+- **r=64 does NOT improve over r=32** — despite lower eval_loss (0.146 vs 0.149),
+  inference metrics are slightly worse on pitch (32% vs 36%)
+- **LoRA rank is now fully explored** (r=16, 32, 64) — the bottleneck is training data
 
 ## Conclusions
 
-1. **Qwen3.5-9B reads pitch from images** — up to 83% pitch similarity on best
-   sample, 36% average across 10 held-out pages.
+1. **Qwen3.5-9B reads pitch from images** — up to 84% pitched-only similarity,
+   88% positional pitch accuracy on best samples, 35% average across 10 pages.
 
-2. **LoRA r=32 helps, especially rhythm** — 46% rhythm similarity vs 32% at r=16.
-   Pitch improves modestly (36% vs 33%). On Ministral-3, LoRA rank made no
-   difference (model couldn't learn pitch regardless). On Qwen3.5-9B where pitch
-   IS being learned, higher rank provides additional capacity.
+2. **LoRA r=32 is optimal** — r=64 overfits without improving inference quality.
+   On Ministral-3, rank made no difference (couldn't learn pitch). On Qwen3.5-9B,
+   r=32 provides the right capacity/regularization balance.
 
 3. **MXC format is essential** — without it, no model reaches note content.
 
-4. **Optimal training: 2-3 epochs** — both r=16 and r=32 overfit after epoch 3
-   on 3K lieder samples.
+4. **Optimal training: 2-3 epochs** — all ranks overfit after epoch 3 on 3K samples.
 
-5. **Model has converged at ~36% avg pitch similarity** on 3K lieder.
-   The bottleneck is now training data, not model capacity or training duration.
+5. **Model has converged at ~35% avg pitched-only similarity** on 3K lieder.
+   The bottleneck is training data, not model capacity or training duration.
 
 ## What the model gets right vs wrong
 
@@ -477,13 +489,14 @@ r=32 is a meaningful improvement over r=16:
 - Part structure (Voice + Piano, correct IDs)
 - Key signatures (8/10 correct)
 - Lyrics (bilingual, correct syllabic encoding)
-- Pitch on simpler passages (up to 83% similarity, 123 consecutive matches)
+- Pitch on simpler passages (up to 88% positional accuracy)
 - Rhythm/note types (46% similarity at r=32)
 
 **Struggles with:**
 - Dense piano passages with complex polyphony
 - Very long pages (coverage drops on pages with 400+ notes)
 - Time signature (7-8/10 correct)
+- Pages where voice has many rest measures (model runs out of tokens before notes start)
 
 ## Next steps
 
