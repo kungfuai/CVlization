@@ -32,7 +32,8 @@ from transformers import (
 from unsloth import FastVisionModel, is_bf16_supported
 from huggingface_hub import snapshot_download
 
-INSTRUCTION = "Transcribe this sheet music page to MusicXML."
+INSTRUCTION_XML = "Transcribe this sheet music page to MusicXML."
+INSTRUCTION_MXC = "Transcribe this sheet music page to MXC (compact MusicXML)."
 DEFAULT_CONFIG = "config_deepseek_ocr2.yaml"
 
 
@@ -370,7 +371,7 @@ class WandbInferenceCallback(TrainerCallback):
             try:
                 feature = {
                     "messages": [
-                        {"role": "<|User|>", "content": f"<image>\n{INSTRUCTION}",
+                        {"role": "<|User|>", "content": f"<image>\n{INSTRUCTION_XML}",
                          "images": [sample["image"]]},
                         {"role": "<|Assistant|>", "content": ""},
                     ]
@@ -543,17 +544,32 @@ def main():
         dataset = dataset.shuffle(seed=training_config["seed"])
         print(f"Dataset shuffled (seed={training_config['seed']})")
 
+    target_format = dataset_config.get("target_format", "xml")
+    if target_format == "mxc":
+        from mxc import xml_to_mxc
+        instruction = INSTRUCTION_MXC
+        print(f"Target format: MXC (compact)")
+    else:
+        instruction = INSTRUCTION_XML
+        print(f"Target format: XML")
+
     def convert_to_conversation(sample):
+        text = strip_musicxml_header(sample["musicxml"])
+        if target_format == "mxc":
+            try:
+                text = xml_to_mxc(text)
+            except Exception:
+                pass
         return {
             "messages": [
                 {
                     "role": "<|User|>",
-                    "content": f"<image>\n{INSTRUCTION}",
+                    "content": f"<image>\n{instruction}",
                     "images": [sample["image"]],
                 },
                 {
                     "role": "<|Assistant|>",
-                    "content": strip_musicxml_header(sample["musicxml"]),
+                    "content": text,
                 },
             ]
         }
@@ -708,7 +724,7 @@ def main():
         # Build token sequence via collator (single sample, no labels needed)
         test_feature = {
             "messages": [
-                {"role": "<|User|>", "content": f"<image>\n{INSTRUCTION}",
+                {"role": "<|User|>", "content": f"<image>\n{INSTRUCTION_XML}",
                  "images": [sample["image"]]},
                 {"role": "<|Assistant|>", "content": ""},
             ]
