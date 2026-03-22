@@ -442,6 +442,8 @@ def main():
             training_config.get("val_steps", training_config["save_steps"])
             if val_data else None
         ),
+        load_best_model_at_end=True if val_data else False,
+        metric_for_best_model="eval_loss",
         optim=training_config["optim"],
         weight_decay=training_config["weight_decay"],
         lr_scheduler_type=training_config["lr_scheduler_type"],
@@ -494,9 +496,14 @@ def main():
     print('='*70)
 
     # ── Save ───────────────────────────────────────────────────────────────────
+    # With load_best_model_at_end=True, the model is already the best checkpoint
     output_dir = training_config["output_dir"]
     final_dir  = f"{output_dir}/final_model"
-    print(f"\nSaving model to {final_dir} ...")
+    best_step = getattr(trainer.state, "best_global_step", None)
+    best_metric = getattr(trainer.state, "best_metric", None)
+    if best_step:
+        print(f"\nBest checkpoint was step {best_step} (eval_loss={best_metric:.5f})")
+    print(f"Saving model to {final_dir} ...")
     model.save_pretrained(final_dir)
     processor.save_pretrained(final_dir)
     print("Model saved.")
@@ -507,15 +514,18 @@ def main():
         if wandb.run is None:
             wandb.init(project=wandb_config["project"], id=wandb_run_id, resume="must")
         # Upload final LoRA adapter as a WandB artifact
+        best_info = f" (best step {best_step}, eval_loss={best_metric:.5f})" if best_step else ""
         artifact = wandb.Artifact(
             name=f"lora-adapter-{wandb_run_id}",
             type="model",
-            description=f"LoRA adapter for {model_config['name']} trained on {corpora}",
+            description=f"LoRA adapter for {model_config['name']} trained on {corpora}{best_info}",
             metadata={
                 "model": model_config["name"],
                 "corpora": corpora,
                 "epochs": training_config.get("num_train_epochs"),
                 "train_loss": round(stats.metrics.get("train_loss", 0), 4),
+                "best_step": best_step,
+                "best_eval_loss": round(best_metric, 5) if best_metric else None,
                 "peak_vram_gb": used_mem,
             },
         )
