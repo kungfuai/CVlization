@@ -498,12 +498,73 @@ On the r=32 best step (2400), the corrected metric shows:
 - Time signature (7-8/10 correct)
 - Pages where voice has many rest measures (model runs out of tokens before notes start)
 
+## Experiment 8: Model comparison — 4 models × MXC × 3 epochs
+
+All runs: r=32, MXC targets, 3 epochs, 10 inference examples, 4096 inference tokens.
+
+### Gemma-3 4B
+
+**WandB run**: `3wr70bas`
+
+| Setting | Value |
+|---|---|
+| Model | gemma-3-4b-pt (SigLIP vision) |
+| Trainable params | 77M (1.76%) |
+| Best eval_loss | 0.216 (step 1500) |
+| Runtime | 10h 10m |
+
+**Result: 1% pitched-only similarity.** Cannot learn pitch — same as Ministral-3.
+4B models lack capacity for pitch discrimination regardless of architecture.
+
+### Qwen3-VL 8B
+
+**WandB run**: `9bh3nzv9`
+
+| Setting | Value |
+|---|---|
+| Model | Qwen3-VL-8B-Instruct (same VL arch as Qwen3.5-9B) |
+| Trainable params | ~102M |
+| Best eval_loss | 0.166 (step 2000) |
+| Runtime | 5h 43m |
+
+**Result: 16% pitched-only similarity, 24% positional.** Learns some pitch but
+significantly worse than Qwen3.5-9B (35%). Surprising given similar size — the
+Qwen3.5 architecture improvements matter.
+
+### Qwen3-VL 32B (in progress)
+
+Step 399/2241 (epoch 0.53), ~5.5h remaining.
+
+### DeepSeek-OCR-2 (queued)
+
+Waiting for Qwen3-VL 32B to finish.
+
+### Cross-model comparison (all MXC runs, best step, 10 samples)
+
+| Model | Size | Pitched-only sim | Positional | Rhythm | Unique pitches | eval_loss |
+|---|---|---|---|---|---|---|
+| Gemma-3 4B | 4.4B | **1%** | 1% | 11% | 1.5 | 0.216 |
+| Ministral-3 r=32 | 3.9B | ~0% | ~0% | 10% | 0.8 | 0.109 |
+| Qwen3-VL 8B | 8B | **16%** | 24% | 23% | 18.3 | 0.166 |
+| Qwen3.5-9B r=16 | 9.5B | ~33% | — | 32% | 14.5 | 0.154 |
+| **Qwen3.5-9B r=32** | 9.5B | **35%** | 29% | **46%** | **27.4** | **0.149** |
+| Qwen3.5-9B r=64 | 9.5B | ~32% | — | 46% | 25.6 | 0.146 |
+| Qwen3-VL 32B | 32B | *pending* | — | — | — | — |
+| DeepSeek-OCR-2 | 3B | *pending* | — | — | — | — |
+
+### Key insight: model architecture matters as much as size
+
+Qwen3-VL 8B (16% pitch) underperforms Qwen3.5-9B (35% pitch) despite similar
+parameter count. The Qwen3.5 architecture revisions (unified early fusion,
+improved training) provide a significant advantage over Qwen3-VL for this task.
+
 ## Next steps
 
 ### 1. Synthetic training data (highest priority)
 
-The model has converged on 3K lieder samples. Generate **synthetic single-page
-music** with controlled complexity:
+The best model (Qwen3.5-9B r=32) has converged at 35% pitched-only similarity
+on 3K lieder samples. Generate **synthetic single-page music** with controlled
+complexity:
 
 - **Simple monophonic melodies**: one staff, varied pitches/rhythms, no lyrics.
   Isolates pitch learning. LilyPond can generate thousands programmatically.
@@ -511,15 +572,10 @@ music** with controlled complexity:
   → lyrics → dynamics.
 - **Controlled pitch coverage**: ensure all pitches/octaves are represented
   (current lieder data biased toward voice range).
-- **Augmentation**: vary spacing, font size, staff distance.
 
 ### 2. Evaluate on full dev set
 
 Current metrics on 10 held-out samples. Run `eval_mxc.py` on all 193 dev samples.
-
-### 3. Qwen3-VL-32B
-
-3.5× larger model. If 9B gets 36%, 32B may push higher. 4-bit fits in 95 GB VRAM.
 
 ### Lower priority
 
