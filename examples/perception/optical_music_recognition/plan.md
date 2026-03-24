@@ -278,6 +278,73 @@ Two sub-tasks:
     Convergence with training data: these same models serve as the vintage augmentation pipeline for Bucket 3 SFT training — solving one solves both.
 
 
+Synthetic data for diagnostic and training (2026-03-24)
+---
+
+### Motivation
+
+SFT experiments on 3K lieder pages (OpenScore) converged at 35% pitched-only
+similarity with Qwen3.5-9B r=32 (best model). The bottleneck is training data.
+Before generating more data, we need to understand WHERE the model fails:
+
+- Is it pitch reading on all pages, or only complex ones?
+- Does polyphony (multiple voices) degrade accuracy?
+- Can the model handle different clefs, key signatures, time signatures?
+
+### Difficulty ladder
+
+Generate synthetic single-page music at graduated complexity levels.
+Each level isolates a specific musical skill:
+
+| Level | Content | What it tests |
+|-------|---------|--------------|
+| 1 | Single staff, C major, quarter notes only, no rests | Basic pitch reading from staff position |
+| 2 | Add varied rhythms (half, eighth, whole, dotted) | Rhythm discrimination |
+| 3 | Add accidentals and key signatures | Accidental/key reading |
+| 4 | Add rests, ties, dynamics | Rest/articulation handling |
+| 5 | Two staves (piano grand staff), monophonic per hand | Multi-staff reading |
+| 6 | Add chords (homophonic) | Chord reading |
+| 7 | Add lyrics (one verse) | Text/note alignment |
+| 8 | Full lieder complexity (voice + piano, lyrics, dynamics) | Baseline comparison |
+
+### Generation pipeline
+
+```
+generate_musicxml(level, seed) → MusicXML
+  ↓
+LilyPond render → PNG (835×1181, matching OpenScore resolution)
+  ↓
+strip_musicxml_header() → cleaned XML
+  ↓
+xml_to_mxc() → MXC ground truth
+```
+
+Implementation: `datasets/omr/synthetic/generate.py` (to be created)
+
+- Use music21 or direct MusicXML generation to create random pages
+- Control: pitch range, rhythm variety, number of measures, number of staves
+- Each level: generate 500-1000 pages
+- Render with same LilyPond Docker image as OpenScore pipeline
+
+### Expected outcomes
+
+If the model achieves high accuracy on Levels 1-3 but fails at Level 5+,
+the bottleneck is multi-staff reading → focus training on piano grand staff.
+
+If the model fails even at Level 1, the vision encoder fundamentally cannot
+resolve note positions on staff lines → need higher resolution or different
+vision architecture.
+
+### Training protocol
+
+For each level:
+1. Train Qwen3.5-9B r=32 MXC for 3 epochs on that level's data alone
+2. Evaluate with `eval_mxc.py`
+3. Also evaluate on OpenScore lieder dev set (does synthetic data help real pages?)
+
+Then: combine levels 1-N and retrain, increasing N until accuracy plateaus.
+
+
 Training strategy: how to make progress fast on “vintage”
 
 The hard truth
