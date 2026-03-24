@@ -139,11 +139,11 @@ class WandbInferenceCallback(TrainerCallback):
 
             rows.append([
                 step,
-                wandb.Image(image, caption=f"{sample['score_id']} p{sample['page']}"),
-                sample["score_id"],
-                sample["corpus"],
-                sample["page"],
-                f"{sample['bar_start']}-{sample['bar_end']}",
+                wandb.Image(image, caption=f"{sample.get('score_id', '?')} {sample.get('page_system', f'p{sample.get(\"page\", \"?\")}')}")  ,
+                sample.get("score_id", ""),
+                sample.get("corpus", ""),
+                sample.get("page", sample.get("page_system", "")),
+                f"{sample.get('bar_start', '?')}-{sample.get('bar_end', '?')}",
                 ref,
                 prediction,
             ])
@@ -166,7 +166,7 @@ class WandbInferenceCallback(TrainerCallback):
             s = self.samples[i]
             ref_i = rows[i][6]
             pred_i = rows[i][7]
-            caption = f"{s['score_id']} p{s['page']} bars {s['bar_start']}-{s['bar_end']}"
+            caption = f"{s.get('score_id', '?')} {s.get('page_system', f'p{s.get(\"page\", \"?\")}')}"
             if not self._images_logged:
                 log_dict[f"sample_{i}/image"]        = wandb.Image(s["image"], caption=caption)
                 log_dict[f"sample_{i}/ground_truth"] = wandb.Html(f"<pre>{_html.escape(ref_i)}</pre>")
@@ -329,7 +329,7 @@ def main():
     print(f"Loading dataset: {repo} (config={cfg}, split={split}) ...")
     dataset = load_dataset(repo, cfg, split=split)
 
-    if corpora:
+    if corpora and "corpus" in dataset.column_names:
         print(f"Filtering to corpora: {corpora} ...")
         corpus_set = set(corpora)
         dataset = dataset.filter(lambda r: r["corpus"] in corpus_set)
@@ -341,10 +341,17 @@ def main():
         print(f"  Limited to {len(dataset)} samples")
 
     print(f"Dataset size: {len(dataset)}")
-    print(f"Sample — score_id={dataset[0]['score_id']} "
-          f"corpus={dataset[0]['corpus']} "
-          f"page={dataset[0]['page']}/{dataset[0]['n_pages']} "
-          f"bars={dataset[0]['bar_start']}-{dataset[0]['bar_end']}")
+    s0 = dataset[0]
+    sample_info = f"score_id={s0.get('score_id', '?')}"
+    if "corpus" in s0:
+        sample_info += f" corpus={s0['corpus']}"
+    if "page" in s0:
+        sample_info += f" page={s0['page']}/{s0.get('n_pages', '?')}"
+    if "page_system" in s0:
+        sample_info += f" system={s0['page_system']}"
+    if "bar_start" in s0:
+        sample_info += f" bars={s0['bar_start']}-{s0['bar_end']}"
+    print(f"Sample — {sample_info}")
 
     # ── Chat format ────────────────────────────────────────────────────────────
     target_format = dataset_config.get("target_format", "xml")
@@ -389,15 +396,18 @@ def main():
     # ── Validation split: prefer HF dev split, fall back to manual carve-out ──
     val_data = None
     val_raw  = None
-    dev_split = load_dataset(repo, cfg, split="dev")
-    if corpora:
-        dev_split = dev_split.filter(lambda r: r["corpus"] in set(corpora))
-    if len(dev_split) > 0:
-        val_data = [convert_to_conversation(s) for s in dev_split]
-        val_raw  = dev_split
-        print(f"Validation: {len(val_data)} rows from HF dev split")
-    else:
-        print("No dev split rows found for selected corpora — skipping validation")
+    try:
+        dev_split = load_dataset(repo, cfg, split="dev")
+        if corpora and "corpus" in dev_split.column_names:
+            dev_split = dev_split.filter(lambda r: r["corpus"] in set(corpora))
+        if len(dev_split) > 0:
+            val_data = [convert_to_conversation(s) for s in dev_split]
+            val_raw  = dev_split
+            print(f"Validation: {len(val_data)} rows from HF dev split")
+        else:
+            print("No dev split rows found — skipping validation")
+    except Exception:
+        print("No dev split available — skipping validation")
 
     print(f"Train: {len(train_data)}  Val: {len(val_data) if val_data else 0}")
 
@@ -549,7 +559,7 @@ def main():
 
         from transformers import TextStreamer
         streamer = TextStreamer(processor, skip_prompt=True)
-        print(f"\n--- Sample (score_id={sample['score_id']}, page={sample['page']}) ---")
+        print(f"\n--- Sample (score_id={sample.get('score_id', '?')}, {sample.get('page_system', f'page={sample.get(\"page\", \"?\")}')}) ---")
         print(f"Reference (first 200 chars): {sample['musicxml'][:200].strip()}")
         print("Prediction:")
         model.generate(**inputs, streamer=streamer, max_new_tokens=512,
