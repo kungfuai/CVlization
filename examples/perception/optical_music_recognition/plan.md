@@ -310,14 +310,13 @@ Each level isolates a specific musical skill:
 ### Generation pipeline
 
 ```
-generate_musicxml(level, seed) → MusicXML
+generate_musicxml(level, seed) → MusicXML (ground truth)
   ↓
 LilyPond render → PNG (835×1181, matching OpenScore resolution)
-  ↓
-strip_musicxml_header() → cleaned XML
-  ↓
-xml_to_mxc() → MXC ground truth
 ```
+
+Ground truth is clean MusicXML. Conversion to MXC or other target formats
+happens at training time (via `target_format` config), not in the data pipeline.
 
 Implementation: `datasets/omr/synthetic/generate.py` (to be created)
 
