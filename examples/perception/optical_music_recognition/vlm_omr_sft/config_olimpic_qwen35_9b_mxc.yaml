@@ -22,8 +22,14 @@ dataset:
   repo: "zzsi/olimpic"
   config: "default"
   split: "train"
+  dev_split: "dev"
   shuffle: true
   target_format: "mxc"
+  columns:
+    image: "image"
+    musicxml: "musicxml"
+    id: "score_id"
+    label: "page_system"
 
 wandb:
   project: "openscore-omr"

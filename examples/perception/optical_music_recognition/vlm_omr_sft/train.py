@@ -92,13 +92,14 @@ class WandbInferenceCallback(TrainerCallback):
       step | image | score_id | corpus | page | bars | reference | prediction
     """
 
-    def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512, target_format="xml"):
+    def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512, target_format="xml", col=None):
         self.model          = model
         self.processor      = processor
         self.samples        = samples       # list of raw dataset rows (PIL images + metadata)
         self.every_n_steps  = every_n_steps
         self.max_new_tokens = max_new_tokens
         self.target_format  = target_format
+        self.col            = col or {"image": "image", "musicxml": "musicxml", "id": "score_id", "label": "page"}
         self._images_logged = False         # log images + ground truth only once
 
     def _run_inference(self, step):
@@ -115,7 +116,7 @@ class WandbInferenceCallback(TrainerCallback):
 
         rows = []
         for sample in self.samples:
-            image = sample["image"]
+            image = sample[self.col["image"]]
             instr = INSTRUCTION_MXC if self.target_format == "mxc" else INSTRUCTION_XML
             inputs = prepare_inference_inputs(self.processor, image, instr).to("cuda")
 
@@ -129,7 +130,7 @@ class WandbInferenceCallback(TrainerCallback):
             pred_tokens = outputs[0][inputs["input_ids"].shape[1]:]
             prediction  = self.processor.decode(pred_tokens, skip_special_tokens=True).strip()
 
-            ref = strip_musicxml_header(sample["musicxml"])
+            ref = strip_musicxml_header(sample[self.col["musicxml"]])
             if self.target_format == "mxc":
                 try:
                     from mxc import xml_to_mxc
@@ -137,13 +138,15 @@ class WandbInferenceCallback(TrainerCallback):
                 except Exception:
                     pass
 
+            sample_id = sample.get(self.col["id"], "")
+            sample_label = sample.get(self.col["label"], "")
             rows.append([
                 step,
-                wandb.Image(image, caption=f"{sample.get('score_id', '?')} {sample.get('page_system', f'p{sample.get(\"page\", \"?\")}')}")  ,
-                sample.get("score_id", ""),
-                sample.get("corpus", ""),
-                sample.get("page", sample.get("page_system", "")),
-                f"{sample.get('bar_start', '?')}-{sample.get('bar_end', '?')}",
+                wandb.Image(image, caption=f"{sample_id} {sample_label}"),
+                sample_id,
+                sample.get(self.col.get("corpus", "corpus"), ""),
+                sample_label,
+                "",
                 ref,
                 prediction,
             ])
@@ -166,7 +169,7 @@ class WandbInferenceCallback(TrainerCallback):
             s = self.samples[i]
             ref_i = rows[i][6]
             pred_i = rows[i][7]
-            caption = f"{s.get('score_id', '?')} {s.get('page_system', f'p{s.get(\"page\", \"?\")}')}"
+            caption = f"{s.get(self.col['id'], '?')} {s.get(self.col['label'], '')}"
             if not self._images_logged:
                 log_dict[f"sample_{i}/image"]        = wandb.Image(s["image"], caption=caption)
                 log_dict[f"sample_{i}/ground_truth"] = wandb.Html(f"<pre>{_html.escape(ref_i)}</pre>")
@@ -324,15 +327,28 @@ def main():
 
     # ── Dataset ────────────────────────────────────────────────────────────────
     repo   = dataset_config["repo"]
-    cfg    = dataset_config["config"]
+    cfg    = dataset_config.get("config", "default")
     split  = dataset_config.get("split", "train")
+    dev_split_name = dataset_config.get("dev_split", "dev")
+
+    # Column mapping: config can override column names for different datasets
+    col = {
+        "image":    "image",
+        "musicxml": "musicxml",
+        "id":       "score_id",
+        "label":    "page",       # used for display captions
+        "corpus":   "corpus",     # optional, for filtering
+    }
+    col.update(dataset_config.get("columns", {}))
+
     print(f"Loading dataset: {repo} (config={cfg}, split={split}) ...")
     dataset = load_dataset(repo, cfg, split=split)
 
-    if corpora and "corpus" in dataset.column_names:
+    if corpora and col["corpus"] in dataset.column_names:
         print(f"Filtering to corpora: {corpora} ...")
+        corpus_col = col["corpus"]
         corpus_set = set(corpora)
-        dataset = dataset.filter(lambda r: r["corpus"] in corpus_set)
+        dataset = dataset.filter(lambda r: r[corpus_col] in corpus_set)
         print(f"  {len(dataset)} rows after filter")
 
     if "max_samples" in dataset_config:
@@ -342,16 +358,7 @@ def main():
 
     print(f"Dataset size: {len(dataset)}")
     s0 = dataset[0]
-    sample_info = f"score_id={s0.get('score_id', '?')}"
-    if "corpus" in s0:
-        sample_info += f" corpus={s0['corpus']}"
-    if "page" in s0:
-        sample_info += f" page={s0['page']}/{s0.get('n_pages', '?')}"
-    if "page_system" in s0:
-        sample_info += f" system={s0['page_system']}"
-    if "bar_start" in s0:
-        sample_info += f" bars={s0['bar_start']}-{s0['bar_end']}"
-    print(f"Sample — {sample_info}")
+    print(f"Sample — id={s0.get(col['id'], '?')} label={s0.get(col['label'], '?')}")
 
     # ── Chat format ────────────────────────────────────────────────────────────
     target_format = dataset_config.get("target_format", "xml")
@@ -364,7 +371,7 @@ def main():
         print(f"Target format: XML")
 
     def convert_to_conversation(sample):
-        text = strip_musicxml_header(sample["musicxml"])
+        text = strip_musicxml_header(sample[col["musicxml"]])
         if target_format == "mxc":
             try:
                 text = xml_to_mxc(text)
@@ -376,7 +383,7 @@ def main():
                     "role": "user",
                     "content": [
                         {"type": "text",  "text": instruction},
-                        {"type": "image", "image": sample["image"]},
+                        {"type": "image", "image": sample[col["image"]]},
                     ],
                 },
                 {
@@ -397,9 +404,10 @@ def main():
     val_data = None
     val_raw  = None
     try:
-        dev_split = load_dataset(repo, cfg, split="dev")
-        if corpora and "corpus" in dev_split.column_names:
-            dev_split = dev_split.filter(lambda r: r["corpus"] in set(corpora))
+        dev_split = load_dataset(repo, cfg, split=dev_split_name)
+        if corpora and col["corpus"] in dev_split.column_names:
+            corpus_col = col["corpus"]
+            dev_split = dev_split.filter(lambda r: r[corpus_col] in set(corpora))
         if len(dev_split) > 0:
             val_data = [convert_to_conversation(s) for s in dev_split]
             val_raw  = dev_split
@@ -480,6 +488,7 @@ def main():
             every_n_steps=wandb_config.get("log_examples_every_n_steps", 100),
             max_new_tokens=wandb_config.get("inference_max_new_tokens", 512),
             target_format=target_format,
+            col=col,
         ))
 
     # Handle models where FastVisionModel returns tokenizer directly (e.g. DeepSeek-OCR-2)
@@ -555,12 +564,12 @@ def main():
 
         sample = inference_samples[0]
         instr = INSTRUCTION_MXC if target_format == "mxc" else INSTRUCTION_XML
-        inputs = prepare_inference_inputs(processor, sample["image"], instr).to("cuda")
+        inputs = prepare_inference_inputs(processor, sample[col["image"]], instr).to("cuda")
 
         from transformers import TextStreamer
         streamer = TextStreamer(processor, skip_prompt=True)
-        print(f"\n--- Sample (score_id={sample.get('score_id', '?')}, {sample.get('page_system', f'page={sample.get(\"page\", \"?\")}')}) ---")
-        print(f"Reference (first 200 chars): {sample['musicxml'][:200].strip()}")
+        print(f"\n--- Sample (id={sample.get(col['id'], '?')}, label={sample.get(col['label'], '?')}) ---")
+        print(f"Reference (first 200 chars): {sample[col['musicxml']][:200].strip()}")
         print("Prediction:")
         model.generate(**inputs, streamer=streamer, max_new_tokens=512,
                        use_cache=True, temperature=1.0, top_p=0.95)
