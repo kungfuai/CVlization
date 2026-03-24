@@ -348,14 +348,26 @@ class DeepSeekOCR2DataCollator:
 class WandbInferenceCallback(TrainerCallback):
     """Logs held-out inference samples to WandB every N steps."""
 
-    def __init__(self, model, tokenizer, data_collator, samples, every_n_steps=100, max_new_tokens=512):
+    def __init__(self, model, tokenizer, data_collator, samples, every_n_steps=100, max_new_tokens=512, target_format="xml"):
         self.model          = model
         self.tokenizer      = tokenizer
         self.data_collator  = data_collator
         self.samples        = samples
         self.every_n_steps  = every_n_steps
         self.max_new_tokens = max_new_tokens
+        self.target_format  = target_format
         self._images_logged = False
+
+    def _format_ref(self, musicxml):
+        """Format reference in the same format as training targets."""
+        text = strip_musicxml_header(musicxml)
+        if self.target_format == "mxc":
+            try:
+                from mxc import xml_to_mxc
+                text = xml_to_mxc(text)
+            except Exception:
+                pass
+        return text
 
     def _run_inference(self, step):
         import wandb, time, html as _html
@@ -408,7 +420,7 @@ class WandbInferenceCallback(TrainerCallback):
                 sample["corpus"],
                 sample["page"],
                 f"{sample['bar_start']}-{sample['bar_end']}",
-                strip_musicxml_header(sample["musicxml"]),
+                self._format_ref(sample["musicxml"]),
                 prediction,
             ])
 
@@ -661,6 +673,7 @@ def main():
             samples=inference_samples,
             every_n_steps=wandb_config.get("log_examples_every_n_steps", 100),
             max_new_tokens=wandb_config.get("inference_max_new_tokens", 512),
+            target_format=target_format,
         ))
 
     trainer = Trainer(

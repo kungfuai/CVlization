@@ -115,10 +115,23 @@ def extract_header(mxc_text: str) -> dict:
     return header
 
 
+def _ensure_mxc(text: str) -> str:
+    """Convert XML reference to MXC if needed."""
+    if text.strip().startswith("<"):
+        try:
+            from mxc import xml_to_mxc
+            return xml_to_mxc(text)
+        except Exception:
+            return text
+    return text
+
+
 def evaluate_pair(pred_text: str, ref_text: str, score_id: str = "", step: int = 0) -> EvalResult:
     """Evaluate a single prediction against reference."""
     result = EvalResult(score_id=score_id, step=step)
 
+    # Auto-convert XML references to MXC for fair comparison
+    ref_text = _ensure_mxc(ref_text)
     pred_events = extract_events(pred_text)
     ref_events = extract_events(ref_text)
 
