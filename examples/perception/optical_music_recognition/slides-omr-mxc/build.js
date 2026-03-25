@@ -12,17 +12,21 @@ async function build() {
 
   const slides = [
     'slide01-title.html',
-    'slide02-challenge.html',
-    'slide03-pipeline.html',
-    'slide04-bottleneck.html',
-    'slide05-mxc.html',
-    'slide06-comparison.html',
-    'slide07-breakthrough.html',
-    'slide08-example.html',
-    'slide09-lora.html',
-    'slide10-findings.html',
-    'slide11-next.html',
-    'slide12-resources.html',
+    'slide02-vintage-scan.html',
+    'slide03-approaches.html',
+    'slide04-zero-shot.html',
+    'slide05-datasets.html',
+    'slide06-challenge.html',
+    'slide07-pipeline.html',
+    'slide08-bottleneck.html',
+    'slide09-mxc.html',
+    'slide10-comparison.html',
+    'slide11-breakthrough.html',
+    'slide12-example.html',
+    'slide13-lora.html',
+    'slide14-findings.html',
+    'slide15-next.html',
+    'slide16-resources.html',
   ];
 
   const slideResults = {};
@@ -32,8 +36,8 @@ async function build() {
     slideResults[file] = result;
   }
 
-  // Add table to slide 6 (model comparison)
-  const s6 = slideResults['slide06-comparison.html'];
+  // Add table to slide 10 (model comparison)
+  const s6 = slideResults['slide10-comparison.html'];
   if (s6.placeholders.length > 0) {
     const p = s6.placeholders[0];
     s6.slide.addTable([
@@ -66,8 +70,8 @@ async function build() {
     });
   }
 
-  // Add table to slide 9 (LoRA rank)
-  const s9 = slideResults['slide09-lora.html'];
+  // Add table to slide 13 (LoRA rank)
+  const s9 = slideResults['slide13-lora.html'];
   if (s9.placeholders.length > 0) {
     const p = s9.placeholders[0];
     s9.slide.addTable([
