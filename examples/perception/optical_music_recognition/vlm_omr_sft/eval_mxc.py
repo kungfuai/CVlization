@@ -57,6 +57,9 @@ class EvalResult:
     pitched_only_similarity: float = 0.0  # sequence similarity of pitched notes only
     pitched_only_positional: float = 0.0  # positional match of pitched notes only
 
+    # Note-type metrics — compares e/q/s/h/w regardless of raw duration values
+    note_type_similarity: float = 0.0     # sequence similarity of note types only (resolution-independent)
+
     # Coverage
     note_coverage: float = 0.0         # pred_events / ref_events
 
@@ -178,6 +181,13 @@ def evaluate_pair(pred_text: str, ref_text: str, score_id: str = "", step: int =
             sum(1 for p, r in zip(pred_pitched[:n], ref_pitched[:n]) if p == r) / n
         )
 
+    # Note-type similarity (e/q/s/h/w — resolution-independent rhythm accuracy)
+    pred_note_types = [e.note_type for e in pred_events if e.kind == "N"]
+    ref_note_types = [e.note_type for e in ref_events if e.kind == "N"]
+    if pred_note_types and ref_note_types:
+        sm_nt = SequenceMatcher(None, pred_note_types, ref_note_types)
+        result.note_type_similarity = sm_nt.ratio()
+
     # Rhythm similarity
     sm_type = SequenceMatcher(None, pred_types, ref_types)
     result.rhythm_similarity = sm_type.ratio()
@@ -205,6 +215,7 @@ def format_result(r: EvalResult) -> str:
     lines.append(f"    Pitched notes: {r.pred_notes}/{r.ref_notes}, unique: {r.pred_unique_pitches}/{r.ref_unique_pitches}")
     lines.append(f"    Pitch similarity:    {100*r.pitch_similarity:.0f}% (longest match: {r.longest_pitch_match})")
     lines.append(f"    Pitched-only sim:    {100*r.pitched_only_similarity:.0f}% (positional: {100*r.pitched_only_positional:.0f}%)")
+    lines.append(f"    Note-type sim:       {100*r.note_type_similarity:.0f}%")
     lines.append(f"    Rhythm similarity:   {100*r.rhythm_similarity:.0f}%")
     lines.append(f"    Combined similarity: {100*r.combined_similarity:.0f}% (longest match: {r.longest_combined_match})")
     lines.append(f"    Header: key={'✓' if r.correct_key else '✗'} time={'✓' if r.correct_time else '✗'} parts={'✓' if r.correct_parts else '✗'}")
@@ -222,6 +233,7 @@ def format_summary(results: list[EvalResult]) -> str:
     lines = [f"Aggregate ({n} samples):"]
     lines.append(f"  Avg pitch similarity:    {100*avg([r.pitch_similarity for r in results]):.0f}%")
     lines.append(f"  Avg pitched-only sim:    {100*avg([r.pitched_only_similarity for r in results]):.0f}% (positional: {100*avg([r.pitched_only_positional for r in results]):.0f}%)")
+    lines.append(f"  Avg note-type sim:       {100*avg([r.note_type_similarity for r in results]):.0f}%")
     lines.append(f"  Avg rhythm similarity:   {100*avg([r.rhythm_similarity for r in results]):.0f}%")
     lines.append(f"  Avg combined similarity: {100*avg([r.combined_similarity for r in results]):.0f}%")
     lines.append(f"  Avg note coverage:       {100*avg([r.note_coverage for r in results]):.0f}%")
@@ -329,12 +341,12 @@ def main():
         steps = sorted(set(r.step for r in results))
         if len(steps) > 1:
             print(f"\n--- Trend across {len(steps)} steps ---")
-            print(f"{'Step':>6} | {'Pitch':>6} | {'Notes':>6} | {'Rhythm':>6} | {'Combined':>8} | {'Coverage':>8} | {'Unique':>6}")
-            print("-" * 70)
+            print(f"{'Step':>6} | {'Pitch':>6} | {'Notes':>6} | {'NType':>6} | {'Rhythm':>6} | {'Combined':>8} | {'Coverage':>8} | {'Unique':>6}")
+            print("-" * 80)
             for step in steps:
                 sr = [r for r in results if r.step == step]
                 avg = lambda vals: sum(vals) / len(vals) if vals else 0
-                print(f"{step:6d} | {100*avg([r.pitch_similarity for r in sr]):5.0f}% | {100*avg([r.pitched_only_similarity for r in sr]):5.0f}% | {100*avg([r.rhythm_similarity for r in sr]):5.0f}% | {100*avg([r.combined_similarity for r in sr]):7.0f}% | {100*avg([r.note_coverage for r in sr]):7.0f}% | {avg([r.pred_unique_pitches for r in sr]):5.1f}")
+                print(f"{step:6d} | {100*avg([r.pitch_similarity for r in sr]):5.0f}% | {100*avg([r.pitched_only_similarity for r in sr]):5.0f}% | {100*avg([r.note_type_similarity for r in sr]):5.0f}% | {100*avg([r.rhythm_similarity for r in sr]):5.0f}% | {100*avg([r.combined_similarity for r in sr]):7.0f}% | {100*avg([r.note_coverage for r in sr]):7.0f}% | {avg([r.pred_unique_pitches for r in sr]):5.1f}")
 
 
 if __name__ == "__main__":
