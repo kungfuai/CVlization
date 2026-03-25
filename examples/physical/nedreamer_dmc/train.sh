@@ -7,12 +7,12 @@ TAG="${TAG:-latest}"
 
 mkdir -p "${SCRIPT_DIR}/outputs"
 
-GPU_FLAG="--gpus=all"
+GPU_ARGS=(--gpus=all)
 if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
-  GPU_FLAG="--gpus='\"device=${CUDA_VISIBLE_DEVICES}\"'"
+  GPU_ARGS=(--gpus="device=${CUDA_VISIBLE_DEVICES}")
 fi
 
-eval docker run --rm ${GPU_FLAG} \
+docker run --rm "${GPU_ARGS[@]}" \
   --workdir /workspace/nedreamer \
   --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
   --mount "type=bind,src=${SCRIPT_DIR}/outputs,dst=/workspace/outputs" \
