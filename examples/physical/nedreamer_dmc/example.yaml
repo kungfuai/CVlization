@@ -1,0 +1,46 @@
+name: nedreamer_dmc
+description: NE-Dreamer world model training on DeepMind Control Suite
+capability: physical/world-model
+tags:
+  - world-model
+  - dmcontrol
+  - model-based-rl
+  - dreamer
+  - ne-dreamer
+
+docker:
+  gpu: required
+
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 5
+
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train NE-Dreamer on a DMC task
+  test:
+    script: test.sh
+    description: Run smoke test (5k steps)
+
+tasks:
+  - model_based_rl
+  - world_model_learning
+
+frameworks:
+  - pytorch
+  - hydra
+  - dm_control
+
+verification:
+  status: not_verified
+  date: 2026-03-14
+  notes: |
+    - Vendored from https://github.com/corl-team/nedreamer
+    - Paper: arXiv:2603.02765
+    - Uses 12M model size by default for fast iteration
+    - Smoke test runs 5k env steps (~2 min on GPU)
