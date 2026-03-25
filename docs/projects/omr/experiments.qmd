@@ -1,0 +1,87 @@
+---
+title: "Experiments"
+description: "SFT experiment results across models, LoRA ranks, and formats"
+---
+
+## Experiment overview
+
+We ran SFT experiments on 6 VLMs with two target formats (XML and MXC),
+multiple LoRA ranks, and up to 6 epochs. All training on 3K lieder pages
+from OpenScore with a single NVIDIA RTX PRO 6000 (95 GB VRAM).
+
+## XML target format (all failed)
+
+With raw MusicXML targets, no model generated actual pitched notes. The
+XML preamble consumed the entire inference token budget.
+
+| Model | train_loss | Notes |
+|---|---|---|
+| Gemma-3 4B | — | Learned XML syntax, wrong key/time/tempo |
+| Ministral-3 r=32 | 0.120 | Degenerate ID repetition |
+| Ministral-3 r=8 | 0.173 | Stuck on MIDI metadata |
+| Qwen3.5-9B | 0.187 | 93 notes, all rests |
+| DeepSeek-OCR-2 | 0.312 | 29 notes, all rests |
+
+Data cleaning (stripping non-visible metadata, comments, MIDI blocks) reduced
+eval_loss from 0.158 to 0.048 on Ministral-3 but still produced no pitched notes.
+
+## MXC target format
+
+With MXC targets (12x compression), models could generate actual notes within
+the context window.
+
+### Model comparison (all r=32, 3 epochs, 10 eval samples)
+
+| Model | Size | Pitched-only sim | Rhythm | eval_loss |
+|---|---|---|---|---|
+| DeepSeek-OCR-2 | 3B | 0% | 4% | 0.315 |
+| Gemma-3 4B | 4.4B | 1% | 11% | 0.216 |
+| Ministral-3 | 3.9B | ~0% | 10% | 0.109 |
+| Qwen3-VL 8B | 8B | 16% | 23% | 0.166 |
+| Qwen3-VL 32B | 32B | 23% | 31% | 0.147 |
+| **Qwen3.5-9B** | **9.5B** | **35%** | **46%** | **0.149** |
+
+Models under 8B cannot learn pitch. Qwen3.5-9B outperforms the 3.5x larger
+Qwen3-VL-32B due to architecture improvements (unified early fusion).
+
+### LoRA rank sweep (Qwen3.5-9B)
+
+| Rank | Params | Pitch sim | Rhythm | eval_loss |
+|---|---|---|---|---|
+| r=16 | 51M (0.54%) | 33% | 32% | 0.154 |
+| **r=32** | **102M (1.07%)** | **36%** | **46%** | **0.149** |
+| r=64 | 204M (2.12%) | 32% | 46% | 0.146 |
+
+r=32 is optimal. r=64 achieves slightly lower eval_loss but worse inference
+metrics — the extra capacity overfits without improving pitch discrimination.
+
+### Epoch sweep (Qwen3.5-9B r=16)
+
+| Epochs | eval_loss | Pitch sim | Notes |
+|---|---|---|---|
+| 2 | 0.154 | 31% | Still improving |
+| 4 | 0.150 | 32% | Marginal gain |
+| 6 | 0.159 | 33% | Overfitting |
+
+2-3 epochs is optimal on 3K lieder samples.
+
+## What works and what doesn't
+
+**Works well:**
+
+- MXC format syntax (never produces invalid MXC)
+- Part structure, key signatures (80%), lyrics
+- Pitch on simpler passages (up to 88% positional accuracy)
+- 123 consecutive matching events on best run
+
+**Struggles with:**
+
+- Dense piano polyphony
+- Very long pages (coverage drops with 400+ notes)
+- Pages where voice enters late (rests consume token budget)
+
+## Detailed reports
+
+- [2026-03-14: Gemma-3 initial run](https://github.com/kungfuai/CVlization/blob/vintage-music-sheet/examples/perception/optical_music_recognition/vlm_omr_sft/reports/2026-03-14-lieder-2epoch.md)
+- [2026-03-18: Model comparison & data cleaning](https://github.com/kungfuai/CVlization/blob/vintage-music-sheet/examples/perception/optical_music_recognition/vlm_omr_sft/reports/2026-03-18-model-comparison-and-data-cleaning.md)
+- [2026-03-19: MXC experiments](https://github.com/kungfuai/CVlization/blob/vintage-music-sheet/examples/perception/optical_music_recognition/vlm_omr_sft/reports/2026-03-19-mxc-experiments.md)

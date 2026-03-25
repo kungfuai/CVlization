@@ -1,0 +1,36 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "CVlization"
+  description: "Dockerized ML examples for perception, generation, and analysis"
+  navbar:
+    left:
+      - text: Home
+        href: index.qmd
+      - text: Projects
+        menu:
+          - text: Optical Music Recognition
+            href: projects/omr/index.qmd
+    right:
+      - icon: github
+        href: https://github.com/kungfuai/CVlization
+
+  sidebar:
+    - title: "OMR"
+      style: docked
+      contents:
+        - projects/omr/index.qmd
+        - projects/omr/dataset.qmd
+        - projects/omr/mxc-format.qmd
+        - projects/omr/experiments.qmd
+        - projects/omr/evaluation.qmd
+
+format:
+  html:
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-tools: true
