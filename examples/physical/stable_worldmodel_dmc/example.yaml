@@ -1,0 +1,29 @@
+name: stable_worldmodel_dmc
+description: stable-worldmodel DMControl parity scaffold with Hugging Face asset validation
+capability: physical/world-model
+tags:
+  - world-model
+  - dmcontrol
+  - stable-worldmodel
+  - model-based-control
+  - huggingface
+
+docker:
+  gpu: optional
+
+model:
+  world_model_repo: zzsi/swm-dmc-cheetah
+  expert_policies_repo: zzsi/swm-dmc-expert-policies
+
+datasets:
+  - zzsi/swm-dmc-expert
+  - zzsi/swm-dmc-mixed-small
+  - zzsi/swm-dmc-mixed-large
+
+verification:
+  status: in_progress
+  date: 2026-02-26
+  notes: |
+    - Hugging Face assets are published.
+    - This example currently validates artifact integrity and layout.
+    - End-to-end upstream parity execution is the next step.

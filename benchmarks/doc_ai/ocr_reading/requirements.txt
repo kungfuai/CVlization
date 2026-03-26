@@ -1,0 +1,9 @@
+datasets>=2.14.0
+Pillow
+tqdm
+pandas
+numpy
+scipy
+Levenshtein
+jiwer
+json-repair

@@ -1,0 +1,141 @@
+# CVlization RL training config for QED-Nano.
+#
+# Inherits from base.yaml (PipelineRL defaults), then adds the math proof
+# domain settings with an external API grader instead of a local vLLM server.
+#
+# GPU allocation (train_rl.py overrides these via command-line):
+#   world.actor_fraction   - GPUs for vLLM rollout servers (default: 2)
+#   world.finetune_fraction - GPUs for DeepSpeed trainer  (default: 2)
+#
+# Grader: set OPENAI_API_KEY (+ optionally OPENAI_BASE_URL for local server).
+# Any OpenAI-compatible model works as grader: gpt-4o-mini, Qwen3-4B, etc.
+
+defaults:
+  - base
+  - _self_
+
+seed: 42
+
+# Public base model (overridden by train_rl.py via model_path= override)
+# Start from an SFT checkpoint for best RL results:
+#   MODEL_ID=outputs/sft OPENAI_API_KEY=... python train_rl.py
+model_path: Qwen/Qwen3-4B-Instruct-2507
+model_revision: main
+
+eval_every_n_versions: 99999  # disable periodic eval; run manually
+
+finetune:
+  seed: 42
+  attempts: 4                         # rollout samples per problem (GRPO group)
+  train_batch_size: 4
+  valid_batch_size: 4
+  gradient_accumulation_passes: 8
+  seq_length: 8192                    # overridden by SEQ_LENGTH env var
+  seq_parallel: 1
+  learning_rate: 1.0e-6
+  lr_scheduler_type: constant_with_warmup
+  num_warmup_steps: 10
+  rl:
+    entropy_bonus: 0.0001
+    final_entropy_bonus: 0.0001
+    overlong_filtering: false
+  save_checkpoint_steps: 20
+  push_to_hub: false
+  hub_model_id: null
+  hub_ignore_patterns:
+    - "*.pt"
+    - "*.pth"
+
+llm:
+  parameters:
+    max_tokens: 8192
+    temperature: 0.8
+  reasoning_delimiters: ["</think>"]
+  wandb_table:
+    enabled: true
+    keep_last_k_groups: 16
+    log_every_n_groups: 16
+
+test_llm:
+  parameters:
+    max_tokens: 8192
+    temperature: 0.8
+    top_p: 0.95
+    top_k: 20
+
+# External API grader for proof verification.
+# train_rl.py overrides llm_grader.name from the GRADER_MODEL env var.
+# Note: sampling_kwargs here do NOT use reasoning.effort (o-series only).
+llm_grader:
+  local: false
+  name: gpt-4o-mini
+  sampling_kwargs:
+    temperature: 0.7
+    max_tokens: 4096
+  reasoning_delimiters: ["</think>"]
+  prompt_name: v1
+  wandb_table:
+    enabled: true
+    keep_last_k_groups: 16
+    log_every_n_groups: 16
+
+actor:
+  llm_max_rollouts: 8
+  max_retries: 5
+  rollout_policy: pipelinerl.domains.math.generate_math_rollout
+  system_prompt: null
+  task_template: |-
+    Generate a rigorous proof to the following question:
+
+    {task}
+
+environment:
+  _target_: pipelinerl.domains.math.MathProofEnvironment
+  model_name: ${llm_grader.name}
+  sampling_kwargs: ${llm_grader.sampling_kwargs}
+  prompt_name: ${llm_grader.prompt_name}
+
+dataset_loader: pipelinerl.domains.math.load_datasets
+dataset_loader_params:
+  seed: 42
+
+train_dataset_names:
+  - hub_id: lm-provers/FineProofs-RL
+    split: train
+
+test_dataset_names:
+  - hub_id: lm-provers/FineProofs-RL-test
+    split: test
+
+vllm_config:
+  use_v1: false
+  vllm_kwargs:
+    dtype: bfloat16
+    gpu-memory-utilization: 0.9
+    num-scheduler-steps: 1
+    disable-log-requests: ""
+    disable-frontend-multiprocessing: ""
+    max-num-seqs: ${actor.llm_max_rollouts}
+    max-num-batched-tokens: 4096
+    max-model-len: ${finetune.seq_length}
+    return-tokens-as-token-ids: ""
+    tensor-parallel-size: 1
+    pipeline-parallel-size: 1
+    generation-config: vllm
+
+# GPU split: 2 actor + 2 trainer = 4 GPUs minimum.
+# For 8 GPUs: ACTOR_GPUS=4 TRAINER_GPUS=4 (train_rl.py overrides these).
+world:
+  replicas: 1
+  actor_fraction: 2
+  preprocessor_fraction: 0
+  finetune_fraction: 2
+  env_replicas: 1
+  actor_group_port: 9000
+  environment_start_port: 7777
+
+wandb:
+  use_wandb: false   # set WANDB_API_KEY env var to enable automatically
+  wandb_project_name: qed-nano-rl
+  wandb_resume: always
+  wandb_use_basename: true
