@@ -1,0 +1,171 @@
+!!!OTL: BIDDLE'S PIANO WALTZ.
+!!!COM: Composed by ROBERT D. BIDDLE.
+!!!OMD: Andante.
+!!!YEC: Copyright, 1884, by J. BIDDLE & SON.
+**kern	**kern
+*clefF4	*clefG2
+*k[f#]	*k[f#]
+*M3/4	*M3/4
+*>INTRO.	*>INTRO.
+=1	=1
+4r	4dd 4gg 4bbb
+4G	4r
+4r	4r
+=2	=2
+4r	4ee 4gg 4ccc
+4B	4r
+4r	4r
+=3	=3
+4r	4dd 4gg 4bbb
+4G	4r
+4r	4r
+=4	=4
+4r	4ee 4gg 4ccc
+4B	4r
+4r	4r
+=5	=5
+[2.G [2.d [2.b	[2.b [2.dd [2.gg
+=6	=6
+2.G] 2.d] 2.b]	2.b] 2.dd] 2.gg]
+*>WALTZ.	*>WALTZ.
+*k[f#]	*k[f#]
+=7	=7
+4G	2.d 2.b
+4B 4d 4g	.
+4B 4d 4g	.
+=8	=8
+4G	2.d 2.b
+4B 4d 4g	.
+4B 4d 4g	.
+=9	=9
+4F#	4d 4a 4cc
+4c 4d 4a	4b
+4c 4d 4a	4a
+=10	=10
+4G	2.g
+4B 4d 4g	.
+4B 4d 4g	.
+=11	=11
+4G	2.b
+4B 4d 4g	.
+4B 4d 4g	.
+=12	=12
+4G	4b
+4B 4d 4g	4dd
+4B 4d 4g	4cc#
+=13	=13
+4G	4cc 4ee
+4B 4d 4g	4b
+4B 4d 4g	4a
+=14	=14
+4F#	4dd 4ff#
+4c 4d 4a	4r
+4c 4d 4a	4r
+=15	=15
+4F#	2.d 2.a 2.cc
+4c 4d 4a	.
+4c 4d 4a	.
+=16	=16
+4F#	2.d 2.a 2.cc
+4c 4d 4a	.
+4c 4d 4a	.
+=17	=17
+4G	4d 4g 4b
+4B 4d 4g	4a
+4B 4d 4g	4g
+=18	=18
+4G	2.ee
+4c 4e 4g	.
+4c 4e 4g	.
+=19	=19
+4D	8ff#L 8ggJ
+4c 4d 4f#	8ff#L 8ggJ
+4c 4d 4f#	4ee
+=20	=20
+4G	4dd
+4B 4d 4g	4b
+4B 4d 4g	4g
+=21	=21
+4D	4cc
+4c 4d 4f#	4a
+4c 4d 4f#	4f#
+=22	=22
+4G	2.g
+4B 4d 4g	.
+4B 4d 4g	.
+=23	=23
+4G	2.g
+4B 4d 4g	.
+4B 4d 4g	.
+=24:|!	=24:|!
+*k[b-]	*k[b-]
+=25	=25
+4F	4cc
+4A 4c 4f	4cc
+4A 4c 4f	4cc
+=26	=26
+4E	4g 4cc
+4G 4c 4e	4r
+4G 4c 4e	4r
+=27	=27
+4E	4b-
+4G 4c 4e	4b-
+4G 4c 4e	4b-
+=28	=28
+4F	4f 4a
+4A 4c 4f	4r
+4A 4c 4f	4r
+=29	=29
+4F	4dd
+4B- 4d 4f	4dd
+4B- 4d 4f	4dd
+=30	=30
+4F	4cc
+4A 4c 4f	4r
+4A 4c 4f	4cc
+=31	=31
+4C	4g 4bn
+4E 4G 4c	4r
+4E 4G 4c	4g 4bn
+=32	=32
+4F	4a 4cc
+4A 4c 4f	4r
+4A 4c 4f	4r
+=33	=33
+4F	4cc
+4A 4c 4f	4cc
+4A 4c 4f	4cc
+=34	=34
+4E	4g 4cc
+4G 4c 4e	4r
+4G 4c 4e	4r
+=35	=35
+4E	4b-
+4G 4c 4e	4b-
+4G 4c 4e	4b-
+=36	=36
+4F	4f 4a
+4A 4c 4f	4r
+4A 4c 4f	4r
+=37	=37
+4B-	8ddL 8ffJ
+4d 4f 4b-	8ddL 8ffJ
+4d 4f 4b-	8ee-L 8ddJ
+=38	=38
+4F	8ddL 8ccJ
+4A 4c 4f	8ccL 8aJ
+4A 4c 4f	8ccL 8gJ
+=39	=39
+4C	8aL 8gJ
+4G 4B- 4e	8gL 8eJ
+4G 4B- 4e	8ccL 8bnJ
+=40	=40
+4F	2.f
+4A 4c 4f	.
+4A 4c 4f	.
+=41	=41
+4F	2.f
+4A 4c 4f	.
+4A 4c 4f	.
+==	==
+*-	*-
