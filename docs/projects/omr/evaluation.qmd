@@ -1,0 +1,67 @@
+---
+title: "Evaluation"
+description: "How to measure OMR transcription accuracy"
+---
+
+## Metrics
+
+We use alignment-aware sequence matching (`SequenceMatcher`) to compare
+predicted and reference MXC note sequences. This handles insertions and
+deletions without cascading positional mismatches.
+
+### Pitched-only similarity
+
+The primary metric. Compares only pitched notes (excludes rests) between
+prediction and reference using sequence alignment.
+
+A sample with many rest measures followed by a few notes would score 0% on
+rests-included metrics even if the notes are correct. Pitched-only avoids this.
+
+### Other metrics
+
+| Metric | What it measures |
+|---|---|
+| Pitched-only similarity | Correct notes in correct order (excl. rests) |
+| Positional accuracy | % of notes correct at each position (strict) |
+| Rhythm similarity | Note types/durations correct |
+| Combined similarity | Pitch + type together |
+| Note coverage | Predicted events / reference events |
+| Longest match | Longest consecutive correct run |
+| Header accuracy | Key, time signature, part structure |
+
+### Interpreting results
+
+- **< 10%**: Model not reading pitch from image
+- **10-30%**: Some pitch learning, with alignment drift
+- **30-50%**: Meaningful pitch reading, room to improve
+- **> 50%**: Good accuracy (check longest match for consistency)
+- **Coverage > 100%**: Model hallucinating extra notes
+
+## Usage
+
+```bash
+# Evaluate latest WandB run
+python eval_mxc.py --latest
+
+# Specific run with trend across steps
+python eval_mxc.py --wandb-run wandb/run-XXXXX --by-step
+
+# Compare two MXC files directly
+python eval_mxc.py --pred prediction.mxc --ref reference.mxc
+```
+
+## Caveats
+
+- Metrics are computed on 10 held-out samples during training, not the full
+  dev set (193 samples). Results may not be statistically robust.
+- `SequenceMatcher` finds the longest common subsequence, which can match
+  notes that happen to share a pitch but are in different measures.
+- The metric does not distinguish between a wrong pitch and a missing note
+  followed by a correct one — both reduce the similarity score.
+- Lyric order (L1 vs L2) sometimes differs between prediction and reference
+  without affecting musical content.
+
+## Implementation
+
+- **Script**: `vlm_omr_sft/eval_mxc.py`
+- **Guide**: `vlm_omr_sft/reports/evaluation-guide.md`

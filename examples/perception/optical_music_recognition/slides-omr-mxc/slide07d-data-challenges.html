@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html><head><style>
+body { width: 720pt; height: 405pt; margin: 0; padding: 0; background: #FFFFFF; font-family: Arial, sans-serif; display: flex; flex-direction: column; }
+.header { background: #E41159; padding: 18pt 30pt; }
+.header h1 { color: #FFFFFF; font-size: 22pt; margin: 0; }
+.content { padding: 10pt 30pt; flex: 1; display: flex; gap: 16pt; }
+.col { flex: 1; }
+.section-title { color: #E41159; font-size: 12pt; font-weight: bold; margin: 0 0 8pt 0; }
+ul { margin: 0; padding-left: 16pt; }
+li { color: #110A29; font-size: 9pt; margin-bottom: 6pt; line-height: 1.3; }
+</style></head><body>
+<div class="header"><h1>Dataset Challenges and Scale</h1></div>
+<div class="content">
+  <div class="col">
+    <p class="section-title">Engineering challenges</p>
+    <ul>
+      <li><b>Render failures:</b> 81/1,460 lieder, 4/122 quartets, 2/94 orchestra scores failed LilyPond rendering (syntax errors, zero-duration objects)</li>
+      <li><b>music21 slicing bugs:</b> arpeggio spanners cause TypeError; retry with gatherSpanners=False. "Measure already in stream" on some page boundaries</li>
+      <li><b>SVG bar number parsing:</b> time signature denominators have same font size as bar numbers; disambiguate by keeping largest consecutive-integer cluster</li>
+      <li><b>Pickup bars:</b> 23% of lieder have measure 0; auto-detect and offset SVG bar numbers by -1</li>
+      <li><b>Runtime:</b> 12-20 hours per corpus (Docker render + music21 slicing)</li>
+    </ul>
+  </div>
+  <div class="col">
+    <p class="section-title">Final dataset stats</p>
+    <div style="background: #F5F3F2; border: 1pt solid #D9D5D2; border-radius: 4pt; padding: 10pt; margin-bottom: 8pt;">
+      <p style="color: #110A29; font-size: 10pt; margin: 0 0 4pt 0;"><b>Lieder:</b> 3,312 train / 209 dev / 223 test</p>
+      <p style="color: #110A29; font-size: 10pt; margin: 0 0 4pt 0;"><b>Quartets:</b> 6,274 train / 136 dev</p>
+      <p style="color: #110A29; font-size: 10pt; margin: 0;"><b>Orchestra:</b> 4,870 train / 242 test</p>
+    </div>
+    <p class="section-title">Data quality</p>
+    <ul>
+      <li>3/500 lieder samples have malformed XML (music21 export bugs)</li>
+      <li>7/27,632 lyric elements contain non-breaking spaces</li>
+      <li>224 quartet pages skipped (page-number-only, no bar content)</li>
+      <li>All issues documented in page_musicxml_runs.md for future fixes</li>
+    </ul>
+  </div>
+</div>
+<img src="kungfu-logo.png" style="position: absolute; bottom: 10pt; right: 20pt; width: 50pt; height: auto; opacity: 0.6;">
+</body></html>

@@ -1,0 +1,61 @@
+---
+title: "MXC Format"
+description: "MusicXML Compact — a 12x compression for VLM training"
+---
+
+## The Problem
+
+MusicXML is extremely verbose. A typical lieder page produces ~14K tokens — far
+beyond the 4,096-token VLM context window. Only ~10% of pages fit, and models
+spend all inference tokens on XML preamble before reaching any `<note>` elements.
+
+## MXC Design
+
+MXC is a line-based encoding where one note = one line:
+
+```
+header work-title="Just for Today"
+header composer="Jane Bingham Abbott"
+P1 Voice Ob
+P2 Piano Pno
+---
+P1
+M 1 div=10080 key=-1 time=3/4 clef=G2
+dir @above [font-weight=bold] Andante
+N C4 q 10080 su L1:s:Lord,
+N Bb3 e 5040 su bm=begin L1:s:for
+N C4 e 5040 su bm=end L1:b:to
+```
+
+## Compression
+
+Tested on 500 lieder pages:
+
+| Metric | Cleaned XML | MXC |
+|--------|-------------|-----|
+| Median chars | 50,272 | 4,172 |
+| Median ~tokens | ~14,363 | **~1,192** |
+| **Compression** | — | **12x** |
+
+## Round-trip accuracy
+
+- **99.2%** lossless round-trip on 500 samples
+- 3 failures from malformed XML in source data
+- 1 failure from double-space in lyric text
+
+## What MXC preserves
+
+- Pitches, durations, types, accidentals, dots
+- Stems, beams, ties, slurs
+- Lyrics (bilingual, syllabic encoding)
+- Key/time signatures, clefs
+- Dynamics, tempo text, directions
+- Composer, lyricist, title
+- Barlines, repeats, endings
+
+## Implementation
+
+- **Encoder/decoder**: `vlm_omr_sft/mxc.py`
+- **Format spec**: `vlm_omr_sft/MXC.md`
+- **Unit tests**: `vlm_omr_sft/test_mxc.py` (28 tests)
+- **Real-data tests**: `vlm_omr_sft/test_mxc_realdata.py` (500 samples)

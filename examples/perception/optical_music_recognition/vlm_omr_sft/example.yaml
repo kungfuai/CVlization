@@ -1,0 +1,48 @@
+name: vlm-omr-sft
+capability: perception/optical_music_recognition
+modalities:
+  - vision
+  - text
+datasets:
+  - zzsi/openscore
+stability: stable
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 25
+image: cvlization/vlm-omr-sft:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Fine-tune Gemma-3 on openscore pages_transcribed (image → MusicXML)
+  test:
+    script: test.sh
+    description: Smoke test — 30 steps, 100 lieder samples
+tags:
+  - unsloth
+  - gemma
+  - gemma-3
+  - vision-language
+  - fine-tuning
+  - lora
+  - sft
+  - omr
+  - optical-music-recognition
+  - musicxml
+  - sheet-music
+  - pytorch
+  - 4bit
+tasks:
+  - image_to_text
+  - optical_music_recognition
+frameworks:
+  - pytorch
+  - unsloth
+  - transformers
+description: Fine-tune Gemma-3 (4B) with QLoRA on zzsi/openscore pages_transcribed to transcribe sheet music page images to MusicXML.
+verification:
+  last_verified: "2026-03-05"
+  last_verification_note: "Smoke test passes: 30 steps, 100 lieder samples, 4.8 min, 32 GB VRAM peak (33.7% of 95 GB). Loss 0.56 → 0.31. Requires pytorch/pytorch:2.9.1-cuda12.8 base image for Blackwell GPU support."

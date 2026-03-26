@@ -1,0 +1,37 @@
+name: qwen3-omr
+capability: perception/optical_music_recognition
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 20
+image: cvlization/qwen3-omr:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run zero-shot OMR probing with Qwen3-VL-8B — answers 5 music-theory questions about a sheet music image (key signature, time signature, era, dynamics, full transcription attempt)
+tags:
+  - omr
+  - music-recognition
+  - sheet-music
+  - zero-shot
+  - vlm
+  - qwen3
+  - piano
+  - vintage
+tasks:
+  - optical_music_recognition
+frameworks:
+  - pytorch
+  - transformers
+description: Zero-shot OMR probing with Qwen3-VL-8B-Instruct. Uses 4-bit quantization (~8GB VRAM). Answers 5 prompts about a piano score image (key signature, time signature, musical era, dynamics/tempo, full ekern transcription attempt). Useful as the B2a lower-bound baseline in the Bucket 3 model comparison matrix.
+
+verification:
+  last_verified: "2026-02-22"
+  last_verification_note: "Verified build (~12s) and inference (~10min) on NVIDIA RTX PRO 6000 Blackwell (98GB VRAM). Default sample: Biddle's Piano Waltz (1884, LoC). Results: time sig (3/4) correct; era (Romantic/1884) excellent — model read copyright text; dynamics/tempo good; key signature wrong (misread flats as sharp); full ekern transcription failed with header-loop hallucination. Output persists to host cwd. First run downloads ~18GB model (Qwen3-VL-8B-Instruct)."
