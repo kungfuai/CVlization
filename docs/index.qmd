@@ -1,0 +1,24 @@
+---
+title: "CVlization"
+subtitle: "Curated AI Training and Inference Recipes That Just Work"
+---
+
+190+ state-of-the-art open source AI capabilities, packaged in self-contained
+Docker environments. Find a recipe, test it, copy what you need.
+
+## Featured Projects
+
+### [Optical Music Recognition](projects/omr/index.qmd)
+
+Fine-tuning Vision-Language Models to transcribe sheet music images into symbolic
+notation. We developed MXC (MusicXML Compact) to compress training targets 12x,
+then tested 6 VLMs across multiple LoRA ranks and training configurations.
+
+Current best: 35% pitched-only similarity using Qwen3.5-9B r=32 on 3K lieder
+pages. The model reads pitch from staff positions but accuracy is limited by
+training data size.
+
+## Repository
+
+- **Code**: [github.com/kungfuai/CVlization](https://github.com/kungfuai/CVlization)
+- **Datasets**: [huggingface.co/zzsi](https://huggingface.co/zzsi)
