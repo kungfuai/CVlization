@@ -232,8 +232,8 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--level", type=int, default=1, choices=list(GENERATORS.keys()),
                         help="Difficulty level (default: 1)")
-    parser.add_argument("--count", type=int, default=100,
-                        help="Number of scores to generate (default: 100)")
+    parser.add_argument("--count", type=int, default=1000,
+                        help="Number of scores to generate (default: 1000)")
     parser.add_argument("--measures", type=int, default=16,
                         help="Measures per score (default: 16)")
     parser.add_argument("--output", type=str, default="output",
