@@ -1,0 +1,7 @@
+outputs/
+__pycache__/
+*.pyc
+omr_results.json
+omr_results.jsonl
+.env
+*_rich_kern.json
