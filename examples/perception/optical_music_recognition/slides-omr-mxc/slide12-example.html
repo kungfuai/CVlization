@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html><head><style>
+body { width: 720pt; height: 405pt; margin: 0; padding: 0; background: #FFFFFF; font-family: Arial, sans-serif; display: flex; flex-direction: column; }
+.header { background: #E41159; padding: 18pt 30pt; }
+.header h1 { color: #FFFFFF; font-size: 24pt; margin: 0; }
+.content { padding: 20pt 30pt; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+</style></head><body>
+<div class="header"><h1>Example: Predicted vs Reference</h1></div>
+<div class="content">
+  <p style="color: #E41159; font-size: 14pt; font-weight: bold; margin: 0 0 16pt 0;">Pitch-by-pitch comparison (lc5800427, step 1000)</p>
+  <div style="background: #F5F3F2; border: 1pt solid #D9D5D2; border-radius: 6pt; padding: 20pt;">
+    <p style="color: #4421D2; font-size: 16pt; font-family: Courier New, monospace; margin: 0 0 12pt 0;"><b>Pred:</b>  E4  A4  B4  C5  C5  B4  D5  C5  B4  A4</p>
+    <p style="color: #4421D2; font-size: 16pt; font-family: Courier New, monospace; margin: 0;"><b>Ref: </b>  E4  A4  B4  C5  C5  B4  D5  C5  B4  A4</p>
+  </div>
+  <p style="color: #110A29; font-size: 13pt; margin: 16pt 0 0 0; text-align: center;"><b>10/10 pitches correct</b> on this passage</p>
+  <p style="color: #110A29; font-size: 11pt; margin: 8pt 0 0 0; text-align: center;">Model correctly reads note positions from staff lines and spaces</p>
+</div>
+<img src="kungfu-logo.png" style="position: absolute; bottom: 10pt; right: 20pt; width: 50pt; height: auto; opacity: 0.6;">
+</body></html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html><head><style>
+body { width: 720pt; height: 405pt; margin: 0; padding: 0; background: #FFFFFF; font-family: Arial, sans-serif; display: flex; flex-direction: column; }
+.header { background: #E41159; padding: 18pt 30pt; }
+.header h1 { color: #FFFFFF; font-size: 24pt; margin: 0; }
+.content { padding: 12pt 30pt; flex: 1; display: flex; gap: 20pt; }
+.col { flex: 1; }
+.section-title { color: #E41159; font-size: 14pt; font-weight: bold; margin: 0 0 10pt 0; }
+.divider { width: 1pt; background: #D9D5D2; }
+ul { margin: 0; padding-left: 18pt; }
+li { color: #110A29; font-size: 11pt; margin-bottom: 8pt; }
+</style></head><body>
+<div class="header"><h1>The Token Bottleneck</h1></div>
+<div class="content">
+  <div class="col">
+    <p class="section-title">The Problem</p>
+    <ul>
+      <li>MusicXML is extremely verbose (~14K tokens per page)</li>
+      <li>VLM context window: 4,096 tokens</li>
+      <li>Only 10% of pages fit &#8212; models never reach note elements</li>
+      <li>All models generate headers/metadata, never actual notes</li>
+    </ul>
+  </div>
+  <div class="divider"></div>
+  <div class="col">
+    <p class="section-title">The Impact</p>
+    <ul>
+      <li>6 models tested with XML targets</li>
+      <li><b>0% pitch accuracy</b> across all models</li>
+      <li>Models learn structure but not musical content</li>
+      <li>Need 12x compression to fit notes in context</li>
+    </ul>
+  </div>
+</div>
+<img src="kungfu-logo.png" style="position: absolute; bottom: 10pt; right: 20pt; width: 50pt; height: auto; opacity: 0.6;">
+</body></html>
