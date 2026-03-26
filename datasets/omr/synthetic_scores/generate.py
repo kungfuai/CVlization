@@ -188,8 +188,18 @@ def render_with_lilypond(musicxml_path: str, output_png: str) -> bool:
   bottom-margin = 10
   left-margin = 15
   right-margin = 15
+  ragged-bottom = ##t
+  ragged-last-bottom = ##t
 }
 \header { title = ##f tagline = ##f }
+\layout {
+  \context {
+    \Staff
+    instrumentName = ##f
+    shortInstrumentName = ##f
+    \remove "Bar_number_engraver"
+  }
+}
 """
         override_path = os.path.join(tmpdir, "overrides.ly")
         with open(override_path, "w") as f:
@@ -202,6 +212,8 @@ def render_with_lilypond(musicxml_path: str, output_png: str) -> bool:
             "cvlization/lilypond:latest",
             "bash", "-c",
             "cd /data && musicxml2ly score.musicxml -o score.ly 2>/dev/null && "
+            "sed -i 's/instrumentName = .*/instrumentName = ##f/' score.ly && "
+            "sed -i 's/shortInstrumentName = .*/shortInstrumentName = ##f/' score.ly && "
             "cat overrides.ly >> score.ly && "
             "lilypond --png -dresolution=150 score.ly 2>/dev/null"
         ]
@@ -220,11 +232,115 @@ def render_with_lilypond(musicxml_path: str, output_png: str) -> bool:
             src = os.path.join(tmpdir, candidate)
             if os.path.exists(src):
                 os.makedirs(output_dir, exist_ok=True)
-                subprocess.run(["cp", src, output_png])
+                # Crop whitespace: trim bottom, keep some margin
+                try:
+                    from PIL import Image as PILImage, ImageOps
+                    img = PILImage.open(src)
+                    # Find bounding box of non-white content
+                    gray = img.convert("L")
+                    bbox = ImageOps.invert(gray).getbbox()
+                    if bbox:
+                        # Add margin around content
+                        margin = 40
+                        crop_box = (0, 0, img.width, min(img.height, bbox[3] + margin))
+                        img = img.crop(crop_box)
+                    img.save(output_png)
+                except ImportError:
+                    subprocess.run(["cp", src, output_png])
                 return True
 
         print(f"  No PNG output found in {tmpdir}")
         return False
+
+
+def batch_render(out_dir, filenames):
+    """Render all MusicXML files in a single Docker container."""
+    out_dir = Path(out_dir).resolve()
+
+    # Write the LilyPond overrides once
+    ly_overrides = r"""\paper {
+  #(set-paper-size "a4")
+  tagline = ##f
+  indent = 0
+  top-margin = 10
+  bottom-margin = 10
+  left-margin = 15
+  right-margin = 15
+  ragged-bottom = ##t
+  ragged-last-bottom = ##t
+}
+\header { title = ##f tagline = ##f }
+\layout {
+  \context {
+    \Score
+    \override BarNumber.break-visibility = ##(#f #f #f)
+  }
+}
+"""
+    (out_dir / "_overrides.ly").write_text(ly_overrides)
+
+    # Build a bash script that converts + renders all files
+    lines = ["#!/bin/bash", "cd /data"]
+    for name in filenames:
+        lines.append(
+            f"musicxml2ly {name}.musicxml -o {name}.ly 2>/dev/null && "
+            f"sed -i 's/instrumentName = .*/instrumentName = ##f/' {name}.ly && "
+            f"sed -i 's/shortInstrumentName = .*/shortInstrumentName = ##f/' {name}.ly && "
+            r"sed -i 's/\\context { \\Score/\\context { \\Score \\override BarNumber.break-visibility = ##(#f #f #f)/' " + f"{name}.ly && "
+            f"cat _overrides.ly >> {name}.ly && "
+            f"lilypond --png -dresolution=150 {name}.ly 2>/dev/null && "
+            f"echo OK:{name} || echo FAIL:{name}"
+        )
+    script = "\n".join(lines)
+    (out_dir / "_render.sh").write_text(script)
+
+    cmd = [
+        "docker", "run", "--rm",
+        "--user", f"{os.getuid()}:{os.getgid()}",
+        "-v", f"{out_dir}:/data",
+        "cvlization/lilypond:latest",
+        "bash", "/data/_render.sh",
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, timeout=3600)
+    output = result.stdout.decode()
+
+    # Crop rendered PNGs
+    rendered = 0
+    try:
+        from PIL import Image as PILImage, ImageOps
+        has_pil = True
+    except ImportError:
+        has_pil = False
+
+    for name in filenames:
+        # LilyPond outputs name.png or name-page1.png
+        for candidate in [out_dir / f"{name}.png", out_dir / f"{name}-page1.png"]:
+            if candidate.exists():
+                if has_pil:
+                    img = PILImage.open(candidate)
+                    gray = img.convert("L")
+                    bbox = ImageOps.invert(gray).getbbox()
+                    if bbox:
+                        margin = 40
+                        img = img.crop((0, 0, img.width, min(img.height, bbox[3] + margin)))
+                    img.save(out_dir / f"{name}.png")
+                    # Remove -page1 variant if different
+                    if candidate.name != f"{name}.png" and candidate.exists():
+                        candidate.unlink()
+                rendered += 1
+                break
+
+    # Cleanup temp files
+    for f in out_dir.glob("*.ly"):
+        f.unlink()
+    (out_dir / "_overrides.ly").unlink(missing_ok=True)
+    (out_dir / "_render.sh").unlink(missing_ok=True)
+
+    if rendered % 100 == 0 or rendered == len(filenames):
+        print(f"  Rendered {rendered}/{len(filenames)}")
+
+    return rendered
 
 
 def main():
@@ -250,26 +366,24 @@ def main():
 
     print(f"Generating {args.count} level-{args.level} scores ({args.measures} measures each)...")
 
-    rendered = 0
+    # Generate all MusicXML files
+    filenames = []
     for i in range(args.count):
         seed = args.seed_start + i
         musicxml = generator(seed, n_measures=args.measures)
-
-        mxml_path = out_dir / f"L{args.level}_{seed:05d}.musicxml"
+        name = f"L{args.level}_{seed:05d}"
+        mxml_path = out_dir / f"{name}.musicxml"
         mxml_path.write_text(musicxml)
+        filenames.append(name)
 
-        if args.render:
-            png_path = out_dir / f"L{args.level}_{seed:05d}.png"
-            if render_with_lilypond(str(mxml_path), str(png_path)):
-                rendered += 1
-                if (rendered % 10) == 0:
-                    print(f"  Rendered {rendered}/{i+1}...")
-            else:
-                print(f"  FAILED: {mxml_path.name}")
+    print(f"  Generated {len(filenames)} MusicXML files")
 
-    print(f"\nDone. {args.count} MusicXML files in {out_dir}")
     if args.render:
-        print(f"  Rendered: {rendered}/{args.count}")
+        print("Rendering with LilyPond (batch)...")
+        rendered = batch_render(out_dir, filenames)
+        print(f"  Rendered: {rendered}/{len(filenames)}")
+
+    print(f"\nDone. {args.count} scores in {out_dir}")
 
 
 if __name__ == "__main__":
