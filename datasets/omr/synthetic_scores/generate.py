@@ -28,23 +28,96 @@ import tempfile
 from pathlib import Path
 
 
+def _pitch_to_index(pitch_str):
+    """Convert 'C4' to a numeric index for interval computation."""
+    step = pitch_str[0]
+    octave = int(pitch_str[-1])
+    return octave * 7 + "CDEFGAB".index(step)
+
+
+def _index_to_pitch(idx):
+    """Convert numeric index back to 'C4' style pitch string."""
+    octave = idx // 7
+    step = "CDEFGAB"[idx % 7]
+    return f"{step}{octave}"
+
+
+# Pitch pool for Level 1: treble clef range
+TREBLE_PITCHES = [
+    "A3", "B3",
+    "C4", "D4", "E4", "F4", "G4", "A4", "B4",
+    "C5", "D5", "E5", "F5", "G5",
+    "A5",
+]
+TREBLE_MIN = _pitch_to_index("A3")
+TREBLE_MAX = _pitch_to_index("A5")
+
+
+def _generate_melody(rng, n_notes, pitches=TREBLE_PITCHES):
+    """Generate a melody using stepwise motion with occasional leaps.
+
+    Produces musically plausible pitch sequences: mostly steps (±1-2),
+    occasional leaps (±3-4), rare large leaps (±5-7).
+    """
+    pitch_indices = [_pitch_to_index(p) for p in pitches]
+    min_idx, max_idx = min(pitch_indices), max(pitch_indices)
+
+    # Start on a random pitch
+    current = rng.choice(pitch_indices)
+    melody = [current]
+
+    mid_idx = (min_idx + max_idx) // 2
+    for _ in range(n_notes - 1):
+        # Bias direction toward center when near edges
+        dist_from_center = current - mid_idx
+        if abs(dist_from_center) > (max_idx - min_idx) // 3:
+            # Near edge: bias toward center
+            bias = -1 if dist_from_center > 0 else 1
+        else:
+            bias = rng.choice([-1, 1])
+
+        # Weighted interval size: mostly steps, some leaps
+        r = rng.random()
+        if r < 0.5:
+            mag = 1       # step
+        elif r < 0.75:
+            mag = 2       # third
+        elif r < 0.9:
+            mag = 3       # fourth
+        else:
+            mag = rng.choice([4, 5])  # larger leap
+
+        interval = bias * mag
+        new_idx = current + interval
+        new_idx = max(min_idx, min(max_idx, new_idx))
+        current = new_idx
+        melody.append(current)
+
+    return [_index_to_pitch(idx) for idx in melody]
+
+
 def generate_level1(seed: int, n_measures: int = 8) -> str:
     """Single staff, C major, quarter notes only, no rests.
 
-    Tests: can the model read pitch from staff position at all?
+    Uses real melodic motion (stepwise with occasional leaps) instead of
+    random pitch selection. Tests: can the model read pitch from staff position?
     """
     rng = random.Random(seed)
-    # C major scale pitches (octave 4 and 5)
-    pitches = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5"]
     divisions = 1  # quarter note = 1 division
+    n_notes = n_measures * 4
+    melody = _generate_melody(rng, n_notes)
 
     measures = []
+    note_idx = 0
     for m in range(1, n_measures + 1):
         notes = []
         for beat in range(4):  # 4/4 time
-            pitch = rng.choice(pitches)
+            pitch = melody[note_idx]
+            note_idx += 1
             step = pitch[0]
             octave = pitch[-1]
+            midi_approx = _pitch_to_index(pitch)
+            stem = "up" if midi_approx < _pitch_to_index("B4") else "down"
             notes.append(f"""      <note>
         <pitch>
           <step>{step}</step>
@@ -52,7 +125,7 @@ def generate_level1(seed: int, n_measures: int = 8) -> str:
         </pitch>
         <duration>{divisions}</duration>
         <type>quarter</type>
-        <stem>{"up" if int(octave) <= 4 and step in "CDEF" else "down"}</stem>
+        <stem>{stem}</stem>
       </note>""")
 
         attrs = ""
@@ -74,12 +147,9 @@ def generate_level1(seed: int, n_measures: int = 8) -> str:
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
   "http://www.musicxml.org/dtds/partwise.dtd">
 <score-partwise version="4.0">
-  <work>
-    <work-title>Synthetic Level 1 (seed {seed})</work-title>
-  </work>
   <part-list>
     <score-part id="P1">
-      <part-name>Treble</part-name>
+      <part-name print-object="no">Treble</part-name>
     </score-part>
   </part-list>
   <part id="P1">
@@ -107,13 +177,32 @@ def render_with_lilypond(musicxml_path: str, output_png: str) -> bool:
         with open(tmp_mxml, "w") as f:
             f.write(open(musicxml_path).read())
 
-        # Run LilyPond via Docker
+        # LilyPond layout overrides: match openscore page dimensions,
+        # remove tagline, use compact layout
+        ly_overrides = r"""
+\paper {
+  #(set-paper-size "a4")
+  tagline = ##f
+  indent = 0
+  top-margin = 10
+  bottom-margin = 10
+  left-margin = 15
+  right-margin = 15
+}
+\header { title = ##f tagline = ##f }
+"""
+        override_path = os.path.join(tmpdir, "overrides.ly")
+        with open(override_path, "w") as f:
+            f.write(ly_overrides)
+
+        # Run LilyPond via Docker: convert MusicXML → .ly, inject overrides, render
         cmd = [
             "docker", "run", "--rm",
             "-v", f"{tmpdir}:/data",
             "cvlization/lilypond:latest",
             "bash", "-c",
             "cd /data && musicxml2ly score.musicxml -o score.ly 2>/dev/null && "
+            "cat overrides.ly >> score.ly && "
             "lilypond --png -dresolution=150 score.ly 2>/dev/null"
         ]
 
@@ -145,8 +234,8 @@ def main():
                         help="Difficulty level (default: 1)")
     parser.add_argument("--count", type=int, default=100,
                         help="Number of scores to generate (default: 100)")
-    parser.add_argument("--measures", type=int, default=8,
-                        help="Measures per score (default: 8)")
+    parser.add_argument("--measures", type=int, default=16,
+                        help="Measures per score (default: 16)")
     parser.add_argument("--output", type=str, default="output",
                         help="Output directory (default: output)")
     parser.add_argument("--render", action="store_true",
