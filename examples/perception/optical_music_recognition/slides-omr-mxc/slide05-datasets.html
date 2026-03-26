@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><style>
+body { width: 720pt; height: 405pt; margin: 0; padding: 0; background: #FFFFFF; font-family: Arial, sans-serif; display: flex; flex-direction: column; }
+.header { background: #E41159; padding: 14pt 30pt; }
+.header h1 { color: #FFFFFF; font-size: 24pt; margin: 0; }
+.content { padding: 8pt 30pt; flex: 1; display: flex; gap: 12pt; }
+.left { flex: 1; }
+.right { flex: 1; display: flex; flex-direction: column; gap: 6pt; }
+.section-title { color: #E41159; font-size: 12pt; font-weight: bold; margin: 0 0 6pt 0; }
+</style></head><body>
+<div class="header"><h1>Training Data</h1></div>
+<div class="content">
+  <div class="left">
+    <p class="section-title">OpenScore (full pages)</p>
+    <p style="color: #110A29; font-size: 10pt; margin: 0 0 6pt 0;">14,456 page images with per-page MusicXML from OpenScore corpus (lieder, quartets, orchestra). Rendered with LilyPond.</p>
+    <img src="https://huggingface.co/datasets/zzsi/cvl/resolve/main/omr_slides/openscore_sample.png" style="max-height: 150pt; max-width: 280pt; border: 1pt solid #D9D5D2;">
+    <p style="color: #110A29; font-size: 8pt; margin: 4pt 0 0 0;">Full page: voice + piano, lyrics, 835x1181px</p>
+  </div>
+  <div class="right">
+    <p class="section-title">OLiMPiC (system crops)</p>
+    <p style="color: #110A29; font-size: 10pt; margin: 0 0 6pt 0;">15,014 system-level piano crops with MusicXML. One grand staff per image. From ICDAR 2024.</p>
+    <img src="https://huggingface.co/datasets/zzsi/cvl/resolve/main/omr_slides/olimpic_sample.png" style="max-height: 100pt; max-width: 280pt; border: 1pt solid #D9D5D2;">
+    <p style="color: #110A29; font-size: 8pt; margin: 4pt 0 0 0;">System crop: piano only, ~3000x700px</p>
+  </div>
+</div>
+<img src="kungfu-logo.png" style="position: absolute; bottom: 10pt; right: 20pt; width: 50pt; height: auto; opacity: 0.6;">
+</body></html>
