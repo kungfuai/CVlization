@@ -1,0 +1,40 @@
+name: rlm-needle
+capability: agentic/long_context
+modalities:
+  - text
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 1
+presets:
+  build:
+    script: build.sh
+    description: Build the RLM needle-in-haystack Docker image
+  predict:
+    script: predict.sh
+    description: Run needle-in-haystack search (set ANTHROPIC_API_KEY or OPENAI_API_KEY)
+tags:
+  - rlm
+  - recursive-language-model
+  - long-context
+  - needle-in-haystack
+  - anthropic
+  - openai
+tasks:
+  - long_context_understanding
+  - question_answering
+frameworks:
+  - anthropic
+  - openai
+description: >
+  Needle-in-a-haystack demo using Recursive Language Models (RLM).
+  The LLM writes Python code in a REPL loop to search a 100K+ line context
+  for a hidden value — the context never fits in the prompt window.
+  Supports Anthropic (default) and OpenAI backends. No GPU required.
+verification:
+  status: VERIFIED
+  last_verified: 2026-02-28
+  last_verification_note: >
+    Verified with claude-haiku-4-5-20251001, CONTEXT_LINES=50000 (1.6M chars).
+    Found magic number in 2 iterations using regex search in REPL. PASS.
