@@ -18,6 +18,7 @@ data/*
 benchmarks/doc_ai/checkbox_qa/data/page_images/
 doc/tmp_notes
 notes/
+**/status.md
 /models
 /outputs
 /*cache

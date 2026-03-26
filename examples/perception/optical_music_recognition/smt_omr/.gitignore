@@ -1,0 +1,8 @@
+outputs/
+wandb/
+__pycache__/
+*.pyc
+*.pth
+*.ckpt
+*.safetensors
+.env
