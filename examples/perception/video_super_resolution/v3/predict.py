@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+"""
+V3: Continuous Space-Time Video Super-Resolution with 3D Fourier Fields (ICLR 2026)
+Wraps prs-eth/v3 inference for dockerized execution.
+"""
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import gdown
+
+try:
+    from cvlization.paths import (
+        get_input_dir,
+        get_output_dir,
+        resolve_input_path,
+        resolve_output_path,
+    )
+    CVL_AVAILABLE = True
+except ImportError:
+    CVL_AVAILABLE = False
+
+    def get_input_dir():
+        return os.getcwd()
+
+    def get_output_dir():
+        out = os.path.join(os.getcwd(), "outputs")
+        os.makedirs(out, exist_ok=True)
+        return out
+
+    def resolve_input_path(path, base_dir):
+        return path if os.path.isabs(path) else os.path.join(base_dir, path)
+
+    def resolve_output_path(path, base_dir):
+        return path if os.path.isabs(path) else os.path.join(base_dir, path)
+
+
+CHECKPOINT_GDRIVE_ID = "15nw5NhEIf7VvetEtQI1cnrLNWPi_9FGj"
+CHECKPOINT_FILENAME = "v3.pkl"
+V3_REPO_DIR = "/opt/v3"
+
+# Built-in sample clips (hosted on zzsi/cvl HuggingFace dataset)
+SAMPLES = {
+    "vid4_city": {
+        "hf_prefix": "v3_vsr/vid4_city",
+        "hf_gt_prefix": "v3_vsr/vid4_city_gt",
+        "num_frames": 34,
+        "description": "Vid4 'city' clip (34 frames, 704x576)",
+    },
+}
+
+
+def ensure_sample_input(name: str, cache_dir: Path) -> tuple[Path, str]:
+    """Download a built-in sample clip from HuggingFace."""
+    from huggingface_hub import hf_hub_download
+
+    sample = SAMPLES[name]
+    eval_set = name
+    # HFEvalVideoFolder expects: data_dir/eval_set/<video_subdir>/<frame>.png
+    frames_dir = cache_dir / "samples" / eval_set / "000"
+
+    if frames_dir.exists() and len(list(frames_dir.glob("*.png"))) >= sample["num_frames"]:
+        print(f"Sample '{name}' found in cache: {frames_dir}")
+        return cache_dir / "samples", eval_set
+
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading sample '{name}' ({sample['description']})...")
+    token = os.environ.get("HF_TOKEN")
+
+    for i in range(sample["num_frames"]):
+        fname = f"{i:08d}.png"
+        downloaded = hf_hub_download(
+            repo_id="zzsi/cvl",
+            repo_type="dataset",
+            filename=f"{sample['hf_prefix']}/{fname}",
+            token=token,
+        )
+        # Copy to expected directory structure
+        import shutil
+        shutil.copy2(downloaded, frames_dir / fname)
+
+    print(f"Sample saved to: {frames_dir}")
+    return cache_dir / "samples", eval_set
+
+
+def ensure_gt(name: str, cache_dir: Path) -> Path:
+    """Download ground-truth frames for a built-in sample (for evaluation)."""
+    from huggingface_hub import hf_hub_download
+    import shutil
+
+    sample = SAMPLES[name]
+    gt_dir = cache_dir / "gt" / name / "000"
+
+    if gt_dir.exists() and len(list(gt_dir.glob("*.png"))) >= sample["num_frames"]:
+        return gt_dir.parent  # return parent so eval_imgs sees the 000/ subdir
+
+    gt_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading GT for '{name}'...")
+    token = os.environ.get("HF_TOKEN")
+
+    for i in range(sample["num_frames"]):
+        fname = f"{i:08d}.png"
+        downloaded = hf_hub_download(
+            repo_id="zzsi/cvl",
+            repo_type="dataset",
+            filename=f"{sample['hf_gt_prefix']}/{fname}",
+            token=token,
+        )
+        shutil.copy2(downloaded, gt_dir / fname)
+
+    return gt_dir.parent
+
+
+def make_comparison_video(
+    input_frames_dir: Path,
+    sr_frames_dir: Path,
+    output_video: Path,
+    space_scale: int,
+    fps: int = 12,
+):
+    """Create a side-by-side MP4: bicubic-upsampled input (left) vs SR output (right)."""
+    from PIL import Image
+    import numpy as np
+    import tempfile
+
+    sr_frames = sorted(sr_frames_dir.glob("*.png"), key=lambda p: int(p.stem))
+    input_frames = sorted(input_frames_dir.glob("*.png"), key=lambda p: int(p.stem))
+
+    if not sr_frames:
+        print("Warning: no SR frames found, skipping video.")
+        return
+
+    # Get SR output size
+    sr_sample = np.array(Image.open(sr_frames[0]))
+    h, w = sr_sample.shape[:2]
+
+    # Create temp directory for comparison frames
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        for i, sr_path in enumerate(sr_frames):
+            sr_img = Image.open(sr_path)
+
+            # Find matching input frame (nearest, accounting for temporal upsampling)
+            input_idx = min(i * len(input_frames) // len(sr_frames), len(input_frames) - 1)
+            input_img = Image.open(input_frames[input_idx])
+            # Bicubic upscale input to match SR resolution
+            input_up = input_img.resize((w, h), Image.BICUBIC)
+
+            # Side by side with label bar
+            canvas = Image.new("RGB", (w * 2, h))
+            canvas.paste(input_up, (0, 0))
+            canvas.paste(sr_img, (w, 0))
+            canvas.save(tmpdir / f"{i:06d}.png")
+
+        # Stitch with ffmpeg
+        output_video.parent.mkdir(parents=True, exist_ok=True)
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-framerate", str(fps),
+            "-i", str(tmpdir / "%06d.png"),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-crf", "18",
+            str(output_video),
+        ]
+        result = subprocess.run(ffmpeg_cmd, capture_output=True)
+        if result.returncode == 0:
+            print(f"Comparison video saved: {output_video}")
+            print(f"  Layout: [Bicubic {space_scale}x upscale] | [V3 SR output]")
+            print(f"  Frames: {len(sr_frames)}, FPS: {fps}, Resolution: {w*2}x{h}")
+        else:
+            print(f"Warning: ffmpeg failed: {result.stderr.decode()[:200]}")
+
+
+def ensure_checkpoint(cache_dir: Path) -> Path:
+    """Download V3 checkpoint from Google Drive if not cached."""
+    ckpt_path = cache_dir / CHECKPOINT_FILENAME
+    if ckpt_path.exists():
+        print(f"Checkpoint found: {ckpt_path}")
+        return ckpt_path
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    print("Downloading V3 checkpoint from Google Drive...")
+    url = f"https://drive.google.com/uc?id={CHECKPOINT_GDRIVE_ID}"
+    gdown.download(url, str(ckpt_path), quiet=False)
+
+    if not ckpt_path.exists():
+        raise RuntimeError(f"Failed to download checkpoint to {ckpt_path}")
+    print(f"Checkpoint saved: {ckpt_path}")
+    return ckpt_path
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="V3: Continuous Space-Time Video Super-Resolution",
+    )
+    parser.add_argument(
+        "--input", default="vid4_city",
+        help="Path to input video directory, or a built-in sample name: "
+             f"{list(SAMPLES.keys())}. Default: vid4_city",
+    )
+    parser.add_argument(
+        "--output", default="v3_result",
+        help="Output directory for super-resolved frames (default: v3_result under output dir)",
+    )
+    parser.add_argument(
+        "--space-scale", type=int, default=4,
+        help="Spatial upsampling factor (default: 4)",
+    )
+    parser.add_argument(
+        "--time-scale", type=int, default=2,
+        help="Temporal upsampling factor (default: 2)",
+    )
+    parser.add_argument(
+        "--checkpoint", default=None,
+        help="Path to V3 checkpoint. If omitted, downloads from Google Drive.",
+    )
+    parser.add_argument(
+        "--cache-dir", default="/root/.cache/cvlization/v3",
+        help="Cache directory for checkpoint and sample data.",
+    )
+    parser.add_argument(
+        "--output-video", default=None,
+        help="Path for side-by-side comparison MP4 (bicubic input vs SR output). "
+             "e.g. --output-video comparison.mp4",
+    )
+    parser.add_argument(
+        "--fps", type=int, default=12,
+        help="FPS for output video (default: 12)",
+    )
+    parser.add_argument(
+        "--eval", action="store_true",
+        help="Run evaluation (PSNR/SSIM) against GT after inference. "
+             "Only works with built-in samples that have GT available.",
+    )
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="Enable verbose logging.",
+    )
+    args = parser.parse_args()
+
+    INP = get_input_dir()
+    OUT = get_output_dir()
+    cache_dir = Path(args.cache_dir)
+
+    # Resolve checkpoint
+    if args.checkpoint:
+        ckpt_path = Path(args.checkpoint)
+    else:
+        ckpt_path = ensure_checkpoint(cache_dir / "checkpoints")
+
+    # Resolve input
+    if args.input in SAMPLES:
+        data_dir, eval_set = ensure_sample_input(args.input, cache_dir)
+        data_dir_arg = str(data_dir)
+    else:
+        input_path = Path(resolve_input_path(args.input, INP))
+        if not input_path.exists():
+            print(f"Error: Input path not found: {input_path}")
+            return 1
+        # The upstream script expects --data-dir to contain a subfolder named by --eval-sets
+        data_dir_arg = str(input_path.parent)
+        eval_set = input_path.name
+
+    # Resolve output
+    output_path = Path(resolve_output_path(args.output, OUT))
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable, os.path.join(V3_REPO_DIR, "run_inference.py"),
+        "--data-dir", data_dir_arg,
+        "--checkpoint-path", str(ckpt_path),
+        "--eval-sets", eval_set,
+        "--space-scale", str(args.space_scale),
+        "--time-scale", str(args.time_scale),
+        "--save-dir", str(output_path),
+    ]
+
+    print(f"Running V3 inference (space={args.space_scale}x, time={args.time_scale}x):")
+    if args.verbose:
+        print(" ".join(cmd))
+
+    result = subprocess.run(cmd, cwd=V3_REPO_DIR)
+    if result.returncode != 0:
+        print(f"Error: V3 inference failed with exit code {result.returncode}")
+        return result.returncode
+
+    # Count output frames
+    out_frames = list(output_path.rglob("*.png"))
+    print(f"Done. {len(out_frames)} frames saved to: {output_path}")
+
+    # Generate comparison video if requested
+    if args.output_video:
+        # Find the SR frames directory (output_path/eval_set/x{scale}/0/)
+        sr_frames_dir = output_path / eval_set / f"x{args.space_scale}" / "0"
+        # Find the input frames directory
+        input_frames_dir = Path(data_dir_arg) / eval_set / "000"
+        if not input_frames_dir.exists():
+            # Try without the 000 subdirectory
+            input_frames_dir = Path(data_dir_arg) / eval_set
+        video_path = Path(resolve_output_path(args.output_video, OUT))
+        make_comparison_video(
+            input_frames_dir, sr_frames_dir, video_path,
+            space_scale=args.space_scale, fps=args.fps,
+        )
+
+    # Run evaluation if requested
+    if args.eval:
+        if args.input not in SAMPLES:
+            print("Warning: --eval only works with built-in samples. Skipping.")
+        elif "hf_gt_prefix" not in SAMPLES[args.input]:
+            print(f"Warning: no GT available for '{args.input}'. Skipping eval.")
+        else:
+            gt_dir = ensure_gt(args.input, cache_dir)
+            # eval_imgs.py expects: gt_dir/<video_subdir>/ and out_dir/<video_subdir>/
+            eval_out_dir = output_path / eval_set / f"x{args.space_scale}"
+            eval_cmd = [
+                sys.executable, os.path.join(V3_REPO_DIR, "eval_imgs.py"),
+                str(gt_dir), str(eval_out_dir),
+                "--time-scale", str(args.time_scale),
+            ]
+            print(f"\nEvaluating against GT (time_scale={args.time_scale}):")
+            subprocess.run(eval_cmd, cwd=V3_REPO_DIR)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -68,7 +68,7 @@ examples/
 |------------|-------------------|-----------------|--------|
 | ![Image Classification](./doc/images/plant_classification.png) Image Classification | [`examples/perception/image_classification`](./examples/perception/image_classification) | torch, cifar10-speedrun | ✅ |
 | ![Object Detection](./doc/images/object_detection.jpg) Object Detection | [`examples/perception/object_detection`](./examples/perception/object_detection) | mmdet, torchvision, rt-detr, yolov13 | ✅ |
-| ![Segmentation](./doc/images/semantic_segmentation.png) Segmentation | [`examples/perception/segmentation`](./examples/perception/segmentation) | instance (mmdet, torchvision), semantic (mmseg, torchvision), panoptic (detectron2, mmdet, torchvision), sam, sam_lora_finetuning, sam3, sam3_finetuning | ✅ |
+| ![Segmentation](./doc/images/semantic_segmentation.png) Segmentation | [`examples/perception/segmentation`](./examples/perception/segmentation) | instance (mmdet, torchvision), semantic (mmseg, torchvision), panoptic (detectron2, mmdet, torchvision), sam, sam_lora_finetuning, sam3, sam3_finetuning, flowrvs | ✅ |
 | ![Pose Estimation](./doc/images/pose_estimation.jpeg) Pose Estimation | [`examples/perception/pose_estimation`](./examples/perception/pose_estimation) | dwpose, mmpose | ✅ |
 | ![Object Tracking](./doc/images/player_tracking.gif) Tracking | [`examples/perception/tracking`](./examples/perception/tracking) | global_tracking_transformer, soccer_visual_tracking | ✅ |
 | ![Line Detection](./doc/images/line_detection.png) Line Detection | [`examples/perception/line_detection`](./examples/perception/line_detection) | torch | ✅ |

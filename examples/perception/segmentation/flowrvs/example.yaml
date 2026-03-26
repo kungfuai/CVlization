@@ -1,0 +1,39 @@
+name: flowrvs
+capability: perception/segmentation
+modalities:
+  - vision
+  - video
+  - text
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 40
+  ram_gb: 32
+  disk_gb: 25
+image: cvlization/flowrvs:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the FlowRVS Docker image
+  predict:
+    script: predict.sh
+    description: Run referring video segmentation inference
+tags:
+  - flowrvs
+  - referring-video-segmentation
+  - rvos
+  - segmentation
+  - video
+  - pytorch
+frameworks:
+  - pytorch
+  - diffusers
+  - transformers
+tasks:
+  - video_object_segmentation
+  - instance_segmentation
+description: FlowRVS inference wrapper for text-guided referring video segmentation.
+
+verification:
+  last_verified: 2026-02-27
+  last_verification_note: "Verified build, inference, model caching, and output on NVIDIA RTX PRO 6000 Blackwell (97GB VRAM). Inference took ~42s. Uses ~33GB VRAM peak. First run downloads Wan2.1-T2V-1.3B (~10GB) and FlowRVS checkpoints (~5GB)."
