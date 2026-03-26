@@ -1,0 +1,60 @@
+---
+title: "Dataset Pipeline"
+description: "How we built the OpenScore and OLiMPiC training datasets"
+---
+
+## OpenScore Dataset
+
+**Repo:** [`zzsi/openscore`](https://huggingface.co/datasets/zzsi/openscore) on HuggingFace
+
+### Source
+
+The [OpenScore](https://musescore.com/openscore) corpus provides public-domain
+MusicXML scores from IMSLP:
+
+| Corpus | Scores | Training pages |
+|--------|--------|---------------|
+| Lieder | 1,460 | 3,312 |
+| Quartets | 122 | 6,274 |
+| Orchestra | 94 | 4,870 |
+| **Total** | **1,676** | **14,456** |
+
+### Pipeline
+
+```
+MusicXML (from OpenScore)
+  → LilyPond Docker render → SVG pages
+  → SVG bar number extraction → per-page measure ranges
+  → music21 slice → per-page MusicXML
+  → PNG conversion → (image, MusicXML) pairs
+  → HuggingFace push
+```
+
+**Implementation:** `datasets/omr/openscore/page_musicxml.py`
+
+### Key details
+
+- **Images**: 835x1181 pixels (LilyPond default DPI)
+- **Bar numbers**: Extracted from SVG `<text>` elements with font-size heuristic
+- **Pickup bars**: Auto-detected (`measure[0].number == 0`) with offset adjustment
+- **Page breaks**: Measures spanning page boundaries assigned to next page
+
+### Known data quality issues
+
+- 3/500 lieder samples have malformed XML (music21 export bugs)
+- 7/27,632 lyrics contain non-breaking spaces (`\xa0`)
+- See `datasets/omr/openscore/page_musicxml_runs.md` for full run log
+
+## OLiMPiC Dataset
+
+**Repo:** [`zzsi/olimpic`](https://huggingface.co/datasets/zzsi/olimpic) on HuggingFace
+
+System-level piano crops from the [OLiMPiC](https://github.com/ufal/olimpic-icdar24)
+dataset (ICDAR 2024):
+
+- **15,014 training samples** (synthetic variant)
+- **System-level crops** (~3000x700 pixels) — one grand staff per image
+- **Piano only** — no voice staff, but partial lyrics may be visible at top of crop
+- **Ground truth**: MusicXML + Linearized MusicXML (LMX)
+
+**Implementation:** `datasets/omr/olimpic/prepare.py`
