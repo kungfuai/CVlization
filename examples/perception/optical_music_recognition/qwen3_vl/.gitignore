@@ -1,0 +1,6 @@
+outputs/
+__pycache__/
+*.pyc
+*.txt
+!requirements.txt
+.env

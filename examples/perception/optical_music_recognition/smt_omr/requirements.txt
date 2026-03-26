@@ -1,0 +1,23 @@
+# SMT dependencies
+# torch and torchvision are pre-installed in the pytorch/pytorch base image
+
+# HuggingFace ecosystem
+transformers==4.49.0
+datasets==3.3.2
+huggingface_hub==0.30.2
+
+# Training
+lightning==2.5.0.post0
+wandb==0.19.7
+
+# Image processing
+opencv-python-headless==4.11.0.86
+Pillow==11.2.1
+scikit-image==0.25.2
+
+# Utilities
+loguru==0.7.3
+rich==13.9.4
+torchinfo==1.8.0
+pyyaml==6.0.2
+fire==0.7.0
