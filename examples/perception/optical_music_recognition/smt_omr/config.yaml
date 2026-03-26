@@ -1,0 +1,23 @@
+# SMT Fine-tuning Configuration
+# Default values are set for a quick smoke test (<10 min).
+# Adjust for full training as noted in comments.
+
+model:
+  name: "antoniorv6/smt-grandstaff"
+  # Alternatives:
+  #   antoniorv6/smt-camera-grandstaff  (more robust to photo/vintage artifacts)
+
+dataset:
+  path: "antoniorv6/grandstaff"
+  max_samples_train: 50     # Small subset for smoke test; set to null for full dataset (~10k)
+  max_samples_val: 10       # Validation subset; set to null for full val split
+
+training:
+  output_dir: "outputs"
+  max_steps: 10             # Very quick smoke test; set to 10000+ for real training
+  # num_train_epochs: 20    # Uncomment to train by epoch instead of steps
+  learning_rate: 1.0e-4
+  batch_size: 1             # GrandStaff images are large; keep at 1 unless you have 24GB+ VRAM
+  num_workers: 0            # 0 = single process (reliable in Docker); increase for faster loading
+  val_check_interval: 5     # Validate every N steps
+  wandb_offline: true       # Set to false to log to wandb.ai (requires wandb login)

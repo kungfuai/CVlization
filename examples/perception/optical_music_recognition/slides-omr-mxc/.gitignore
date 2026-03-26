@@ -1,0 +1,4 @@
+# Images hosted on HuggingFace (zzsi/cvl omr_slides/)
+*.jpg
+*.png
+!kungfu-logo.png

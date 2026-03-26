@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html><head><style>
+body { width: 720pt; height: 405pt; margin: 0; padding: 0; background: #FFFFFF; font-family: Arial, sans-serif; display: flex; flex-direction: column; }
+.header { background: #E41159; padding: 14pt 30pt; }
+.header h1 { color: #FFFFFF; font-size: 24pt; margin: 0; }
+.header h2 { color: #FFFFFF; font-size: 12pt; margin: 4pt 0 0 0; font-weight: 400; }
+.content { padding: 8pt 30pt; flex: 1; display: flex; gap: 12pt; }
+.img-col { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.img-col p { color: #110A29; font-size: 9pt; text-align: center; margin: 4pt 0 0 0; }
+.label { color: #E41159; font-size: 10pt; font-weight: bold; margin: 0 0 4pt 0; }
+</style></head><body>
+<div class="header">
+  <h1>Zero-shot VLM Comparison</h1>
+  <h2>LilyPond renders of ekern output from each model on vintage_score_1884.jpg</h2>
+</div>
+<div class="content">
+  <div class="img-col">
+    <p class="label">Gemini 3.1 Pro</p>
+    <img src="https://huggingface.co/datasets/zzsi/cvl/resolve/main/omr_slides/gemini3_rendered_ly.png" style="max-height: 260pt; max-width: 210pt; border: 1pt solid #D9D5D2;">
+    <p>Best output. Correct waltz texture. Key wrong (G major).</p>
+  </div>
+  <div class="img-col">
+    <p class="label">Claude Opus 4.6</p>
+    <img src="https://huggingface.co/datasets/zzsi/cvl/resolve/main/omr_slides/claude_opus_rendered_ly.png" style="max-height: 260pt; max-width: 210pt; border: 1pt solid #D9D5D2;">
+    <p>Section labels correct. Stopped early. Key wrong (C major).</p>
+  </div>
+  <div class="img-col">
+    <p class="label">SMT (trained)</p>
+    <img src="https://huggingface.co/datasets/zzsi/cvl/resolve/main/omr_slides/smt_omr_rendered_ly.png" style="max-height: 260pt; max-width: 210pt; border: 1pt solid #D9D5D2;">
+    <p>Most structural detail. Note collisions. Key wrong (Bb major).</p>
+  </div>
+</div>
+<img src="kungfu-logo.png" style="position: absolute; bottom: 10pt; right: 20pt; width: 50pt; height: auto; opacity: 0.6;">
+</body></html>

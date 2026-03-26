@@ -1,0 +1,42 @@
+name: omr-layout-analysis
+description: >
+  Sheet music page layout analysis using a YOLOv8 model trained on ~7k images
+  with ~500k bounding box annotations. Detects systems, grand staves, staves,
+  and measures on full-page piano scores.
+capability: perception/optical_music_recognition
+modalities:
+  - vision
+stability: experimental
+resources:
+  gpu: 0
+  disk_gb: 1
+image: cvlization/omr-layout-analysis:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Detect systems/staves/measures on a sheet music page (outputs JSON bounding boxes + optional cropped system images)
+tags:
+  - object-detection
+  - sheet-music
+  - layout-analysis
+  - yolov8
+  - omr
+tasks:
+  - optical_music_recognition
+  - layout_analysis
+frameworks:
+  - pytorch
+  - ultralytics
+model:
+  name: OLA v2.0
+  source: https://github.com/v-dvorak/omr-layout-analysis
+  weights: https://github.com/v-dvorak/omr-layout-analysis/releases/download/ola-v2.0/ola-layout-analysis-2.0-2025-03-09.pt
+  classes:
+    - system_measures
+    - stave_measures
+    - staves
+    - systems
+    - grand_staff

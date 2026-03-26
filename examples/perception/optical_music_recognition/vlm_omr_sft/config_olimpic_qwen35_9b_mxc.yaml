@@ -1,0 +1,56 @@
+# Qwen3.5-9B on OLiMPiC dataset — MXC target, 3 epochs
+# System-level piano crops (~18K samples) — simpler than full-page lieder.
+# Tests if more data + simpler images improve pitch accuracy.
+
+model:
+  name: "unsloth/Qwen3.5-9B"
+  load_in_4bit: true
+  use_gradient_checkpointing: "unsloth"
+  max_length: 4096
+  chat_template: null
+
+lora:
+  r: 32
+  alpha: 32
+  dropout: 0
+  finetune_vision_layers: true
+  finetune_language_layers: true
+  finetune_attention_modules: true
+  finetune_mlp_modules: true
+
+dataset:
+  repo: "zzsi/olimpic"
+  config: "default"
+  split: "train"
+  dev_split: "dev"
+  shuffle: true
+  target_format: "mxc"
+  columns:
+    image: "image"
+    musicxml: "musicxml"
+    id: "score_id"
+    label: "page_system"
+
+wandb:
+  project: "openscore-omr"
+  run_name: null
+  log_examples_every_n_steps: 500
+  n_examples: 10
+  inference_max_new_tokens: 4096
+
+training:
+  output_dir: "outputs"
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
+  max_grad_norm: 0.3
+  warmup_ratio: 0.03
+  num_train_epochs: 3
+  learning_rate: 2.0e-4
+  logging_steps: 1
+  save_steps: 1000
+  val_steps: 1000
+  optim: "adamw_torch_fused"
+  weight_decay: 0.001
+  lr_scheduler_type: "cosine"
+  seed: 3407
+  test_after_training: true

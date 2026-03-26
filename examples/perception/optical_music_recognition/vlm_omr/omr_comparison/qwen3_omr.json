@@ -1,0 +1,195 @@
+======================================================================
+Qwen3-VL Zero-Shot OMR Probe
+======================================================================
+Model : Qwen/Qwen3-VL-8B-Instruct
+Image : /root/.cache/huggingface/cvl_data/qwen3_omr/vintage_score_1884.jpg
+
+----------------------------------------------------------------------
+[key_signature] Key signature
+Expectation: Expected to work well — key signature is a clear visual feature.
+
+Prompt:
+Look at this sheet music image. What is the key signature? Count the sharps or flats shown at the beginning of each staff line and name the major or minor key (e.g. 'G major', 'D minor', 'no sharps or flats — C major').
+
+Response:
+Looking at the sheet music, I can see the key signature at the beginning of the first staff in the "INTRO." section.
+
+In the first measure, the key signature shows **one sharp** (the F#).
+
+This indicates the piece is in **F# major**.
+
+However, looking at the "WALTZ" section, the key signature changes. The first measure of the waltz section shows **one sharp** (F#) as well.
+
+Therefore, the key signature is **F# major**.
+
+F# major
+
+----------------------------------------------------------------------
+[time_signature] Time signature
+Expectation: Expected to work well — time signature digits are visually salient.
+
+Prompt:
+Look at this sheet music image. What is the time signature? Read the two stacked numbers shown at the start of the piece (e.g. 4/4, 3/4, 6/8) and explain what it means rhythmically.
+
+Response:
+Based on the sheet music provided, the time signature is **3/4**.
+
+Here's what this means rhythmically:
+
+*   **The top number (3)** indicates that there are **three** main beats in each measure.
+*   **The bottom number (4)** indicates that the **beat is a quarter note**.
+
+Therefore, the time signature 3/4 means that each measure should be played with **three quarter-note beats**. This is the standard time signature for a waltz, which is why the piece is titled "Waltz" and is written in 3/4 time. The rhythmic pattern is typically a strong beat on the first, a medium beat on the second, and a strong beat on the third, creating a characteristic "one-two-three" pulse.
+
+----------------------------------------------------------------------
+[musical_era] Musical era
+Expectation: Moderate — depends on whether the image has clear period-specific features.
+
+Prompt:
+Looking at the engraving style, paper quality, typography, and notation conventions in this sheet music image, what musical era or approximate time period does it appear to be from? Give your best estimate (e.g. Baroque, Classical, Romantic, early 20th century).
+
+Response:
+Based on the visual evidence in the sheet music, the piece most likely dates from the **early to mid-19th century**, placing it squarely within the **Romantic era**.
+
+Here's the reasoning:
+
+1.  **Typography and Engraving Style:**
+    *   The title, "BIDDLE'S PIANO WALTZ," and the composer's name, "ROBERT D. BIDDLE," are printed in a clear, capitalized serif font typical of the 19th century.
+    *   The overall layout and the way the text is set are characteristic of 19th-century engraving, not the more modern, streamlined printing of the 20th century.
+    *   The copyright notice at the bottom, "Copyright, 1884, by J. BIDDLE & SON," is the most definitive clue. The year 1884 places the publication firmly in the late 19th century.
+
+2.  **Notation Conventions:**
+    *   The use of "Waltz" and "3/4 time" is standard for the period.
+    *   The dynamic markings (pp, f, ff, fz) and articulations (marcato, legato, glissando) are typical of Romantic-era piano music.
+    *   The presence of a "Waltz" section following an "Intro" is common in this period.
+    *   The notation is clear and precise, but the overall aesthetic is that of a 19th-century engraving, not a modern digital print.
+
+3.  **Historical Context:**
+    *   The Romantic era in music is generally dated from around 1820 to 1900.
+    *   The copyright date of 1884 falls squarely within this period.
+    *   The composer, Robert D. Biddle, was an American composer active in the 19th century, and his works were often published by firms like J. Biddle & Son, which was active during this time.
+
+**Conclusion:**
+
+While the piece is labeled as a "Waltz," which was popular throughout the 19th century, the **copyright date of 1884** is the most reliable indicator. Therefore, the sheet music is from the **late Romantic era**, specifically the **1880s**. The engraving style, typography, and notation conventions are all consistent with this time period.
+
+----------------------------------------------------------------------
+[dynamics_tempo] Dynamics and tempo markings
+Expectation: Moderate — depends on image resolution and marking visibility.
+
+Prompt:
+List all dynamics markings (e.g. p, f, mf, pp, ff, crescendo, decrescendo) and tempo / expression markings (e.g. Allegro, Andante, poco a poco, dolce) visible in this sheet music image. For each, note approximately where it appears.
+
+Response:
+Based on the provided sheet music for "BIDDLE'S PIANO WALTZ", here are all the dynamics and tempo/expression markings found, along with their approximate locations:
+
+**Dynamics Markings:**
+
+*   **pp (pianissimo):** Appears at the beginning of the "INTRO." section, written above the first measure of the right-hand part.
+*   **f (forte):** Appears in the "INTRO." section, written above the last measure of the right-hand part.
+*   **cres. (crescendo):** Appears in the "INTRO." section, written above the last measure of the right-hand part, just before the "f".
+*   **p (piano):** Appears at the beginning of the "WALTZ." section, written above the first measure of the right-hand part.
+*   **ff (fortissimo):** Appears in the lower staff of the "WALTZ." section, written above the first measure of the left-hand part, near the "glossando" marking.
+*   **legato. p (legato piano):** Appears in the lower staff of the "WALTZ." section, written above the measure containing the "legato" articulation.
+*   **fz (forte con sordino / forte con vibrato - often interpreted as "forte" with a specific articulation, but "fz" is not standard; it's likely a misprint or a specific publisher's marking for "forte" or "forte con vibrato" in this context).** Appears in the final measure of the "WALTZ." section, written above the last measure of the right-hand part.
+
+**Tempo / Expression Markings:**
+
+*   **Andante:** Appears above the "INTRO." section, indicating the tempo for the introduction.
+*   **ben marcato:** Appears in the "INTRO." section, written above the measure containing the "cres." marking, indicating a strong, marked rhythm.
+*   **WALTZ:** Appears above the "WALTZ." section, indicating the style of the piece.
+*   **marcato:** Appears in the "WALTZ." section, written above the measure containing the "marcato" marking, indicating a strong, marked rhythm.
+*   **glossando:** Appears in the "WALTZ." section, written above the measure containing the "glossando"
+
+----------------------------------------------------------------------
+[ekern_transcription] Full ekern transcription
+Expectation: Expected to fail / hallucinate — full symbolic transcription requires fine-tuning. Included as a lower-bound probe to show what zero-shot cannot do.
+
+Prompt:
+Transcribe this piano sheet music image into ekern notation (**ekern_1.0). Ekern is a two-column tab-separated format: left column = bass clef staff, right column = treble clef staff. Each row is a beat position. Use standard kern tokens: note durations (1, 2, 4, 8, 16), pitch (C, D, E, F, G, A, B with octave suffix), rests (r), barlines (=), clef (*clefG2, *clefF4), key (*k[b-]), time (*M4/4), voice beaming (L=beam start, J=beam end). Example first line: **ekern_1.0	**ekern_1.0
+Transcribe as many measures as you can read.
+
+Response:
+**ekern_1.0
+**ekern_1.0
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*clefG2*clefF4
+*M3/4
+*kF
+*cle
+
+======================================================================

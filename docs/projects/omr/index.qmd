@@ -1,0 +1,39 @@
+---
+title: "Optical Music Recognition with VLMs"
+description: "Fine-tuning Vision-Language Models for sheet music transcription"
+---
+
+## Overview
+
+We fine-tune Vision-Language Models (VLMs) to transcribe sheet music page images
+into symbolic notation. The key innovation is **MXC (MusicXML Compact)**, a
+line-based encoding that achieves 12x compression over MusicXML, enabling VLMs
+to generate actual musical notes within their context window.
+
+## Key Results
+
+| Model | Size | Pitched-only Similarity | Rhythm | eval_loss |
+|---|---|---|---|---|
+| DeepSeek-OCR-2 | 3B | 0% | 4% | 0.315 |
+| Gemma-3 4B | 4.4B | 1% | 11% | 0.216 |
+| Ministral-3 | 3.9B | 0% | 10% | 0.109 |
+| Qwen3-VL 8B | 8B | 16% | 23% | 0.166 |
+| Qwen3-VL 32B | 32B | 23% | 31% | 0.147 |
+| **Qwen3.5-9B r=32** | **9.5B** | **35%** | **46%** | **0.149** |
+
+## Key Findings
+
+1. **MXC format is essential** — without it, no model reaches note content
+2. **Architecture > size** — Qwen3.5-9B (9.5B) beats Qwen3-VL-32B (32B)
+3. **Models < 8B fail** — cannot learn pitch regardless of architecture
+4. **LoRA r=32 is optimal** — tested r=8, 16, 32, 64
+5. **Data is the bottleneck** — model converged at 35% on 3K samples
+
+## Links
+
+- [Dataset pipeline](dataset.qmd)
+- [MXC format](mxc-format.qmd)
+- [Experiment details](experiments.qmd)
+- [Evaluation guide](evaluation.qmd)
+- [WandB project](https://wandb.ai/zzsi_kungfu/openscore-omr)
+- [HuggingFace dataset](https://huggingface.co/datasets/zzsi/openscore)

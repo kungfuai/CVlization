@@ -1,0 +1,6 @@
+transformers>=4.51.0
+qwen-vl-utils
+bitsandbytes>=0.43.0
+accelerate>=0.30.0
+Pillow
+huggingface_hub

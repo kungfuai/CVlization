@@ -1,0 +1,169 @@
+!!!OTL: Biddle's Piano Waltz.
+!!!COM: Composed by Robert D. Biddle.
+!!!OMD: Andante
+!!!YEC: Copyright 1894 by J. Biddle & Son.
+**kern	**kern
+*clefF4	*clefG2
+*k[]	*k[]
+*M3/4	*M3/4
+*>Intro	*>Intro
+=1	=1
+4C	4r
+4r	8.r
+.	16r
+2G	2g#
+=2	=2
+4r	4r
+4r	8.r
+.	16r
+2G	2g#
+=3	=3
+4r	4r
+4r	4r
+2B-	2b- 2d
+=4	=4
+4r	4r
+4r	4r
+4G	4g 4b 4dd
+=5	=5
+2G	2g 2b 2dd 2gg
+4r	4r
+*M3/4	*M3/4
+*>Waltz	*>Waltz
+=6	=6
+4C 4E	2ee-
+4c 4e 4g	.
+4c 4e 4g	4r
+=7	=7
+4E	4r
+4c 4e 4g#	2ee
+4c 4e 4g#	.
+=8	=8
+4F	2ff
+4c 4f 4a	.
+4c 4f 4a	4r
+=9	=9
+4E	4r
+4c 4e 4g	2ee
+4c 4e 4g	.
+=10	=10
+4C 4E	2ee-
+4c 4e 4g	.
+4c 4e 4g	4r
+=11	=11
+4E	4ee
+4c 4e 4g	4ee
+4c 4e 4g	4ee
+=12	=12
+4F	4.ee 4.cc
+4c 4f 4a	.
+4c 4f 4a	8dd 8b
+=13	=13
+4E	4cc 4a
+4c 4e 4g	4cc 4g
+4c 4e 4g	4ee 4cc
+=14	=14
+4C 4E	2ee-
+4c 4e 4g	.
+4c 4e 4g	4r
+=15	=15
+4E	4r
+4c 4e 4g	2ee
+4c 4e 4g	.
+=16	=16
+4F	2ff
+4c 4f 4a	.
+4c 4f 4a	4r
+=17	=17
+4E	4r
+4c 4e 4g	4ee
+4c 4e 4g	4ee
+=18	=18
+4F	4ff
+4d 4f 4a	4ee
+4d 4f 4a	4dd
+=19	=19
+4G	4.dd 4.b
+4d 4f 4b-	.
+4d 4f 4b-	8cc 8a
+=20	=20
+4C	4cc 4g 4e
+4c 4e 4g	4r
+4r	4r
+=21:|!	=21:|!
+4C	4cc 4g 4e
+4c 4e 4g	4r
+4r	4r
+*k[b-]	*k[b-]
+=22	=22
+4F	4f 4a
+4c 4f 4a	4cc 4ff
+4c 4f 4a	4cc 4ff
+=23	=23
+4A	4a 4cc
+4c 4f 4a	4cc 4ff
+4c 4f 4a	4cc 4ff
+=24	=24
+4F	2.ff
+4c 4f 4a	.
+4c 4f 4a	.
+=25	=25
+4F	4ff 4cc 4a
+4c 4f 4a	4r
+4r	4r
+=26	=26
+4F	4f 4a
+4c 4f 4a	4cc 4ff
+4c 4f 4a	4cc 4ff
+=27	=27
+4A	4a 4cc
+4c 4f 4a	4cc 4ff
+4c 4f 4a	4cc 4ff
+=28	=28
+4F	2.ff
+4c 4f 4a	.
+4c 4f 4a	.
+=29	=29
+4F	4ff 4cc 4a
+4c 4f 4a	4r
+4r	4r
+=30	=30
+4B-	4b- 4dd
+4d 4f 4b-	4dd 4ff
+4d 4f 4b-	4dd 4ff
+=31	=31
+4B-	4b- 4dd
+4d 4f 4b-	4dd 4ff
+4d 4f 4b-	4dd 4ff
+=32	=32
+4F	2.dd
+4c 4f 4a	.
+4c 4f 4a	.
+=33	=33
+4F	4cc 4a
+4c 4f 4a	4r
+4r	4r
+=34	=34
+4F	4f 4a
+4c 4f 4a	4cc 4ff
+4c 4f 4a	4cc 4ff
+=35	=35
+4A	4b- 4dd
+4d 4f 4b-	4dd 4ff
+4d 4f 4b-	4dd 4ff
+=36	=36
+4C	8ccL 8aaL
+4c 4f 4a	8bbJ 8ggJ
+.	8aaL 8ffL
+4c 4f 4a	8ggJ 8eeJ
+.	8ffL 8ddL
+.	8eeJ 8ccJ
+=37	=37
+4F	2ff
+4c 4f 4a	.
+4r	4r
+=38:|!	=38:|!
+4F	4ff
+4c 4f 4a	4r
+4r	4r
+*-	*-

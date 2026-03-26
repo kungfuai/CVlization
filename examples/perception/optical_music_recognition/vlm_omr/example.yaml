@@ -1,0 +1,40 @@
+name: vlm-omr
+capability: perception/optical_music_recognition
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 0
+  disk_gb: 1
+image: cvlization/vlm-omr:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Run zero-shot OMR probing via LiteLLM (default gemini/gemini-2.5-flash) — 5 music-theory prompts on a vintage score; supports batch directory mode with JSONL output and --resume
+tags:
+  - omr
+  - music-recognition
+  - sheet-music
+  - zero-shot
+  - vlm
+  - frontier
+  - api
+  - litellm
+  - gemini
+  - gpt-4o
+  - vintage
+  - piano
+  - batch
+tasks:
+  - optical_music_recognition
+frameworks:
+  - litellm
+description: Provider-agnostic frontier VLM OMR probe via LiteLLM. Routes to Gemini 2.5 Flash (default), GPT-4o, or Claude with no code changes — just set the API key. Runs the same 5 prompts as qwen3-omr for direct comparison. Supports batch directory mode (JSONL output, --resume). No GPU required.
+
+verification:
+  last_verified: "2026-02-23"
+  last_verification_note: "Verified build (111MB, python:3.11-slim) and run pipeline. Container starts in <1s, encodes image, runs all 5 prompts, captures API errors gracefully, saves omr_results.json to host cwd. Auth errors expected without API key — set GEMINI_API_KEY/OPENAI_API_KEY/ANTHROPIC_API_KEY before running. Default sample reuses cached vintage_score_1884.jpg from qwen3-omr."

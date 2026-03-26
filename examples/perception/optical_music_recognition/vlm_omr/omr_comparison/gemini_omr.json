@@ -1,0 +1,37 @@
+{
+  "file": "/root/.cache/huggingface/cvl_data/qwen3_omr/vintage_score_1884.jpg",
+  "model": "gemini/gemini-2.5-flash",
+  "timestamp": "2026-02-23T04:18:12.374826+00:00",
+  "results": {
+    "key_signature": {
+      "label": "Key signature",
+      "expectation": "Expected to work well — key signature is a clear visual feature.",
+      "prompt": "Look at this sheet music image. What is the key signature? Count the sharps or flats shown at the beginning of each staff line and name the major or minor key (e.g. 'G major', 'D minor', 'no sharps or flats — C major').",
+      "response": "There is **one sharp** in the key signature. This corresponds to **G major** (or E minor).\n\nLooking at the initial measures of the \"WALTZ\" section, the chords appear to strongly outline G major, suggesting that **G major** is the intended key."
+    },
+    "time_signature": {
+      "label": "Time signature",
+      "expectation": "Expected to work well — time signature digits are visually salient.",
+      "prompt": "Look at this sheet music image. What is the time signature? Read the two stacked numbers shown at the start of the piece (e.g. 4/4, 3/4, 6/8) and explain what it means rhythmically.",
+      "response": "The time signature shown at the start of the piece (both for the \"INTRO.\" and the \"WALTZ.\" section) is **3/4**.\n\nHere's what it means rhythmically:\n\n*   The **top number (3)** indicates that there are **three beats in each measure**.\n*   The **bottom number (4)** indicates that the **quarter note gets one beat**.\n\nTherefore, rhythmically, each measure of the music will contain the equivalent of three quarter notes. This time signature is very common for waltzes, giving them their characteristic \"oom-pah-pah\" feel with a strong emphasis often placed on the first beat of each measure."
+    },
+    "musical_era": {
+      "label": "Musical era",
+      "expectation": "Moderate — depends on whether the image has clear period-specific features.",
+      "prompt": "Looking at the engraving style, paper quality, typography, and notation conventions in this sheet music image, what musical era or approximate time period does it appear to be from? Give your best estimate (e.g. Baroque, Classical, Romantic, early 20th century).",
+      "response": "Based on the engraving style, typography, notation conventions, and most definitively, the copyright date, this sheet music appears to be from the **Romantic era**, specifically the **late 19"
+    },
+    "dynamics_tempo": {
+      "label": "Dynamics and tempo markings",
+      "expectation": "Moderate — depends on image resolution and marking visibility.",
+      "prompt": "List all dynamics markings (e.g. p, f, mf, pp, ff, crescendo, decrescendo) and tempo / expression markings (e.g. Allegro, Andante, poco a poco, dolce) visible in this sheet music image. For each, note approximately where it appears.",
+      "response": "Here are the dynamics and tempo/expression markings visible in the sheet music, with their approximate locations:\n\n**Tempo / Expression Markings:**\n\n*   **Andante.** - Top of the page"
+    },
+    "ekern_transcription": {
+      "label": "Full ekern transcription",
+      "expectation": "Expected to fail / hallucinate — full symbolic transcription requires fine-tuning. Included as a lower-bound probe.",
+      "prompt": "Transcribe this piano sheet music image into ekern notation (**ekern_1.0). Ekern is a two-column tab-separated format: left column = bass clef staff, right column = treble clef staff. Each row is a beat position. Use standard kern tokens: note durations (1, 2, 4, 8, 16), pitch (C, D, E, F, G, A, B with octave suffix), rests (r), barlines (=), clef (*clefG2, *clefF4), key (*k[b-]), time (*M4/4), voice beaming (L=beam start, J=beam end). Example first line: **ekern_1.0\t**ekern_1.0\nTranscribe as many measures as you can read.",
+      "response": "**ekern_1.0**\t**ekern_1.0**\n*clefF4\t*clefG2\n*k[f#c#]\t*k"
+    }
+  }
+}

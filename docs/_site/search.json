@@ -1,0 +1,283 @@
+[
+  {
+    "objectID": "projects/omr/dataset.html",
+    "href": "projects/omr/dataset.html",
+    "title": "Dataset Pipeline",
+    "section": "",
+    "text": "Repo: zzsi/openscore on HuggingFace\n\n\nThe OpenScore corpus provides public-domain MusicXML scores from IMSLP:\n\n\n\nCorpus\nScores\nTraining pages\n\n\n\n\nLieder\n1,460\n3,312\n\n\nQuartets\n122\n6,274\n\n\nOrchestra\n94\n4,870\n\n\nTotal\n1,676\n14,456\n\n\n\n\n\n\nMusicXML (from OpenScore)\n  → LilyPond Docker render → SVG pages\n  → SVG bar number extraction → per-page measure ranges\n  → music21 slice → per-page MusicXML\n  → PNG conversion → (image, MusicXML) pairs\n  → HuggingFace push\nImplementation: datasets/omr/openscore/page_musicxml.py\n\n\n\n\nImages: 835x1181 pixels (LilyPond default DPI)\nBar numbers: Extracted from SVG &lt;text&gt; elements with font-size heuristic\nPickup bars: Auto-detected (measure[0].number == 0) with offset adjustment\nPage breaks: Measures spanning page boundaries assigned to next page\n\n\n\n\n\n3/500 lieder samples have malformed XML (music21 export bugs)\n7/27,632 lyrics contain non-breaking spaces (\\xa0)\nSee datasets/omr/openscore/page_musicxml_runs.md for full run log",
+    "crumbs": [
+      "Dataset Pipeline"
+    ]
+  },
+  {
+    "objectID": "projects/omr/dataset.html#openscore-dataset",
+    "href": "projects/omr/dataset.html#openscore-dataset",
+    "title": "Dataset Pipeline",
+    "section": "",
+    "text": "Repo: zzsi/openscore on HuggingFace\n\n\nThe OpenScore corpus provides public-domain MusicXML scores from IMSLP:\n\n\n\nCorpus\nScores\nTraining pages\n\n\n\n\nLieder\n1,460\n3,312\n\n\nQuartets\n122\n6,274\n\n\nOrchestra\n94\n4,870\n\n\nTotal\n1,676\n14,456\n\n\n\n\n\n\nMusicXML (from OpenScore)\n  → LilyPond Docker render → SVG pages\n  → SVG bar number extraction → per-page measure ranges\n  → music21 slice → per-page MusicXML\n  → PNG conversion → (image, MusicXML) pairs\n  → HuggingFace push\nImplementation: datasets/omr/openscore/page_musicxml.py\n\n\n\n\nImages: 835x1181 pixels (LilyPond default DPI)\nBar numbers: Extracted from SVG &lt;text&gt; elements with font-size heuristic\nPickup bars: Auto-detected (measure[0].number == 0) with offset adjustment\nPage breaks: Measures spanning page boundaries assigned to next page\n\n\n\n\n\n3/500 lieder samples have malformed XML (music21 export bugs)\n7/27,632 lyrics contain non-breaking spaces (\\xa0)\nSee datasets/omr/openscore/page_musicxml_runs.md for full run log",
+    "crumbs": [
+      "Dataset Pipeline"
+    ]
+  },
+  {
+    "objectID": "projects/omr/dataset.html#olimpic-dataset",
+    "href": "projects/omr/dataset.html#olimpic-dataset",
+    "title": "Dataset Pipeline",
+    "section": "OLiMPiC Dataset",
+    "text": "OLiMPiC Dataset\nRepo: zzsi/olimpic on HuggingFace\nSystem-level piano crops from the OLiMPiC dataset (ICDAR 2024):\n\n15,014 training samples (synthetic variant)\nSystem-level crops (~3000x700 pixels) — one grand staff per image\nPiano only — no voice staff, but partial lyrics may be visible at top of crop\nGround truth: MusicXML + Linearized MusicXML (LMX)\n\nImplementation: datasets/omr/olimpic/prepare.py",
+    "crumbs": [
+      "Dataset Pipeline"
+    ]
+  },
+  {
+    "objectID": "projects/omr/evaluation.html",
+    "href": "projects/omr/evaluation.html",
+    "title": "Evaluation",
+    "section": "",
+    "text": "We use alignment-aware sequence matching (SequenceMatcher) to compare predicted and reference MXC note sequences. This handles insertions and deletions without cascading positional mismatches.\n\n\nThe primary metric. Compares only pitched notes (excludes rests) between prediction and reference using sequence alignment.\nA sample with many rest measures followed by a few notes would score 0% on rests-included metrics even if the notes are correct. Pitched-only avoids this.\n\n\n\n\n\n\n\n\n\n\nMetric\nWhat it measures\n\n\n\n\nPitched-only similarity\nCorrect notes in correct order (excl. rests)\n\n\nPositional accuracy\n% of notes correct at each position (strict)\n\n\nRhythm similarity\nNote types/durations correct\n\n\nCombined similarity\nPitch + type together\n\n\nNote coverage\nPredicted events / reference events\n\n\nLongest match\nLongest consecutive correct run\n\n\nHeader accuracy\nKey, time signature, part structure\n\n\n\n\n\n\n\n&lt; 10%: Model not reading pitch from image\n10-30%: Some pitch learning, with alignment drift\n30-50%: Meaningful pitch reading, room to improve\n&gt; 50%: Good accuracy (check longest match for consistency)\nCoverage &gt; 100%: Model hallucinating extra notes",
+    "crumbs": [
+      "Evaluation"
+    ]
+  },
+  {
+    "objectID": "projects/omr/evaluation.html#metrics",
+    "href": "projects/omr/evaluation.html#metrics",
+    "title": "Evaluation",
+    "section": "",
+    "text": "We use alignment-aware sequence matching (SequenceMatcher) to compare predicted and reference MXC note sequences. This handles insertions and deletions without cascading positional mismatches.\n\n\nThe primary metric. Compares only pitched notes (excludes rests) between prediction and reference using sequence alignment.\nA sample with many rest measures followed by a few notes would score 0% on rests-included metrics even if the notes are correct. Pitched-only avoids this.\n\n\n\n\n\n\n\n\n\n\nMetric\nWhat it measures\n\n\n\n\nPitched-only similarity\nCorrect notes in correct order (excl. rests)\n\n\nPositional accuracy\n% of notes correct at each position (strict)\n\n\nRhythm similarity\nNote types/durations correct\n\n\nCombined similarity\nPitch + type together\n\n\nNote coverage\nPredicted events / reference events\n\n\nLongest match\nLongest consecutive correct run\n\n\nHeader accuracy\nKey, time signature, part structure\n\n\n\n\n\n\n\n&lt; 10%: Model not reading pitch from image\n10-30%: Some pitch learning, with alignment drift\n30-50%: Meaningful pitch reading, room to improve\n&gt; 50%: Good accuracy (check longest match for consistency)\nCoverage &gt; 100%: Model hallucinating extra notes",
+    "crumbs": [
+      "Evaluation"
+    ]
+  },
+  {
+    "objectID": "projects/omr/evaluation.html#usage",
+    "href": "projects/omr/evaluation.html#usage",
+    "title": "Evaluation",
+    "section": "Usage",
+    "text": "Usage\n# Evaluate latest WandB run\npython eval_mxc.py --latest\n\n# Specific run with trend across steps\npython eval_mxc.py --wandb-run wandb/run-XXXXX --by-step\n\n# Compare two MXC files directly\npython eval_mxc.py --pred prediction.mxc --ref reference.mxc",
+    "crumbs": [
+      "Evaluation"
+    ]
+  },
+  {
+    "objectID": "projects/omr/evaluation.html#caveats",
+    "href": "projects/omr/evaluation.html#caveats",
+    "title": "Evaluation",
+    "section": "Caveats",
+    "text": "Caveats\n\nMetrics are computed on 10 held-out samples during training, not the full dev set (193 samples). Results may not be statistically robust.\nSequenceMatcher finds the longest common subsequence, which can match notes that happen to share a pitch but are in different measures.\nThe metric does not distinguish between a wrong pitch and a missing note followed by a correct one — both reduce the similarity score.\nLyric order (L1 vs L2) sometimes differs between prediction and reference without affecting musical content.",
+    "crumbs": [
+      "Evaluation"
+    ]
+  },
+  {
+    "objectID": "projects/omr/evaluation.html#implementation",
+    "href": "projects/omr/evaluation.html#implementation",
+    "title": "Evaluation",
+    "section": "Implementation",
+    "text": "Implementation\n\nScript: vlm_omr_sft/eval_mxc.py\nGuide: vlm_omr_sft/reports/evaluation-guide.md",
+    "crumbs": [
+      "Evaluation"
+    ]
+  },
+  {
+    "objectID": "projects/omr/mxc-format.html",
+    "href": "projects/omr/mxc-format.html",
+    "title": "MXC Format",
+    "section": "",
+    "text": "MusicXML is extremely verbose. A typical lieder page produces ~14K tokens — far beyond the 4,096-token VLM context window. Only ~10% of pages fit, and models spend all inference tokens on XML preamble before reaching any &lt;note&gt; elements.",
+    "crumbs": [
+      "MXC Format"
+    ]
+  },
+  {
+    "objectID": "projects/omr/mxc-format.html#the-problem",
+    "href": "projects/omr/mxc-format.html#the-problem",
+    "title": "MXC Format",
+    "section": "",
+    "text": "MusicXML is extremely verbose. A typical lieder page produces ~14K tokens — far beyond the 4,096-token VLM context window. Only ~10% of pages fit, and models spend all inference tokens on XML preamble before reaching any &lt;note&gt; elements.",
+    "crumbs": [
+      "MXC Format"
+    ]
+  },
+  {
+    "objectID": "projects/omr/mxc-format.html#mxc-design",
+    "href": "projects/omr/mxc-format.html#mxc-design",
+    "title": "MXC Format",
+    "section": "MXC Design",
+    "text": "MXC Design\nMXC is a line-based encoding where one note = one line:\nheader work-title=\"Just for Today\"\nheader composer=\"Jane Bingham Abbott\"\nP1 Voice Ob\nP2 Piano Pno\n---\nP1\nM 1 div=10080 key=-1 time=3/4 clef=G2\ndir @above [font-weight=bold] Andante\nN C4 q 10080 su L1:s:Lord,\nN Bb3 e 5040 su bm=begin L1:s:for\nN C4 e 5040 su bm=end L1:b:to",
+    "crumbs": [
+      "MXC Format"
+    ]
+  },
+  {
+    "objectID": "projects/omr/mxc-format.html#compression",
+    "href": "projects/omr/mxc-format.html#compression",
+    "title": "MXC Format",
+    "section": "Compression",
+    "text": "Compression\nTested on 500 lieder pages:\n\n\n\nMetric\nCleaned XML\nMXC\n\n\n\n\nMedian chars\n50,272\n4,172\n\n\nMedian ~tokens\n~14,363\n~1,192\n\n\nCompression\n—\n12x",
+    "crumbs": [
+      "MXC Format"
+    ]
+  },
+  {
+    "objectID": "projects/omr/mxc-format.html#round-trip-accuracy",
+    "href": "projects/omr/mxc-format.html#round-trip-accuracy",
+    "title": "MXC Format",
+    "section": "Round-trip accuracy",
+    "text": "Round-trip accuracy\n\n99.2% lossless round-trip on 500 samples\n3 failures from malformed XML in source data\n1 failure from double-space in lyric text",
+    "crumbs": [
+      "MXC Format"
+    ]
+  },
+  {
+    "objectID": "projects/omr/mxc-format.html#what-mxc-preserves",
+    "href": "projects/omr/mxc-format.html#what-mxc-preserves",
+    "title": "MXC Format",
+    "section": "What MXC preserves",
+    "text": "What MXC preserves\n\nPitches, durations, types, accidentals, dots\nStems, beams, ties, slurs\nLyrics (bilingual, syllabic encoding)\nKey/time signatures, clefs\nDynamics, tempo text, directions\nComposer, lyricist, title\nBarlines, repeats, endings",
+    "crumbs": [
+      "MXC Format"
+    ]
+  },
+  {
+    "objectID": "projects/omr/mxc-format.html#implementation",
+    "href": "projects/omr/mxc-format.html#implementation",
+    "title": "MXC Format",
+    "section": "Implementation",
+    "text": "Implementation\n\nEncoder/decoder: vlm_omr_sft/mxc.py\nFormat spec: vlm_omr_sft/MXC.md\nUnit tests: vlm_omr_sft/test_mxc.py (28 tests)\nReal-data tests: vlm_omr_sft/test_mxc_realdata.py (500 samples)",
+    "crumbs": [
+      "MXC Format"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "CVlization",
+    "section": "",
+    "text": "190+ state-of-the-art open source AI capabilities, packaged in self-contained Docker environments. Find a recipe, test it, copy what you need."
+  },
+  {
+    "objectID": "index.html#featured-projects",
+    "href": "index.html#featured-projects",
+    "title": "CVlization",
+    "section": "Featured Projects",
+    "text": "Featured Projects\n\nOptical Music Recognition\nFine-tuning Vision-Language Models to transcribe sheet music images into symbolic notation. We developed MXC (MusicXML Compact) to compress training targets 12x, then tested 6 VLMs across multiple LoRA ranks and training configurations.\nCurrent best: 35% pitched-only similarity using Qwen3.5-9B r=32 on 3K lieder pages. The model reads pitch from staff positions but accuracy is limited by training data size."
+  },
+  {
+    "objectID": "index.html#repository",
+    "href": "index.html#repository",
+    "title": "CVlization",
+    "section": "Repository",
+    "text": "Repository\n\nCode: github.com/kungfuai/CVlization\nDatasets: huggingface.co/zzsi"
+  },
+  {
+    "objectID": "projects/omr/experiments.html",
+    "href": "projects/omr/experiments.html",
+    "title": "Experiments",
+    "section": "",
+    "text": "We ran SFT experiments on 6 VLMs with two target formats (XML and MXC), multiple LoRA ranks, and up to 6 epochs. All training on 3K lieder pages from OpenScore with a single NVIDIA RTX PRO 6000 (95 GB VRAM).",
+    "crumbs": [
+      "Experiments"
+    ]
+  },
+  {
+    "objectID": "projects/omr/experiments.html#experiment-overview",
+    "href": "projects/omr/experiments.html#experiment-overview",
+    "title": "Experiments",
+    "section": "",
+    "text": "We ran SFT experiments on 6 VLMs with two target formats (XML and MXC), multiple LoRA ranks, and up to 6 epochs. All training on 3K lieder pages from OpenScore with a single NVIDIA RTX PRO 6000 (95 GB VRAM).",
+    "crumbs": [
+      "Experiments"
+    ]
+  },
+  {
+    "objectID": "projects/omr/experiments.html#xml-target-format-all-failed",
+    "href": "projects/omr/experiments.html#xml-target-format-all-failed",
+    "title": "Experiments",
+    "section": "XML target format (all failed)",
+    "text": "XML target format (all failed)\nWith raw MusicXML targets, no model generated actual pitched notes. The XML preamble consumed the entire inference token budget.\n\n\n\nModel\ntrain_loss\nNotes\n\n\n\n\nGemma-3 4B\n—\nLearned XML syntax, wrong key/time/tempo\n\n\nMinistral-3 r=32\n0.120\nDegenerate ID repetition\n\n\nMinistral-3 r=8\n0.173\nStuck on MIDI metadata\n\n\nQwen3.5-9B\n0.187\n93 notes, all rests\n\n\nDeepSeek-OCR-2\n0.312\n29 notes, all rests\n\n\n\nData cleaning (stripping non-visible metadata, comments, MIDI blocks) reduced eval_loss from 0.158 to 0.048 on Ministral-3 but still produced no pitched notes.",
+    "crumbs": [
+      "Experiments"
+    ]
+  },
+  {
+    "objectID": "projects/omr/experiments.html#mxc-target-format",
+    "href": "projects/omr/experiments.html#mxc-target-format",
+    "title": "Experiments",
+    "section": "MXC target format",
+    "text": "MXC target format\nWith MXC targets (12x compression), models could generate actual notes within the context window.\n\nModel comparison (all r=32, 3 epochs, 10 eval samples)\n\n\n\nModel\nSize\nPitched-only sim\nRhythm\neval_loss\n\n\n\n\nDeepSeek-OCR-2\n3B\n0%\n4%\n0.315\n\n\nGemma-3 4B\n4.4B\n1%\n11%\n0.216\n\n\nMinistral-3\n3.9B\n~0%\n10%\n0.109\n\n\nQwen3-VL 8B\n8B\n16%\n23%\n0.166\n\n\nQwen3-VL 32B\n32B\n23%\n31%\n0.147\n\n\nQwen3.5-9B\n9.5B\n35%\n46%\n0.149\n\n\n\nModels under 8B cannot learn pitch. Qwen3.5-9B outperforms the 3.5x larger Qwen3-VL-32B due to architecture improvements (unified early fusion).\n\n\nLoRA rank sweep (Qwen3.5-9B)\n\n\n\nRank\nParams\nPitch sim\nRhythm\neval_loss\n\n\n\n\nr=16\n51M (0.54%)\n33%\n32%\n0.154\n\n\nr=32\n102M (1.07%)\n36%\n46%\n0.149\n\n\nr=64\n204M (2.12%)\n32%\n46%\n0.146\n\n\n\nr=32 is optimal. r=64 achieves slightly lower eval_loss but worse inference metrics — the extra capacity overfits without improving pitch discrimination.\n\n\nEpoch sweep (Qwen3.5-9B r=16)\n\n\n\nEpochs\neval_loss\nPitch sim\nNotes\n\n\n\n\n2\n0.154\n31%\nStill improving\n\n\n4\n0.150\n32%\nMarginal gain\n\n\n6\n0.159\n33%\nOverfitting\n\n\n\n2-3 epochs is optimal on 3K lieder samples.",
+    "crumbs": [
+      "Experiments"
+    ]
+  },
+  {
+    "objectID": "projects/omr/experiments.html#what-works-and-what-doesnt",
+    "href": "projects/omr/experiments.html#what-works-and-what-doesnt",
+    "title": "Experiments",
+    "section": "What works and what doesn’t",
+    "text": "What works and what doesn’t\nWorks well:\n\nMXC format syntax (never produces invalid MXC)\nPart structure, key signatures (80%), lyrics\nPitch on simpler passages (up to 88% positional accuracy)\n123 consecutive matching events on best run\n\nStruggles with:\n\nDense piano polyphony\nVery long pages (coverage drops with 400+ notes)\nPages where voice enters late (rests consume token budget)",
+    "crumbs": [
+      "Experiments"
+    ]
+  },
+  {
+    "objectID": "projects/omr/experiments.html#detailed-reports",
+    "href": "projects/omr/experiments.html#detailed-reports",
+    "title": "Experiments",
+    "section": "Detailed reports",
+    "text": "Detailed reports\n\n2026-03-14: Gemma-3 initial run\n2026-03-18: Model comparison & data cleaning\n2026-03-19: MXC experiments",
+    "crumbs": [
+      "Experiments"
+    ]
+  },
+  {
+    "objectID": "projects/omr/index.html",
+    "href": "projects/omr/index.html",
+    "title": "Optical Music Recognition with VLMs",
+    "section": "",
+    "text": "We fine-tune Vision-Language Models (VLMs) to transcribe sheet music page images into symbolic notation. The key innovation is MXC (MusicXML Compact), a line-based encoding that achieves 12x compression over MusicXML, enabling VLMs to generate actual musical notes within their context window.",
+    "crumbs": [
+      "Optical Music Recognition with VLMs"
+    ]
+  },
+  {
+    "objectID": "projects/omr/index.html#overview",
+    "href": "projects/omr/index.html#overview",
+    "title": "Optical Music Recognition with VLMs",
+    "section": "",
+    "text": "We fine-tune Vision-Language Models (VLMs) to transcribe sheet music page images into symbolic notation. The key innovation is MXC (MusicXML Compact), a line-based encoding that achieves 12x compression over MusicXML, enabling VLMs to generate actual musical notes within their context window.",
+    "crumbs": [
+      "Optical Music Recognition with VLMs"
+    ]
+  },
+  {
+    "objectID": "projects/omr/index.html#key-results",
+    "href": "projects/omr/index.html#key-results",
+    "title": "Optical Music Recognition with VLMs",
+    "section": "Key Results",
+    "text": "Key Results\n\n\n\nModel\nSize\nPitched-only Similarity\nRhythm\neval_loss\n\n\n\n\nDeepSeek-OCR-2\n3B\n0%\n4%\n0.315\n\n\nGemma-3 4B\n4.4B\n1%\n11%\n0.216\n\n\nMinistral-3\n3.9B\n0%\n10%\n0.109\n\n\nQwen3-VL 8B\n8B\n16%\n23%\n0.166\n\n\nQwen3-VL 32B\n32B\n23%\n31%\n0.147\n\n\nQwen3.5-9B r=32\n9.5B\n35%\n46%\n0.149",
+    "crumbs": [
+      "Optical Music Recognition with VLMs"
+    ]
+  },
+  {
+    "objectID": "projects/omr/index.html#key-findings",
+    "href": "projects/omr/index.html#key-findings",
+    "title": "Optical Music Recognition with VLMs",
+    "section": "Key Findings",
+    "text": "Key Findings\n\nMXC format is essential — without it, no model reaches note content\nArchitecture &gt; size — Qwen3.5-9B (9.5B) beats Qwen3-VL-32B (32B)\nModels &lt; 8B fail — cannot learn pitch regardless of architecture\nLoRA r=32 is optimal — tested r=8, 16, 32, 64\nData is the bottleneck — model converged at 35% on 3K samples",
+    "crumbs": [
+      "Optical Music Recognition with VLMs"
+    ]
+  },
+  {
+    "objectID": "projects/omr/index.html#links",
+    "href": "projects/omr/index.html#links",
+    "title": "Optical Music Recognition with VLMs",
+    "section": "Links",
+    "text": "Links\n\nDataset pipeline\nMXC format\nExperiment details\nEvaluation guide\nWandB project\nHuggingFace dataset",
+    "crumbs": [
+      "Optical Music Recognition with VLMs"
+    ]
+  }
+]

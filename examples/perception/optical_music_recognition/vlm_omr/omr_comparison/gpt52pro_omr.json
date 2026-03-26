@@ -1,0 +1,37 @@
+{
+  "file": "/root/.cache/huggingface/cvl_data/qwen3_omr/vintage_score_1884.jpg",
+  "model": "gpt-5.2-pro",
+  "timestamp": "2026-02-23T05:24:26.597827+00:00",
+  "results": {
+    "key_signature": {
+      "label": "Key signature",
+      "expectation": "Expected to work well — key signature is a clear visual feature.",
+      "prompt": "Look at this sheet music image. What is the key signature? Count the sharps or flats shown at the beginning of each staff line and name the major or minor key (e.g. 'G major', 'D minor', 'no sharps or flats — C major').",
+      "response": "The key signature shows **2 flats (B♭ and E♭)** at the beginning of the staves, which corresponds to **B♭ major** (relative minor: **G minor**)."
+    },
+    "time_signature": {
+      "label": "Time signature",
+      "expectation": "Expected to work well — time signature digits are visually salient.",
+      "prompt": "Look at this sheet music image. What is the time signature? Read the two stacked numbers shown at the start of the piece (e.g. 4/4, 3/4, 6/8) and explain what it means rhythmically.",
+      "response": "The time signature is **3/4** (a **3** stacked over a **4** at the start).\n\nRhythmically, **3/4** means:\n\n- Each measure has **3 beats**.\n- The **quarter note (♩)** gets **one beat**.\n- You typically feel it as **ONE–two–three**, with a natural accent on **beat 1**—the classic waltz pulse."
+    },
+    "musical_era": {
+      "label": "Musical era",
+      "expectation": "Moderate — depends on whether the image has clear period-specific features.",
+      "prompt": "Looking at the engraving style, paper quality, typography, and notation conventions in this sheet music image, what musical era or approximate time period does it appear to be from? Give your best estimate (e.g. Baroque, Classical, Romantic, early 20th century).",
+      "response": "This looks **late 19th century (Victorian-era) “parlor music,” i.e., late Romantic**, roughly **1880s**.\n\nThe engraving/notation conventions (dense waltz accompaniment patterns, hairpins and expressive markings like *marcato*, *glissando*, bold title typography) and the overall lithographed/engraved look match common American/European piano sheet-music production from that period—and the bottom line appears to read **“Copyright, 1881 …”**, which fits that late-Romantic timeframe."
+    },
+    "dynamics_tempo": {
+      "label": "Dynamics and tempo markings",
+      "expectation": "Moderate — depends on image resolution and marking visibility.",
+      "prompt": "List all dynamics markings (e.g. p, f, mf, pp, ff, crescendo, decrescendo) and tempo / expression markings (e.g. Allegro, Andante, poco a poco, dolce) visible in this sheet music image. For each, note approximately where it appears.",
+      "response": "### Dynamics markings visible\n\n- **pp** — in the **INTRO**, first system, just under the opening right-hand chord (near the start, left side).\n- **cresc.** — in the **INTRO**, first system, mid‑system (just before the louder arrival).\n- **(hairpin crescendo, \\< )** — in the **INTRO**, first system, near the end leading into the big chord.\n- **f** — in the **INTRO**, first system, at/just after the hairpin, on the large accented chord near the end of the intro.\n- **(hairpin crescendo, \\< )** — in the **WALTZ** section, first waltz system, near the middle above the accompaniment figure (a small wedge).\n- **p** — at the **start of the WALTZ**, first waltz system, left side under the opening.\n- **f** — in the lower half of the page, at the beginning of the section marked **glissando.** (left side of that system), just after the glissando indication.\n- **p** — near the bottom, in the system with **legato.**, a **p** appears just after “legato.” (mid‑system).\n- **fz** — bottom system, far right at the ending cadence (just before the final barline area).\n\n### Tempo / expression markings visible\n\n- **Andante.** — at the very top, in the **INTRO**, above the first measure (left side).\n- **ben marcato.** — in the **INTRO**, first system, shortly after the start (above the staff).\n- **marcato.** — in the **WALTZ**, first waltz system, near the middle (above the accented/marked passage).\n- **glissando.** — lower half of the page, left side of a system (printed under/near the left-hand staff where the run begins).\n- **legato.** — near the bottom, mid‑system (above the staff where the smoother passage begins)."
+    },
+    "ekern_transcription": {
+      "label": "Full ekern transcription",
+      "expectation": "Expected to fail / hallucinate — full symbolic transcription requires fine-tuning. Included as a lower-bound probe.",
+      "prompt": "Transcribe this piano sheet music image into ekern notation (**ekern_1.0). Ekern is a two-column tab-separated format: left column = bass clef staff, right column = treble clef staff. Each row is a beat position. Use standard kern tokens: note durations (1, 2, 4, 8, 16), pitch (C, D, E, F, G, A, B with octave suffix), rests (r), barlines (=), clef (*clefG2, *clefF4), key (*k[b-]), time (*M4/4), voice beaming (L=beam start, J=beam end). Example first line: **ekern_1.0\t**ekern_1.0\nTranscribe as many measures as you can read.",
+      "response": "ERROR: litellm.APIConnectionError: APIConnectionError: OpenAIException - gpt-5.2-pro unable to complete request: max_output_tokens"
+    }
+  }
+}

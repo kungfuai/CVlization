@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head><style>
+body { width: 720pt; height: 405pt; margin: 0; padding: 0; background: #FFFFFF; font-family: Arial, sans-serif; display: flex; flex-direction: column; }
+.header { background: #E41159; padding: 14pt 30pt; }
+.header h1 { color: #FFFFFF; font-size: 22pt; margin: 0; }
+.content { padding: 8pt 30pt; flex: 1; display: flex; gap: 12pt; }
+.left { flex: 1.2; }
+.right { flex: 0.8; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+</style></head><body>
+<div class="header"><h1>Dataset Creation: From MusicXML to Training Pairs</h1></div>
+<div class="content">
+  <div class="left">
+    <p style="color: #E41159; font-size: 11pt; font-weight: bold; margin: 0 0 6pt 0;">Step 1: Render pages</p>
+    <p style="color: #110A29; font-size: 9pt; margin: 0 0 8pt 0;">MusicXML scores from OpenScore corpus rendered to SVG/PNG via LilyPond in Docker. All bar numbers forced visible for later extraction.</p>
+    <p style="color: #E41159; font-size: 11pt; font-weight: bold; margin: 0 0 6pt 0;">Step 2: Extract page boundaries</p>
+    <p style="color: #110A29; font-size: 9pt; margin: 0 0 8pt 0;">Parse SVG text elements to find bar numbers. Heuristic: most common font size = bar numbers. Filter outliers via consecutive-integer clustering.</p>
+    <p style="color: #E41159; font-size: 11pt; font-weight: bold; margin: 0 0 6pt 0;">Step 3: Slice MusicXML per page</p>
+    <p style="color: #110A29; font-size: 9pt; margin: 0 0 8pt 0;">music21 extracts measures bar_start to bar_end for each page. Handles pickup bars (measure 0) with auto-offset. Retries with gatherSpanners=False for arpeggio bugs.</p>
+    <p style="color: #E41159; font-size: 11pt; font-weight: bold; margin: 0 0 6pt 0;">Step 4: Push to HuggingFace</p>
+    <p style="color: #110A29; font-size: 9pt; margin: 0;">Each row: (PNG image, per-page MusicXML, score_id, page, bars). Streaming-friendly Parquet with corpus column for predicate pushdown.</p>
+  </div>
+  <div class="right">
+    <img src="https://huggingface.co/datasets/zzsi/cvl/resolve/main/omr_slides/openscore_page1_example.png" style="max-height: 320pt; max-width: 220pt; border: 1pt solid #D9D5D2;">
+    <p style="color: #110A29; font-size: 8pt; margin: 4pt 0 0 0; text-align: center;">lc6583477 p1: "Just for Today" bars 1-29</p>
+  </div>
+</div>
+<img src="kungfu-logo.png" style="position: absolute; bottom: 10pt; right: 20pt; width: 50pt; height: auto; opacity: 0.6;">
+</body></html>
