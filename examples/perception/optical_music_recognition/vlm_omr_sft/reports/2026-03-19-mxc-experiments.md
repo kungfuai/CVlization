@@ -531,53 +531,169 @@ All runs: r=32, MXC targets, 3 epochs, 10 inference examples, 4096 inference tok
 significantly worse than Qwen3.5-9B (35%). Surprising given similar size — the
 Qwen3.5 architecture improvements matter.
 
-### Qwen3-VL 32B (in progress)
+### Qwen3-VL 32B
 
-Step 399/2241 (epoch 0.53), ~5.5h remaining.
+**WandB run**: `bnjb5ry5`
 
-### DeepSeek-OCR-2 (queued)
+| Setting | Value |
+|---|---|
+| Model | Qwen3-VL-32B-Instruct (largest model tested) |
+| Best eval_loss | 0.147 (step 1500) |
+| Runtime | 14h |
 
-Waiting for Qwen3-VL 32B to finish.
+**Result: 23% pitched-only similarity.** Does not outperform the 3.5× smaller
+Qwen3.5-9B (35%). Architecture matters more than scale.
+
+### DeepSeek-OCR-2
+
+**WandB run**: `22zgvj58`
+
+| Setting | Value |
+|---|---|
+| Model | DeepSeek-OCR-2 3B (OCR-specialized) |
+| Best eval_loss | 0.315 |
+| Runtime | 2h |
+
+**Result: 0% pitched-only similarity.** 3B model cannot learn pitch, consistent
+with Ministral-3 and Gemma-3 results. Note: initial eval showed 0% due to a bug
+where the WandB callback logged XML references instead of MXC — fixed by adding
+auto-conversion in eval_mxc.py. Re-evaluation confirmed genuinely 0%.
 
 ### Cross-model comparison (all MXC runs, best step, 10 samples)
 
-| Model | Size | Pitched-only sim | Positional | Rhythm | Unique pitches | eval_loss |
-|---|---|---|---|---|---|---|
-| Gemma-3 4B | 4.4B | **1%** | 1% | 11% | 1.5 | 0.216 |
-| Ministral-3 r=32 | 3.9B | ~0% | ~0% | 10% | 0.8 | 0.109 |
-| Qwen3-VL 8B | 8B | **16%** | 24% | 23% | 18.3 | 0.166 |
-| Qwen3.5-9B r=16 | 9.5B | ~33% | — | 32% | 14.5 | 0.154 |
-| **Qwen3.5-9B r=32** | 9.5B | **35%** | 29% | **46%** | **27.4** | **0.149** |
-| Qwen3.5-9B r=64 | 9.5B | ~32% | — | 46% | 25.6 | 0.146 |
-| Qwen3-VL 32B | 32B | *pending* | — | — | — | — |
-| DeepSeek-OCR-2 | 3B | *pending* | — | — | — | — |
+| Model | Size | Pitched-only sim | Note-type sim | Rhythm | eval_loss |
+|---|---|---|---|---|---|
+| DeepSeek-OCR-2 | 3B | 0% | — | 4% | 0.315 |
+| Gemma-3 4B | 4.4B | 1% | — | 11% | 0.216 |
+| Ministral-3 r=32 | 3.9B | ~0% | — | 10% | 0.109 |
+| Qwen3-VL 8B | 8B | 16% | — | 23% | 0.166 |
+| Qwen3-VL 32B | 32B | 23% | — | 31% | 0.147 |
+| **Qwen3.5-9B r=32** | **9.5B** | **35%** | **42%** | **46%** | **0.149** |
 
 ### Key insight: model architecture matters as much as size
 
 Qwen3-VL 8B (16% pitch) underperforms Qwen3.5-9B (35% pitch) despite similar
-parameter count. The Qwen3.5 architecture revisions (unified early fusion,
-improved training) provide a significant advantage over Qwen3-VL for this task.
+parameter count. Qwen3-VL 32B (23%) underperforms the 3.5× smaller Qwen3.5-9B.
+The Qwen3.5 architecture revisions (unified early fusion) matter more than scale.
+
+## Experiment 9: OLiMPiC dataset — Qwen3.5-9B r=32, 3 epochs
+
+**WandB run**: `af6jitjq`
+
+| Setting | Value |
+|---|---|
+| Model | Qwen3.5-9B r=32 (same as best OpenScore recipe) |
+| Dataset | zzsi/olimpic (15,014 system-level piano crops) |
+| Target format | MXC |
+| Best eval_loss | 0.031 (step 11000) |
+| Runtime | 22h 35m |
+
+### Comparison: OpenScore (full pages) vs OLiMPiC (system crops)
+
+| Metric | OpenScore (3K pages) | OLiMPiC (15K systems) |
+|---|---|---|
+| eval_loss | 0.149 | **0.031** |
+| Pitched-only sim | 35% | **39%** |
+| **Note-type sim** | **42%** | **65%** |
+| Rhythm sim (raw duration) | 43% | 63% |
+| Combined sim (pitch+type) | 37% | 28% |
+| Coverage | 69% | 120% |
+| Max pitch sim | 83% | 85% |
+| Max longest match | 121 events | 15 events |
+| Key sig | 8/10 | 5/10 |
+| Time sig | 7/10 | **10/10** |
+
+### What note-type similarity reveals
+
+The new `note_type_similarity` metric compares note types (`e`/`q`/`s`/`h`/`w`)
+independently of raw duration values, which differ due to `divisions`
+normalization across datasets.
+
+- OLiMPiC: 65% note-type vs 63% rhythm — the model learned correct note types;
+  duration values are consistent but use a different `divisions` base than
+  the ground truth
+- OpenScore: 42% note-type vs 43% rhythm — both lower, meaning full pages are
+  harder for rhythm learning too
+
+### Pitch error analysis
+
+Typical errors on OLiMPiC predictions (step 9000, 10 samples):
+
+| Error type | Frequency | Explanation |
+|---|---|---|
+| Off by a third/fourth (3-5 semitones) | 52% | One staff line off |
+| Off by 1-2 semitones | 18% | Accidental errors |
+| Off by an octave | 12% | Right note name, wrong register |
+| Off by a fifth | 11% | Two staff lines off |
+
+Errors skew downward (model predicts lower than reference). G#3 appears as a
+frequent "default" prediction when the model is uncertain.
+
+### Why combined similarity is low
+
+Combined similarity (28%) is much lower than pitch (39%) and note-type (65%)
+separately. This means pitch and rhythm errors happen on **different notes** —
+the model gets pitch right on some notes and rhythm right on others, but rarely
+both together.
+
+### Manual inspection findings
+
+Side-by-side comparison of predicted vs reference MXC revealed systematic issues
+that aggregate metrics partially masked:
+
+1. **`divisions` mismatch**: Model predicts `div=12` when reference has `div=2`,
+   causing all duration values to differ by a constant factor (6x). Rhythms are
+   semantically correct but string-compare fails.
+2. **Consistent pitch shifts**: Model predicts Eb4 where reference has G4 — a
+   persistent 4-semitone error on certain samples.
+3. **Note-type confusion**: Model predicts 16th notes (with double beams) where
+   reference has eighths (single beam) — misreading rhythm subdivision.
+4. **Hallucinated repetition**: Some samples show the model repeating the same
+   chord (e.g., G#4+E5) with identical durations, clearly not reading the image.
+
+## Conclusions (updated 2026-03-26)
+
+1. **Qwen3.5-9B r=32 is the best model** across both datasets — 35% on OpenScore
+   pages, 39% on OLiMPiC system crops.
+
+2. **System-level crops are easier** — 5× lower eval_loss, +23% note-type
+   accuracy, perfect time signature detection. But pitch improvement is modest
+   (+4%), suggesting pitch reading difficulty is not primarily about image
+   complexity.
+
+3. **Note-type accuracy (65%) is much higher than pitch accuracy (39%)** on
+   OLiMPiC — the model learns rhythm better than pitch from images.
+
+4. **Combined accuracy is poor (28%)** — the model rarely gets pitch AND rhythm
+   right on the same note. This is a fundamental limitation of the current
+   approach.
+
+5. **More SFT on the same data will not reach near-perfect accuracy.** Eval loss
+   plateaued, pitch accuracy is noisy rather than trending up, and systematic
+   errors (divisions mismatch, pitch shifts, hallucinated repetition) are
+   structural, not convergence issues.
+
+6. **Architecture matters more than model size** — Qwen3.5-9B beats Qwen3-VL-32B.
 
 ## Next steps
 
 ### 1. Synthetic training data (highest priority)
 
-The best model (Qwen3.5-9B r=32) has converged at 35% pitched-only similarity
-on 3K lieder samples. Generate **synthetic single-page music** with controlled
-complexity:
+Generate **synthetic single-page music** with controlled complexity to diagnose
+where pitch reading fails. See `plan.md` for the difficulty ladder (8 levels).
 
-- **Simple monophonic melodies**: one staff, varied pitches/rhythms, no lyrics.
-  Isolates pitch learning. LilyPond can generate thousands programmatically.
-- **Graduated complexity**: single-staff → bass clef → chords → two-staff piano
-  → lyrics → dynamics.
-- **Controlled pitch coverage**: ensure all pitches/octaves are represented
-  (current lieder data biased toward voice range).
+### 2. RL with musical correctness rewards
 
-### 2. Evaluate on full dev set
+Use structural rewards (valid MXC, measure durations sum correctly, pitch range)
+to improve beyond SFT ceiling. Best attempted after synthetic data diagnostics.
 
-Current metrics on 10 held-out samples. Run `eval_mxc.py` on all 193 dev samples.
+### 3. Evaluate on full dev set
 
-### Lower priority
+Current metrics on 10 held-out samples. Run `eval_mxc.py` on all 193 dev samples
+for statistically meaningful accuracy.
 
-- **Training max_length 8192** — marginal benefit, not the bottleneck.
-- **Quartets/orchestra data** — lower quality transcriptions. Synthetic is better.
+### 4. Normalize `divisions` in evaluation
+
+The current `rhythm_similarity` metric is inflated/deflated by `divisions`
+differences between prediction and reference. Normalizing durations to a common
+base before comparison would give a more accurate rhythm score.
