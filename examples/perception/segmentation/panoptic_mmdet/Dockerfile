@@ -1,13 +1,21 @@
-# FROM pytorch/pytorch:1.9.0-cuda10.2-cudnn7-runtime  # RuntimeError: CUDA error: no kernel image is available for execution on the device
-FROM pytorch/pytorch:1.11.0-cuda11.3-cudnn8-runtime
-# FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-runtime  # not compatible with mmdv-full==1.5.0
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
 
 WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
+ENV MMCV_WITH_OPS=1
+ENV FORCE_CUDA=1
+ENV TORCH_CUDA_ARCH_LIST=12.0
+ENV MAX_JOBS=16
+ENV CMAKE_BUILD_PARALLEL_LEVEL=16
+
 RUN --mount=type=cache,mode=0777,target=/var/cache/apt apt-get update \
-    && apt-get install -y git wget unzip libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 # for imgaug \ 
+    && apt-get install -y build-essential git wget unzip libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 \
     && rm -rf /var/lib/apt/lists/*
-RUN pip install mmdet==2.25.0 scikit-image==0.19.3 torch==1.11.0
-RUN pip install -U mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu113/torch1.11.0/index.html # https://download.openmmlab.com/mmcv/dist/cu102/torch1.11.0/index.html
-RUN pip install git+https://github.com/cocodataset/panopticapi.git
-RUN pip install yapf==0.40.1  # https://github.com/open-mmlab/mmdetection/issues/10962
-RUN pip install wandb==0.16.6
+
+RUN pip install --upgrade pip
+RUN pip install "setuptools>=80,<81" wheel cython ninja
+RUN pip install "mmengine>=0.10.5"
+RUN pip install --no-build-isolation "mmcv>=2.0.0rc4,<2.2.0"
+RUN pip install "mmdet>=3.3.0"
+RUN pip install scikit-image==0.24.0 wandb==0.17.*
+RUN pip install git+https://github.com/cocodataset/panopticapi.git@7bb4655548f98f3fedc07bf37e9040a992b054b0

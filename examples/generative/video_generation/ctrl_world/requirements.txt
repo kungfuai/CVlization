@@ -1,0 +1,12 @@
+diffusers==0.34.0
+transformers==4.48.1
+accelerate==1.3.0
+mediapy==1.2.2
+decord==0.6.0
+einops==0.8.1
+scipy==1.14.1
+numpy==1.26.4
+wandb==0.19.6
+swanlab==0.4.6
+tqdm==4.67.1
+huggingface_hub==0.27.1

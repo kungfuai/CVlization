@@ -14,6 +14,9 @@ benchmarks/
 │   ├── checkbox_qa/          # CheckboxQA: Form element understanding
 │   └── receipt_extraction/   # Receipt/invoice OCR comparison
 │
+├── model_arch/               # Model architecture benchmarks
+│   └── adderboard/          # 10-digit addition benchmark
+│
 └── vision_language/          # (Future) VLM benchmarks
     ├── vqa_v2/
     ├── docvqa/
@@ -28,6 +31,12 @@ benchmarks/
 |-----------|---------|------|--------|--------|
 | [checkbox_qa](doc_ai/checkbox_qa/) | CheckboxQA (88 docs, 579 Q) | Form understanding, checkbox detection | ANLS* | VLMs |
 | [receipt_extraction](doc_ai/receipt_extraction/) | Custom receipts | OCR extraction | Visual inspection | OCR models, VLMs |
+
+### Model Architecture
+
+| Benchmark | Dataset | Task | Metric | Models |
+|-----------|---------|------|--------|--------|
+| [adderboard](model_arch/adderboard/) | Synthetic random integer pairs | 10-digit addition | Accuracy (%) | Autoregressive transformer submissions |
 
 ## Quick Start
 
