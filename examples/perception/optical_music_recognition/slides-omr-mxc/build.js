@@ -39,17 +39,20 @@ async function build() {
     slideResults[file] = result;
   }
 
+  const hdr = { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 };
+  const best = { bold: true, color: 'E41159' };
+
   // Add table to slide 10 (model comparison)
   const s6 = slideResults['slide10-comparison.html'];
   if (s6.placeholders.length > 0) {
     const p = s6.placeholders[0];
     s6.slide.addTable([
       [
-        { text: 'Model', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
-        { text: 'Size', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
-        { text: 'Pitched-only Sim', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
-        { text: 'Rhythm', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
-        { text: 'eval_loss', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
+        { text: 'Model', options: hdr },
+        { text: 'Size', options: hdr },
+        { text: 'Pitched-only Sim', options: hdr },
+        { text: 'Rhythm', options: hdr },
+        { text: 'eval_loss', options: hdr },
       ],
       ['DeepSeek-OCR-2', '3B', '0%', '4%', '0.315'],
       ['Gemma-3 4B', '4.4B', '1%', '11%', '0.216'],
@@ -57,11 +60,11 @@ async function build() {
       ['Qwen3-VL 8B', '8B', '16%', '23%', '0.166'],
       ['Qwen3-VL 32B', '32B', '23%', '31%', '0.147'],
       [
-        { text: 'Qwen3.5-9B r=32', options: { bold: true, color: 'E41159' } },
-        { text: '9.5B', options: { bold: true, color: 'E41159' } },
-        { text: '35%', options: { bold: true, color: 'E41159' } },
-        { text: '46%', options: { bold: true, color: 'E41159' } },
-        { text: '0.149', options: { bold: true, color: 'E41159' } },
+        { text: 'Qwen3.5-9B r=32', options: best },
+        { text: '9.5B', options: best },
+        { text: '35%', options: best },
+        { text: '46%', options: best },
+        { text: '0.149', options: best },
       ],
     ], {
       x: p.x, y: p.y, w: p.w, h: p.h,
@@ -79,17 +82,17 @@ async function build() {
     const p = s9.placeholders[0];
     s9.slide.addTable([
       [
-        { text: 'LoRA Rank', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
-        { text: 'Trainable Params', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
-        { text: 'Pitch Similarity', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
-        { text: 'Rhythm Similarity', options: { fill: { color: 'E41159' }, color: 'FFFFFF', bold: true, fontSize: 11 } },
+        { text: 'LoRA Rank', options: hdr },
+        { text: 'Trainable Params', options: hdr },
+        { text: 'Pitch Similarity', options: hdr },
+        { text: 'Rhythm Similarity', options: hdr },
       ],
       ['r=16', '51M (0.54%)', '33%', '32%'],
       [
-        { text: 'r=32', options: { bold: true, color: 'E41159' } },
-        { text: '102M (1.07%)', options: { bold: true, color: 'E41159' } },
-        { text: '36%', options: { bold: true, color: 'E41159' } },
-        { text: '46%', options: { bold: true, color: 'E41159' } },
+        { text: 'r=32', options: best },
+        { text: '102M (1.07%)', options: best },
+        { text: '36%', options: best },
+        { text: '46%', options: best },
       ],
       ['r=64', '204M (2.12%)', '32%', '46%'],
     ], {

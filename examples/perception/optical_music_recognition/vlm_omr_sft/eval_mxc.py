@@ -118,12 +118,20 @@ def extract_header(mxc_text: str) -> dict:
     return header
 
 
+_xml_to_mxc_fn = None
+
 def _ensure_mxc(text: str) -> str:
     """Convert XML reference to MXC if needed."""
-    if text.strip().startswith("<"):
+    if text.strip().startswith("<score-partwise") or text.strip().startswith("<?xml"):
+        global _xml_to_mxc_fn
+        if _xml_to_mxc_fn is None:
+            try:
+                from mxc import xml_to_mxc
+                _xml_to_mxc_fn = xml_to_mxc
+            except ImportError:
+                return text
         try:
-            from mxc import xml_to_mxc
-            return xml_to_mxc(text)
+            return _xml_to_mxc_fn(text)
         except Exception:
             return text
     return text
@@ -170,9 +178,11 @@ def evaluate_pair(pred_text: str, ref_text: str, score_id: str = "", step: int =
     blocks = sm_pitch.get_matching_blocks()
     result.longest_pitch_match = max((b.size for b in blocks), default=0)
 
-    # Pitched-only similarity (excludes rests — measures actual note accuracy)
-    pred_pitched = [e.pitch for e in pred_events if e.kind == "N"]
-    ref_pitched = [e.pitch for e in ref_events if e.kind == "N"]
+    # Pitched-only metrics (excludes rests) — extract once, reuse for pitch and note-type
+    pred_pitched_events = [e for e in pred_events if e.kind == "N"]
+    ref_pitched_events = [e for e in ref_events if e.kind == "N"]
+    pred_pitched = [e.pitch for e in pred_pitched_events]
+    ref_pitched = [e.pitch for e in ref_pitched_events]
     if pred_pitched and ref_pitched:
         sm_pitched = SequenceMatcher(None, pred_pitched, ref_pitched)
         result.pitched_only_similarity = sm_pitched.ratio()
@@ -180,11 +190,9 @@ def evaluate_pair(pred_text: str, ref_text: str, score_id: str = "", step: int =
         result.pitched_only_positional = (
             sum(1 for p, r in zip(pred_pitched[:n], ref_pitched[:n]) if p == r) / n
         )
-
-    # Note-type similarity (e/q/s/h/w — resolution-independent rhythm accuracy)
-    pred_note_types = [e.note_type for e in pred_events if e.kind == "N"]
-    ref_note_types = [e.note_type for e in ref_events if e.kind == "N"]
-    if pred_note_types and ref_note_types:
+        # Note-type similarity (e/q/s/h/w — resolution-independent rhythm accuracy)
+        pred_note_types = [e.note_type for e in pred_pitched_events]
+        ref_note_types = [e.note_type for e in ref_pitched_events]
         sm_nt = SequenceMatcher(None, pred_note_types, ref_note_types)
         result.note_type_similarity = sm_nt.ratio()
 
