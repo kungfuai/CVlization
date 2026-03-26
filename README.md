@@ -112,6 +112,7 @@ examples/
 | **Prompt Optimization** | [`examples/agentic/optimization`](./examples/agentic/optimization) | dspy_gepa_promptops, mcts_prompt_agent | 🧪 |
 | **Tool Use & Coding** | [`examples/agentic`](./examples/agentic) | Code (autogen_pair_programmer), Data analysis (smolagents_data_analyst), Data preparation (physio_signal_prep), Local AI (llamacpp_assistant) | 🧪 |
 | **Formal Reasoning** | [`examples/agentic/formal`](./examples/agentic/formal) | nanoproof (Lean theorem proving), qed-nano (Olympiad level math proof generation) | 🧪 |
+| **Long Context (RLM)** | [`examples/agentic/long_context`](./examples/agentic/long_context) | rlm_needle (needle-in-haystack), rlm_doc_qa (document QA), rlm_claude_code (Claude Code native) | 🧪 |
 
 Note: These examples are regularly updated and tested to ensure compatibility with the latest dependencies. We recommend starting with the nanogpt example.
 

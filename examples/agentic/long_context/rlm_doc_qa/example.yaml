@@ -1,0 +1,43 @@
+name: rlm-doc-qa
+capability: agentic/long_context
+modalities:
+  - text
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 1
+presets:
+  build:
+    script: build.sh
+    description: Build the RLM document QA Docker image
+  predict:
+    script: predict.sh
+    description: Answer a question about a document (set DOCUMENT_PATH and QUERY)
+tags:
+  - rlm
+  - recursive-language-model
+  - long-context
+  - document-qa
+  - question-answering
+  - anthropic
+  - openai
+tasks:
+  - long_context_understanding
+  - question_answering
+  - document_understanding
+frameworks:
+  - anthropic
+  - openai
+description: >
+  Long document question-answering using Recursive Language Models (RLM).
+  The LLM chunks any document (text, markdown, code) and delegates analysis
+  to sub-LLMs, synthesizing a final answer — no context window limit.
+  Supports Anthropic (default) and OpenAI backends. No GPU required.
+verification:
+  status: VERIFIED
+  last_verified: 2026-02-28
+  last_verification_note: >
+    Verified with claude-haiku-4-5-20251001 on CVlization README (14K chars).
+    Query: "What object detection implementations are available?"
+    Correctly answered mmdet, torchvision, rt-detr, yolov13 (all ✅) in 1 iteration.
