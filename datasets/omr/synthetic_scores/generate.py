@@ -158,9 +158,103 @@ def generate_level1(seed: int, n_measures: int = 8) -> str:
 </score-partwise>"""
 
 
+def generate_level2(seed: int, n_measures: int = 16) -> str:
+    """Single staff, C major, varied rhythms (half, quarter, eighth, dotted), no rests.
+
+    Tests: can the model read both pitch AND rhythm from the image?
+    """
+    rng = random.Random(seed)
+    divisions = 2  # eighth note = 1, quarter = 2, half = 4, dotted quarter = 3
+
+    # Rhythm patterns that fill a 4/4 measure (total = 8 eighth-note units)
+    # Each pattern is a list of (duration, type, dotted) tuples
+    PATTERNS = [
+        # All quarters
+        [(2, "quarter", False)] * 4,
+        # Half + two quarters
+        [(4, "half", False), (2, "quarter", False), (2, "quarter", False)],
+        # Two quarters + half
+        [(2, "quarter", False), (2, "quarter", False), (4, "half", False)],
+        # Four eighths + two quarters
+        [(1, "eighth", False)] * 4 + [(2, "quarter", False)] * 2,
+        # Two quarters + four eighths
+        [(2, "quarter", False)] * 2 + [(1, "eighth", False)] * 4,
+        # Dotted quarter + eighth + half
+        [(3, "quarter", True), (1, "eighth", False), (4, "half", False)],
+        # Half + dotted quarter + eighth
+        [(4, "half", False), (3, "quarter", True), (1, "eighth", False)],
+        # Eight eighths
+        [(1, "eighth", False)] * 8,
+        # Two halves
+        [(4, "half", False)] * 2,
+        # Dotted half + quarter
+        [(6, "half", True), (2, "quarter", False)],
+        # Quarter + dotted half
+        [(2, "quarter", False), (6, "half", True)],
+        # Quarter + two eighths + quarter + two eighths
+        [(2, "quarter", False), (1, "eighth", False), (1, "eighth", False),
+         (2, "quarter", False), (1, "eighth", False), (1, "eighth", False)],
+    ]
+
+    # Generate enough pitches for all measures (max 8 notes per measure)
+    all_pitches = _generate_melody(rng, n_measures * 8)
+    pitch_idx = 0
+
+    measures = []
+    for m in range(1, n_measures + 1):
+        pattern = rng.choice(PATTERNS)
+        notes = []
+        for dur, ntype, dotted in pattern:
+            pitch = all_pitches[pitch_idx % len(all_pitches)]
+            pitch_idx += 1
+            step = pitch[0]
+            octave = pitch[-1]
+            midi_approx = _pitch_to_index(pitch)
+            stem = "up" if midi_approx < _pitch_to_index("B4") else "down"
+            dot_xml = "\n        <dot />" if dotted else ""
+            notes.append(f"""      <note>
+        <pitch>
+          <step>{step}</step>
+          <octave>{octave}</octave>
+        </pitch>
+        <duration>{dur}</duration>
+        <type>{ntype}</type>{dot_xml}
+        <stem>{stem}</stem>
+      </note>""")
+
+        attrs = ""
+        if m == 1:
+            attrs = f"""      <attributes>
+        <divisions>{divisions}</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>"""
+
+        measure_xml = f"""    <measure number="{m}">
+{attrs}
+{chr(10).join(notes)}
+    </measure>"""
+        measures.append(measure_xml)
+
+    return f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1">
+      <part-name print-object="no">Treble</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+{chr(10).join(measures)}
+  </part>
+</score-partwise>"""
+
+
 GENERATORS = {
     1: generate_level1,
-    # Future levels will be added here
+    2: generate_level2,
 }
 
 
