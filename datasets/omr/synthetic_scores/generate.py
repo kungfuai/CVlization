@@ -387,14 +387,16 @@ def generate_level3(seed: int, n_measures: int = 16) -> str:
 
 
 def generate_level4(seed: int, n_measures: int = 16) -> str:
-    """Single staff, various keys, varied rhythms, rests, ties.
+    """Single staff, various keys, accidentals, varied rhythms, rests, ties.
 
-    Tests: can the model handle rests and tied notes?
+    Builds on Level 3 (key sigs + accidentals) and adds rests and ties.
+    Tests: can the model handle rests and tied notes on top of accidentals?
     """
     rng = random.Random(seed)
     divisions = 2
     fifths = rng.randint(-4, 4)
 
+    # Same key/pitch setup as Level 3
     SHARP_ORDER = "FCGDAEB"
     FLAT_ORDER = "BEADGCF"
     altered = {}
@@ -414,6 +416,7 @@ def generate_level4(seed: int, n_measures: int = 16) -> str:
     pitches_with_alter = [(s, o, a) for s, o, a in pitches_with_alter
                           if (o == 3 and s in "AB") or o == 4 or (o == 5 and s in "CDEFGA")]
 
+    # Same melody generation as Level 3
     n_notes = n_measures * 6
     melody_indices = []
     current = len(pitches_with_alter) // 2
@@ -428,22 +431,23 @@ def generate_level4(seed: int, n_measures: int = 16) -> str:
     melody = [pitches_with_alter[i] for i in melody_indices]
     pitch_idx = 0
 
-    # Patterns including rests (duration 0 = rest placeholder)
-    # 'R' marks a rest, tuple is (duration, type, dotted)
+    # Patterns with rests (Level 3 patterns + rest patterns)
     PATTERNS = [
         [(2, "quarter", False)] * 4,
         [(4, "half", False), (2, "quarter", False), (2, "quarter", False)],
-        [("R", 2, "quarter", False), (2, "quarter", False), (4, "half", False)],  # rest + notes
-        [(2, "quarter", False), ("R", 2, "quarter", False), (2, "quarter", False), (2, "quarter", False)],
+        [(2, "quarter", False), (2, "quarter", False), (4, "half", False)],
         [(1, "eighth", False)] * 4 + [(2, "quarter", False)] * 2,
-        [("R", 4, "half", False), (2, "quarter", False), (2, "quarter", False)],  # half rest
-        [(2, "quarter", False), (2, "quarter", False), ("R", 4, "half", False)],
+        [(2, "quarter", False)] * 2 + [(1, "eighth", False)] * 4,
         [(3, "quarter", True), (1, "eighth", False), (4, "half", False)],
         [(4, "half", False), (3, "quarter", True), (1, "eighth", False)],
         [(1, "eighth", False)] * 8,
-        [("R", 2, "quarter", False), ("R", 2, "quarter", False), (2, "quarter", False), (2, "quarter", False)],
         [(6, "half", True), (2, "quarter", False)],
-        [("R", 8, "whole", False)],  # whole rest
+        # Patterns with rests
+        [("R", 2, "quarter", False), (2, "quarter", False), (4, "half", False)],
+        [(2, "quarter", False), ("R", 2, "quarter", False), (2, "quarter", False), (2, "quarter", False)],
+        [("R", 4, "half", False), (2, "quarter", False), (2, "quarter", False)],
+        [(2, "quarter", False), (2, "quarter", False), ("R", 4, "half", False)],
+        [("R", 8, "whole", False)],
     ]
 
     measures = []
@@ -453,7 +457,6 @@ def generate_level4(seed: int, n_measures: int = 16) -> str:
         notes = []
         for item in pattern:
             if isinstance(item[0], str) and item[0] == "R":
-                # Rest
                 _, dur, ntype, dotted = item
                 dot_xml = "\n        <dot />" if dotted else ""
                 if ntype == "whole":
@@ -473,16 +476,26 @@ def generate_level4(seed: int, n_measures: int = 16) -> str:
                 step, octave, alter = melody[pitch_idx % len(melody)]
                 pitch_idx += 1
 
-                alter_xml = f"\n          <alter>{alter}</alter>" if alter != 0 else ""
+                # Same accidental logic as Level 3 (10% chromatic)
+                acc_xml = ""
+                alter_xml = ""
+                if rng.random() < 0.1:
+                    if alter == 0:
+                        chromatic = rng.choice([1, -1])
+                        alter_xml = f"\n          <alter>{chromatic}</alter>"
+                        acc_xml = f"\n        <accidental>{'sharp' if chromatic == 1 else 'flat'}</accidental>"
+                    else:
+                        alter_xml = "\n          <alter>0</alter>"
+                        acc_xml = "\n        <accidental>natural</accidental>"
+                elif alter != 0:
+                    alter_xml = f"\n          <alter>{alter}</alter>"
 
-                # Occasionally add a tie (10% chance, same pitch repeated)
+                # Tie logic
                 tie_xml = ""
                 if prev_pitch == (step, octave) and rng.random() < 0.3:
                     tie_xml = '\n        <tie type="stop" />'
                 elif rng.random() < 0.1:
                     tie_xml = '\n        <tie type="start" />'
-                    # Next note should be same pitch for tie to make sense
-                    # (simplified: we just mark the start, LilyPond handles it)
 
                 midi_approx = octave * 7 + "CDEFGAB".index(step)
                 stem = "up" if midi_approx < 4 * 7 + 6 else "down"
@@ -494,7 +507,7 @@ def generate_level4(seed: int, n_measures: int = 16) -> str:
           <octave>{octave}</octave>
         </pitch>
         <duration>{dur}</duration>
-        <type>{ntype}</type>{dot_xml}{tie_xml}
+        <type>{ntype}</type>{dot_xml}{acc_xml}{tie_xml}
         <stem>{stem}</stem>
       </note>""")
                 prev_pitch = (step, octave)
