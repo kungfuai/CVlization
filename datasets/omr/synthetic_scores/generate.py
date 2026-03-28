@@ -841,10 +841,11 @@ def generate_level6(seed: int, n_measures: int = 16) -> str:
 </score-partwise>"""
 
 
-def generate_level7(seed: int, n_measures: int = 16) -> str:
-    """Voice + piano grand staff with lyrics.
+def generate_level7(seed: int, n_measures: int = 24) -> str:
+    """Voice + piano grand staff (with chords) + lyrics.
 
-    Tests: can the model handle 3 staves and text (lyrics)?
+    The hardest level — closest to real openscore lieder.
+    Tests: voice+piano chords+lyrics on dense pages.
     """
     rng = random.Random(seed)
     divisions = 2
@@ -929,18 +930,77 @@ def generate_level7(seed: int, n_measures: int = 16) -> str:
 {chr(10).join(notes)}
     </measure>""")
 
-    # Piano parts (reuse Level 5 logic)
+    # Piano RH: chords (like Level 6)
     n_piano_notes = n_measures * 6
-    treble_mel = []
+    PIANO_PATTERNS = [
+        [(2, "quarter", False)] * 4,
+        [(4, "half", False), (2, "quarter", False), (2, "quarter", False)],
+        [(2, "quarter", False), (2, "quarter", False), (4, "half", False)],
+        [(1, "eighth", False)] * 4 + [(2, "quarter", False)] * 2,
+        [(6, "half", True), (2, "quarter", False)],
+    ]
+    treble_mel_idx = []
     current = len(treble_pitches) // 3
     for _ in range(n_piano_notes):
-        treble_mel.append(treble_pitches[current])
+        treble_mel_idx.append(current)
         mid = len(treble_pitches) // 3
         dist = current - mid
         bias = -1 if dist > len(treble_pitches) // 4 else (1 if dist < -len(treble_pitches) // 4 else rng.choice([-1, 1]))
         mag = 1 if rng.random() < 0.5 else (2 if rng.random() < 0.8 else 3)
-        current = max(0, min(len(treble_pitches) - 1, current + bias * mag))
+        current = max(0, min(len(treble_pitches) - 4, current + bias * mag))
 
+    piano_treble_measures = []
+    p_idx = 0
+    for m in range(1, n_measures + 1):
+        pattern = rng.choice(PIANO_PATTERNS)
+        notes = []
+        for dur, ntype, dotted in pattern:
+            root_idx = treble_mel_idx[p_idx % len(treble_mel_idx)]
+            p_idx += 1
+            step, octave, alter = treble_pitches[root_idx]
+            alter_xml = f"\n          <alter>{alter}</alter>" if alter != 0 else ""
+            dot_xml = "\n        <dot />" if dotted else ""
+            midi_approx = _pitch_to_index(f"{step}{octave}")
+            stem = "up" if midi_approx < _pitch_to_index("B4") else "down"
+            notes.append(f"""      <note>
+        <pitch>
+          <step>{step}</step>{alter_xml}
+          <octave>{octave}</octave>
+        </pitch>
+        <duration>{dur}</duration>
+        <type>{ntype}</type>{dot_xml}
+        <stem>{stem}</stem>
+      </note>""")
+            # Add chord tones
+            for offset in [2, 4] if rng.random() < 0.5 else [2]:
+                chord_idx = min(root_idx + offset, len(treble_pitches) - 1)
+                cs, co, ca = treble_pitches[chord_idx]
+                ca_xml = f"\n          <alter>{ca}</alter>" if ca != 0 else ""
+                notes.append(f"""      <note>
+        <chord />
+        <pitch>
+          <step>{cs}</step>{ca_xml}
+          <octave>{co}</octave>
+        </pitch>
+        <duration>{dur}</duration>
+        <type>{ntype}</type>{dot_xml}
+        <stem>{stem}</stem>
+      </note>""")
+
+        attrs = ""
+        if m == 1:
+            attrs = f"""      <attributes>
+        <divisions>{divisions}</divisions>
+        <key><fifths>{fifths}</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>"""
+        piano_treble_measures.append(f"""    <measure number="{m}">
+{attrs}
+{chr(10).join(notes)}
+    </measure>""")
+
+    # Piano LH: monophonic bass (with rests)
     bass_mel = []
     current = len(bass_pitches) // 2
     for _ in range(n_piano_notes):
@@ -951,7 +1011,6 @@ def generate_level7(seed: int, n_measures: int = 16) -> str:
         mag = 1 if rng.random() < 0.5 else (2 if rng.random() < 0.8 else 3)
         current = max(0, min(len(bass_pitches) - 1, current + bias * mag))
 
-    piano_treble = _generate_part_measures(rng, treble_mel, n_measures, divisions, fifths, "treble")
     piano_bass = _generate_part_measures(rng, bass_mel, n_measures, divisions, fifths, "bass")
 
     return f"""<?xml version="1.0" encoding="utf-8"?>
@@ -973,7 +1032,7 @@ def generate_level7(seed: int, n_measures: int = 16) -> str:
 {chr(10).join(voice_measures)}
   </part>
   <part id="P2">
-{chr(10).join(piano_treble)}
+{chr(10).join(piano_treble_measures)}
   </part>
   <part id="P3">
 {chr(10).join(piano_bass)}
