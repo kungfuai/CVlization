@@ -718,15 +718,47 @@ This is a **key signature interpretation error**, not a visual reading error. Th
 model reads note positions correctly (the D is on the right line) but misapplies
 the key signature context.
 
+### Levels 5-7 results
+
+| Level | Content | Pitch | Note-type | eval_loss |
+|---|---|---|---|---|
+| 5 | Grand staff (treble+bass) | **94%** | **100%** | 0.0016 |
+| 6 | + chords in right hand | **97%** | **90%** | 0.0019 |
+| 7 | Voice+piano+lyrics | **95-98%** | **99%** | ~0.002 |
+
+- **Level 5**: Adding bass clef barely drops accuracy (94% vs 95% at Level 3).
+  Multi-staff reading is not a bottleneck.
+- **Level 6**: Chords cause the first note-type accuracy drop (90%). Reading
+  multiple stacked noteheads and outputting `+N` chord markers is harder.
+- **Level 7**: 95-98% pitch, 99% note-type. Appears high, but this is misleading.
+
+### Level 7 is too easy compared to real openscore
+
+| | Level 7 synthetic | Real openscore lieder |
+|---|---|---|
+| MXC length | 3,361 chars | **15,026 chars** (4.5× longer) |
+| Notes | 181 | 291 |
+| Chords | **0** | **109** (38% of notes) |
+| Rests | 7 | 37 |
+| Piano | Monophonic per hand | Dense chords + polyphony |
+
+Level 7's piano parts are monophonic — no chords. Real lieder piano accompaniment
+is full of chords (109 chord notes vs 0). Level 7 is essentially Level 5 + lyrics,
+which explains why it didn't drop. The hard parts of real music (dense piano
+chords, complex voicing, long pages) are missing.
+
 ### Implications for real music transcription
 
-The 35% pitch accuracy on openscore lieder is likely driven by:
-1. **Key signature misapplication** (as diagnosed here) — accounts for ~5% error on simple scores
-2. **Multi-staff complexity** (not yet tested — needs Levels 5-6)
-3. **Dense polyphony** (chords, multiple voices)
-4. **Visual noise** (lyrics, dynamics, directions)
+The 35% pitch accuracy on openscore lieder is driven by:
+1. **Key signature misapplication** (~5% error on simple scores)
+2. **Dense piano chords** (Level 6 shows 10% note-type drop even with simple chords;
+   real lieder has much denser chord textures)
+3. **Page density** (real pages are 4.5× longer with more notes per system)
+4. **Complex rhythms** not in synthetic data (triplets, syncopation, grace notes, ornaments)
 
-Each factor compounds, explaining the drop from 95% (single staff with accidentals)
+Each factor compounds. The synthetic diagnostic confirms the model CAN read pitch
+(100% on simple scores) but real music complexity degrades accuracy through
+multiple interacting factors, not a single bottleneck.
 to 35% (full lieder pages).
 
 ## Next steps
