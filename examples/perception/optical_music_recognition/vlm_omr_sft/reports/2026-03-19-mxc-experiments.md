@@ -677,23 +677,78 @@ that aggregate metrics partially masked:
 
 ## Next steps
 
-### 1. Synthetic training data (highest priority)
+## Experiment 10: Synthetic data diagnostic (Levels 1-4)
 
-Generate **synthetic single-page music** with controlled complexity to diagnose
-where pitch reading fails. See `plan.md` for the difficulty ladder (8 levels).
+**Dataset**: `zzsi/synthetic-scores` — 1,000 samples per level, 800/100/100 splits.
+**Model**: Qwen3.5-9B r=32 MXC, 3 epochs per level.
 
-### 2. RL with musical correctness rewards
+### Difficulty ladder results
 
-Use structural rewards (valid MXC, measure durations sum correctly, pitch range)
-to improve beyond SFT ceiling. Best attempted after synthetic data diagnostics.
+| Level | Content | Pitch accuracy | Note-type | eval_loss |
+|---|---|---|---|---|
+| 1 | Single staff, C major, quarter notes | **100%** | **100%** | 0.0003 |
+| 2 | + varied rhythms (half, eighth, dotted) | **100%** | **100%** | 0.0008 |
+| 3 | + key signatures + accidentals | **95%** | **100%** | 0.0032 |
+| 4 | + rests + ties | **95-99%** | **100%** | 0.0296 |
 
-### 3. Evaluate on full dev set
+### Key finding: accidentals are the accuracy bottleneck
 
-Current metrics on 10 held-out samples. Run `eval_mxc.py` on all 193 dev samples
-for statistically meaningful accuracy.
+Levels 1-2 achieve perfect accuracy. Level 3 introduces key signatures and
+accidentals (♯♭♮), dropping pitch accuracy to 95%. Level 4 adds rests and ties
+but doesn't drop further — the model handles rests/ties easily. The 5% error
+persists from accidentals.
 
-### 4. Normalize `divisions` in evaluation
+### Error analysis (Level 3, step 400+, 3165 notes)
 
-The current `rhythm_similarity` metric is inflated/deflated by `divisions`
-differences between prediction and reference. Normalizing durations to a common
-base before comparison would give a more accurate rhythm score.
+175 errors total (5.5%). The errors are **not random**:
+
+| Error pattern | Count | % of errors |
+|---|---|---|
+| D → D# | 90 | 51% |
+| D5 → D#5 | 55 | 31% |
+| A → Ab | 25 | 14% |
+| D → Dn0 | 5 | 3% |
+
+**All D→D# errors occur in key=3 (A major: F#, C#, G#).** The model sees 3 sharps
+in the key signature and over-generalizes — it applies sharps to D as well, but D
+is natural in A major. The model hasn't learned which specific notes each key
+signature sharp/flat applies to (F, C, G in A major, not D).
+
+This is a **key signature interpretation error**, not a visual reading error. The
+model reads note positions correctly (the D is on the right line) but misapplies
+the key signature context.
+
+### Implications for real music transcription
+
+The 35% pitch accuracy on openscore lieder is likely driven by:
+1. **Key signature misapplication** (as diagnosed here) — accounts for ~5% error on simple scores
+2. **Multi-staff complexity** (not yet tested — needs Levels 5-6)
+3. **Dense polyphony** (chords, multiple voices)
+4. **Visual noise** (lyrics, dynamics, directions)
+
+Each factor compounds, explaining the drop from 95% (single staff with accidentals)
+to 35% (full lieder pages).
+
+## Next steps
+
+### 1. Levels 5-6 (grand staff, chords)
+
+Implement two-staff piano generator and chord generator to test multi-staff
+reading and polyphony. These are the next biggest complexity jumps toward
+real openscore data.
+
+### 2. Key signature training
+
+The accidental errors suggest the model needs more examples of each key signature.
+Current Level 3 has random keys (-4 to +4) across 800 samples = ~100 per key.
+Generating more samples or oversampling rare keys may help.
+
+### 3. RL with musical correctness rewards
+
+Use structural rewards (valid MXC, measure durations, pitch range) to push
+past the SFT ceiling. Best attempted after Levels 5-6 diagnostics.
+
+### 4. Evaluate on full dev set
+
+Run `eval_mxc.py` on all 193 openscore dev samples for statistically
+meaningful accuracy on real data.
