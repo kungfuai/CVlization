@@ -542,11 +542,453 @@ def generate_level4(seed: int, n_measures: int = 16) -> str:
 </score-partwise>"""
 
 
+def _make_key_and_pitches(rng, clef="treble"):
+    """Generate key signature and pitch pool for a given clef."""
+    fifths = rng.randint(-4, 4)
+    SHARP_ORDER = "FCGDAEB"
+    FLAT_ORDER = "BEADGCF"
+    altered = {}
+    if fifths > 0:
+        for i in range(fifths):
+            altered[SHARP_ORDER[i]] = 1
+    elif fifths < 0:
+        for i in range(-fifths):
+            altered[FLAT_ORDER[i]] = -1
+
+    base_steps = "CDEFGAB"
+    pitches = []
+    if clef == "treble":
+        for octave in [3, 4, 5]:
+            for step in base_steps:
+                pitches.append((step, octave, altered.get(step, 0)))
+        pitches = [(s, o, a) for s, o, a in pitches
+                   if (o == 3 and s in "AB") or o == 4 or (o == 5 and s in "CDEFGA")]
+    else:  # bass
+        for octave in [2, 3, 4]:
+            for step in base_steps:
+                pitches.append((step, octave, altered.get(step, 0)))
+        pitches = [(s, o, a) for s, o, a in pitches
+                   if (o == 2 and s in "CDEFGAB") or o == 3 or (o == 4 and s in "C")]
+
+    return fifths, altered, pitches
+
+
+def _generate_part_measures(rng, melody, n_measures, divisions, fifths, clef, include_rests=True):
+    """Generate MusicXML measures for one part."""
+    PATTERNS = [
+        [(2, "quarter", False)] * 4,
+        [(4, "half", False), (2, "quarter", False), (2, "quarter", False)],
+        [(2, "quarter", False), (2, "quarter", False), (4, "half", False)],
+        [(1, "eighth", False)] * 4 + [(2, "quarter", False)] * 2,
+        [(3, "quarter", True), (1, "eighth", False), (4, "half", False)],
+        [(4, "half", False), (3, "quarter", True), (1, "eighth", False)],
+        [(1, "eighth", False)] * 8,
+        [(6, "half", True), (2, "quarter", False)],
+    ]
+    if include_rests:
+        PATTERNS += [
+            [("R", 2, "quarter", False), (2, "quarter", False), (4, "half", False)],
+            [(2, "quarter", False), ("R", 2, "quarter", False), (2, "quarter", False), (2, "quarter", False)],
+            [("R", 4, "half", False), (2, "quarter", False), (2, "quarter", False)],
+        ]
+
+    clef_sign = "G" if clef == "treble" else "F"
+    clef_line = "2" if clef == "treble" else "4"
+    threshold = _pitch_to_index("B4") if clef == "treble" else _pitch_to_index("D3")
+
+    measures = []
+    pitch_idx = 0
+    for m in range(1, n_measures + 1):
+        pattern = rng.choice(PATTERNS)
+        notes = []
+        for item in pattern:
+            if isinstance(item[0], str) and item[0] == "R":
+                _, dur, ntype, dotted = item
+                dot_xml = "\n        <dot />" if dotted else ""
+                notes.append(f"""      <note>
+        <rest />
+        <duration>{dur}</duration>
+        <type>{ntype}</type>{dot_xml}
+      </note>""")
+            else:
+                dur, ntype, dotted = item
+                step, octave, alter = melody[pitch_idx % len(melody)]
+                pitch_idx += 1
+
+                acc_xml = ""
+                alter_xml = ""
+                if rng.random() < 0.1:
+                    if alter == 0:
+                        chromatic = rng.choice([1, -1])
+                        alter_xml = f"\n          <alter>{chromatic}</alter>"
+                        acc_xml = f"\n        <accidental>{'sharp' if chromatic == 1 else 'flat'}</accidental>"
+                    else:
+                        alter_xml = "\n          <alter>0</alter>"
+                        acc_xml = "\n        <accidental>natural</accidental>"
+                elif alter != 0:
+                    alter_xml = f"\n          <alter>{alter}</alter>"
+
+                midi_approx = _pitch_to_index(f"{step}{octave}")
+                stem = "up" if midi_approx < threshold else "down"
+                dot_xml = "\n        <dot />" if dotted else ""
+
+                notes.append(f"""      <note>
+        <pitch>
+          <step>{step}</step>{alter_xml}
+          <octave>{octave}</octave>
+        </pitch>
+        <duration>{dur}</duration>
+        <type>{ntype}</type>{dot_xml}{acc_xml}
+        <stem>{stem}</stem>
+      </note>""")
+
+        attrs = ""
+        if m == 1:
+            attrs = f"""      <attributes>
+        <divisions>{divisions}</divisions>
+        <key><fifths>{fifths}</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>{clef_sign}</sign><line>{clef_line}</line></clef>
+      </attributes>"""
+
+        measures.append(f"""    <measure number="{m}">
+{attrs}
+{chr(10).join(notes)}
+    </measure>""")
+
+    return measures
+
+
+def generate_level5(seed: int, n_measures: int = 16) -> str:
+    """Piano grand staff (treble + bass), monophonic per hand, accidentals, rests.
+
+    Tests: can the model handle two staves with different clefs?
+    """
+    rng = random.Random(seed)
+    divisions = 2
+    fifths, altered, treble_pitches = _make_key_and_pitches(rng, "treble")
+    _, _, bass_pitches = _make_key_and_pitches(random.Random(seed), "bass")
+    # Use same fifths for bass
+    bass_pitches_corrected = []
+    for s, o, _ in bass_pitches:
+        bass_pitches_corrected.append((s, o, altered.get(s, 0)))
+    bass_pitches = bass_pitches_corrected
+
+    n_notes = n_measures * 6
+    # Generate melodies for each hand
+    treble_melody_idx = []
+    current = len(treble_pitches) // 2
+    for _ in range(n_notes):
+        treble_melody_idx.append(current)
+        mid = len(treble_pitches) // 2
+        dist = current - mid
+        bias = -1 if dist > len(treble_pitches) // 4 else (1 if dist < -len(treble_pitches) // 4 else rng.choice([-1, 1]))
+        mag = 1 if rng.random() < 0.5 else (2 if rng.random() < 0.8 else rng.choice([3, 4]))
+        current = max(0, min(len(treble_pitches) - 1, current + bias * mag))
+    treble_melody = [treble_pitches[i] for i in treble_melody_idx]
+
+    bass_melody_idx = []
+    current = len(bass_pitches) // 2
+    for _ in range(n_notes):
+        bass_melody_idx.append(current)
+        mid = len(bass_pitches) // 2
+        dist = current - mid
+        bias = -1 if dist > len(bass_pitches) // 4 else (1 if dist < -len(bass_pitches) // 4 else rng.choice([-1, 1]))
+        mag = 1 if rng.random() < 0.5 else (2 if rng.random() < 0.8 else rng.choice([3, 4]))
+        current = max(0, min(len(bass_pitches) - 1, current + bias * mag))
+    bass_melody = [bass_pitches[i] for i in bass_melody_idx]
+
+    treble_measures = _generate_part_measures(rng, treble_melody, n_measures, divisions, fifths, "treble")
+    bass_measures = _generate_part_measures(rng, bass_melody, n_measures, divisions, fifths, "bass")
+
+    return f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1">
+      <part-name print-object="no">Right Hand</part-name>
+    </score-part>
+    <score-part id="P2">
+      <part-name print-object="no">Left Hand</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+{chr(10).join(treble_measures)}
+  </part>
+  <part id="P2">
+{chr(10).join(bass_measures)}
+  </part>
+</score-partwise>"""
+
+
+def generate_level6(seed: int, n_measures: int = 16) -> str:
+    """Piano grand staff with chords (2-3 notes per beat in right hand).
+
+    Tests: can the model read simultaneous notes (chords)?
+    """
+    rng = random.Random(seed)
+    divisions = 2
+    fifths, altered, treble_pitches = _make_key_and_pitches(rng, "treble")
+    _, _, bass_pitches = _make_key_and_pitches(random.Random(seed), "bass")
+    bass_pitches = [(s, o, altered.get(s, 0)) for s, o, _ in bass_pitches]
+
+    n_notes = n_measures * 6
+    # Bass melody (monophonic)
+    bass_melody_idx = []
+    current = len(bass_pitches) // 2
+    for _ in range(n_notes):
+        bass_melody_idx.append(current)
+        mid = len(bass_pitches) // 2
+        dist = current - mid
+        bias = -1 if dist > len(bass_pitches) // 4 else (1 if dist < -len(bass_pitches) // 4 else rng.choice([-1, 1]))
+        mag = 1 if rng.random() < 0.5 else (2 if rng.random() < 0.8 else rng.choice([3, 4]))
+        current = max(0, min(len(bass_pitches) - 1, current + bias * mag))
+    bass_melody = [bass_pitches[i] for i in bass_melody_idx]
+
+    # Treble: generate chords (root + third + optional fifth)
+    treble_melody_idx = []
+    current = len(treble_pitches) // 3  # start lower for room to add chord tones
+    for _ in range(n_notes):
+        treble_melody_idx.append(current)
+        mid = len(treble_pitches) // 3
+        dist = current - mid
+        bias = -1 if dist > len(treble_pitches) // 4 else (1 if dist < -len(treble_pitches) // 4 else rng.choice([-1, 1]))
+        mag = 1 if rng.random() < 0.5 else (2 if rng.random() < 0.8 else rng.choice([3, 4]))
+        current = max(0, min(len(treble_pitches) - 4, current + bias * mag))
+
+    # Build treble measures with chords
+    PATTERNS = [
+        [(2, "quarter", False)] * 4,
+        [(4, "half", False), (2, "quarter", False), (2, "quarter", False)],
+        [(2, "quarter", False), (2, "quarter", False), (4, "half", False)],
+        [(1, "eighth", False)] * 4 + [(2, "quarter", False)] * 2,
+        [(6, "half", True), (2, "quarter", False)],
+    ]
+
+    treble_measures = []
+    pitch_idx = 0
+    for m in range(1, n_measures + 1):
+        pattern = rng.choice(PATTERNS)
+        notes = []
+        for dur, ntype, dotted in pattern:
+            root_idx = treble_melody_idx[pitch_idx % len(treble_melody_idx)]
+            pitch_idx += 1
+            # Root note
+            step, octave, alter = treble_pitches[root_idx]
+            alter_xml = f"\n          <alter>{alter}</alter>" if alter != 0 else ""
+            dot_xml = "\n        <dot />" if dotted else ""
+            midi_approx = _pitch_to_index(f"{step}{octave}")
+            stem = "up" if midi_approx < _pitch_to_index("B4") else "down"
+            notes.append(f"""      <note>
+        <pitch>
+          <step>{step}</step>{alter_xml}
+          <octave>{octave}</octave>
+        </pitch>
+        <duration>{dur}</duration>
+        <type>{ntype}</type>{dot_xml}
+        <stem>{stem}</stem>
+      </note>""")
+            # Add chord tones (third, sometimes fifth)
+            for offset in [2, 4] if rng.random() < 0.5 else [2]:
+                chord_idx = min(root_idx + offset, len(treble_pitches) - 1)
+                cs, co, ca = treble_pitches[chord_idx]
+                ca_xml = f"\n          <alter>{ca}</alter>" if ca != 0 else ""
+                notes.append(f"""      <note>
+        <chord />
+        <pitch>
+          <step>{cs}</step>{ca_xml}
+          <octave>{co}</octave>
+        </pitch>
+        <duration>{dur}</duration>
+        <type>{ntype}</type>{dot_xml}
+        <stem>{stem}</stem>
+      </note>""")
+
+        attrs = ""
+        if m == 1:
+            attrs = f"""      <attributes>
+        <divisions>{divisions}</divisions>
+        <key><fifths>{fifths}</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>"""
+        treble_measures.append(f"""    <measure number="{m}">
+{attrs}
+{chr(10).join(notes)}
+    </measure>""")
+
+    bass_measures = _generate_part_measures(rng, bass_melody, n_measures, divisions, fifths, "bass")
+
+    return f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1">
+      <part-name print-object="no">Right Hand</part-name>
+    </score-part>
+    <score-part id="P2">
+      <part-name print-object="no">Left Hand</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+{chr(10).join(treble_measures)}
+  </part>
+  <part id="P2">
+{chr(10).join(bass_measures)}
+  </part>
+</score-partwise>"""
+
+
+def generate_level7(seed: int, n_measures: int = 16) -> str:
+    """Voice + piano grand staff with lyrics.
+
+    Tests: can the model handle 3 staves and text (lyrics)?
+    """
+    rng = random.Random(seed)
+    divisions = 2
+    fifths, altered, treble_pitches = _make_key_and_pitches(rng, "treble")
+    _, _, bass_pitches = _make_key_and_pitches(random.Random(seed), "bass")
+    bass_pitches = [(s, o, altered.get(s, 0)) for s, o, _ in bass_pitches]
+
+    # Voice melody (treble range, simpler rhythms)
+    VOICE_PATTERNS = [
+        [(2, "quarter", False)] * 4,
+        [(4, "half", False), (2, "quarter", False), (2, "quarter", False)],
+        [(2, "quarter", False), (2, "quarter", False), (4, "half", False)],
+        [(3, "quarter", True), (1, "eighth", False), (4, "half", False)],
+    ]
+
+    # Simple English syllables for lyrics
+    SYLLABLES = [
+        ("The", "single"), ("sun", "single"), ("will", "single"), ("shine", "single"),
+        ("to", "begin"), ("day", "end"), ("through", "single"), ("the", "single"),
+        ("morn", "begin"), ("ing", "end"), ("light", "single"), ("and", "single"),
+        ("eve", "begin"), ("ning", "end"), ("stars", "single"), ("a", "begin"),
+        ("bove", "end"), ("sing", "single"), ("a", "single"), ("song", "single"),
+        ("of", "single"), ("love", "single"), ("and", "single"), ("peace", "single"),
+        ("for", "single"), ("all", "single"), ("who", "single"), ("hear", "single"),
+        ("the", "single"), ("mu", "begin"), ("sic", "end"), ("play", "single"),
+    ]
+
+    n_notes = n_measures * 4  # voice is simpler
+    voice_melody_idx = []
+    current = len(treble_pitches) // 2
+    for _ in range(n_notes):
+        voice_melody_idx.append(current)
+        mid = len(treble_pitches) // 2
+        dist = current - mid
+        bias = -1 if dist > len(treble_pitches) // 4 else (1 if dist < -len(treble_pitches) // 4 else rng.choice([-1, 1]))
+        mag = 1 if rng.random() < 0.5 else 2
+        current = max(0, min(len(treble_pitches) - 1, current + bias * mag))
+
+    # Build voice measures with lyrics
+    voice_measures = []
+    pitch_idx = 0
+    syl_idx = 0
+    for m in range(1, n_measures + 1):
+        pattern = rng.choice(VOICE_PATTERNS)
+        notes = []
+        for dur, ntype, dotted in pattern:
+            step, octave, alter = treble_pitches[voice_melody_idx[pitch_idx % len(voice_melody_idx)]]
+            pitch_idx += 1
+            alter_xml = f"\n          <alter>{alter}</alter>" if alter != 0 else ""
+            dot_xml = "\n        <dot />" if dotted else ""
+            midi_approx = _pitch_to_index(f"{step}{octave}")
+            stem = "up" if midi_approx < _pitch_to_index("B4") else "down"
+
+            text, syllabic = SYLLABLES[syl_idx % len(SYLLABLES)]
+            syl_idx += 1
+            lyric_xml = f"""
+        <lyric number="1">
+          <syllabic>{syllabic}</syllabic>
+          <text>{text}</text>
+        </lyric>"""
+
+            notes.append(f"""      <note>
+        <pitch>
+          <step>{step}</step>{alter_xml}
+          <octave>{octave}</octave>
+        </pitch>
+        <duration>{dur}</duration>
+        <type>{ntype}</type>{dot_xml}
+        <stem>{stem}</stem>{lyric_xml}
+      </note>""")
+
+        attrs = ""
+        if m == 1:
+            attrs = f"""      <attributes>
+        <divisions>{divisions}</divisions>
+        <key><fifths>{fifths}</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>"""
+        voice_measures.append(f"""    <measure number="{m}">
+{attrs}
+{chr(10).join(notes)}
+    </measure>""")
+
+    # Piano parts (reuse Level 5 logic)
+    n_piano_notes = n_measures * 6
+    treble_mel = []
+    current = len(treble_pitches) // 3
+    for _ in range(n_piano_notes):
+        treble_mel.append(treble_pitches[current])
+        mid = len(treble_pitches) // 3
+        dist = current - mid
+        bias = -1 if dist > len(treble_pitches) // 4 else (1 if dist < -len(treble_pitches) // 4 else rng.choice([-1, 1]))
+        mag = 1 if rng.random() < 0.5 else (2 if rng.random() < 0.8 else 3)
+        current = max(0, min(len(treble_pitches) - 1, current + bias * mag))
+
+    bass_mel = []
+    current = len(bass_pitches) // 2
+    for _ in range(n_piano_notes):
+        bass_mel.append(bass_pitches[current])
+        mid = len(bass_pitches) // 2
+        dist = current - mid
+        bias = -1 if dist > len(bass_pitches) // 4 else (1 if dist < -len(bass_pitches) // 4 else rng.choice([-1, 1]))
+        mag = 1 if rng.random() < 0.5 else (2 if rng.random() < 0.8 else 3)
+        current = max(0, min(len(bass_pitches) - 1, current + bias * mag))
+
+    piano_treble = _generate_part_measures(rng, treble_mel, n_measures, divisions, fifths, "treble")
+    piano_bass = _generate_part_measures(rng, bass_mel, n_measures, divisions, fifths, "bass")
+
+    return f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1">
+      <part-name print-object="no">Voice</part-name>
+    </score-part>
+    <score-part id="P2">
+      <part-name print-object="no">Piano RH</part-name>
+    </score-part>
+    <score-part id="P3">
+      <part-name print-object="no">Piano LH</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+{chr(10).join(voice_measures)}
+  </part>
+  <part id="P2">
+{chr(10).join(piano_treble)}
+  </part>
+  <part id="P3">
+{chr(10).join(piano_bass)}
+  </part>
+</score-partwise>"""
+
+
 GENERATORS = {
     1: generate_level1,
     2: generate_level2,
     3: generate_level3,
     4: generate_level4,
+    5: generate_level5,
+    6: generate_level6,
+    7: generate_level7,
 }
 
 
