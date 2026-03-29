@@ -34,7 +34,7 @@ wandb:
   run_name: null
   log_examples_every_n_steps: 50
   n_examples: 10
-  inference_max_new_tokens: 2048
+  inference_max_new_tokens: 4096
 
 training:
   output_dir: "outputs"
