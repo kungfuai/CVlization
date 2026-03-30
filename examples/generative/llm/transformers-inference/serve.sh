@@ -20,4 +20,5 @@ docker run --rm --gpus all --ipc=host --shm-size 16g \
   --model-id "${MODEL_ID}" \
   --trust-remote-code \
   --max-new-tokens 1024 \
+  # shellcheck disable=SC2086  # word splitting intentional: TGI_EXTRA_ARGS may contain multiple flags
   ${TGI_EXTRA_ARGS:-}
