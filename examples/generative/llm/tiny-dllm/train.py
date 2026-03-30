@@ -68,7 +68,7 @@ def estimate_loss(model, train_data, val_data, batch_size, device,
     model.eval()
     out = {}
     for split in ["train", "val"]:
-        losses = torch.zeros(eval_iters)
+        losses = []
         for k in range(eval_iters):
             if mode == "diffusion":
                 X, Y, M = get_batch_diffusion(train_data, val_data, split,
@@ -78,8 +78,8 @@ def estimate_loss(model, train_data, val_data, batch_size, device,
                 X, Y = get_batch_gpt(train_data, val_data, split,
                                      batch_size, device)
                 _, loss = model(X, Y)
-            losses[k] = loss.item()
-        out[split] = losses.mean().item()
+            losses.append(loss)
+        out[split] = torch.stack(losses).mean().item()
     model.train()
     return out
 
@@ -118,7 +118,6 @@ def main():
     print(f"Mode: {mode}")
     torch.manual_seed(args.seed)
 
-    # Data
     download_data(args.data)
     with open(args.data, "r", encoding="utf-8") as f:
         text = f.read()
@@ -132,18 +131,15 @@ def main():
     train_data, val_data = data[:n], data[n:]
     val_text = text[n:]
 
-    # Model
     model = TinyLM(tokenizer.vocab_size, is_causal=not is_diffusion).to(device)
     param_count = sum(p.numel() for p in model.parameters())
     print(f"Parameters: {param_count / 1e6:.1f}M")
 
-    # Output paths
     out_dir = args.output_dir or get_output_dir()
     os.makedirs(out_dir, exist_ok=True)
     weights_path = os.path.join(out_dir, f"{mode}.pt")
     tokenizer_path = os.path.join(out_dir, f"tokenizer_{mode}.pt")
 
-    # Train
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     start = time.time()
 
