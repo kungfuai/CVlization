@@ -97,7 +97,7 @@ def parse_args():
     parser.add_argument("--dtype", default=os.getenv("DTYPE", "bfloat16"),
                         choices=["bfloat16", "float16", "float32"],
                         help="Model dtype (default: bfloat16).")
-    parser.add_argument("--output", type=Path, default=Path("outputs/result.txt"),
+    parser.add_argument("--output", default="outputs/result.txt",
                         help="Path to save output text.")
     return parser.parse_args()
 
@@ -109,7 +109,7 @@ def main():
     print("Response:\n")
     print(response.strip())
 
-    out_path = Path(resolve_output_path(str(args.output)))
+    out_path = Path(resolve_output_path(args.output))
     save_output(response.strip(), out_path)
 
 
