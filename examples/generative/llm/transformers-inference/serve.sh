@@ -11,6 +11,7 @@ TGI_IMAGE="${TGI_IMAGE:-ghcr.io/huggingface/text-generation-inference:latest}"
 echo "Starting TGI server (${MODEL_ID}) on port ${PORT}"
 echo "OpenAI-compatible endpoint: http://localhost:${PORT}/v1"
 
+# shellcheck disable=SC2086  # word splitting intentional: TGI_EXTRA_ARGS may contain multiple flags
 docker run --rm --gpus all --ipc=host --shm-size 16g \
   ${CUDA_VISIBLE_DEVICES:+-e CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES} \
   -p "${PORT}:80" \
@@ -20,5 +21,4 @@ docker run --rm --gpus all --ipc=host --shm-size 16g \
   --model-id "${MODEL_ID}" \
   --trust-remote-code \
   --max-new-tokens 1024 \
-  # shellcheck disable=SC2086  # word splitting intentional: TGI_EXTRA_ARGS may contain multiple flags
   ${TGI_EXTRA_ARGS:-}
