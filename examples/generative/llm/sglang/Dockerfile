@@ -16,7 +16,6 @@ RUN apt-get update && \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
 # Fix CuDNN compatibility issue for VLMs (Conv3d bug in PyTorch 2.9.1 + CuDNN < 9.15)
 # See: https://github.com/pytorch/pytorch/issues/168167
 RUN pip install --no-cache-dir nvidia-cudnn-cu12==9.16.0.29

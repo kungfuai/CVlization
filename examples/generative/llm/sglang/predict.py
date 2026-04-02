@@ -23,7 +23,7 @@ from typing import List, Optional
 
 import requests
 from cvlization.paths import resolve_input_path, resolve_output_path
-from gpu_utils import get_model_attention_backend_override, get_optimal_attention_backend
+from gpu_utils import get_model_attention_backend_override, get_model_extra_server_args, get_optimal_attention_backend
 from openai import OpenAI
 from PIL import Image
 
@@ -111,6 +111,11 @@ def launch_server(args) -> subprocess.Popen:
     ]
     if args.trust_remote_code:
         cmd.append("--trust-remote-code")
+    extra = get_model_extra_server_args(args.model)
+    for arg in extra:
+        if arg not in cmd:
+            print(f"Model-specific server arg: {arg} ({args.model})")
+            cmd.append(arg)
     if args.extra_args:
         cmd.extend(args.extra_args.split())
     # Select attention backend (skipped if user already passed --attention-backend)

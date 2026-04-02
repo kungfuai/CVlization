@@ -10,6 +10,8 @@ _MODEL_ATTENTION_BACKEND_OVERRIDES: dict[str, str] = {
     "lfm2": "torch_native",  # LiquidAI/LFM2-* (pure Mamba SSM)
 }
 
+_MODEL_EXTRA_SERVER_ARGS: dict[str, list[str]] = {}
+
 
 def get_model_attention_backend_override(model_id: str) -> str | None:
     """Return a required attention backend for known SSM/Mamba models, or None."""
@@ -18,6 +20,15 @@ def get_model_attention_backend_override(model_id: str) -> str | None:
         if pattern in lower:
             return backend
     return None
+
+
+def get_model_extra_server_args(model_id: str) -> list[str]:
+    """Return extra launch_server args required for specific model families."""
+    lower = model_id.lower()
+    for pattern, args in _MODEL_EXTRA_SERVER_ARGS.items():
+        if pattern in lower:
+            return args
+    return []
 
 
 def get_optimal_attention_backend() -> str:
