@@ -22,6 +22,7 @@ docker run --rm --gpus all --ipc=host --shm-size 16g \
   -e MODEL_ID="${MODEL_ID}" \
   -e HF_TOKEN="${HF_TOKEN:-}" \
   -e DTYPE="${DTYPE:-bfloat16}" \
+  ${IMAGE_PATH:+-e IMAGE_PATH="$IMAGE_PATH"} \
   -v "${WORK_DIR}:/mnt/cvl/workspace" \
   -e CVL_INPUTS="${CVL_INPUTS:-/mnt/cvl/workspace}" \
   -e CVL_OUTPUTS="${CVL_OUTPUTS:-/mnt/cvl/workspace}" \

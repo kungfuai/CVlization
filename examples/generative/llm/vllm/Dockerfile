@@ -14,7 +14,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# vLLM 0.14.0 supports both text LLMs and vision-language models (VLMs)
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
