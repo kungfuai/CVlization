@@ -11,16 +11,16 @@ image: cvl-transformers-inference
 presets:
   build:
     script: build.sh
-    description: Build container (torch 2.9.1 + transformers>=5.3.0)
+    description: Build container (torch 2.9.1 + transformers 5.5.0)
   predict:
     script: predict.sh
-    description: "Run chat inference with any HuggingFace causal LM. Default: allenai/Olmo-Hybrid-Instruct-DPO-7B"
+    description: "Run chat inference with any HuggingFace causal LM or VLM. Default: allenai/Olmo-Hybrid-Instruct-DPO-7B"
   serve:
     script: serve.sh
     description: "Launch OpenAI-compatible TGI server (pulls ghcr.io/huggingface/text-generation-inference)"
-tags: [transformers, huggingface, llm, text-generation, hybrid, olmo]
+tags: [transformers, huggingface, llm, vlm, text-generation, hybrid, olmo, gemma, qwen]
 tasks: [text_generation]
 
 verification:
-  last_verified: "2026-03-30"
-  last_verification_note: "Verified build and inference (OLMo-Hybrid-Instruct-DPO-7B) on RTX PRO 6000 Blackwell (98GB VRAM). Uses ~14.2GB VRAM. Outputs saved to outputs/result.txt in user cwd."
+  last_verified: "2026-04-02"
+  last_verification_note: "transformers 5.5.0, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell (98GB VRAM). Verified: OLMo-Hybrid-Instruct-DPO-7B (~14.2GB), google/gemma-4-e2b-it (text + VLM image mode, 5.12B), Qwen/Qwen3-4B. VLM support via --image flag (URL or local path). Falcon-OCR requires custom API; Granite-4.0-3B-Vision requires post-5.5.0 transformers (not yet on PyPI)."

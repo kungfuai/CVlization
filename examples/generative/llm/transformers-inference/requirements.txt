@@ -1,4 +1,6 @@
 transformers==5.5.0
 accelerate==1.13.0
+einops==0.8.2
+peft==0.18.1
 pillow==12.2.0
 requests==2.33.1

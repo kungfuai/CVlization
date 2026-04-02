@@ -22,6 +22,6 @@ tags: [sglang, openai-api, llm, serving, text-generation]
 tasks: [text_generation, serving]
 
 verification:
-  last_verified: "2026-02-26"
-  last_verification_note: "sglang 0.5.9, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell Max-Q (SM120, 95GB VRAM). 9 models confirmed: 8 chat + Llama-3.1-8B-Instruct (gated). LFM2-1.2B auto-selects torch_native. openai/gpt-oss-20b fails: SM120a lacks .tile::gather4 .shared::cluster TMA instruction used by SGLang's GPT-OSS Triton MoE kernel (affects both MXFP4 and bf16 variants); use vLLM instead."
+  last_verified: "2026-04-02"
+  last_verification_note: "sglang 0.5.9, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell (SM120, 98GB VRAM). Verified: OLMo-3-7B-Instruct, Qwen/Qwen3-4B (think mode works). LFM2-1.2B auto-selects torch_native. Gemma 4 not supported (sglang 0.5.9 pins transformers==4.57.1, incompatible with Gemma 4's transformers 5.5.0 requirement). openai/gpt-oss-20b fails on SM120a (TMA instruction missing); use vLLM instead."
   status: VERIFIED
