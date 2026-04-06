@@ -1,7 +1,7 @@
 # vLLM Serve + Predict (auto-tuned)
 
 Dockerized vLLM preset with sensible defaults and optional auto-tuning based on your GPU. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
-- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.15.1, OpenAI SDK 2.12.0).
+- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.19.0 + transformers 5.5.0, OpenAI SDK 2.12.0).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible server with heuristics for tensor-parallel size, max context, dtype, and GPU memory utilization (overridable).
 - `predict.sh`/`predict.py`: runs a quick test. Default mode is **chat** (loads the model inside the container with vLLM, no server needed). Supports VLMs via `--image` flag. `embed` and `rerank` modes use transformers locally (not vLLM) for encoder models.
 
@@ -18,7 +18,7 @@ bash examples/generative/llm/vllm/serve.sh
 Defaults:
 - Model: `allenai/Olmo-3-7B-Instruct` (set `MODEL_ID` to change; served name mirrors the model unless `SERVED_MODEL_NAME` is set)
 - Port: `8000`, Host: `0.0.0.0`
-- Base: `pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime`
+- Base: `pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel`
 
 ## Auto-tuning rules (override any via env or flags)
 - GPU count → `--tensor-parallel-size` (capped at number of GPUs; env `VLLM_TP_SIZE`)
@@ -63,14 +63,14 @@ bash examples/generative/llm/vllm/predict.sh
 # Chat local (no server) - text-only LLM
 bash examples/generative/llm/vllm/predict.sh --prompt "Summarize PagedAttention."
 
-# Vision-Language Model (VLM) - pass an image
-MODEL_ID=Qwen/Qwen2-VL-2B-Instruct \
+# Vision-Language Model (VLM) - pass a local image
+MODEL_ID=Qwen/Qwen3.5-9B \
 bash examples/generative/llm/vllm/predict.sh \
   --image /path/to/image.jpg \
   --prompt "Describe this image in detail."
 
 # VLM with URL image
-MODEL_ID=Qwen/Qwen2-VL-2B-Instruct \
+MODEL_ID=mistralai/Ministral-3-8B-Instruct-2512 \
 bash examples/generative/llm/vllm/predict.sh \
   --image "https://example.com/image.jpg" \
   --prompt "What text is in this image?"
@@ -89,8 +89,11 @@ python examples/generative/llm/vllm/predict.py --mode rerank \
 ```
 
 ## Supported VLMs
-Any VLM supported by vLLM 0.15.1 with stable transformers should work:
-- `Qwen/Qwen2-VL-2B-Instruct`, `Qwen/Qwen2-VL-7B-Instruct`
+Any VLM supported by vLLM 0.19.0 should work via `--image` flag:
+- `google/gemma-4-e2b-it` (verified), `google/gemma-4-26B-A4B-it`, `google/gemma-4-31B-it`
+- `Qwen/Qwen2-VL-2B-Instruct`, `Qwen/Qwen2-VL-7B-Instruct`, `Qwen/Qwen3-VL-8B-Instruct`
+- `allenai/Molmo2-8B`, `allenai/Molmo2-4B`
+- `openbmb/MiniCPM-o-4_5` (omni-modal: video+audio+speech)
 - `llava-hf/llava-v1.6-mistral-7b-hf`
 - `microsoft/Phi-3-vision-128k-instruct`
 - `OpenGVLab/InternVL2-8B`
@@ -100,6 +103,16 @@ Any VLM supported by vLLM 0.15.1 with stable transformers should work:
 - Mounts `~/.cache/huggingface` into the container for model pulls.
 - If you disable Docker build caching, set `VLLM_IMAGE` to reuse a prebuilt image.
 - CPU-only will work for small models but uses conservative defaults (`max_model_len=4096`, `dtype=float32`).
+
+## Verification (RTX PRO 6000 / Blackwell SM120, Apr 2026)
+vLLM 0.19.0 + transformers 5.5.0, PyTorch 2.9.1+CUDA 12.8, RTX PRO 6000 Blackwell (98GB VRAM), SM120.
+- ✅ `allenai/OLMo-3-7B-Instruct` (bf16, max_len=4096)
+- ✅ `Qwen/Qwen3-4B` (bf16, think mode; use mem_util=0.80 if GPU partly occupied)
+- ✅ `Qwen/Qwen3.5-9B` (bf16, VLM; think mode; text-only and image both verified)
+- ✅ `google/gemma-4-e2b-it` (bf16, max_len=4096; use mem_util=0.80 if GPU partly occupied)
+- ✅ `nvidia/NVIDIA-Nemotron-Nano-9B-v2` (bf16; Mamba-2+Attention hybrid, thinking mode)
+- ✅ `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` (bf16; MoE+Mamba-2+Attention hybrid, 3.5B active params)
+- ✅ `mistralai/Ministral-3-8B-Instruct-2512` (fp8/Pixtral; text-only and image both verified; requires devel base image for FP8 JIT kernel on SM120)
 
 ## Verification (RTX PRO 6000 / Blackwell SM120, Feb 2026)
 vLLM 0.15.1, PyTorch 2.9.1+CUDA 12.8, 2× RTX PRO 6000 Blackwell Max-Q (95GB VRAM each), SM120. FLASH_ATTN backend auto-selected.

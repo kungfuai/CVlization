@@ -11,7 +11,7 @@ image: cvl-sglang
 presets:
   build:
     script: build.sh
-    description: Build SGLang container (torch 2.9.1 + sglang 0.5.9)
+    description: Build SGLang container (torch 2.11.0 + CUDA 13.0 + sglang 0.5.10)
   predict:
     script: predict.sh
     description: "Run a local SGLang chat (starts server + client in one container). Default model: allenai/Olmo-3-7B-Instruct."
@@ -22,6 +22,6 @@ tags: [sglang, openai-api, llm, serving, text-generation]
 tasks: [text_generation, serving]
 
 verification:
-  last_verified: "2026-02-26"
-  last_verification_note: "sglang 0.5.9, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell Max-Q (SM120, 95GB VRAM). 9 models confirmed: 8 chat + Llama-3.1-8B-Instruct (gated). LFM2-1.2B auto-selects torch_native. openai/gpt-oss-20b fails: SM120a lacks .tile::gather4 .shared::cluster TMA instruction used by SGLang's GPT-OSS Triton MoE kernel (affects both MXFP4 and bf16 variants); use vLLM instead."
+  last_verified: "2026-04-06"
+  last_verification_note: "sglang 0.5.10, PyTorch 2.11.0+CUDA 13.0 on RTX PRO 6000 Blackwell (SM120, 98GB VRAM). Verified: OLMo-3-7B-Instruct (rope_theta patch applied), OLMo-3-7B-Think, Ministral-3-8B-Instruct-2512 (fp8; CUDA 13.0 required for SM120), LFM2.5-VL-1.6B (Mamba VLM). Voxtral-Mini-3B-2507 fails: MistralCommonBackend incompatible with sglang tokenizer loading kwargs. Gemma 4 not supported (sglang 0.5.10 pins transformers==5.3.0). openai/gpt-oss-20b fails on SM120a (TMA instruction missing); use vLLM instead."
   status: VERIFIED

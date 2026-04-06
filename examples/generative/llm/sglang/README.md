@@ -1,7 +1,7 @@
 # SGLang Serve + Predict (OpenAI-compatible)
 
 Dockerized SGLang preset with sensible defaults. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
-- `build.sh`: builds the image (torch 2.9.1 + sglang 0.5.9, OpenAI SDK 2.6.1).
+- `build.sh`: builds the image (torch 2.11.0 + CUDA 13.0 + sglang 0.5.10, OpenAI SDK 2.6.1).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible HTTP server with heuristics for tensor-parallel size, context length, dtype, and static memory fraction (overridable).
 - `predict.sh`/`predict.py`: spins up a local server inside the container, sends a chat completion via the OpenAI client, then tears the server down. Supports VLMs via `--image` flag.
 
@@ -18,7 +18,7 @@ bash examples/generative/llm/sglang/serve.sh
 Defaults:
 - Model: `allenai/Olmo-3-7B-Instruct` (set `MODEL_ID` to change)
 - Port: `30000`, Host: `0.0.0.0`
-- Base: `pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel` (nvcc present; numactl installed)
+- Base: `pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel` (nvcc present; numactl installed; CUDA 13.0 required for FP8 on SM120 Blackwell)
 
 ## Auto-tuning rules (override via env or flags)
 - GPU count → `--tensor-parallel-size` (capped at number of GPUs; env `SGLANG_TP_SIZE`)
@@ -59,6 +59,7 @@ bash examples/generative/llm/sglang/predict.sh \
 
 ## Supported VLMs
 Any VLM supported by SGLang should work:
+- `LiquidAI/LFM2.5-VL-1.6B` (Mamba hybrid VLM; verified)
 - `Qwen/Qwen2-VL-2B-Instruct`, `Qwen/Qwen2-VL-7B-Instruct`
 - `llava-hf/llava-v1.6-mistral-7b-hf`
 - `microsoft/Phi-3-vision-128k-instruct`
@@ -90,6 +91,16 @@ bash examples/generative/llm/sglang/predict.sh
 - Mounts `~/.cache/huggingface` into the container for model pulls. Set `HF_TOKEN` if needed.
 - OpenAI client base URL is `http://127.0.0.1:${PORT}/v1`; API key is ignored but required by the SDK (defaults to `sk-noauth`).
 - CPU-only will work for tiny models but uses conservative defaults (`context_length=4096`, `dtype=float32`).
+
+## Verification (RTX PRO 6000 / Blackwell SM120, Apr 2026)
+sglang 0.5.10, PyTorch 2.11.0+CUDA 13.0, RTX PRO 6000 Blackwell (98GB VRAM), SM120.
+- ✅ `allenai/Olmo-3-7B-Instruct` (bf16, ctx=4096, mem_frac=0.88)
+- ✅ `allenai/Olmo-3-7B-Think` (bf16, ctx=4096, mem_frac=0.88)
+- ✅ `mistralai/Ministral-3-8B-Instruct-2512` (fp8, ctx=4096, mem_frac=0.88) — FP8 requires CUDA ≥ 12.9; use CUDA 13.0 base
+- ✅ `LiquidAI/LFM2.5-VL-1.6B` (bf16, ctx=4096, mem_frac=0.88) — VLM; Mamba hybrid
+- ❌ `mistralai/Voxtral-Mini-3B-2507` — sglang 0.5.10 passes unsupported kwargs (`tokenizer_revision`, `_from_auto`) to `MistralCommonBackend.from_pretrained`; fix merged in [sgl-project/sglang#21635](https://github.com/sgl-project/sglang/pull/21635) (Apr 5 2026) but not yet released; will work in 0.5.11+
+- ❌ `openai/gpt-oss-20b` (MXFP4): FlashInfer MXFP4 MoE kernel crashes (`assert K % 4 == 0`); bf16 variant `lmsys/gpt-oss-20b-bf16` also fails — SGLang's GPT-OSS Triton MoE kernel uses `.tile::gather4 .shared::cluster` (TMA into cluster/distributed shared memory), a PTX instruction available on SM90 (H100) and SM100 (B200/DGX Spark GB10) but absent on SM120a (consumer Blackwell GB202). All official SGLang GPT-OSS examples target DGX Spark (SM100) or B200; SM120a is not a supported target. Use vLLM instead (uses Marlin kernel, no TMA requirement).
+- ❌ `tencent/Hunyuan-A13B-Instruct-FP8` two SM120 blockers: (1) `v_head_dim=null` in config.json crashes KV-cache profiler — patched in Dockerfile; (2) FP8 MoE Triton kernel requires 147 KB shared memory, SM120 limit is 101 KB (H100 has 228 KB) — use vLLM instead
 
 ## Verification (RTX PRO 6000 / Blackwell SM120, Feb 2026)
 sglang 0.5.9, PyTorch 2.9.1+CUDA 12.8, 2× RTX PRO 6000 Blackwell Max-Q (95GB VRAM each), SM120.
