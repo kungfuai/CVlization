@@ -11,17 +11,17 @@ image: cvl-vllm
 presets:
   build:
     script: build.sh
-    description: Build vLLM container (torch 2.9.1 + vLLM 0.18.1)
+    description: Build vLLM container (torch 2.9.1 + vLLM 0.19.0 + transformers 5.5.0)
   predict:
     script: predict.sh
     description: "Run a local vLLM inference (no server required). Default model: allenai/Olmo-3-7B-Instruct."
   serve:
     script: serve.sh
     description: Launch OpenAI-compatible vLLM server with auto-tuning
-tags: [vllm, openai-api, llm, serving, text-generation, qwen]
+tags: [vllm, openai-api, llm, serving, text-generation, qwen, gemma]
 tasks: [text_generation, serving]
 
 verification:
-  last_verified: "2026-04-02"
-  last_verification_note: "vLLM 0.18.1, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell (SM120, 98GB VRAM). Verified: OLMo-3-7B-Instruct, Qwen/Qwen3-4B (think mode works). Gemma 4 not yet supported (vllm 0.18.1 requires transformers<5 but Gemma 4 needs transformers==5.5.0). Qwen3 may need VLLM_GPU_MEMORY_UTILIZATION=0.80 if GPU memory is already partly used."
+  last_verified: "2026-04-06"
+  last_verification_note: "vLLM 0.19.0 + transformers 5.5.0, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell (SM120, 98GB VRAM). Verified: OLMo-3-7B-Instruct, Qwen/Qwen3-4B (think mode works), google/gemma-4-e2b-it. transformers 5.5.0 installed after vllm (overrides <5 pip constraint); vLLM 0.19.0 includes explicit v5 compat fixes (PRs #37681, #38127). Qwen3/Gemma4 may need VLLM_GPU_MEMORY_UTILIZATION=0.80 if GPU memory partly used."
   status: VERIFIED
