@@ -50,18 +50,39 @@ def load_image(src: str, max_size: int = 1280) -> Image.Image:
     return img
 
 
-def build_messages(user_prompt: str, system_prompt: str, image: Optional[Image.Image] = None) -> List[dict]:
-    """Build chat messages, optionally including an image for VLMs."""
+def image_to_data_url(img: Image.Image) -> str:
+    """Encode a PIL image as a base64 data URL (for local file inputs)."""
+    import base64
+    from io import BytesIO
+    buf = BytesIO()
+    img.save(buf, format="JPEG")
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def build_messages(
+    user_prompt: str,
+    system_prompt: str,
+    image: Optional[Image.Image] = None,
+    image_src: Optional[str] = None,
+) -> List[dict]:
+    """Build chat messages, optionally including an image for VLMs.
+
+    Uses image_url content type (URL or base64 data URL) so that vllm's chat()
+    API can handle multimodal placeholder injection internally per architecture.
+    """
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
     if image is not None:
-        # Multimodal message format for VLMs
+        if image_src and image_src.startswith(("http://", "https://")):
+            url = image_src
+        else:
+            url = image_to_data_url(image)
         messages.append({
             "role": "user",
             "content": [
-                {"type": "image", "image": image},
+                {"type": "image_url", "image_url": {"url": url}},
                 {"type": "text", "text": user_prompt},
             ],
         })
@@ -72,19 +93,6 @@ def build_messages(user_prompt: str, system_prompt: str, image: Optional[Image.I
 
 def run_local_chat(args, messages: List[dict], image: Optional[Image.Image] = None) -> str:
     """Run chat inference with vLLM. Supports both text-only and vision-language models."""
-    # Try AutoProcessor first (needed for VLMs), fall back to AutoTokenizer
-    try:
-        processor = AutoProcessor.from_pretrained(args.model, trust_remote_code=True)
-    except Exception:
-        processor = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
-
-    prompt = processor.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-    )
-
-    # Initialize vLLM engine
     llm = LLM(
         model=args.model,
         dtype=args.dtype,
@@ -100,16 +108,19 @@ def run_local_chat(args, messages: List[dict], image: Optional[Image.Image] = No
         max_tokens=args.max_tokens,
     )
 
-    # Use multimodal API if image provided, otherwise text-only
+    # Use llm.chat() for VLMs: vllm handles multimodal prompt construction internally,
+    # including inserting the correct image placeholder tokens per architecture.
+    # For text-only models, apply_chat_template + generate is equivalent.
     if image is not None:
-        inputs = {
-            "prompt": prompt,
-            "multi_modal_data": {"image": image},
-        }
+        outputs = llm.chat(messages, sampling_params=sampling)
     else:
-        inputs = prompt
+        try:
+            processor = AutoProcessor.from_pretrained(args.model, trust_remote_code=True)
+        except Exception:
+            processor = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+        prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        outputs = llm.generate(prompt, sampling_params=sampling)
 
-    outputs = llm.generate(inputs, sampling_params=sampling)
     return outputs[0].outputs[0].text
 
 
@@ -176,7 +187,7 @@ def main():
         print(f"Loaded image: {args.image} ({image.size[0]}x{image.size[1]})")
 
     if args.mode == "chat":
-        messages = build_messages(args.prompt, args.system, image)
+        messages = build_messages(args.prompt, args.system, image, image_src=args.image)
         text = run_local_chat(args, messages, image)
         print("Response:\n")
         print(text.strip())
