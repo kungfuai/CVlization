@@ -18,7 +18,7 @@ bash examples/generative/llm/vllm/serve.sh
 Defaults:
 - Model: `allenai/Olmo-3-7B-Instruct` (set `MODEL_ID` to change; served name mirrors the model unless `SERVED_MODEL_NAME` is set)
 - Port: `8000`, Host: `0.0.0.0`
-- Base: `pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime`
+- Base: `pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel`
 
 ## Auto-tuning rules (override any via env or flags)
 - GPU count → `--tensor-parallel-size` (capped at number of GPUs; env `VLLM_TP_SIZE`)
@@ -63,14 +63,14 @@ bash examples/generative/llm/vllm/predict.sh
 # Chat local (no server) - text-only LLM
 bash examples/generative/llm/vllm/predict.sh --prompt "Summarize PagedAttention."
 
-# Vision-Language Model (VLM) - pass an image
-MODEL_ID=Qwen/Qwen2-VL-2B-Instruct \
+# Vision-Language Model (VLM) - pass a local image
+MODEL_ID=Qwen/Qwen3.5-9B \
 bash examples/generative/llm/vllm/predict.sh \
   --image /path/to/image.jpg \
   --prompt "Describe this image in detail."
 
 # VLM with URL image
-MODEL_ID=Qwen/Qwen2-VL-2B-Instruct \
+MODEL_ID=mistralai/Ministral-3-8B-Instruct-2512 \
 bash examples/generative/llm/vllm/predict.sh \
   --image "https://example.com/image.jpg" \
   --prompt "What text is in this image?"
