@@ -98,7 +98,7 @@ sglang 0.5.10, PyTorch 2.11.0+CUDA 13.0, RTX PRO 6000 Blackwell (98GB VRAM), SM1
 - ✅ `allenai/Olmo-3-7B-Think` (bf16, ctx=4096, mem_frac=0.88)
 - ✅ `mistralai/Ministral-3-8B-Instruct-2512` (fp8, ctx=4096, mem_frac=0.88) — FP8 requires CUDA ≥ 12.9; use CUDA 13.0 base
 - ✅ `LiquidAI/LFM2.5-VL-1.6B` (bf16, ctx=4096, mem_frac=0.88) — VLM; Mamba hybrid
-- ❌ `mistralai/Voxtral-Mini-3B-2507` — sglang 0.5.10 passes unsupported kwargs (`tokenizer_revision`, `_from_auto`) to `MistralCommonBackend.from_pretrained`; use vLLM instead
+- ❌ `mistralai/Voxtral-Mini-3B-2507` — sglang 0.5.10 passes unsupported kwargs (`tokenizer_revision`, `_from_auto`) to `MistralCommonBackend.from_pretrained`; fix merged in [sgl-project/sglang#21635](https://github.com/sgl-project/sglang/pull/21635) (Apr 5 2026) but not yet released; will work in 0.5.11+
 - ❌ `openai/gpt-oss-20b` (MXFP4): FlashInfer MXFP4 MoE kernel crashes (`assert K % 4 == 0`); bf16 variant `lmsys/gpt-oss-20b-bf16` also fails — SGLang's GPT-OSS Triton MoE kernel uses `.tile::gather4 .shared::cluster` (TMA into cluster/distributed shared memory), a PTX instruction available on SM90 (H100) and SM100 (B200/DGX Spark GB10) but absent on SM120a (consumer Blackwell GB202). All official SGLang GPT-OSS examples target DGX Spark (SM100) or B200; SM120a is not a supported target. Use vLLM instead (uses Marlin kernel, no TMA requirement).
 - ❌ `tencent/Hunyuan-A13B-Instruct-FP8` two SM120 blockers: (1) `v_head_dim=null` in config.json crashes KV-cache profiler — patched in Dockerfile; (2) FP8 MoE Triton kernel requires 147 KB shared memory, SM120 limit is 101 KB (H100 has 228 KB) — use vLLM instead
 
