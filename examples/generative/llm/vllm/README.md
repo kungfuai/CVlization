@@ -1,7 +1,7 @@
 # vLLM Serve + Predict (auto-tuned)
 
 Dockerized vLLM preset with sensible defaults and optional auto-tuning based on your GPU. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
-- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.15.1, OpenAI SDK 2.12.0).
+- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.19.0 + transformers 5.5.0, OpenAI SDK 2.12.0).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible server with heuristics for tensor-parallel size, max context, dtype, and GPU memory utilization (overridable).
 - `predict.sh`/`predict.py`: runs a quick test. Default mode is **chat** (loads the model inside the container with vLLM, no server needed). Supports VLMs via `--image` flag. `embed` and `rerank` modes use transformers locally (not vLLM) for encoder models.
 
@@ -89,8 +89,11 @@ python examples/generative/llm/vllm/predict.py --mode rerank \
 ```
 
 ## Supported VLMs
-Any VLM supported by vLLM 0.15.1 with stable transformers should work:
-- `Qwen/Qwen2-VL-2B-Instruct`, `Qwen/Qwen2-VL-7B-Instruct`
+Any VLM supported by vLLM 0.19.0 should work via `--image` flag:
+- `google/gemma-4-e2b-it` (verified), `google/gemma-4-26B-A4B-it`, `google/gemma-4-31B-it`
+- `Qwen/Qwen2-VL-2B-Instruct`, `Qwen/Qwen2-VL-7B-Instruct`, `Qwen/Qwen3-VL-8B-Instruct`
+- `allenai/Molmo2-8B`, `allenai/Molmo2-4B`
+- `openbmb/MiniCPM-o-4_5` (omni-modal: video+audio+speech)
 - `llava-hf/llava-v1.6-mistral-7b-hf`
 - `microsoft/Phi-3-vision-128k-instruct`
 - `OpenGVLab/InternVL2-8B`
