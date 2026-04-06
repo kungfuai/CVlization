@@ -15,6 +15,12 @@ RUN apt-get update && \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# vLLM 0.19.0 added Gemma 4 support but still declares transformers<5 in pip metadata.
+# Install transformers 5.5.0 after vllm to override that constraint — this is the
+# same approach used by the official vllm/vllm-openai:gemma4 image.
+# vLLM 0.19.0 includes explicit transformers v5 compatibility fixes for OLMo-3,
+# LFM2, DeepSeekVL2, Pixtral, and other models (PRs #37681, #38127, #38090, #38247).
+RUN pip install --no-cache-dir transformers==5.5.0
 
 COPY . .
 
