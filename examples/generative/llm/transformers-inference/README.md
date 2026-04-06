@@ -27,6 +27,27 @@ cvl run transformers-inference predict -- --prompt "Explain diffusion language m
 MODEL_ID=allenai/Olmo-3-7B-Instruct cvl run transformers-inference predict
 ```
 
+## Gemma 4 (VLM)
+
+Gemma 4 is a vision-language model family requiring transformers ≥5.5.0 — supported out of the box.
+
+```bash
+# Text-only
+MODEL_ID=google/gemma-4-e2b-it cvl run transformers-inference predict \
+  -- --prompt "Explain mixture-of-experts routing."
+
+# Image + text (VLM mode)
+MODEL_ID=google/gemma-4-e2b-it cvl run transformers-inference predict \
+  -- --image /path/to/image.jpg --prompt "Describe this image."
+
+# URL image
+MODEL_ID=google/gemma-4-e2b-it cvl run transformers-inference predict \
+  -- --image "https://example.com/photo.jpg" --prompt "What is in this image?"
+```
+
+Verified on RTX PRO 6000 (98GB): `google/gemma-4-e2b-it` (5.12B, bf16, text and image mode).
+Larger variants (`gemma-4-27b-it`, `gemma-4-27b-it-qat-int4`) follow the same usage.
+
 ## Arguments
 
 | Arg | Default | Description |
@@ -80,6 +101,13 @@ curl http://localhost:8080/v1/chat/completions \
 ```
 
 Environment variables: `MODEL_ID`, `PORT` (default 8080), `HF_TOKEN`, `CUDA_VISIBLE_DEVICES`, `TGI_EXTRA_ARGS`, `TGI_IMAGE`.
+
+## Verification (RTX PRO 6000 / Blackwell SM120, Apr 2026)
+transformers 5.5.0, PyTorch 2.9.1+CUDA 12.8, RTX PRO 6000 Blackwell (98GB VRAM), SM120.
+- ✅ `allenai/Olmo-Hybrid-Instruct-DPO-7B` (bf16, ~14.2GB) — hybrid DeltaNet+attention
+- ✅ `google/gemma-4-e2b-it` (bf16, ~5.12B) — text-only and VLM image mode both verified
+- ✅ `Qwen/Qwen3-4B` (bf16)
+- ⚠️ `ibm-granite/granite-4.0-3b-a800m-instruct-vision` — requires transformers post-5.5.0 (not yet on PyPI as of Apr 2026)
 
 ## References
 

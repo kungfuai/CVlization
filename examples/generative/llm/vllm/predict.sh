@@ -14,6 +14,7 @@ mkdir -p outputs
 
 echo "Running local vLLM inference in container (${IMAGE}) with model ${MODEL_ID}"
 docker run --rm --gpus all --ipc=host --shm-size 16g \
+  ${CUDA_VISIBLE_DEVICES:+-e CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES} \
   -v "${HF_CACHE}:/root/.cache/huggingface" \
   -v "${SCRIPT_DIR}:/workspace" \
   -v "${REPO_ROOT}:/cvlization_repo:ro" \
