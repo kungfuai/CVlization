@@ -107,10 +107,12 @@ Any VLM supported by vLLM 0.19.0 should work via `--image` flag:
 ## Verification (RTX PRO 6000 / Blackwell SM120, Apr 2026)
 vLLM 0.19.0 + transformers 5.5.0, PyTorch 2.9.1+CUDA 12.8, RTX PRO 6000 Blackwell (98GB VRAM), SM120.
 - ✅ `allenai/OLMo-3-7B-Instruct` (bf16, max_len=4096)
-- ✅ `Qwen/Qwen3-4B` (bf16, think mode works; use mem_util=0.80 if GPU partly occupied)
+- ✅ `Qwen/Qwen3-4B` (bf16, think mode; use mem_util=0.80 if GPU partly occupied)
+- ✅ `Qwen/Qwen3.5-9B` (bf16, VLM; think mode; text-only and image both verified)
 - ✅ `google/gemma-4-e2b-it` (bf16, max_len=4096; use mem_util=0.80 if GPU partly occupied)
-- ✅ `nvidia/NVIDIA-Nemotron-Nano-9B-v2` (bf16, max_len=4096; Mamba-2+Attention hybrid, thinking mode)
-- ✅ `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` (bf16, max_len=4096; MoE+Mamba-2+Attention hybrid, 3.5B active params)
+- ✅ `nvidia/NVIDIA-Nemotron-Nano-9B-v2` (bf16; Mamba-2+Attention hybrid, thinking mode)
+- ✅ `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` (bf16; MoE+Mamba-2+Attention hybrid, 3.5B active params)
+- ✅ `mistralai/Ministral-3-8B-Instruct-2512` (fp8/Pixtral; text-only and image both verified; requires devel base image for FP8 JIT kernel on SM120)
 
 ## Verification (RTX PRO 6000 / Blackwell SM120, Feb 2026)
 vLLM 0.15.1, PyTorch 2.9.1+CUDA 12.8, 2× RTX PRO 6000 Blackwell Max-Q (95GB VRAM each), SM120. FLASH_ATTN backend auto-selected.

@@ -23,5 +23,5 @@ tasks: [text_generation, serving]
 
 verification:
   last_verified: "2026-04-06"
-  last_verification_note: "vLLM 0.19.0 + transformers 5.5.0, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell (SM120, 98GB VRAM). Verified: OLMo-3-7B-Instruct, Qwen/Qwen3-4B (think mode), google/gemma-4-e2b-it, nvidia/NVIDIA-Nemotron-Nano-9B-v2 (thinking mode, Mamba-2+Attn hybrid), nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16 (MoE+Mamba-2+Attn, 3.5B active). transformers 5.5.0 installed after vllm (overrides <5 pip constraint); vLLM 0.19.0 includes explicit v5 compat fixes (PRs #37681, #38127)."
+  last_verification_note: "vLLM 0.19.0 + transformers 5.5.0, PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell (SM120, 98GB VRAM). Verified: OLMo-3-7B-Instruct, Qwen/Qwen3-4B (think), Qwen/Qwen3.5-9B (VLM, text+image, think), google/gemma-4-e2b-it, nvidia/NVIDIA-Nemotron-Nano-9B-v2 (think, Mamba-2+Attn), nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16 (MoE+Mamba-2+Attn, 3.5B active), mistralai/Ministral-3-8B-Instruct-2512 (fp8 VLM, text+image). Uses devel base image for FP8 JIT (Ministral) and nvcc availability."
   status: VERIFIED
