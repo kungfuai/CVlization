@@ -35,4 +35,4 @@ frameworks:
 description: Build and query a persistent knowledge graph from a code corpus using a headless coding agent (Claude Code or Codex).
 verification:
   last_verified: "2026-04-07"
-  last_verification_note: "Corpus is 7 files (5 Python + 2 Markdown, 32K). Docker image builds with node:20-slim + claude-code + codex + graphifyy. Headless invocation via claude -p or codex --approval-mode full-auto."
+  last_verification_note: "Verified build and full pipeline (ingest + query) with Claude Code Max plan OAuth credentials. Runs as host user (--user $(id -u):$(id -g)), mounts only ~/.claude/.credentials.json. God nodes and cross-module call graph confirmed correct on bundled 7-file corpus."
