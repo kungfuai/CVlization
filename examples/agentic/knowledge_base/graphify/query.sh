@@ -15,12 +15,13 @@ IMG="${CVL_IMAGE:-cvl-knowledge-base-graphify}"
 AGENT="${AGENT:-claude}"
 QUESTION="${1:-what are the god nodes and how do the modules connect?}"
 
-if [[ ! -f "${SCRIPT_DIR}/graphify-out/GRAPH_REPORT.md" ]]; then
-    echo "Error: graphify-out/GRAPH_REPORT.md not found. Run ingest.sh first." >&2
+GRAPH_OUT="${SCRIPT_DIR}/corpus/graphify-out"
+if [[ ! -f "${GRAPH_OUT}/GRAPH_REPORT.md" ]]; then
+    echo "Error: corpus/graphify-out/GRAPH_REPORT.md not found. Run ingest.sh first." >&2
     exit 1
 fi
 
-PROMPT="Read graphify-out/GRAPH_REPORT.md and graphify-out/graph.json, then answer: ${QUESTION}"
+PROMPT="Read corpus/graphify-out/GRAPH_REPORT.md and corpus/graphify-out/graph.json, then answer: ${QUESTION}"
 
 mkdir -p "${HOME}/.cache/cvlization"
 
@@ -86,7 +87,7 @@ docker run --rm \
 
         # Fail fast: verify the agent can authenticate before querying
         echo '[graphify] Checking agent authentication...'
-        PROMPT='Read graphify-out/GRAPH_REPORT.md and graphify-out/graph.json, then answer: ${QUESTION}'
+        PROMPT='Read corpus/graphify-out/GRAPH_REPORT.md and corpus/graphify-out/graph.json, then answer: ${QUESTION}'
         if [[ \"\${AGENT}\" == 'codex' ]]; then
             codex --approval-mode full-auto 'Reply with only: ok' || { echo 'Error: Codex agent auth failed.' >&2; exit 1; }
             codex --approval-mode full-auto \"\${PROMPT}\"
