@@ -18,9 +18,15 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     tree-sitter-javascript \
     tree-sitter-typescript
 
-# Pre-install graphify skill for both platforms
-RUN graphify install --platform claude \
- && graphify install --platform codex
+# Pre-install graphify skill to a shared location.
+# At runtime the entrypoint copies this into the container user's $HOME.
+RUN HOME=/opt/graphify-skill graphify install --platform claude \
+ && HOME=/opt/graphify-skill graphify install --platform codex \
+ && chmod -R 755 /opt/graphify-skill
+
+# Create the runtime home dir with the .claude subdirectory so Docker can
+# bind-mount the credentials file into it even before the entrypoint runs.
+RUN mkdir -p /tmp/cvl-home/.claude && chmod -R 777 /tmp/cvl-home
 
 WORKDIR /workspace
 CMD ["bash"]
