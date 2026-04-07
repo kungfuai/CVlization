@@ -73,7 +73,7 @@ docker run --rm \
     ${CVL_CONTAINER_NAME:+--name "${CVL_CONTAINER_NAME}"} \
     --workdir /workspace \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
-    --mount "type=bind,src=${CORPUS},dst=/corpus,readonly" \
+    --mount "type=bind,src=${CORPUS},dst=/corpus" \
     --mount "type=bind,src=${HOME}/.cache/cvlization,dst=/tmp/cvl-home/.cache/cvlization" \
     "${CRED_MOUNTS[@]+"${CRED_MOUNTS[@]}"}" \
     "${CRED_ENVS[@]+"${CRED_ENVS[@]}"}" \
@@ -88,9 +88,9 @@ docker run --rm \
         echo '[graphify] Checking agent authentication...'
         if [[ \"\${AGENT}\" == 'codex' ]]; then
             codex --approval-mode full-auto 'Reply with only: ok' || { echo 'Error: Codex agent auth failed.' >&2; exit 1; }
-            codex --approval-mode full-auto '/graphify /corpus'
+            cd /corpus && codex --approval-mode full-auto '/graphify .'
         else
             claude -p 'Reply with only: ok' --permission-mode bypassPermissions || { echo 'Error: Claude agent auth failed.' >&2; exit 1; }
-            claude -p '/graphify /corpus' --permission-mode bypassPermissions
+            cd /corpus && claude -p '/graphify .' --permission-mode bypassPermissions
         fi
     "
