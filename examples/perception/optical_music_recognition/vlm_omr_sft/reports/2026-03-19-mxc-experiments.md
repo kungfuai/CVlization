@@ -761,26 +761,98 @@ Each factor compounds. The synthetic diagnostic confirms the model CAN read pitc
 multiple interacting factors, not a single bottleneck.
 to 35% (full lieder pages).
 
-## Next steps
+## Experiment 11: Level 7 with 5K samples — Qwen3.5-9B r=32, 3 epochs
 
-### 1. Levels 5-6 (grand staff, chords)
+**WandB run**: `rdt13jav` — https://wandb.ai/zzsi_kungfu/openscore-omr/runs/rdt13jav
 
-Implement two-staff piano generator and chord generator to test multi-staff
-reading and polyphony. These are the next biggest complexity jumps toward
-real openscore data.
+| Setting | Value |
+|---|---|
+| Model | Qwen3.5-9B r=32 MXC |
+| Dataset | zzsi/synthetic-scores level7, 5K samples (4K train / 500 dev / 500 test) |
+| Level 7 content | Voice + piano (chords in RH) + lyrics, 24 measures |
+| Epochs | 3 (2979 steps) |
+| Best eval_loss | 0.000425 (epoch 2.4) |
+| Runtime | ~28h |
 
-### 2. Key signature training
+### Eval loss — still decreasing at end
 
-The accidental errors suggest the model needs more examples of each key signature.
-Current Level 3 has random keys (-4 to +4) across 800 samples = ~100 per key.
-Generating more samples or oversampling rare keys may help.
+| Epoch | eval_loss |
+|---|---|
+| 0.2 | 0.004633 |
+| 0.8 | 0.000792 |
+| 1.4 | 0.000730 |
+| 2.0 | 0.000488 |
+| 2.2 | 0.000447 |
+| 2.4 | **0.000425** |
 
-### 3. RL with musical correctness rewards
+Val loss did not plateau — the model could benefit from more epochs. However,
+training loss was near zero (~1e-6), suggesting the model memorized the training
+set while still generalizing to the dev set.
 
-Use structural rewards (valid MXC, measure durations, pitch range) to push
-past the SFT ceiling. Best attempted after Levels 5-6 diagnostics.
+### Accuracy evaluation (50 test samples, eval_run.py)
 
-### 4. Evaluate on full dev set
+| Metric | Value |
+|---|---|
+| **Pitched-only similarity** | **47%** |
+| Positional accuracy | 55% |
+| Note-type similarity | 54% |
+| Rhythm similarity | 54% |
+| Combined similarity | 64% |
+| Note coverage | 105% |
+| Unique pitches | 17.2 pred / 32.0 ref |
+| Max pitch similarity | 80% |
+| Max longest match | 318 events |
+| Header accuracy | key=96%, time=100%, parts=100% |
 
-Run `eval_mxc.py` on all 193 openscore dev samples for statistically
-meaningful accuracy on real data.
+### Bimodal distribution
+
+The accuracy is highly bimodal across samples:
+- 23/50 samples (46%) have >50% pitch accuracy (range 56-80%)
+- 13/50 samples (26%) have <10% pitch accuracy (range 1-5%)
+- 14/50 samples (28%) fall in between (12-49%)
+
+This suggests the model succeeds on some score configurations and fails
+completely on others — not a gradual degradation.
+
+### Comparison: 1K vs 5K samples
+
+The 1K baseline reported "74% pitch" but that was measured on only 10 noisy
+WandB inference samples. With a proper 50-sample evaluation:
+
+| | 1K samples (WandB n=10) | 5K samples (eval n=50) |
+|---|---|---|
+| Pitched-only sim | ~56% (noisy) | **47%** (reliable) |
+| eval_loss | ~0.002 | **0.000425** |
+| Unique pitches pred | ~16 | 17.2 |
+
+The 5K run achieved 5× lower eval_loss, but pitch accuracy did not improve
+significantly. The eval_loss improvement is driven by better syntax/format
+accuracy, not better pitch reading. The model still covers only ~17/32 unique
+pitches in the reference.
+
+### Inference speed (Blackwell RTX PRO 6000)
+
+| Metric | Value |
+|---|---|
+| Throughput | 26 tok/s (steady state) |
+| Per-sample time | ~153s (4096 tokens generated) |
+| 50-sample eval | ~2.1 hours |
+
+Tested acceleration options:
+- **flash-attn 2.8.3**: Produces garbage output on Blackwell SM120 — incompatible
+- **flash-linear-attention + causal-conv1d**: 12% throughput boost (29 tok/s) but
+  produces garbage when loading checkpoints trained without it (different computation graph)
+- **vLLM v0.17.0**: Has Qwen3.5 architecture support but tokenizer compatibility
+  issues with unsloth model — not yet working
+- **PyTorch SDPA**: Used by default, works correctly
+
+For new training runs, installing flash-linear-attention from the start would
+enable both the training speedup and compatible inference. Existing checkpoints
+must be evaluated without it.
+
+
+---
+
+**Continued in [`2026-04-01-context-length-and-eos.md`](2026-04-01-context-length-and-eos.md)** —
+analysis of training target truncation, the EOS learning bug, and the
+`max_length=8192` fix.

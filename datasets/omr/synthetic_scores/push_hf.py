@@ -16,7 +16,7 @@ from pathlib import Path
 from datasets import Dataset, DatasetDict, Image as HFImage
 
 
-def build_dataset(input_dir: str, level: int, train_frac: float = 0.8, dev_frac: float = 0.1):
+def build_dataset(input_dir: str, level, train_frac: float = 0.8, dev_frac: float = 0.1):
     """Build train/dev/test splits from a directory of .musicxml + .png pairs."""
     input_dir = Path(input_dir)
     rows = []
@@ -47,7 +47,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--input", required=True, help="Directory with .musicxml + .png files")
-    parser.add_argument("--level", type=int, required=True, help="Difficulty level (1-8)")
+    def _level_type(v):
+        try:
+            return int(v)
+        except ValueError:
+            return v
+    parser.add_argument("--level", type=_level_type, required=True, help="Difficulty level (1-7, 6b, 7a, 7b, 7c)")
     parser.add_argument("--repo", default="zzsi/synthetic-scores", help="HuggingFace repo ID")
     args = parser.parse_args()
 

@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import datetime
 import os
 import yaml
 import torch
@@ -23,6 +24,8 @@ from transformers import TrainerCallback, AutoModel
 from unsloth import FastVisionModel, get_chat_template
 from unsloth.trainer import UnslothVisionDataCollator
 from trl import SFTTrainer, SFTConfig
+
+from mxc import xml_to_mxc
 
 INSTRUCTION_XML = "Transcribe this sheet music page to MusicXML."
 INSTRUCTION_MXC = "Transcribe this sheet music page to MXC (compact MusicXML)."
@@ -92,7 +95,8 @@ class WandbInferenceCallback(TrainerCallback):
       step | image | score_id | corpus | page | bars | reference | prediction
     """
 
-    def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512, target_format="xml", col=None):
+    def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512,
+                 target_format="xml", col=None):
         self.model          = model
         self.processor      = processor
         self.samples        = samples       # list of raw dataset rows (PIL images + metadata)
@@ -133,10 +137,10 @@ class WandbInferenceCallback(TrainerCallback):
             ref = strip_musicxml_header(sample[self.col["musicxml"]])
             if self.target_format == "mxc":
                 try:
-                    from mxc import xml_to_mxc
                     ref = xml_to_mxc(ref)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"WARN: xml_to_mxc failed for inference sample "
+                          f"{sample.get(self.col['id'], '?')}: {e}")
 
             sample_id = sample.get(self.col["id"], "")
             sample_label = sample.get(self.col["label"], "")
@@ -280,20 +284,30 @@ def main():
                     f.write(patched)
                 print(f"  Patched {py_file}: DeepseekV2MoE → DeepseekV2Moe")
 
-    extra_kwargs = {}
+    # Quantization: 4-bit, 8-bit, or bf16 (none).
+    # For Qwen3.5, Unsloth recommends bf16 instead of 4-bit (4-bit has known issues).
+    load_in_4bit = model_config.get("load_in_4bit", True)
+    load_in_8bit = model_config.get("load_in_8bit", False)
+    if load_in_4bit and load_in_8bit:
+        raise ValueError("Cannot set both load_in_4bit and load_in_8bit")
+    quant_label = "4-bit" if load_in_4bit else "8-bit" if load_in_8bit else "bf16 (no quantization)"
+    print(f"Quantization: {quant_label}")
+
+    extra_kwargs = {
+        "load_in_4bit": load_in_4bit,
+        "load_in_8bit": load_in_8bit,
+        "use_gradient_checkpointing": model_config.get("use_gradient_checkpointing", "unsloth"),
+    }
     if model_config.get("trust_remote_code", False):
         extra_kwargs["trust_remote_code"] = True
     if model_config.get("unsloth_force_compile", False):
         extra_kwargs["unsloth_force_compile"] = True
     if model_config.get("auto_model", False):
         extra_kwargs["auto_model"] = AutoModel
+    if model_config.get("unsloth_tiled_mlp", False):
+        extra_kwargs["unsloth_tiled_mlp"] = True
 
-    model, processor = FastVisionModel.from_pretrained(
-        model_name,
-        load_in_4bit=model_config["load_in_4bit"],
-        use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
-        **extra_kwargs,
-    )
+    model, processor = FastVisionModel.from_pretrained(model_name, **extra_kwargs)
 
     model = FastVisionModel.get_peft_model(
         model,
@@ -363,20 +377,42 @@ def main():
     # ── Chat format ────────────────────────────────────────────────────────────
     target_format = dataset_config.get("target_format", "xml")
     if target_format == "mxc":
-        from mxc import xml_to_mxc
         instruction = INSTRUCTION_MXC
         print(f"Target format: MXC (compact)")
     else:
         instruction = INSTRUCTION_XML
         print(f"Target format: XML")
 
+    strict_mxc = dataset_config.get("strict_mxc", False)
+
+    class MxcFailureTracker:
+        __slots__ = ("count", "first_id", "first_err")
+        def __init__(self):
+            self.count = 0
+            self.first_id = None
+            self.first_err = None
+        def record(self, sample_id, err):
+            if self.count == 0:
+                self.first_id = sample_id
+                self.first_err = str(err)
+            self.count += 1
+
+    mxc_failures = MxcFailureTracker()
+
     def convert_to_conversation(sample):
         text = strip_musicxml_header(sample[col["musicxml"]])
         if target_format == "mxc":
             try:
                 text = xml_to_mxc(text)
-            except Exception:
-                pass  # fall back to cleaned XML for malformed samples
+            except Exception as e:
+                sample_id = sample.get(col["id"], "?")
+                if strict_mxc:
+                    raise RuntimeError(
+                        f"xml_to_mxc failed on sample {sample_id}: {e}. "
+                        f"Set dataset.strict_mxc=false to fall back to cleaned XML."
+                    ) from e
+                mxc_failures.record(sample_id, e)
+                # fall back to cleaned XML for malformed samples
         return {
             "messages": [
                 {
@@ -419,6 +455,18 @@ def main():
 
     print(f"Train: {len(train_data)}  Val: {len(val_data) if val_data else 0}")
 
+    if target_format == "mxc" and mxc_failures.count > 0:
+        # convert_to_conversation runs on both train and val splits, so the
+        # failure count covers both halves.
+        total = len(train_data) + (len(val_data) if val_data else 0)
+        pct = 100 * mxc_failures.count / total
+        print(
+            f"WARNING: xml_to_mxc failed on {mxc_failures.count}/{total} samples "
+            f"({pct:.1f}%). First failure: {mxc_failures.first_id} — "
+            f"{mxc_failures.first_err}. Those samples trained on cleaned XML "
+            f"instead of MXC. Set dataset.strict_mxc=true to fail fast."
+        )
+
     chat_template = model_config.get("chat_template", "gemma-3")
     if chat_template:
         print(f"Setting up {chat_template} chat template ...")
@@ -438,6 +486,17 @@ def main():
 
     # ── Training ───────────────────────────────────────────────────────────────
     FastVisionModel.for_training(model)
+
+    # Per-run output subdirectory to prevent checkpoint collisions across runs.
+    # Uses wandb run_id if available, otherwise a timestamp.
+    base_output_dir = training_config["output_dir"]
+    if wandb_run_id:
+        run_subdir = wandb_run_id
+    else:
+        run_subdir = f"run-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    run_output_dir = os.path.join(base_output_dir, run_subdir)
+    os.makedirs(run_output_dir, exist_ok=True)
+    print(f"Checkpoints will be saved to: {run_output_dir}")
 
     training_args = SFTConfig(
         per_device_train_batch_size=training_config["per_device_train_batch_size"],
@@ -466,7 +525,7 @@ def main():
         weight_decay=training_config["weight_decay"],
         lr_scheduler_type=training_config["lr_scheduler_type"],
         seed=training_config["seed"],
-        output_dir=training_config["output_dir"],
+        output_dir=run_output_dir,
         report_to="wandb" if use_wandb else "none",
         remove_unused_columns=False,
         dataset_text_field="",
@@ -505,7 +564,16 @@ def main():
     )
 
     print("\nStarting training ...")
-    stats = trainer.train()
+    # Use unsloth_train(trainer) instead of trainer.train() to apply Unsloth's
+    # gradient accumulation bug fix (fixes incorrect loss denominator when
+    # sequence lengths vary across grad accumulation steps).
+    # See: https://unsloth.ai/blog/gradient
+    if training_config.get("use_unsloth_train", False):
+        from unsloth import unsloth_train
+        print("  Using unsloth_train() for fixed gradient accumulation")
+        stats = unsloth_train(trainer)
+    else:
+        stats = trainer.train()
 
     used_mem = round(torch.cuda.max_memory_reserved() / 1024 ** 3, 3)
     print(f"\n{'='*70}")
@@ -516,8 +584,7 @@ def main():
 
     # ── Save ───────────────────────────────────────────────────────────────────
     # With load_best_model_at_end=True, the model is already the best checkpoint
-    output_dir = training_config["output_dir"]
-    final_dir  = f"{output_dir}/final_model"
+    final_dir = f"{run_output_dir}/final_model"
     best_step = getattr(trainer.state, "best_global_step", None)
     best_metric = getattr(trainer.state, "best_metric", None)
     if best_step:

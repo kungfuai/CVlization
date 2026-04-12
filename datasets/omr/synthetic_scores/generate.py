@@ -841,11 +841,17 @@ def generate_level6(seed: int, n_measures: int = 16) -> str:
 </score-partwise>"""
 
 
-def generate_level7(seed: int, n_measures: int = 24) -> str:
-    """Voice + piano grand staff (with chords) + lyrics.
+def generate_level7_parameterized(
+    seed: int,
+    n_measures: int = 24,
+    include_voice: bool = True,
+    include_lyrics: bool = True,
+) -> str:
+    """Parameterized version of Level 7 for ablation studies.
 
-    The hardest level — closest to real openscore lieder.
-    Tests: voice+piano chords+lyrics on dense pages.
+    - include_voice=True, include_lyrics=True, n_measures=24: standard Level 7
+    - include_voice=True, include_lyrics=False: Level 7 without lyrics (7a/7c)
+    - include_voice=False: piano-only grand staff with chords (6b)
     """
     rng = random.Random(seed)
     divisions = 2
@@ -853,7 +859,8 @@ def generate_level7(seed: int, n_measures: int = 24) -> str:
     _, _, bass_pitches = _make_key_and_pitches(random.Random(seed), "bass")
     bass_pitches = [(s, o, altered.get(s, 0)) for s, o, _ in bass_pitches]
 
-    # Voice melody (treble range, simpler rhythms)
+    # Voice melody (treble range, simpler rhythms) — only generated if include_voice
+    voice_measures = []
     VOICE_PATTERNS = [
         [(2, "quarter", False)] * 4,
         [(4, "half", False), (2, "quarter", False), (2, "quarter", False)],
@@ -873,22 +880,29 @@ def generate_level7(seed: int, n_measures: int = 24) -> str:
         ("the", "single"), ("mu", "begin"), ("sic", "end"), ("play", "single"),
     ]
 
-    n_notes = n_measures * 4  # voice is simpler
-    voice_melody_idx = []
-    current = len(treble_pitches) // 2
-    for _ in range(n_notes):
-        voice_melody_idx.append(current)
-        mid = len(treble_pitches) // 2
-        dist = current - mid
-        bias = -1 if dist > len(treble_pitches) // 4 else (1 if dist < -len(treble_pitches) // 4 else rng.choice([-1, 1]))
-        mag = 1 if rng.random() < 0.5 else 2
-        current = max(0, min(len(treble_pitches) - 1, current + bias * mag))
+    if include_voice:
+        n_notes = n_measures * 4  # voice is simpler
+        voice_melody_idx = []
+        current = len(treble_pitches) // 2
+        for _ in range(n_notes):
+            voice_melody_idx.append(current)
+            mid = len(treble_pitches) // 2
+            dist = current - mid
+            bias = -1 if dist > len(treble_pitches) // 4 else (1 if dist < -len(treble_pitches) // 4 else rng.choice([-1, 1]))
+            mag = 1 if rng.random() < 0.5 else 2
+            current = max(0, min(len(treble_pitches) - 1, current + bias * mag))
 
-    # Build voice measures with lyrics
-    voice_measures = []
-    pitch_idx = 0
-    syl_idx = 0
-    for m in range(1, n_measures + 1):
+        pitch_idx = 0
+        syl_idx = 0
+    else:
+        # Still consume rng to keep melody reproducible across variants
+        n_notes = n_measures * 4
+        _ = [rng.random() for _ in range(n_notes * 3)]
+        voice_melody_idx = []
+        pitch_idx = 0
+        syl_idx = 0
+
+    for m in range(1, n_measures + 1) if include_voice else range(0):
         pattern = rng.choice(VOICE_PATTERNS)
         notes = []
         for dur, ntype, dotted in pattern:
@@ -899,13 +913,16 @@ def generate_level7(seed: int, n_measures: int = 24) -> str:
             midi_approx = _pitch_to_index(f"{step}{octave}")
             stem = "up" if midi_approx < _pitch_to_index("B4") else "down"
 
-            text, syllabic = SYLLABLES[syl_idx % len(SYLLABLES)]
-            syl_idx += 1
-            lyric_xml = f"""
+            if include_lyrics:
+                text, syllabic = SYLLABLES[syl_idx % len(SYLLABLES)]
+                syl_idx += 1
+                lyric_xml = f"""
         <lyric number="1">
           <syllabic>{syllabic}</syllabic>
           <text>{text}</text>
         </lyric>"""
+            else:
+                lyric_xml = ""
 
             notes.append(f"""      <note>
         <pitch>
@@ -1013,12 +1030,8 @@ def generate_level7(seed: int, n_measures: int = 24) -> str:
 
     piano_bass = _generate_part_measures(rng, bass_mel, n_measures, divisions, fifths, "bass")
 
-    return f"""<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
-  "http://www.musicxml.org/dtds/partwise.dtd">
-<score-partwise version="4.0">
-  <part-list>
-    <score-part id="P1">
+    if include_voice:
+        part_list = """    <score-part id="P1">
       <part-name print-object="no">Voice</part-name>
     </score-part>
     <score-part id="P2">
@@ -1026,9 +1039,8 @@ def generate_level7(seed: int, n_measures: int = 24) -> str:
     </score-part>
     <score-part id="P3">
       <part-name print-object="no">Piano LH</part-name>
-    </score-part>
-  </part-list>
-  <part id="P1">
+    </score-part>"""
+        parts_xml = f"""  <part id="P1">
 {chr(10).join(voice_measures)}
   </part>
   <part id="P2">
@@ -1036,8 +1048,59 @@ def generate_level7(seed: int, n_measures: int = 24) -> str:
   </part>
   <part id="P3">
 {chr(10).join(piano_bass)}
+  </part>"""
+    else:
+        part_list = """    <score-part id="P1">
+      <part-name print-object="no">Piano RH</part-name>
+    </score-part>
+    <score-part id="P2">
+      <part-name print-object="no">Piano LH</part-name>
+    </score-part>"""
+        # Renumber piano parts from P2/P3 to P1/P2
+        piano_treble_p1 = [m.replace('', '') for m in piano_treble_measures]  # no-op, part id is at wrapper level
+        parts_xml = f"""  <part id="P1">
+{chr(10).join(piano_treble_measures)}
   </part>
+  <part id="P2">
+{chr(10).join(piano_bass)}
+  </part>"""
+
+    return f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list>
+{part_list}
+  </part-list>
+{parts_xml}
 </score-partwise>"""
+
+
+def generate_level7(seed: int, n_measures: int = 24) -> str:
+    """Standard Level 7: voice+piano+chords+lyrics, 24 measures."""
+    return generate_level7_parameterized(seed, n_measures=24, include_voice=True, include_lyrics=True)
+
+
+def generate_level6b(seed: int) -> str:
+    """Level 6b: Piano-only grand staff with chords, 24 measures.
+    Uses Level 6's generator with more measures (isolates length from Level 6).
+    """
+    return generate_level6(seed, n_measures=24)
+
+
+def generate_level7a(seed: int) -> str:
+    """Level 7a: Voice+piano, 16 measures, NO lyrics (isolates voice part addition)."""
+    return generate_level7_parameterized(seed, n_measures=16, include_voice=True, include_lyrics=False)
+
+
+def generate_level7b(seed: int) -> str:
+    """Level 7b: Voice+piano, 16 measures, WITH lyrics (isolates lyrics markup)."""
+    return generate_level7_parameterized(seed, n_measures=16, include_voice=True, include_lyrics=True)
+
+
+def generate_level7c(seed: int) -> str:
+    """Level 7c: Voice+piano, 24 measures, NO lyrics (isolates length from 7a)."""
+    return generate_level7_parameterized(seed, n_measures=24, include_voice=True, include_lyrics=False)
 
 
 GENERATORS = {
@@ -1048,6 +1111,10 @@ GENERATORS = {
     5: generate_level5,
     6: generate_level6,
     7: generate_level7,
+    "6b": generate_level6b,
+    "7a": generate_level7a,
+    "7b": generate_level7b,
+    "7c": generate_level7c,
 }
 
 
@@ -1233,8 +1300,13 @@ def batch_render(out_dir, filenames):
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--level", type=int, default=1, choices=list(GENERATORS.keys()),
-                        help="Difficulty level (default: 1)")
+    def _level_type(v):
+        try:
+            return int(v)
+        except ValueError:
+            return v
+    parser.add_argument("--level", type=_level_type, default=1, choices=list(GENERATORS.keys()),
+                        help="Difficulty level (default: 1). Supports 1-7 and variants 6b/7a/7b/7c.")
     parser.add_argument("--count", type=int, default=1000,
                         help="Number of scores to generate (default: 1000)")
     parser.add_argument("--measures", type=int, default=16,
@@ -1251,13 +1323,18 @@ def main():
     out_dir = Path(args.output) / f"level{args.level}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Generating {args.count} level-{args.level} scores ({args.measures} measures each)...")
+    # Variant generators (6b, 7a, 7b, 7c) have hardcoded n_measures — ignore CLI --measures
+    is_variant = isinstance(args.level, str)
+    print(f"Generating {args.count} level-{args.level} scores...")
 
     # Generate all MusicXML files
     filenames = []
     for i in range(args.count):
         seed = args.seed_start + i
-        musicxml = generator(seed, n_measures=args.measures)
+        if is_variant:
+            musicxml = generator(seed)
+        else:
+            musicxml = generator(seed, n_measures=args.measures)
         name = f"L{args.level}_{seed:05d}"
         mxml_path = out_dir / f"{name}.musicxml"
         mxml_path.write_text(musicxml)
