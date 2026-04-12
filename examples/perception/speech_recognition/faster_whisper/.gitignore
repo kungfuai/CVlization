@@ -1,0 +1,11 @@
+outputs/
+sample_data/
+__pycache__/
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+*.srt
+*.vtt
+*.json
