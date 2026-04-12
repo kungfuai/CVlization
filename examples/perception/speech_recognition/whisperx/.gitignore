@@ -1,0 +1,13 @@
+outputs/
+sample_data/
+examples/
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+*.aac
+*.pt
+*.pth
+*.bin
+*_smoke.json
