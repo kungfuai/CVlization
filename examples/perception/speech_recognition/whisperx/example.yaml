@@ -1,0 +1,55 @@
+name: whisperx
+capability: perception/speech_recognition
+modalities:
+  - audio
+  - text
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 12
+image: whisperx
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Transcribe speech with WhisperX alignment and optional diarization
+    path_args:
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run a CPU smoke test on the default sample audio
+tags:
+  - asr
+  - speech-recognition
+  - transcription
+  - speech-to-text
+  - whisper
+  - whisperx
+  - faster-whisper
+  - ctranslate2
+  - alignment
+  - word-timestamps
+  - diarization
+tasks:
+  - automatic_speech_recognition
+  - speech_to_text
+  - forced_alignment
+  - speaker_diarization
+frameworks:
+  - whisperx
+  - faster-whisper
+  - ctranslate2
+  - pytorch
+description: WhisperX speech transcription with VAD batching, forced alignment, word-level timestamps, and optional speaker diarization.
+
+verification:
+  last_verified: "2026-04-12"
+  last_verification_note: "Verified CVL discovery, Docker build, CPU int8 smoke inference with forced alignment, word-level timestamp JSON output, direct host output persistence, and cache reuse on Docker Desktop linux/arm64 (Apple M5 Pro host) running the linux/amd64 image under emulation. Built image: ~4.8GB. Sample transcript: \"It's an amazing gift and a unique privilege and I love going\"."

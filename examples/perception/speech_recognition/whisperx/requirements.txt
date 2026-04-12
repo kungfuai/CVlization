@@ -1,0 +1,12 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
+whisperx==3.8.5
+faster-whisper==1.2.1
+ctranslate2==4.7.1
+huggingface-hub==0.36.2
+nltk==3.9.4
+numpy==2.2.6
+omegaconf==2.3.0
+pandas==2.3.3
+pyannote-audio==4.0.4
+torchcodec==0.7.0
+transformers==4.57.6
