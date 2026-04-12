@@ -6,9 +6,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 IMG="${CVL_IMAGE:-cvlization/vlm-omr-sft:latest}"
 
 mkdir -p "${HOME}/.cache/huggingface"
-mkdir -p "${SCRIPT_DIR}/outputs"
 
-echo "Starting Gemma-3 OMR SFT training..."
+echo "Running eval_run.py with args: $@"
 
 docker run --rm --gpus=all \
   ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
@@ -18,9 +17,7 @@ docker run --rm --gpus=all \
   --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
   --env "PYTHONPATH=/cvlization_repo" \
   --env "PYTHONUNBUFFERED=1" \
-  ${WANDB_API_KEY:+--env "WANDB_API_KEY=${WANDB_API_KEY}"} \
-  ${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"} \
   --shm-size=16g \
-  "$IMG" python3 train.py "$@"
+  "$IMG" python3 eval_run.py "$@"
 
-echo "Training complete! Check the per-run subdirectory under ${SCRIPT_DIR}/outputs/ for the final_model."
+echo "Evaluation complete."

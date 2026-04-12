@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html><head><style>
+body { width: 720pt; height: 405pt; margin: 0; padding: 0; background: #FFFFFF; font-family: Arial, sans-serif; display: flex; flex-direction: column; }
+.header { background: #E41159; padding: 18pt 30pt; }
+.header h1 { color: #FFFFFF; font-size: 24pt; margin: 0; }
+.content { padding: 12pt 30pt; flex: 1; display: flex; gap: 20pt; }
+.col { flex: 1; }
+.section-title { color: #E41159; font-size: 14pt; font-weight: bold; margin: 0 0 10pt 0; }
+.divider { width: 1pt; background: #D9D5D2; }
+ul { margin: 0; padding-left: 0; list-style: none; }
+li { color: #110A29; font-size: 10pt; margin-bottom: 8pt; padding-left: 0; }
+</style></head><body>
+<div class="header"><h1>MXC: MusicXML Compact</h1></div>
+<div class="content">
+  <div class="col">
+    <p class="section-title">Design</p>
+    <ul>
+      <li>Line-based encoding: one note = one line</li>
+      <li>N C4 q 10080 su L1:s:Lord, (= quarter C4, stem up, lyric)</li>
+      <li>12&#215; compression: 14K tokens &#8594; 1.2K tokens</li>
+      <li>99.2% lossless round-trip on 500 samples</li>
+    </ul>
+  </div>
+  <div class="divider"></div>
+  <div class="col">
+    <p class="section-title">What it preserves</p>
+    <ul>
+      <li>Pitches, durations, stems, beams</li>
+      <li>Lyrics (bilingual, syllabic encoding)</li>
+      <li>Key/time signatures, clefs</li>
+      <li>Dynamics, directions, barlines</li>
+      <li>Composer, lyricist, title</li>
+    </ul>
+  </div>
+</div>
+<img src="kungfu-logo.png" style="position: absolute; bottom: 10pt; right: 20pt; width: 50pt; height: auto; opacity: 0.6;">
+</body></html>

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html><head><style>
+body { width: 720pt; height: 405pt; margin: 0; padding: 0; background: #FFFFFF; font-family: Arial, sans-serif; display: flex; flex-direction: column; }
+.header { background: #E41159; padding: 18pt 30pt; }
+.header h1 { color: #FFFFFF; font-size: 24pt; margin: 0; }
+.content { padding: 16pt 30pt; flex: 1; }
+</style></head><body>
+<div class="header"><h1>OpenScore Dataset Pipeline</h1></div>
+<div class="content">
+  <div style="background: #F5F3F2; border: 1pt solid #D9D5D2; border-radius: 4pt; padding: 12pt;">
+    <p style="color: #110A29; font-size: 11pt; margin: 0 0 8pt 0;"><b>Source:</b> OpenScore corpus (1,460 lieder, 122 quartets, 94 orchestra scores)</p>
+    <p style="color: #110A29; font-size: 11pt; margin: 0 0 8pt 0;"><b>Render:</b> MusicXML &#8594; LilyPond &#8594; PNG page images (835&#215;1181px)</p>
+    <p style="color: #110A29; font-size: 11pt; margin: 0 0 8pt 0;"><b>Slice:</b> music21 splits MusicXML per page using SVG bar numbers</p>
+    <p style="color: #110A29; font-size: 11pt; margin: 0 0 8pt 0;"><b>Result:</b> 14,456 (image, MusicXML) pairs on HuggingFace (zzsi/openscore)</p>
+    <p style="color: #110A29; font-size: 11pt; margin: 0;"><b>Also:</b> OLiMPiC dataset &#8212; 18K system-level piano crops with MusicXML</p>
+  </div>
+</div>
+<img src="kungfu-logo.png" style="position: absolute; bottom: 10pt; right: 20pt; width: 50pt; height: auto; opacity: 0.6;">
+</body></html>

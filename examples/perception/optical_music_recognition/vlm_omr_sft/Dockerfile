@@ -9,6 +9,16 @@ RUN apt-get update && apt-get install -y \
 # Unsloth controls all core dependency versions
 RUN pip install --no-cache-dir "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
 
+# NOTE: flash-attn 2.8.3 causes garbage output on Blackwell (SM120) with unsloth/Qwen3.5.
+# PyTorch SDPA is used instead (attn_implementation="sdpa").
+# RUN pip install --no-cache-dir https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.0/flash_attn-2.8.3%2Bcu128torch2.9-cp311-cp311-linux_x86_64.whl
+
+# Optional: causal-conv1d and flash-linear-attention for Qwen3.5 fast path
+# NOTE: Only enable for training NEW models. Existing checkpoints trained without
+# these libs will produce garbage if loaded with them (different computation graph).
+# RUN MAX_JOBS=8 pip install --no-cache-dir causal-conv1d --no-build-isolation
+# RUN MAX_JOBS=8 pip install --no-cache-dir flash-linear-attention --no-build-isolation
+
 RUN pip install --no-cache-dir datasets==3.4.1 pyyaml==6.0.2 pillow==11.1.0 timm==1.0.12 wandb==0.19.9 qwen-vl-utils==0.0.10 addict matplotlib
 
 RUN python -c "import torch; print(f'PyTorch: {torch.__version__}')" && \
