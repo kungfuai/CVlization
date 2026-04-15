@@ -1,0 +1,47 @@
+name: musicgen
+capability: generative/audio
+modalities:
+  - text
+  - audio
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 20
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate music from text
+    path_args:
+      - flag: "--input"
+        type: file
+      - flag: "--output"
+        type: file
+      - flag: "--melody"
+        type: file
+  test:
+    script: test.sh
+    description: Run smoke test
+tags:
+  - text-to-music
+  - music-generation
+  - audiocraft
+  - musicgen
+  - meta
+  - pytorch
+tasks:
+  - text_to_music
+  - music_generation
+  - melody_conditioned_generation
+frameworks:
+  - pytorch
+  - audiocraft
+description: Text-to-music generation with Meta AudioCraft MusicGen
+verification:
+  last_verified: "2026-04-15"
+  last_verification_note: "Verified cvl info, cvl run build, cvl run test, zzsi/cvl sample data download, and cvl run predict host output persistence on NVIDIA RTX PRO 6000 Blackwell Max-Q with PyTorch 2.9.1/CUDA 12.8. Full facebook/musicgen-small inference passed: 32 kHz mono WAV, 10 seconds."
