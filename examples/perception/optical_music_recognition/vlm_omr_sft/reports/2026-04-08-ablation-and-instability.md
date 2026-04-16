@@ -365,24 +365,214 @@ The most effective documented solution is **Sequence Length Warmup**, which
 we haven't tried. We could leverage the existing 16-measure datasets (Level
 6, 7a) as warmup before training on 24-measure content (6b, 7).
 
-### Open issues
+## Experiment 16: Tier 1 experiments — bf16, curriculum, openscore (2026-04-13)
 
-1. **Spikes are still present** — the stable run has 9 large spikes, just
-   smaller than before. Further tuning might help (longer warmup, even
-   lower LR, or batch shuffling to break up the bad batch). Sequence Length
-   Warmup is the most promising untried fix.
+### Experiment A: bf16 on 6b
 
-2. **EOS learning is partial** — the model uses `<|endoftext|>` instead of
-   `<|im_end|>`, which works but isn't fully aligned with training format.
-   Could be improved with more training or explicit EOS token configuration.
+**WandB run**: `bsdwhinm`. Tests Unsloth's recommendation that Qwen3.5
+should use bf16 instead of 4-bit.
 
-3. **The 27pp length penalty** is real but not catastrophic. It suggests
-   that for openscore (full pages with even more content), the model will
-   be limited by sequence length even with proper training.
+| Metric | 4-bit stable (Exp 15) | **bf16** |
+|---|---|---|
+| Spikes >5× | 9 | 7 |
+| Step 742 loss | 0.01017 | 0.01053 |
+| **Pitched-only sim** | **68%** | **64%** |
+| Key accuracy | 50/50 | 45/50 |
+| Peak VRAM | ~12 GB | 42 GB |
 
+**Result: bf16 does not help.** Similar spikes, slightly worse accuracy.
+4-bit quantization is NOT the root cause of training instability.
+
+### Experiment B: Curriculum 6 → 6b
+
+**WandB run**: `o4web7uq`. Resumed from Level 6 (16m) adapter
+(`outputs/0jbjvq3t/final_model`) and trained on Level 6b (24m), 3 epochs.
+
+**Training stability:**
+
+| Metric | From scratch (4-bit) | From scratch (bf16) | **Curriculum (6→6b)** |
+|---|---|---|---|
+| Spikes >5× | 9 | 7 | **0** |
+| Step 742 loss | 0.01017 | 0.01053 | **0.00015** (67× lower) |
+| Best eval_loss | 0.00011 | 0.00010 | **0.00002** (5× better) |
+
+**Accuracy (n=50):**
+
+| Metric | From scratch stable | **Curriculum** |
+|---|---|---|
+| **Pitched-only sim** | 68% | **94%** |
+| Rhythm similarity | 75% | **84%** |
+| Combined sim | 81% | **97%** |
+| Coverage | 100% | 100% |
+| Unique pitches | 30/33 | **33/33** (perfect) |
+| Key accuracy | 50/50 | 50/50 |
+
+**The "27pp length penalty" was almost entirely training instability.**
+Curriculum 6b scores 94% — only 1pp below Level 6 (16m) at 95%.
+
+### Experiment C: Openscore lieder with 8K context
+
+Trained Qwen3.5-9B r=32 MXC on openscore lieder (~3K pages),
+`max_length=8192`, LR=5e-5, max_grad_norm=0.1, 3 epochs.
+
+Note: only 39% of lieder pages fit in 8192 tokens. 61% are truncated.
+
+**Accuracy (n=50):**
+
+| Metric | Old openscore (4K, n=10) | **New openscore (8K, n=50)** |
+|---|---|---|
+| Pitched-only sim | 35%\* | **18%** |
+| Rhythm similarity | — | 20% |
+| Coverage | — | 99% |
+| Unique pitches | — | 16/39 (41%) |
+| Key accuracy | — | 44/50 (88%) |
+| Time accuracy | — | 22/50 (44%) |
+
+\* n=10, not validated.
+
+**18% on real lieder pages.** Significantly lower than the old n=10
+estimate (35%). The model only covers 41% of the pitch vocabulary.
+Time signature accuracy is 44% — the model struggles with real music's
+diverse time signatures (3/4, 6/8, etc. vs always 4/4 in synthetic).
+
+### Summary: curriculum > hyperparameter tuning > quantization
+
+| Approach | Spikes | 6b pitch | Effect |
+|---|---|---|---|
+| From scratch, default LR | 16 | 36% | baseline |
+| Lower LR + tighter clipping | 9 | 68% | +32pp |
+| bf16 quantization | 7 | 64% | +28pp |
+| **Curriculum (6→6b)** | **0** | **94%** | **+58pp** |
+
+### The synthetic-to-real gap
+
+| Dataset | Pitched-only | Notes |
+|---|---|---|
+| Level 6b (curriculum) | **94%** | Synthetic piano, 24m |
+| Level 7 (8K) | 67% | Synthetic voice+piano+lyrics |
+| **Openscore (8K, n=50)** | **18%** | Real lieder pages |
+
+The 76pp gap between synthetic (94%) and real (18%) shows that training
+stability is solved but **data representativeness** is now the bottleneck.
+
+Causes of the gap:
+1. Token truncation: 61% of openscore pages truncated at 8K
+2. Content diversity: real music has irregular rhythms, ornaments, dynamics
+3. Page density: real pages have 4.5× more notes than synthetic
+4. Time signature variety: synthetic is always 4/4; real uses 3/4, 6/8, etc.
+5. Visual complexity: real scans have varied layout, system breaks
+
+## Experiment 17: Level 7 variants — lyrics effect and curriculum (2026-04-14)
+
+### 7b with stable LR (lyrics effect isolation)
+
+**Goal**: Determine whether lyrics genuinely hurt accuracy, or if the
+original 42% was caused by LR=2e-4 instability.
+
+**Setup**: Same as original 7b but with LR=5e-5, max_grad_norm=0.1.
+
+| Metric | 7a (no lyrics, LR=2e-4) | 7b old (lyrics, LR=2e-4) | **7b stable (lyrics, LR=5e-5)** |
+|---|---|---|---|
+| Pitched-only sim | 91% | 42% | **64%** |
+| Rhythm similarity | 90% | 55% | 64% |
+| Coverage | 110% | 206% | **142%** |
+| Parts accuracy | 50/50 | 50/50 | **42/50** |
+
+**Result: lyrics DO hurt accuracy (−27pp), even with stable training.**
+The lower LR improved 7b from 42% → 64% (+22pp), but the gap vs 7a (91%)
+remains large. Coverage at 142% means the model still overgenerates.
+Parts accuracy degraded to 42/50 — the model sometimes confuses part
+assignments when lyrics are present.
+
+### Level 7 with curriculum (7a → 7)
+
+**Goal**: Apply the proven curriculum approach to the full Level 7
+(voice+piano+lyrics, 24 measures).
+
+**Setup**: Resume from Level 7a (16m, voice+piano, no lyrics) adapter,
+train on Level 7 (24m, lyrics), LR=5e-5, max_grad_norm=0.1, 3 epochs.
+
+| Metric | Level 7 old (LR=2e-4) | **Level 7 curriculum (7a→7)** |
+|---|---|---|
+| Pitched-only sim | 67% | **82%** |
+| Rhythm similarity | 59% | **82%** |
+| Combined sim | 73% | **88%** |
+| Coverage | 104% | 109% |
+| Unique pitches | 17/32 | **30/32** |
+| Max pitch | 81% | **99%** |
+| Parts accuracy | 50/50 | 50/50 |
+
+**Result: curriculum improves Level 7 from 67% to 82% (+15pp).** Not as
+dramatic as 6b (68% → 94%) because Level 7 has the additional lyrics
+penalty, but still a major improvement.
+
+### The lyrics effect
+
+Comparing across all n=50 results:
+
+| | No lyrics | With lyrics | Lyrics penalty |
+|---|---|---|---|
+| **16 measures** | 7a: 91% | 7b stable: 64% | **−27pp** |
+| **24 measures (curriculum)** | 6b curriculum: 94% | 7 curriculum: 82% | **−12pp** (\*) |
+
+(\*) Not a clean comparison — 6b is piano-only (2 parts) while Level 7
+has voice+piano (3 parts). The true lyrics-only penalty at 24m would
+require a "7c curriculum" (voice+piano, 24m, NO lyrics, curriculum).
+
+### Experiment 18: 7b with curriculum (lyrics penalty isolation)
+
+**WandB run**: latest. Resume from Level 7a (16m, no lyrics) adapter,
+train on Level 7b (16m, WITH lyrics), LR=5e-5, 3 epochs.
+
+| Approach | Pitched-only | Rhythm | Coverage | Parts |
+|---|---|---|---|---|
+| 7a (no lyrics, baseline) | 91% | 90% | 110% | 50/50 |
+| 7b from-scratch (LR=2e-4) | 42% | 55% | 206% | 50/50 |
+| 7b stable (LR=5e-5) | 64% | 64% | 142% | 42/50 |
+| **7b curriculum (7a→7b)** | **87%** | **89%** | **100%** | **50/50** |
+
+**Result: the lyrics penalty is only ~4pp, not ~27pp.** Curriculum took
+7b from 64% → 87% (+23pp). The gap vs 7a (91%) is now just 4pp.
+Coverage is perfect (100%), parts restored to 50/50, inference time
+dropped from 172s to 100s (proper EOS).
+
+### The lyrics penalty was mostly training dynamics
+
+| | Without curriculum | With curriculum | Real penalty |
+|---|---|---|---|
+| No lyrics → lyrics (16m) | 91% → 64% (−27pp) | 91% → 87% (**−4pp**) | **−4pp** |
+| No lyrics → lyrics (24m) | — | 94% → 82% (−12pp\*) | **−12pp\*** |
+
+(\*) 24m comparison confounded: 6b is 2 parts, Level 7 is 3 parts.
+
+### Full penalty decomposition (with curriculum everywhere)
+
+Starting from Level 6 (95%, piano, 16m, no lyrics):
+
+| Factor | Penalty | Evidence |
+|---|---|---|
+| Length (16m → 24m) | **−1pp** | Level 6 (95%) → 6b curriculum (94%) |
+| Voice part (2 → 3 parts) | **−4pp** | Level 6 (95%) → 7a (91%) |
+| Lyrics | **−4pp** | 7a (91%) → 7b curriculum (87%) |
+| All combined (incl. interactions) | **−13pp** | Level 6 (95%) → Level 7 curriculum (82%) |
+
+Every factor that previously looked catastrophic turned out to be mostly
+training dynamics:
+- "Length penalty" (−27pp) → real: −1pp
+- "Voice part penalty" (−55pp) → real: −4pp
+- "Lyrics penalty" (−27pp) → real: −4pp
+
+### Updated synthetic ladder (all n=50, best approach)
+
+| Variant | Parts | Meas. | Lyrics | Approach | Pitched-only |
+|---|---|---|---|---|---|
+| Level 6 (8K) | 2 | 16 | No | from scratch | **95%** |
+| Level 6b | 2 | 24 | No | curriculum (6→6b) | **94%** |
+| Level 7a | 3 | 16 | No | from scratch | **91%** |
+| **Level 7b** | **3** | **16** | **Yes** | **curriculum (7a→7b)** | **87%** |
+| Level 7 | 3 | 24 | Yes | curriculum (7a→7) | **82%** |
 
 ---
 
 **Continued in [`2026-04-12-findings.md`](2026-04-12-findings.md)** — current
-state of knowledge: reliable findings, retracted claims, open questions, and
-next steps.
+state of knowledge.
