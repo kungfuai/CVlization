@@ -1597,6 +1597,354 @@ def generate_level8(seed: int, n_measures: int = 24) -> str:
 </score-partwise>"""
 
 
+# ── Level 9: Multi-voice piano (openscore-realistic) ──────────────────────────
+# Piano as a single <part> with 2 staves, 2 voices (treble melody + bass accomp).
+# Uses <backup> between voices, <voice>, <staff> elements.
+# More slurs, directions, rests (matching openscore ratios).
+
+
+def generate_level9(seed: int, n_measures: int = 24) -> str:
+    """Level 9: Multi-voice piano + voice with bilingual lyrics.
+
+    Adds to Level 8:
+    - Piano as single <part> with staves=2, voice 1 (treble) + voice 2 (bass)
+    - <backup> elements between voices within each measure
+    - <voice> and <staff> elements on every note
+    - Many more rests (matching openscore's ~56/page)
+    - More slurs (~30/page) and directions (~30/page)
+    """
+    rng = random.Random(seed)
+    divisions = 480
+
+    beats, beat_type = rng.choice(LEVEL8_TIME_SIGS)
+    beat_dur_q = 4.0 / beat_type
+    measure_dur_q = beats * beat_dur_q
+
+    fifths, altered, treble_pitches = _make_key_and_pitches(rng, "treble")
+    _, _, bass_pitches = _make_key_and_pitches(random.Random(seed + 1000), "bass")
+    bass_pitches = [(s, o, altered.get(s, 0)) for s, o, _ in bass_pitches]
+
+    title = rng.choice(LEVEL8_TITLES)
+    composer = rng.choice(LEVEL8_COMPOSERS)
+    tempo_mark = rng.choice(LEVEL8_TEMPO_MARKS)
+
+    # ── Rhythm patterns for this time signature ────────────────────────────
+    def _make_patterns():
+        patterns = []
+        if beat_type == 4:
+            unit = [(1.0, "quarter", False)]
+            half = [(2.0, "half", False)]
+            dotted_q = [(1.5, "quarter", True), (0.5, "eighth", False)]
+            eighth_pair = [(0.5, "eighth", False)] * 2
+            if beats == 4:
+                patterns = [unit*4, half+unit*2, unit*2+half, dotted_q+half,
+                            eighth_pair+unit*3, [(4.0, "whole", False)]]
+            elif beats == 3:
+                patterns = [unit*3, half+unit, unit+half, [(3.0, "half", True)]]
+            elif beats == 2:
+                patterns = [unit*2, half, dotted_q, eighth_pair+unit]
+        elif beat_type == 8:
+            if beats == 6:
+                trip = [(0.5, "eighth", False)] * 3
+                dq = [(1.5, "quarter", True)]
+                patterns = [trip+trip, dq+trip, trip+dq, dq+dq]
+            elif beats == 3:
+                patterns = [[(0.5, "eighth", False)]*3, [(1.5, "quarter", True)]]
+        elif beat_type == 2:
+            patterns = [[(2.0, "half", False)]*2, [(1.0, "quarter", False)]*4,
+                        [(4.0, "whole", False)], [(3.0, "half", True), (1.0, "quarter", False)]]
+        if not patterns:
+            n = max(1, int(measure_dur_q))
+            patterns = [[(1.0, "quarter", False)] * n]
+        return patterns
+
+    voice_patterns = _make_patterns()
+    piano_patterns = _make_patterns()
+
+    # ── Generate melodies ──────────────────────────────────────────────────
+    def _gen_melody(pitches, n, seed_offset=0):
+        r = random.Random(seed + seed_offset)
+        mel = []
+        cur = len(pitches) // 2
+        for _ in range(n):
+            mel.append(cur)
+            mid = len(pitches) // 2
+            d = cur - mid
+            bias = -1 if d > len(pitches)//4 else (1 if d < -len(pitches)//4 else r.choice([-1,1]))
+            mag = 1 if r.random() < 0.5 else 2
+            cur = max(0, min(len(pitches)-1, cur + bias*mag))
+        return mel
+
+    voice_mel = _gen_melody(treble_pitches, n_measures * 6, 100)
+    piano_treble_mel = _gen_melody(treble_pitches, n_measures * 8, 200)
+    piano_bass_mel = _gen_melody(bass_pitches, n_measures * 8, 300)
+
+    # ── Helper: build a note XML element ───────────────────────────────────
+    def _note_xml(step, octave, alter, dur_q, ntype, dotted, stem,
+                  voice=None, staff=None, chord=False, tie=None, lyric_xml=""):
+        alter_xml = f"\n          <alter>{alter}</alter>" if alter != 0 else ""
+        dot_xml = "\n        <dot />" if dotted else ""
+        dur_ticks = int(dur_q * divisions)
+        chord_xml = "\n        <chord />" if chord else ""
+        voice_xml = f"\n        <voice>{voice}</voice>" if voice else ""
+        staff_xml = f"\n        <staff>{staff}</staff>" if staff else ""
+        tie_xml = ""
+        if tie == "start":
+            tie_xml = '\n        <tie type="start" />'
+        elif tie == "stop":
+            tie_xml = '\n        <tie type="stop" />'
+        elif tie == "both":
+            tie_xml = '\n        <tie type="stop" />\n        <tie type="start" />'
+        return f"""      <note>{chord_xml}
+        <pitch>
+          <step>{step}</step>{alter_xml}
+          <octave>{octave}</octave>
+        </pitch>
+        <duration>{dur_ticks}</duration>
+        <type>{ntype}</type>{dot_xml}{tie_xml}
+        <stem>{stem}</stem>{voice_xml}{staff_xml}{lyric_xml}
+      </note>"""
+
+    def _rest_xml(dur_q, ntype, dotted, voice=None, staff=None, measure_rest=False):
+        dur_ticks = int(dur_q * divisions)
+        dot_xml = "\n        <dot />" if dotted else ""
+        voice_xml = f"\n        <voice>{voice}</voice>" if voice else ""
+        staff_xml = f"\n        <staff>{staff}</staff>" if staff else ""
+        mrest = ' measure="yes"' if measure_rest else ""
+        return f"""      <note>
+        <rest{mrest} />
+        <duration>{dur_ticks}</duration>
+        <type>{ntype}</type>{dot_xml}{voice_xml}{staff_xml}
+      </note>"""
+
+    def _backup_xml(dur_q):
+        return f"      <backup><duration>{int(dur_q * divisions)}</duration></backup>"
+
+    def _direction_xml(dyn, placement="below"):
+        return f"""      <direction placement="{placement}">
+        <direction-type><dynamics><{dyn} /></dynamics></direction-type>
+      </direction>"""
+
+    # ── Voice part (P1) ────────────────────────────────────────────────────
+    voice_measures = []
+    v_idx = 0
+    syl_de = 0
+    syl_en = 0
+    v_pending_tie = False
+    v_slur_active = False
+    v_dyn_placed = False
+
+    for m in range(1, n_measures + 1):
+        notes = []
+        attrs = ""
+        if m == 1:
+            attrs = f"""      <attributes>
+        <divisions>{divisions}</divisions>
+        <key><fifths>{fifths}</fifths></key>
+        <time><beats>{beats}</beats><beat-type>{beat_type}</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="above">
+        <direction-type>
+          <words font-size="12" font-weight="bold">{tempo_mark}</words>
+        </direction-type>
+      </direction>"""
+
+        # Voice rests for intro / interludes
+        if m <= rng.randint(1, 4) or (rng.random() < 0.06 and not v_pending_tie):
+            ntype = {4.0:"whole", 3.0:"half", 2.0:"half", 1.5:"quarter"}.get(measure_dur_q, "whole")
+            dotted = measure_dur_q == 3.0
+            notes.append(_rest_xml(measure_dur_q, ntype, dotted, measure_rest=True))
+        else:
+            pattern = rng.choice(voice_patterns)
+            for pi, (dur_q, ntype, dotted) in enumerate(pattern):
+                step, octave, alter = treble_pitches[voice_mel[v_idx % len(voice_mel)]]
+                v_idx += 1
+                midi = _pitch_to_index(f"{step}{octave}")
+                stem = "up" if midi < _pitch_to_index("B4") else "down"
+
+                tie = None
+                if v_pending_tie:
+                    tie = "stop"
+                    v_pending_tie = False
+                if pi == len(pattern)-1 and rng.random() < 0.12:
+                    tie = "start" if tie is None else "both"
+                    v_pending_tie = True
+
+                # Slurs (more frequent than L8)
+                slur_notation = ""
+                if not v_slur_active and rng.random() < 0.18:
+                    slur_notation = "\n        <notations><slur type=\"start\" /></notations>"
+                    v_slur_active = True
+                elif v_slur_active and rng.random() < 0.35:
+                    slur_notation = "\n        <notations><slur type=\"stop\" /></notations>"
+                    v_slur_active = False
+
+                # Dynamics
+                if not v_dyn_placed and m >= 3:
+                    notes.append(_direction_xml(rng.choice(LEVEL8_DYNAMICS)))
+                    v_dyn_placed = True
+                elif rng.random() < 0.07:
+                    notes.append(_direction_xml(rng.choice(LEVEL8_DYNAMICS)))
+
+                # Bilingual lyrics
+                t_de, s_de = LEVEL8_LYRICS_DE[syl_de % len(LEVEL8_LYRICS_DE)]
+                t_en, s_en = LEVEL8_LYRICS_EN[syl_en % len(LEVEL8_LYRICS_EN)]
+                syl_de += 1; syl_en += 1
+                lyric_xml = f"""
+        <lyric number="1"><syllabic>{s_de}</syllabic><text>{t_de}</text></lyric>
+        <lyric number="2"><syllabic>{s_en}</syllabic><text>{t_en}</text></lyric>"""
+
+                n_xml = _note_xml(step, octave, alter, dur_q, ntype, dotted, stem,
+                                  tie=tie, lyric_xml=lyric_xml)
+                # Inject slur notation before closing </note>
+                if slur_notation:
+                    n_xml = n_xml.replace("</note>", f"{slur_notation}\n      </note>")
+                notes.append(n_xml)
+
+        voice_measures.append(f"""    <measure number="{m}">
+{attrs}
+{chr(10).join(notes)}
+    </measure>""")
+
+    # ── Piano part (P2): single part, 2 staves, 2 voices ──────────────────
+    piano_measures = []
+    pt_idx = 0  # treble melody index
+    pb_idx = 0  # bass melody index
+    pt_pending_tie = False
+    pb_pending_tie = False
+    piano_dyn_placed = False
+
+    for m in range(1, n_measures + 1):
+        notes = []
+        attrs = ""
+        if m == 1:
+            attrs = f"""      <attributes>
+        <divisions>{divisions}</divisions>
+        <key><fifths>{fifths}</fifths></key>
+        <time><beats>{beats}</beats><beat-type>{beat_type}</beat-type></time>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>"""
+
+        if not piano_dyn_placed and m == 1:
+            notes.append(_direction_xml(rng.choice(LEVEL8_DYNAMICS)))
+            piano_dyn_placed = True
+        elif rng.random() < 0.08:
+            notes.append(_direction_xml(rng.choice(LEVEL8_DYNAMICS)))
+
+        # Voice 1 (treble, staff 1): chords
+        pattern_t = rng.choice(piano_patterns)
+        treble_dur_total = 0
+        for pi, (dur_q, ntype, dotted) in enumerate(pattern_t):
+            root_idx = piano_treble_mel[pt_idx % len(piano_treble_mel)]
+            pt_idx += 1
+            step, octave, alter = treble_pitches[root_idx]
+            midi = _pitch_to_index(f"{step}{octave}")
+            stem = "down"  # treble chords stem down in piano
+
+            tie = None
+            if pt_pending_tie:
+                tie = "stop"; pt_pending_tie = False
+            if pi == len(pattern_t)-1 and rng.random() < 0.10:
+                tie = "start" if tie is None else "both"
+                pt_pending_tie = True
+
+            notes.append(_note_xml(step, octave, alter, dur_q, ntype, dotted,
+                                   stem, voice=1, staff=1, tie=tie))
+            # Chord tones
+            for offset in ([2, 4] if rng.random() < 0.5 else [2]):
+                ci = min(root_idx + offset, len(treble_pitches)-1)
+                cs, co, ca = treble_pitches[ci]
+                notes.append(_note_xml(cs, co, ca, dur_q, ntype, dotted,
+                                       stem, voice=1, staff=1, chord=True))
+            treble_dur_total += dur_q
+
+        # Backup to start of measure
+        notes.append(_backup_xml(treble_dur_total))
+
+        # Voice 2 (bass, staff 2): simpler accompaniment with rests
+        # Sometimes rest for first beat(s), then play
+        bass_rest_beats = rng.choice([0, 0, 0, 1, 1, 2]) if beats >= 3 else rng.choice([0, 0, 1])
+        bass_rest_q = bass_rest_beats * beat_dur_q
+        remaining_q = measure_dur_q - bass_rest_q
+
+        if bass_rest_q > 0:
+            rest_ntype = {2.0:"half", 1.5:"quarter", 1.0:"quarter", 0.5:"eighth"}.get(
+                bass_rest_q, "quarter")
+            rest_dotted = bass_rest_q == 1.5 or bass_rest_q == 3.0
+            notes.append(_rest_xml(bass_rest_q, rest_ntype, rest_dotted, voice=2, staff=2))
+
+        if remaining_q > 0:
+            # Generate bass notes to fill remaining duration
+            pattern_b = rng.choice(piano_patterns)
+            # Scale pattern to fit remaining duration
+            total_p = sum(d for d, _, _ in pattern_b)
+            scale = remaining_q / total_p if total_p > 0 else 1
+            for pi, (dur_q_orig, ntype, dotted) in enumerate(pattern_b):
+                dur_q = dur_q_orig * scale
+                # Snap to nearest valid duration
+                if dur_q >= 3.5: ntype, dur_q, dotted = "whole", 4.0, False
+                elif dur_q >= 2.5: ntype, dur_q, dotted = "half", round(remaining_q) if pi == len(pattern_b)-1 else 2.0, False
+                elif dur_q >= 1.25: ntype, dur_q, dotted = "quarter", 1.5, True
+                elif dur_q >= 0.75: ntype, dur_q, dotted = "quarter", 1.0, False
+                elif dur_q >= 0.375: ntype, dur_q, dotted = "eighth", 0.5, False
+                else: continue
+
+                step, octave, alter = bass_pitches[piano_bass_mel[pb_idx % len(piano_bass_mel)]]
+                pb_idx += 1
+                midi = _pitch_to_index(f"{step}{octave}")
+                stem = "up"  # bass notes stem up
+
+                tie = None
+                if pb_pending_tie:
+                    tie = "stop"; pb_pending_tie = False
+                if pi == len(pattern_b)-1 and rng.random() < 0.08:
+                    tie = "start" if tie is None else "both"
+                    pb_pending_tie = True
+
+                notes.append(_note_xml(step, octave, alter, dur_q, ntype, dotted,
+                                       stem, voice=2, staff=2, tie=tie))
+                # Occasional chord in bass
+                if rng.random() < 0.3:
+                    ci = min(piano_bass_mel[pb_idx % len(piano_bass_mel)] + 2, len(bass_pitches)-1)
+                    cs, co, ca = bass_pitches[ci]
+                    notes.append(_note_xml(cs, co, ca, dur_q, ntype, dotted,
+                                           stem, voice=2, staff=2, chord=True))
+
+        piano_measures.append(f"""    <measure number="{m}">
+{attrs}
+{chr(10).join(notes)}
+    </measure>""")
+
+    return f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <work>
+    <work-title>{title}</work-title>
+  </work>
+  <identification>
+    <creator type="composer">{composer}</creator>
+  </identification>
+  <part-list>
+    <score-part id="P1">
+      <part-name print-object="no">Voice</part-name>
+    </score-part>
+    <score-part id="P2">
+      <part-name print-object="no">Piano</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+{chr(10).join(voice_measures)}
+  </part>
+  <part id="P2">
+{chr(10).join(piano_measures)}
+  </part>
+</score-partwise>"""
+
+
 GENERATORS = {
     1: generate_level1,
     2: generate_level2,
@@ -1606,6 +1954,7 @@ GENERATORS = {
     6: generate_level6,
     7: generate_level7,
     8: generate_level8,
+    9: generate_level9,
     "6b": generate_level6b,
     "7a": generate_level7a,
     "7b": generate_level7b,
