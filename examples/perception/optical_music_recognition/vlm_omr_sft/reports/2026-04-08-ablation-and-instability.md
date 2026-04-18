@@ -572,6 +572,59 @@ training dynamics:
 | **Level 7b** | **3** | **16** | **Yes** | **curriculum (7a→7b)** | **87%** |
 | Level 7 | 3 | 24 | Yes | curriculum (7a→7) | **82%** |
 
+## Experiment 19: Openscore with curriculum (2026-04-17)
+
+### Openscore 8K + curriculum (Level 7 → openscore)
+
+Resume from Level 7 curriculum adapter (82% on synthetic), train on
+openscore lieder (~3K pages) with 8K context, 3 epochs.
+
+| Metric | No curriculum (Exp C) | **8K + curriculum** |
+|---|---|---|
+| Pitched-only sim | 18% | **18%** |
+| Rhythm similarity | 20% | 24% |
+| Coverage | 99% | 90% |
+| Time accuracy | 22/50 | 23/50 |
+
+**Curriculum did NOT help.** The Level 7 synthetic adapter provided zero
+transfer benefit to real music.
+
+### Openscore 16K + curriculum (Level 7 → openscore)
+
+Same but with `max_length=16384`. 85% of lieder pages fit (vs 39% at 8K).
+
+| Metric | 8K + curriculum | **16K + curriculum** |
+|---|---|---|
+| Pitched-only sim | 18% | **21%** |
+| Rhythm similarity | 24% | 21% |
+| Coverage | 90% | **383%** |
+| Time accuracy | 23/50 | 23/50 |
+
+**16K barely helped (+3pp) and caused severe overgeneration (383% coverage).**
+The model produces 4× too much output at 16K.
+
+### Why curriculum failed on openscore
+
+**Critical correction**: openscore images are also rendered by LilyPond —
+same renderer as synthetic data. There is NO visual domain gap. The
+synthetic-to-real gap is entirely about **content complexity**:
+
+1. Real lieder have 4-5× more notes per page than synthetic Level 7
+2. Real music uses diverse time signatures (3/4, 6/8, 2/4) — synthetic
+   is always 4/4 (model gets time sig wrong 56% of the time)
+3. Real music has complex voice assignments, cross-staff notes, multiple
+   voices per staff
+4. Real music has ornaments, dynamics, tempo changes, fermatas — none
+   in synthetic data
+5. Token truncation: even at 16K, 15% of pages are still truncated
+
+The model learned to read LilyPond notation perfectly on simple content
+(82-94% on synthetic). But it hasn't learned the musical vocabulary of
+real compositions. Same visual rendering, different music.
+
+**Implication**: improving the synthetic generator to produce more complex
+music is a viable path forward, since visual domain transfer is perfect.
+
 ---
 
 **Continued in [`2026-04-12-findings.md`](2026-04-12-findings.md)** — current
