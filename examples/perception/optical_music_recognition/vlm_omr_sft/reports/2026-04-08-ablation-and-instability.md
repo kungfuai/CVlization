@@ -625,6 +625,71 @@ real compositions. Same visual rendering, different music.
 **Implication**: improving the synthetic generator to produce more complex
 music is a viable path forward, since visual domain transfer is perfect.
 
+## Experiment 20: Levels 8-9 and openscore transfer (2026-04-19)
+
+### Level 8: ties, slurs, dynamics, varied time sigs, bilingual lyrics
+
+**WandB run**: `147231qy`. Curriculum from Level 7 adapter.
+
+Added features: `div=480`, ties (`tie=start/stop`), slurs, dynamics
+(`dir @below dyn=mp`), tempo markings, varied time sigs (3/4, 6/8, 2/2),
+bilingual lyrics (L1: German + L2: English), headers (title, composer).
+
+| Metric | Level 7 (curriculum) | **Level 8** |
+|---|---|---|
+| Pitched-only | 82% | **77%** (−5pp) |
+| Training spikes | 0 | 0 |
+
+### Level 9: multi-voice piano (backup, voice, staff)
+
+Curriculum from Level 8 adapter. Added: piano as single `<part>` with
+`staves=2`, voice 1 (treble chords, `v=1 st=1`) + voice 2 (bass accomp,
+`v=2 st=2`), `bak` (backup) commands between voices, more rests.
+
+| Metric | Level 8 | **Level 9** |
+|---|---|---|
+| Pitched-only | 77% | **65%** (−12pp) |
+| Coverage | 139% | **158%** |
+| Key accuracy | 50/50 | **40/50** |
+
+Multi-voice notation is the hardest synthetic feature — the model
+struggles with `bak`/`v=`/`st=` constructs and overgenerates.
+
+### Openscore transfer from Level 9
+
+| | From Level 7 | From Level 8 | **From Level 9** |
+|---|---|---|---|
+| Openscore pitched-only | 18% | 18% | **23%** |
+| Openscore rhythm | 24% | — | 25% |
+| Openscore time accuracy | 23/50 | — | 21/50 |
+
+**+5pp openscore gain from the full L7→L8→L9 ladder.** The multi-voice
+features transferred modestly. But the synthetic ladder is hitting
+diminishing returns: each level makes synthetic harder (82→77→65%) with
+only marginal openscore transfer (18→18→23%).
+
+### Synthetic ladder summary (all n=50, curriculum)
+
+| Level | Key features added | Synthetic | Openscore |
+|---|---|---|---|
+| 7 | Voice+piano+lyrics, 24m | 82% | 18% |
+| 8 | +ties, slurs, dynamics, time sigs | 77% | 18% |
+| 9 | +multi-voice, backup, staves | 65% | **23%** |
+
+### Conclusion: synthetic ladder has reached diminishing returns
+
+The synthetic ladder taught us:
+- Curriculum learning eliminates training instability (every penalty was
+  mostly training dynamics, not real difficulty)
+- The model learns MXC format features when shown them
+- But format knowledge transfers only weakly to real music (+5pp)
+
+The remaining 77pp openscore gap is dominated by **content complexity**
+that synthetic data can't easily replicate: real harmonic language, voice
+leading, varied density, musical phrasing. The next step should be
+training directly on openscore data, with the Level 9 adapter as
+a starting point.
+
 ---
 
 **Continued in [`2026-04-12-findings.md`](2026-04-12-findings.md)** — current
