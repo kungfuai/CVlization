@@ -314,8 +314,26 @@ def patch_ly(ly_path: Path, hide_empty_staves: bool = False) -> None:
     # music21 includes lilypond-book-preamble.ly which forces a title-only
     # first page (book layout).  Removing it keeps the title inline with music.
     text = text.replace('\\include "lilypond-book-preamble.ly"', "")
-    # Compact layout: smaller staff so more measures fit per line/page
-    text = text.replace('\\version', '#(set-global-staff-size 16)\n\n\\version', 1)
+    # Standard staff size (LilyPond default is 20; previously used 16 which was
+    # too compact — squeezed 5-6 systems/page instead of the standard 3-4).
+    text = text.replace('\\version', '#(set-global-staff-size 20)\n\n\\version', 1)
+    # Limit systems per page to match standard published editions.
+    # For voice+piano (3 staves/system), 4 systems = 12 staves — standard density.
+    paper_override = (
+        '\\paper {\n'
+        '  max-systems-per-page = #4\n'
+        '  system-system-spacing.basic-distance = #18\n'
+        '}\n\n'
+    )
+    if r'\paper' not in text:
+        text = paper_override + text
+    else:
+        text = re.sub(
+            r'\\paper\s*\{',
+            lambda m: m.group(0) + '\n  max-systems-per-page = #4\n'
+                      '  system-system-spacing.basic-distance = #18',
+            text, count=1,
+        )
     # Hide staves that contain only rests (standard for orchestral scores)
     if hide_empty_staves:
         context_block = (
