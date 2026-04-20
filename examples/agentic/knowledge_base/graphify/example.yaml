@@ -1,0 +1,38 @@
+name: agentic-knowledge-base-graphify
+capability: agentic/knowledge_base
+modalities:
+  - language
+  - code
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 2
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image (node:20-slim + claude-code + codex + graphifyy)
+  ingest:
+    script: ingest.sh
+    description: Run coding agent headlessly to build knowledge graph from corpus
+  train:
+    script: ingest.sh
+    description: Alias for ingest
+  query:
+    script: query.sh
+    description: Run coding agent headlessly to query the knowledge graph
+  predict:
+    script: query.sh
+    description: Alias for query
+tags:
+  - graphify
+  - knowledge-graph
+  - claude-code
+  - codex
+  - agentic
+frameworks:
+  - graphify
+description: Build and query a persistent knowledge graph from a code corpus using a headless coding agent (Claude Code or Codex).
+verification:
+  last_verified: "2026-04-07"
+  last_verification_note: "Verified build and full pipeline (ingest + query) with Claude Code Max plan OAuth credentials. Runs as host user (--user $(id -u):$(id -g)), mounts only ~/.claude/.credentials.json. God nodes and cross-module call graph confirmed correct on bundled 7-file corpus."
