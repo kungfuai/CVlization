@@ -1,0 +1,50 @@
+name: faster-whisper
+capability: perception/speech_recognition
+modalities:
+  - audio
+  - text
+datasets:
+  - custom
+stability: stable
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 6
+image: faster-whisper
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Transcribe or translate speech audio
+    path_args:
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run a CPU smoke test on the default sample audio
+tags:
+  - asr
+  - speech-recognition
+  - transcription
+  - speech-to-text
+  - whisper
+  - faster-whisper
+  - ctranslate2
+  - vad
+  - word-timestamps
+tasks:
+  - automatic_speech_recognition
+  - speech_to_text
+  - speech_translation
+frameworks:
+  - ctranslate2
+  - pytorch
+description: Fast Whisper-family speech transcription and translation with CTranslate2, VAD, and optional word timestamps.
+
+verification:
+  last_verified: "2026-04-12"
+  last_verification_note: "Verified CVL discovery, Docker build, CPU int8 smoke inference, host output persistence, and cache reuse on Docker Desktop linux/arm64 (Apple M5 Pro host) running the linux/amd64 image under emulation. Built image: ~4.3GB. Sample transcript: \"It's an amazing gift and a unique privilege and I love going.\""
