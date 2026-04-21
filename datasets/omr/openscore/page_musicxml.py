@@ -447,8 +447,11 @@ def process_score(mxl_path: Path, svg_dir: Path, score_id: str,
 
 def build_pages_with_musicxml(corpus_name: str) -> "DatasetDict":
     """
-    Load zzsi/openscore (pages config), add 'musicxml' column per page,
-    and return updated DatasetDict.
+    Build per-page dataset from SVG renderings + MusicXML slicing.
+
+    Instead of matching against original page metadata, derives page breaks
+    directly from the SVG renderings. This means the page count and measure
+    ranges reflect the current LilyPond settings (staff size, max systems).
     """
     from datasets import load_dataset, Dataset, DatasetDict, Image as HFImage
 
@@ -458,10 +461,25 @@ def build_pages_with_musicxml(corpus_name: str) -> "DatasetDict":
     score_glob  = meta["score_glob"]
     exclude     = meta["exclude"]
 
-    print(f"Loading zzsi/openscore (pages config) ...")
-    source = load_dataset("zzsi/openscore", "default",
-                          columns=["score_id", "corpus", "page", "n_pages"])
-    print(f"  {source}")
+    # Load existing dataset for train/dev/test split assignment by score_id
+    print(f"Loading zzsi/openscore for split assignments ...")
+    for cfg_name in ["pages_transcribed", "pages"]:
+        try:
+            source = load_dataset("zzsi/openscore", cfg_name)
+            print(f"  Loaded config '{cfg_name}': {source}")
+            break
+        except Exception as e:
+            print(f"  Config '{cfg_name}' failed: {e}")
+            continue
+    else:
+        raise RuntimeError("Cannot load zzsi/openscore for split assignments")
+
+    # Determine which scores belong to which split
+    score_to_split: dict[str, str] = {}
+    for split_name, split_ds in source.items():
+        for row in split_ds:
+            if row["corpus"] == corpus_name:
+                score_to_split.setdefault(row["score_id"], split_name)
 
     # Build MXL index for this corpus
     all_mxl = sorted(corpus_root.glob(score_glob))
@@ -475,62 +493,45 @@ def build_pages_with_musicxml(corpus_name: str) -> "DatasetDict":
     print(f"  Rendering SVGs ...")
     render_corpus_to_svg(corpus_name, corpus_root, svg_base)
 
-    # Process each split
+    # Process all scores and build pages from SVG page breaks
+    split_rows: dict[str, list] = {"train": [], "dev": [], "test": []}
+    skipped = 0
+    total_pages = 0
+
+    for score_id, mxl_path in sorted(mxl_index.items()):
+        split = score_to_split.get(score_id, "train")
+        svg_dir = _svg_dir_for_score(mxl_path, corpus_root, svg_base)
+        svg_files = sorted(svg_dir.glob("*.svg"), key=_svg_page_index)
+        if not svg_files:
+            skipped += 1
+            continue
+
+        n_svg_pages = len(svg_files)
+        page_data = process_score(mxl_path, svg_dir, score_id, n_svg_pages)
+        if not page_data:
+            skipped += 1
+            continue
+
+        for pd in page_data:
+            split_rows[split].append({
+                "score_id":  score_id,
+                "corpus":    corpus_name,
+                "page":      pd["page"],
+                "n_pages":   n_svg_pages,
+                "bar_start": pd["bar_start"],
+                "bar_end":   pd["bar_end"],
+                "musicxml":  pd["musicxml"],
+            })
+            total_pages += 1
+
+    print(f"\n  Total: {total_pages} pages from {len(mxl_index) - skipped} scores "
+          f"({skipped} scores skipped)")
+
     split_dicts = {}
-    for split_name, split_ds in source.items():
-        # Filter rows for this corpus
-        corpus_rows = [r for r in split_ds if r["corpus"] == corpus_name]
-        if not corpus_rows:
-            continue
-
-        # Group by score_id
-        score_pages: dict[str, list] = {}
-        for row in corpus_rows:
-            score_pages.setdefault(row["score_id"], []).append(row)
-
-        print(f"\n  {split_name}: {len(score_pages)} scores ({len(corpus_rows)} pages)")
-
-        new_rows = []
-        skipped = 0
-
-        for score_id, pages in score_pages.items():
-            n_pages = pages[0]["n_pages"]
-            mxl_path = mxl_index.get(score_id)
-            if mxl_path is None:
-                skipped += 1
-                continue
-
-            svg_dir = _svg_dir_for_score(mxl_path, corpus_root, svg_base)
-
-            page_data = process_score(mxl_path, svg_dir, score_id, n_pages)
-            if not page_data:
-                skipped += 1
-                continue
-
-            page_data_by_page = {d["page"]: d for d in page_data}
-
-            for row in sorted(pages, key=lambda r: r["page"]):
-                pd = page_data_by_page.get(row["page"])
-                if pd is None:
-                    skipped += 1
-                    continue
-                new_rows.append({
-                    **row,
-                    "bar_start": pd["bar_start"],
-                    "bar_end":   pd["bar_end"],
-                    "musicxml":  pd["musicxml"],
-                })
-
-        if skipped:
-            print(f"    WARNING: {skipped} rows skipped")
-
-        if not new_rows:
-            print(f"    Skipping empty split: {split_name}")
-            continue
-
-        new_ds = Dataset.from_list(new_rows)
-        split_dicts[split_name] = new_ds
-        print(f"    {split_name}: {len(new_ds)} rows with musicxml")
+    for split_name, rows in split_rows.items():
+        if rows:
+            split_dicts[split_name] = Dataset.from_list(rows)
+            print(f"    {split_name}: {len(rows)} rows with musicxml")
 
     return DatasetDict(split_dicts)
 

@@ -311,6 +311,8 @@ def patch_ly(ly_path: Path, hide_empty_staves: bool = False) -> None:
     text = text.replace(r"\RemoveEmptyStaffContext", r"\RemoveEmptyStaves")
     # Old property syntax: #'foo → .foo (in \override / \set contexts)
     text = re.sub(r"(\\(?:override|set)\s+\S+)\s+#'(\S+)", r"\1.\2", text)
+    # music21 sometimes splits \bar "|." across lines — rejoin
+    text = re.sub(r'\\bar\s+"\|\s*\n\s*\."', r'\\bar "|."', text)
     # music21 includes lilypond-book-preamble.ly which forces a title-only
     # first page (book layout).  Removing it keeps the title inline with music.
     text = text.replace('\\include "lilypond-book-preamble.ly"', "")
@@ -318,22 +320,19 @@ def patch_ly(ly_path: Path, hide_empty_staves: bool = False) -> None:
     # too compact — squeezed 5-6 systems/page instead of the standard 3-4).
     text = text.replace('\\version', '#(set-global-staff-size 20)\n\n\\version', 1)
     # Limit systems per page to match standard published editions.
-    # For voice+piano (3 staves/system), 4 systems = 12 staves — standard density.
-    paper_override = (
+    # Always prepend a top-level \paper block (safe even if one exists inside \score).
+    paper_block = (
         '\\paper {\n'
         '  max-systems-per-page = #4\n'
         '  system-system-spacing.basic-distance = #18\n'
         '}\n\n'
     )
-    if r'\paper' not in text:
-        text = paper_override + text
-    else:
-        text = re.sub(
-            r'\\paper\s*\{',
-            lambda m: m.group(0) + '\n  max-systems-per-page = #4\n'
-                      '  system-system-spacing.basic-distance = #18',
-            text, count=1,
-        )
+    # Insert after \version line (which is always first after set-global-staff-size)
+    text = re.sub(
+        r'(\\version\s+"[^"]+"\s*\n)',
+        lambda m: m.group(0) + paper_block,
+        text, count=1,
+    )
     # Hide staves that contain only rests (standard for orchestral scores)
     if hide_empty_staves:
         context_block = (
