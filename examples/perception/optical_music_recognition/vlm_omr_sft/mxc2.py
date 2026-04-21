@@ -33,7 +33,6 @@ def _dur_ticks_to_type(ticks, divisions):
     """
     if divisions <= 0:
         return None, 0
-    # Quarter = divisions ticks. Build lookup.
     quarter = divisions
     mapping = [
         ("maxima", quarter * 32),
@@ -60,6 +59,49 @@ def _dur_ticks_to_type(ticks, divisions):
         if ticks == base + base // 2 + base // 4:  # double-dotted
             return name, 2
     return None, 0
+
+
+def _dur_ticks_to_compound(ticks, divisions):
+    """Convert duration ticks to a compound type string.
+
+    For simple durations: "quarter", "half dot"
+    For compound durations (e.g. 7.5 quarters in 15/8): "whole dot half dot"
+
+    Always succeeds by decomposing greedily into the largest fitting types.
+    """
+    if divisions <= 0:
+        return str(ticks)
+    # Try simple first
+    name, dots = _dur_ticks_to_type(ticks, divisions)
+    if name is not None:
+        return name + " dot" * dots
+
+    # Greedy decomposition into largest-fitting durations
+    quarter = divisions
+    mapping = [
+        ("whole", quarter * 4),
+        ("half", quarter * 2),
+        ("quarter", quarter),
+        ("eighth", quarter // 2),
+        ("16th", quarter // 4),
+        ("32nd", quarter // 8),
+    ]
+    remaining = int(ticks)
+    parts = []
+    for name, base in mapping:
+        if base <= 0:
+            continue
+        # Try dotted first (larger)
+        dotted = base + base // 2
+        while remaining >= dotted > 0:
+            parts.append(f"{name} dot")
+            remaining -= dotted
+        while remaining >= base:
+            parts.append(name)
+            remaining -= base
+    if remaining > 0:
+        parts.append(str(remaining))  # leftover ticks as fallback
+    return " ".join(parts) if parts else str(ticks)
 
 
 def xml_to_mxc2(xml: str) -> str:
@@ -178,11 +220,7 @@ def _encode_measure_v2(measure, lines, state):
             _encode_barline_v2(child, lines)
         elif tag == "forward":
             dur = child.findtext("duration") or "0"
-            type_name, dots = _dur_ticks_to_type(dur, state.divisions)
-            if type_name:
-                fwd_str = type_name + (" dot" * dots)
-            else:
-                fwd_str = dur  # fallback to ticks if no match
+            fwd_str = _dur_ticks_to_compound(dur, state.divisions)
             voice = child.findtext("voice")
             staff = child.findtext("staff")
             fwd = f"fwd {fwd_str}"
@@ -195,11 +233,7 @@ def _encode_measure_v2(measure, lines, state):
             lines.append(fwd)
         elif tag == "backup":
             dur = child.findtext("duration") or "0"
-            type_name, dots = _dur_ticks_to_type(dur, state.divisions)
-            if type_name:
-                bak_str = type_name + (" dot" * dots)
-            else:
-                bak_str = dur  # fallback
+            bak_str = _dur_ticks_to_compound(dur, state.divisions)
             lines.append(f"bak {bak_str}")
             state.reset_for_backup()
         elif tag == "print":
