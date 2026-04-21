@@ -26,9 +26,11 @@ from unsloth.trainer import UnslothVisionDataCollator
 from trl import SFTTrainer, SFTConfig
 
 from mxc import xml_to_mxc
+from mxc2 import xml_to_mxc2
 
 INSTRUCTION_XML = "Transcribe this sheet music page to MusicXML."
 INSTRUCTION_MXC = "Transcribe this sheet music page to MXC (compact MusicXML)."
+INSTRUCTION_MXC2 = "Transcribe this sheet music page to MXC2 (compact MusicXML)."
 
 
 def prepare_inference_inputs(processor, image, instruction=None):
@@ -96,13 +98,14 @@ class WandbInferenceCallback(TrainerCallback):
     """
 
     def __init__(self, model, processor, samples, every_n_steps=100, max_new_tokens=512,
-                 target_format="xml", col=None):
+                 target_format="xml", drop_beams=False, col=None):
         self.model          = model
         self.processor      = processor
-        self.samples        = samples       # list of raw dataset rows (PIL images + metadata)
+        self.samples        = samples
         self.every_n_steps  = every_n_steps
         self.max_new_tokens = max_new_tokens
         self.target_format  = target_format
+        self.drop_beams     = drop_beams
         self.col            = col or {"image": "image", "musicxml": "musicxml", "id": "score_id", "label": "page"}
         self._images_logged = False         # log images + ground truth only once
 
@@ -121,7 +124,9 @@ class WandbInferenceCallback(TrainerCallback):
         rows = []
         for sample in self.samples:
             image = sample[self.col["image"]]
-            instr = INSTRUCTION_MXC if self.target_format == "mxc" else INSTRUCTION_XML
+            instr = (INSTRUCTION_MXC2 if self.target_format == "mxc2"
+                     else INSTRUCTION_MXC if self.target_format == "mxc"
+                     else INSTRUCTION_XML)
             inputs = prepare_inference_inputs(self.processor, image, instr).to("cuda")
 
             with torch.no_grad():
@@ -135,11 +140,14 @@ class WandbInferenceCallback(TrainerCallback):
             prediction  = self.processor.decode(pred_tokens, skip_special_tokens=True).strip()
 
             ref = strip_musicxml_header(sample[self.col["musicxml"]])
-            if self.target_format == "mxc":
+            if self.target_format in ("mxc", "mxc2"):
                 try:
-                    ref = xml_to_mxc(ref)
+                    if self.target_format == "mxc2":
+                        ref = xml_to_mxc2(ref, drop_beams=self.drop_beams)
+                    else:
+                        ref = xml_to_mxc(ref)
                 except Exception as e:
-                    print(f"WARN: xml_to_mxc failed for inference sample "
+                    print(f"WARN: {self.target_format} failed for inference sample "
                           f"{sample.get(self.col['id'], '?')}: {e}")
 
             sample_id = sample.get(self.col["id"], "")
@@ -376,7 +384,11 @@ def main():
 
     # ── Chat format ────────────────────────────────────────────────────────────
     target_format = dataset_config.get("target_format", "xml")
-    if target_format == "mxc":
+    drop_beams = dataset_config.get("drop_beams", False)
+    if target_format == "mxc2":
+        instruction = INSTRUCTION_MXC2
+        print(f"Target format: MXC2 (compact v2, drop_beams={drop_beams})")
+    elif target_format == "mxc":
         instruction = INSTRUCTION_MXC
         print(f"Target format: MXC (compact)")
     else:
@@ -399,16 +411,23 @@ def main():
 
     mxc_failures = MxcFailureTracker()
 
+    def _convert_xml_to_target(text):
+        if target_format == "mxc2":
+            return xml_to_mxc2(text, drop_beams=drop_beams)
+        elif target_format == "mxc":
+            return xml_to_mxc(text)
+        return text
+
     def convert_to_conversation(sample):
         text = strip_musicxml_header(sample[col["musicxml"]])
-        if target_format == "mxc":
+        if target_format in ("mxc", "mxc2"):
             try:
-                text = xml_to_mxc(text)
+                text = _convert_xml_to_target(text)
             except Exception as e:
                 sample_id = sample.get(col["id"], "?")
                 if strict_mxc:
                     raise RuntimeError(
-                        f"xml_to_mxc failed on sample {sample_id}: {e}. "
+                        f"{target_format} conversion failed on sample {sample_id}: {e}. "
                         f"Set dataset.strict_mxc=false to fall back to cleaned XML."
                     ) from e
                 mxc_failures.record(sample_id, e)
@@ -547,6 +566,7 @@ def main():
             every_n_steps=wandb_config.get("log_examples_every_n_steps", 100),
             max_new_tokens=wandb_config.get("inference_max_new_tokens", 512),
             target_format=target_format,
+            drop_beams=drop_beams,
             col=col,
         ))
 
