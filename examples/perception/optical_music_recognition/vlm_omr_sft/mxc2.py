@@ -251,7 +251,17 @@ def _encode_note_v2(note, lines, state):
     if ntype:
         tokens.append(ntype)
 
-    # NO duration ticks — the type + dots is sufficient
+    # Time modification (tuplets): 3in2, 5in4, etc.
+    # Without this, triplet eighths (dur=3360 in div=10080) would be
+    # indistinguishable from regular eighths (dur=5040).
+    time_mod = note.find("time-modification")
+    if time_mod is not None:
+        actual = time_mod.findtext("actual-notes")
+        normal = time_mod.findtext("normal-notes")
+        if actual and normal:
+            tokens.append(f"{actual}in{normal}")
+
+    # NO duration ticks — the type + dots + time-modification is sufficient
 
     # Accidental
     acc = note.findtext("accidental")
