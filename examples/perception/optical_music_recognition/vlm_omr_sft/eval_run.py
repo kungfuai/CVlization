@@ -17,19 +17,27 @@ import torch
 
 
 def run_eval(checkpoint, n_samples=50, dataset_repo="zzsi/synthetic-scores",
-             dataset_config="level7", split="test"):
+             dataset_config="level7", split="test", target_format="mxc",
+             drop_beams=False):
     """Run inference + accuracy evaluation. Returns list of EvalResult."""
     from datasets import load_dataset
     from unsloth import FastVisionModel
-    from train import prepare_inference_inputs, INSTRUCTION_MXC, strip_musicxml_header
+    from train import (prepare_inference_inputs, INSTRUCTION_MXC, INSTRUCTION_MXC2,
+                       INSTRUCTION_XML, strip_musicxml_header)
     from eval_mxc import evaluate_pair
     from mxc import xml_to_mxc
+    from mxc2 import xml_to_mxc2
+
+    instruction = (INSTRUCTION_MXC2 if target_format == "mxc2"
+                   else INSTRUCTION_MXC if target_format == "mxc"
+                   else INSTRUCTION_XML)
 
     print(f"Loading model from {checkpoint} ...")
     model, processor = FastVisionModel.from_pretrained(checkpoint, load_in_4bit=True)
     FastVisionModel.for_inference(model)
 
     print(f"Loading dataset: {dataset_repo} config={dataset_config} split={split} ...")
+    print(f"Target format: {target_format} (drop_beams={drop_beams})")
     ds = load_dataset(dataset_repo, dataset_config, split=split)
     n_samples = min(n_samples, len(ds))
     print(f"Evaluating {n_samples} / {len(ds)} samples\n")
@@ -38,7 +46,7 @@ def run_eval(checkpoint, n_samples=50, dataset_repo="zzsi/synthetic-scores",
     t0 = time.time()
     for i in range(n_samples):
         sample = ds[i]
-        inputs = prepare_inference_inputs(processor, sample["image"], INSTRUCTION_MXC).to("cuda")
+        inputs = prepare_inference_inputs(processor, sample["image"], instruction).to("cuda")
         with torch.no_grad():
             output = model.generate(**inputs, max_new_tokens=8192, use_cache=True, do_sample=False)
         pred_tokens = output[0][inputs["input_ids"].shape[1]:]
@@ -46,7 +54,10 @@ def run_eval(checkpoint, n_samples=50, dataset_repo="zzsi/synthetic-scores",
 
         ref = strip_musicxml_header(sample["musicxml"])
         try:
-            ref = xml_to_mxc(ref)
+            if target_format == "mxc2":
+                ref = xml_to_mxc2(ref, drop_beams=drop_beams)
+            elif target_format == "mxc":
+                ref = xml_to_mxc(ref)
         except Exception:
             pass
 
@@ -78,6 +89,9 @@ def main():
     parser.add_argument("--dataset-repo", default="zzsi/synthetic-scores")
     parser.add_argument("--dataset-config", default="level7")
     parser.add_argument("--split", default="test")
+    parser.add_argument("--target-format", default="mxc",
+                        choices=["xml", "mxc", "mxc2"])
+    parser.add_argument("--drop-beams", action="store_true")
     args = parser.parse_args()
 
     from eval_mxc import format_summary
@@ -87,6 +101,8 @@ def main():
         n_samples=args.n_samples,
         dataset_repo=args.dataset_repo,
         dataset_config=args.dataset_config,
+        target_format=args.target_format,
+        drop_beams=args.drop_beams,
         split=args.split,
     )
     print()
