@@ -104,8 +104,15 @@ def _dur_ticks_to_compound(ticks, divisions):
     return " ".join(parts) if parts else str(ticks)
 
 
-def xml_to_mxc2(xml: str) -> str:
-    """Convert cleaned MusicXML to MXC2 format."""
+def xml_to_mxc2(xml: str, drop_beams: bool = False) -> str:
+    """Convert cleaned MusicXML to MXC2 format.
+
+    Args:
+        xml: Cleaned MusicXML string (post strip_musicxml_header).
+        drop_beams: If True, omit beam tokens (bm=begin/end/etc.).
+            Beaming is purely visual grouping, deterministically
+            reconstructible from rhythm + time signature.
+    """
     root = ET.fromstring(xml)
     lines = []
 
@@ -142,7 +149,7 @@ def xml_to_mxc2(xml: str) -> str:
     for part in root.findall("part"):
         lines.append("---")
         lines.append(part.get("id", ""))
-        state = _EncoderState()
+        state = _EncoderState(drop_beams=drop_beams)
         for measure in part.findall("measure"):
             _encode_measure_v2(measure, lines, state)
 
@@ -151,13 +158,14 @@ def xml_to_mxc2(xml: str) -> str:
 
 class _EncoderState:
     """Track stateful properties to emit only on change."""
-    __slots__ = ("voice", "staff", "stem", "divisions")
+    __slots__ = ("voice", "staff", "stem", "divisions", "drop_beams")
 
-    def __init__(self):
+    def __init__(self, drop_beams=False):
         self.voice = None
         self.staff = None
         self.stem = None
-        self.divisions = 1  # current divisions value
+        self.divisions = 1
+        self.drop_beams = drop_beams
 
     def reset_for_backup(self):
         """After a backup, voice/staff/stem must be re-declared."""
@@ -320,14 +328,15 @@ def _encode_note_v2(note, lines, state):
             tokens.append("sn")
         state.stem = stem
 
-    # Beam(s)
-    for beam in note.findall("beam"):
-        bn = beam.get("number", "1")
-        bval = (beam.text or "").strip().replace(" ", "-")
-        if bn == "1":
-            tokens.append(f"bm={bval}")
-        else:
-            tokens.append(f"bm{bn}={bval}")
+    # Beam(s) — skip if drop_beams (beaming is reconstructible from rhythm)
+    if not state.drop_beams:
+        for beam in note.findall("beam"):
+            bn = beam.get("number", "1")
+            bval = (beam.text or "").strip().replace(" ", "-")
+            if bn == "1":
+                tokens.append(f"bm={bval}")
+            else:
+                tokens.append(f"bm{bn}={bval}")
 
     # Tie
     for tie in note.findall("tie"):
@@ -423,3 +432,84 @@ def _encode_barline_v2(barline, lines):
     if ending is not None:
         parts.append(f"ending={ending.get('number', '')}:{ending.get('type', '')}")
     lines.append(" ".join(parts))
+
+
+# ── Beam reconstruction ──────────────────────────────────────────────────────
+
+_BEAMABLE_TYPES = {"eighth", "16th", "32nd", "64th", "128th"}
+_TYPE_BEAM_LEVELS = {"eighth": 1, "16th": 2, "32nd": 3, "64th": 4, "128th": 5}
+
+
+def reconstruct_beams(mxc2_text: str) -> str:
+    """Add beam tokens to MXC2 text encoded with drop_beams=True.
+
+    Groups consecutive beamable notes (eighth or shorter) and adds
+    bm=begin/end tokens. Rests and non-beamable notes break groups.
+    Multi-level beaming (bm2=, bm3=) added for 16th and shorter.
+    """
+    lines = mxc2_text.splitlines()
+    result = list(lines)  # mutable copy
+    beam_group = []  # list of (line_index, type_name)
+
+    def _flush():
+        if len(beam_group) < 2:
+            beam_group.clear()
+            return
+        for j, (idx, tname) in enumerate(beam_group):
+            levels = _TYPE_BEAM_LEVELS.get(tname, 1)
+            beam_tokens = []
+            for lev in range(1, levels + 1):
+                prev_lev = _TYPE_BEAM_LEVELS.get(beam_group[j-1][1], 0) if j > 0 else 0
+                next_lev = _TYPE_BEAM_LEVELS.get(beam_group[j+1][1], 0) if j < len(beam_group)-1 else 0
+                if j == 0:
+                    bval = "begin"
+                elif j == len(beam_group) - 1:
+                    bval = "end"
+                elif lev > prev_lev and lev > next_lev:
+                    continue  # isolated level — skip
+                elif lev > prev_lev:
+                    bval = "begin" if lev <= next_lev else "forward-hook"
+                elif lev > next_lev:
+                    bval = "end" if lev <= prev_lev else "backward-hook"
+                else:
+                    continue  # continue — implicit
+                if lev == 1:
+                    beam_tokens.append(f"bm={bval}")
+                else:
+                    beam_tokens.append(f"bm{lev}={bval}")
+            if beam_tokens:
+                tokens = result[idx].split()
+                # Insert after stem/dot/acc, before tie/slur/voice/staff/lyric
+                insert_pos = len(tokens)
+                for k, t in enumerate(tokens):
+                    if t.startswith(("tie=", "tied=", "slur", "fermata",
+                                     "art=", "orn=", "v=", "st=", "L")):
+                        insert_pos = k
+                        break
+                tokens[insert_pos:insert_pos] = beam_tokens
+                result[idx] = " ".join(tokens)
+        beam_group.clear()
+
+    for i, line in enumerate(lines):
+        tokens = line.split()
+        if not tokens:
+            _flush()
+            continue
+
+        # Is this a beamable note?
+        is_note = (tokens[0].startswith("N") or tokens[0].startswith("+N") or
+                   tokens[0].startswith("gN"))
+        note_type = None
+        if is_note:
+            for t in tokens:
+                if t in _BEAMABLE_TYPES:
+                    note_type = t
+                    break
+
+        if is_note and note_type:
+            beam_group.append((i, note_type))
+        else:
+            _flush()
+
+    _flush()
+    return "\n".join(result)
