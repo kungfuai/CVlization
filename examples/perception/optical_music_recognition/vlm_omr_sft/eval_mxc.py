@@ -78,19 +78,19 @@ class EvalResult:
 
 
 def extract_events(mxc_text: str) -> list[NoteEvent]:
-    """Extract note/rest events from MXC text."""
+    """Extract note/rest events from MXC or MXC2 text."""
     events = []
     for line in mxc_text.split("\n"):
         line = line.strip()
-        # Pitched note: N C4 q 10080 ...
-        m = re.match(r"(\+?g?N) (\S+) (\S+) (\d+)", line)
+        # Pitched note: MXC "N C4 q 10080 ..." or MXC2 "N C4 quarter ..."
+        m = re.match(r"(\+?g?N) (\S+) (\S+)(?: (\d+))?", line)
         if m:
             events.append(NoteEvent(
                 kind="N", pitch=m.group(2), note_type=m.group(3),
-                duration=m.group(4), raw=line,
+                duration=m.group(4) or "0", raw=line,
             ))
             continue
-        # Rest: R q 10080 or R whole 30240
+        # Rest: MXC "R q 10080" or MXC2 "R quarter" or "R whole"
         m = re.match(r"(\+?g?R)(?: (\S+))?(?: (\d+))?", line)
         if m and (m.group(2) or m.group(3)):
             events.append(NoteEvent(
