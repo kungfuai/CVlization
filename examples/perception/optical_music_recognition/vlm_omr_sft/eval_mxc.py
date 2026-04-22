@@ -83,7 +83,8 @@ def extract_events(mxc_text: str) -> list[NoteEvent]:
     for line in mxc_text.split("\n"):
         line = line.strip()
         # Pitched note: MXC "N C4 q 10080 ..." or MXC2 "N C4 quarter ..."
-        m = re.match(r"(\+?g?N) (\S+) (\S+)(?: (\d+))?", line)
+        # Duration is pure digits not followed by "in" (to avoid matching "3in2" tuplets)
+        m = re.match(r"(\+?g?N) (\S+) (\S+)(?: (\d+)(?!in\d))?", line)
         if m:
             events.append(NoteEvent(
                 kind="N", pitch=m.group(2), note_type=m.group(3),
@@ -91,7 +92,7 @@ def extract_events(mxc_text: str) -> list[NoteEvent]:
             ))
             continue
         # Rest: MXC "R q 10080" or MXC2 "R quarter" or "R whole"
-        m = re.match(r"(\+?g?R)(?: (\S+))?(?: (\d+))?", line)
+        m = re.match(r"(\+?g?R)(?: (\S+))?(?: (\d+)(?!in\d))?", line)
         if m and (m.group(2) or m.group(3)):
             events.append(NoteEvent(
                 kind="R", pitch="R", note_type=m.group(2) or "?",
