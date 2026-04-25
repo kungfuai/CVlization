@@ -282,9 +282,12 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    # Step 1: Download
+    # Step 1: Download (CSV only for --inspect, full archive otherwise)
     print("=== Downloading PDMX ===")
-    download_pdmx()
+    if args.inspect:
+        download_file(f"{ZENODO_BASE}/PDMX.csv", CSV_PATH)
+    else:
+        download_pdmx()
 
     # Step 2: Load and filter metadata
     print("\n=== Loading metadata ===")
