@@ -26,7 +26,7 @@ from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # datasets/omr/ → datasets/ → repo root
 LILYPOND_DIR = (REPO_ROOT / "examples" / "perception" /
                 "optical_music_recognition" / "lilypond")
 

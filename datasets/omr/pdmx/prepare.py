@@ -177,8 +177,8 @@ def build_pages(score_rows: list[dict], max_scores: int | None = None,
     scores = score_rows[:max_scores] if max_scores else score_rows
 
     for i, row in enumerate(scores):
-        score_id = row.get("id", "")
-        mxl_filename = row.get("path", "")
+        score_id = Path(row.get("mxl", "")).stem
+        mxl_filename = row.get("mxl", "").lstrip("./")
 
         # Find the MXL file
         mxl_path = MXL_DIR / mxl_filename
@@ -189,7 +189,8 @@ def build_pages(score_rows: list[dict], max_scores: int | None = None,
             skipped += 1
             continue
 
-        sdir = svg_dir_for_score(mxl_path, MXL_DIR, SVG_DIR)
+        # SVGs are rendered from flat symlink dir, so SVG output is SVG_DIR/<stem>/
+        sdir = SVG_DIR / mxl_path.stem
         svg_files = sorted(sdir.glob("*.svg"), key=svg_page_index)
 
         if not svg_files:
@@ -327,21 +328,21 @@ def main():
 
     # Step 3: Render SVGs
     print(f"\n=== Rendering {len(scores_to_process)} scores to SVG ===")
-    # Create a temporary directory with symlinks to the filtered MXL files,
-    # so we can use render_scores_to_svg with a single corpus_root
+    # Copy filtered MXL files to a flat directory for Docker rendering.
+    # (Symlinks don't work across Docker mount boundaries.)
+    import shutil
     render_dir = CACHE_DIR / "render_subset"
     render_dir.mkdir(parents=True, exist_ok=True)
-    linked = 0
+    copied = 0
     for row in scores_to_process:
-        mxl_path = MXL_DIR / row.get("path", "")
-        if not mxl_path.exists():
-            mxl_path = CACHE_DIR / row.get("path", "")
+        mxl_rel = row.get("mxl", "").lstrip("./")
+        mxl_path = CACHE_DIR / mxl_rel
         if mxl_path.exists():
-            link = render_dir / mxl_path.name
-            if not link.exists():
-                link.symlink_to(mxl_path)
-            linked += 1
-    print(f"  Linked {linked} MXL files to {render_dir}")
+            dest = render_dir / mxl_path.name
+            if not dest.exists():
+                shutil.copy2(mxl_path, dest)
+            copied += 1
+    print(f"  Copied {copied} MXL files to {render_dir}")
 
     render_scores_to_svg(render_dir, SVG_DIR, "*.mxl")
 
