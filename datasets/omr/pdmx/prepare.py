@@ -17,11 +17,15 @@ import argparse
 import csv
 import os
 import random
+import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import warnings
 from pathlib import Path
+
+import cairosvg
 
 warnings.filterwarnings("ignore")
 
@@ -205,6 +209,33 @@ def build_pages(score_rows: list[dict], max_scores: int | None = None,
             continue
 
         for pd in page_data:
+            # Find the corresponding SVG and convert to PNG path
+            page_idx = pd["page"]
+            svg_candidates = [
+                sdir / f"score-{page_idx}.svg",
+                sdir / "score.svg",  # single-page scores
+            ]
+            image_path = None
+            for svg_f in svg_candidates:
+                if svg_f.exists():
+                    # Convert SVG to PNG (using cairosvg or rsvg-convert)
+                    png_path = svg_f.with_suffix(".png")
+                    if not png_path.exists():
+                        try:
+                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                                cairosvg.svg2png(url=str(svg_f), write_to=tmp.name)
+                                shutil.move(tmp.name, str(png_path))
+                        except Exception:
+                            alt_png = Path("/tmp") / f"pdmx_{score_id}_p{page_idx}.png"
+                            try:
+                                cairosvg.svg2png(url=str(svg_f), write_to=str(alt_png))
+                                png_path = alt_png
+                            except Exception:
+                                pass
+                    if png_path.exists():
+                        image_path = str(png_path)
+                    break
+
             all_pages.append({
                 "score_id":  score_id,
                 "page":      pd["page"],
@@ -212,6 +243,7 @@ def build_pages(score_rows: list[dict], max_scores: int | None = None,
                 "bar_start": pd["bar_start"],
                 "bar_end":   pd["bar_end"],
                 "musicxml":  pd["musicxml"],
+                "image":     image_path,
             })
 
         if (i + 1) % 100 == 0:
@@ -251,8 +283,16 @@ def split_pages(pages: list[dict], seed: int = 42,
     dd = {}
     for name, rows in splits.items():
         if rows:
-            dd[name] = Dataset.from_list(rows)
-            print(f"    {name}: {len(rows)} pages")
+            # Filter out rows without images
+            rows_with_images = [r for r in rows if r.get("image")]
+            if len(rows_with_images) < len(rows):
+                print(f"    {name}: {len(rows) - len(rows_with_images)} rows dropped (no image)")
+            ds = Dataset.from_list(rows_with_images)
+            if "image" in ds.column_names:
+                from datasets import Image as HFImage
+                ds = ds.cast_column("image", HFImage())
+            dd[name] = ds
+            print(f"    {name}: {len(rows_with_images)} pages")
 
     return DatasetDict(dd)
 
