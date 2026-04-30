@@ -15,6 +15,7 @@ Public API:
     svg_dir_for_score(mxl_path, corpus_root, svg_base)
 """
 
+import copy
 import functools
 import re
 import subprocess
@@ -293,14 +294,9 @@ def read_musicxml(mxl_path: Path) -> str:
         return z.read(xml_names[0]).decode("utf-8", errors="replace")
 
 
-@functools.lru_cache(maxsize=4)
-def _load_score(mxl_path: str):
-    """Parse .mxl and return (music21 Score, pickup_offset).
-
-    Cached: a 5-page score calls slice_musicxml 5× plus total_measures_in_mxl
-    once — without caching, that's 6 full music21 parses of the same file.
-    The str argument (not Path) is required for lru_cache hashability.
-    """
+@functools.lru_cache(maxsize=1)
+def _load_score_cached(mxl_path: str):
+    """Parse .mxl (cached). Use _load_score() which deepcopies the result."""
     from music21 import converter
 
     mxl = Path(mxl_path)
@@ -323,6 +319,12 @@ def _load_score(mxl_path: str):
     return score, pickup_offset
 
 
+def _load_score(mxl_path: str):
+    """Parse .mxl with caching. Returns a deepcopy to prevent mutation of cached object."""
+    score, offset = _load_score_cached(mxl_path)
+    return copy.deepcopy(score), offset
+
+
 def slice_musicxml(mxl_path: Path, bar_start: int, bar_end: int | None) -> str:
     """Return MusicXML string for bars bar_start..bar_end (inclusive)."""
     score, offset = _load_score(str(mxl_path))
@@ -333,11 +335,14 @@ def slice_musicxml(mxl_path: Path, bar_start: int, bar_end: int | None) -> str:
     with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as f:
         out_path = Path(f.name)
     try:
-        sliced.write("musicxml", fp=str(out_path))
-    except (TypeError, AttributeError):
-        sliced = score.measures(actual_start, actual_end, gatherSpanners=False)
-        sliced.write("musicxml", fp=str(out_path))
-    return out_path.read_text(encoding="utf-8")
+        try:
+            sliced.write("musicxml", fp=str(out_path))
+        except (TypeError, AttributeError):
+            sliced = score.measures(actual_start, actual_end, gatherSpanners=False)
+            sliced.write("musicxml", fp=str(out_path))
+        return out_path.read_text(encoding="utf-8")
+    finally:
+        out_path.unlink(missing_ok=True)
 
 
 def total_measures_in_mxl(mxl_path: Path) -> int:
