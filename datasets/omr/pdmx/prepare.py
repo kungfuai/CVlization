@@ -169,46 +169,29 @@ def filter_scores(metadata: list[dict],
 # Build dataset
 # ---------------------------------------------------------------------------
 
-def build_pages(score_rows: list[dict], max_scores: int | None = None,
-                seed: int = 42) -> list[dict]:
-    """Process filtered scores through the render→slice pipeline.
+def _process_one_score(args):
+    """Process a single score (for multiprocessing). Returns list of page dicts."""
+    row, = args
+    score_id = Path(row.get("mxl", "")).stem
+    mxl_filename = row.get("mxl", "").lstrip("./")
 
-    Returns list of page dicts: {score_id, page, n_pages, bar_start, bar_end, musicxml}.
-    """
-    all_pages = []
-    skipped = 0
+    mxl_path = MXL_DIR / mxl_filename
+    if not mxl_path.exists():
+        mxl_path = CACHE_DIR / mxl_filename
+    if not mxl_path.exists():
+        return []
 
-    scores = score_rows[:max_scores] if max_scores else score_rows
+    sdir = SVG_DIR / mxl_path.stem
+    svg_files = sorted(sdir.glob("*.svg"), key=svg_page_index)
+    if not svg_files:
+        return []
 
-    for i, row in enumerate(scores):
-        score_id = Path(row.get("mxl", "")).stem
-        mxl_filename = row.get("mxl", "").lstrip("./")
+    page_data = process_score(mxl_path, sdir, score_id, len(svg_files))
+    if not page_data:
+        return []
 
-        # Find the MXL file
-        mxl_path = MXL_DIR / mxl_filename
-        if not mxl_path.exists():
-            # Try alternate locations
-            mxl_path = CACHE_DIR / mxl_filename
-        if not mxl_path.exists():
-            skipped += 1
-            continue
-
-        # SVGs are rendered from flat symlink dir, so SVG output is SVG_DIR/<stem>/
-        sdir = SVG_DIR / mxl_path.stem
-        svg_files = sorted(sdir.glob("*.svg"), key=svg_page_index)
-
-        if not svg_files:
-            # Need to render — but batch rendering is more efficient.
-            # For now skip and let the caller run batch render first.
-            skipped += 1
-            continue
-
-        page_data = process_score(mxl_path, sdir, score_id, len(svg_files))
-        if not page_data:
-            skipped += 1
-            continue
-
-        for pd in page_data:
+    pages = []
+    for pd in page_data:
             # Find the corresponding SVG and convert to PNG path
             page_idx = pd["page"]
             svg_candidates = [
@@ -236,7 +219,7 @@ def build_pages(score_rows: list[dict], max_scores: int | None = None,
                         image_path = str(png_path)
                     break
 
-            all_pages.append({
+            pages.append({
                 "score_id":  score_id,
                 "page":      pd["page"],
                 "n_pages":   len(svg_files),
@@ -245,10 +228,33 @@ def build_pages(score_rows: list[dict], max_scores: int | None = None,
                 "musicxml":  pd["musicxml"],
                 "image":     image_path,
             })
+    return pages
 
-        if (i + 1) % 100 == 0:
-            print(f"  Processed {i+1}/{len(scores)} scores, "
-                  f"{len(all_pages)} pages ...", flush=True)
+
+def build_pages(score_rows: list[dict], max_scores: int | None = None,
+                seed: int = 42, n_workers: int = 4) -> list[dict]:
+    """Process filtered scores through the render→slice pipeline.
+
+    Uses multiprocessing for parallel music21 parsing.
+    """
+    from multiprocessing import Pool
+
+    scores = score_rows[:max_scores] if max_scores else score_rows
+    args_list = [(row,) for row in scores]
+
+    all_pages = []
+    skipped = 0
+
+    # Process in parallel with progress reporting
+    with Pool(n_workers) as pool:
+        for i, pages in enumerate(pool.imap(_process_one_score, args_list)):
+            if pages:
+                all_pages.extend(pages)
+            else:
+                skipped += 1
+            if (i + 1) % 100 == 0:
+                print(f"  Processed {i+1}/{len(scores)} scores, "
+                      f"{len(all_pages)} pages ...", flush=True)
 
     print(f"\n  Total: {len(all_pages)} pages from {len(scores) - skipped} scores "
           f"({skipped} skipped)")

@@ -15,6 +15,7 @@ Public API:
     svg_dir_for_score(mxl_path, corpus_root, svg_base)
 """
 
+import functools
 import re
 import subprocess
 import tempfile
@@ -292,11 +293,18 @@ def read_musicxml(mxl_path: Path) -> str:
         return z.read(xml_names[0]).decode("utf-8", errors="replace")
 
 
-def _load_score(mxl_path: Path):
-    """Parse .mxl and return (music21 Score, pickup_offset)."""
+@functools.lru_cache(maxsize=4)
+def _load_score(mxl_path: str):
+    """Parse .mxl and return (music21 Score, pickup_offset).
+
+    Cached: a 5-page score calls slice_musicxml 5× plus total_measures_in_mxl
+    once — without caching, that's 6 full music21 parses of the same file.
+    The str argument (not Path) is required for lru_cache hashability.
+    """
     from music21 import converter
 
-    with zipfile.ZipFile(mxl_path) as z:
+    mxl = Path(mxl_path)
+    with zipfile.ZipFile(mxl) as z:
         xml_names = [n for n in z.namelist()
                      if n.endswith(".xml") and "META" not in n]
         xml_bytes = z.read(xml_names[0])
@@ -317,7 +325,7 @@ def _load_score(mxl_path: Path):
 
 def slice_musicxml(mxl_path: Path, bar_start: int, bar_end: int | None) -> str:
     """Return MusicXML string for bars bar_start..bar_end (inclusive)."""
-    score, offset = _load_score(mxl_path)
+    score, offset = _load_score(str(mxl_path))
     actual_start = bar_start - offset
     actual_end = None if bar_end is None else bar_end - offset
 
@@ -334,7 +342,7 @@ def slice_musicxml(mxl_path: Path, bar_start: int, bar_end: int | None) -> str:
 
 def total_measures_in_mxl(mxl_path: Path) -> int:
     """Return total number of measures in the first part."""
-    score, _ = _load_score(mxl_path)
+    score, _ = _load_score(str(mxl_path))
     return len(list(score.parts[0].getElementsByClass("Measure")))
 
 
