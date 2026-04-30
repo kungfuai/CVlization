@@ -169,9 +169,8 @@ def filter_scores(metadata: list[dict],
 # Build dataset
 # ---------------------------------------------------------------------------
 
-def _process_one_score(args):
+def _process_one_score(row):
     """Process a single score (for multiprocessing). Returns list of page dicts."""
-    row, = args
     score_id = Path(row.get("mxl", "")).stem
     mxl_filename = row.get("mxl", "").lstrip("./")
 
@@ -192,62 +191,61 @@ def _process_one_score(args):
 
     pages = []
     for pd in page_data:
-            # Find the corresponding SVG and convert to PNG path
-            page_idx = pd["page"]
-            svg_candidates = [
-                sdir / f"score-{page_idx}.svg",
-                sdir / "score.svg",  # single-page scores
-            ]
-            image_path = None
-            for svg_f in svg_candidates:
-                if svg_f.exists():
-                    # Convert SVG to PNG (using cairosvg or rsvg-convert)
-                    png_path = svg_f.with_suffix(".png")
-                    if not png_path.exists():
+        page_idx = pd["page"]
+        svg_candidates = [
+            sdir / f"score-{page_idx}.svg",
+            sdir / "score.svg",
+        ]
+        image_path = None
+        for svg_f in svg_candidates:
+            if svg_f.exists():
+                png_path = svg_f.with_suffix(".png")
+                if not png_path.exists():
+                    try:
+                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                            cairosvg.svg2png(url=str(svg_f), write_to=tmp.name)
+                            shutil.move(tmp.name, str(png_path))
+                    except Exception:
+                        alt_png = Path("/tmp") / f"pdmx_{score_id}_p{page_idx}.png"
                         try:
-                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                                cairosvg.svg2png(url=str(svg_f), write_to=tmp.name)
-                                shutil.move(tmp.name, str(png_path))
+                            cairosvg.svg2png(url=str(svg_f), write_to=str(alt_png))
+                            png_path = alt_png
                         except Exception:
-                            alt_png = Path("/tmp") / f"pdmx_{score_id}_p{page_idx}.png"
-                            try:
-                                cairosvg.svg2png(url=str(svg_f), write_to=str(alt_png))
-                                png_path = alt_png
-                            except Exception:
-                                pass
-                    if png_path.exists():
-                        image_path = str(png_path)
-                    break
+                            pass
+                if png_path.exists():
+                    image_path = str(png_path)
+                break
 
-            pages.append({
-                "score_id":  score_id,
-                "page":      pd["page"],
-                "n_pages":   len(svg_files),
-                "bar_start": pd["bar_start"],
-                "bar_end":   pd["bar_end"],
-                "musicxml":  pd["musicxml"],
-                "image":     image_path,
-            })
+        pages.append({
+            "score_id":  score_id,
+            "page":      pd["page"],
+            "n_pages":   len(svg_files),
+            "bar_start": pd["bar_start"],
+            "bar_end":   pd["bar_end"],
+            "musicxml":  pd["musicxml"],
+            "image":     image_path,
+        })
     return pages
 
 
 def build_pages(score_rows: list[dict], max_scores: int | None = None,
-                seed: int = 42, n_workers: int = 4) -> list[dict]:
+                n_workers: int = None) -> list[dict]:
     """Process filtered scores through the render→slice pipeline.
 
     Uses multiprocessing for parallel music21 parsing.
     """
-    from multiprocessing import Pool
+    import multiprocessing
+
+    if n_workers is None:
+        n_workers = min(multiprocessing.cpu_count() or 4, 8)
 
     scores = score_rows[:max_scores] if max_scores else score_rows
-    args_list = [(row,) for row in scores]
 
     all_pages = []
     skipped = 0
 
-    # Process in parallel with progress reporting
-    with Pool(n_workers) as pool:
-        for i, pages in enumerate(pool.imap(_process_one_score, args_list)):
+    with multiprocessing.Pool(n_workers) as pool:
+        for i, pages in enumerate(pool.imap_unordered(_process_one_score, scores)):
             if pages:
                 all_pages.extend(pages)
             else:
