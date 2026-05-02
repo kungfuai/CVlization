@@ -6,8 +6,9 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Unsloth controls all core dependency versions
-RUN pip install --no-cache-dir "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+# Unsloth controls all core dependency versions — install both together to avoid version mismatch
+RUN pip install --no-cache-dir --upgrade "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" \
+    "unsloth_zoo @ git+https://github.com/unslothai/unsloth-zoo.git"
 
 # NOTE: flash-attn 2.8.3 causes garbage output on Blackwell (SM120) with unsloth/Qwen3.5.
 # PyTorch SDPA is used instead (attn_implementation="sdpa").
@@ -19,7 +20,7 @@ RUN pip install --no-cache-dir "unsloth[colab-new] @ git+https://github.com/unsl
 # RUN MAX_JOBS=8 pip install --no-cache-dir causal-conv1d --no-build-isolation
 # RUN MAX_JOBS=8 pip install --no-cache-dir flash-linear-attention --no-build-isolation
 
-RUN pip install --no-cache-dir datasets==3.4.1 pyyaml==6.0.2 pillow==11.1.0 timm==1.0.12 wandb==0.19.9 qwen-vl-utils==0.0.10 addict matplotlib
+RUN pip install --no-cache-dir datasets==3.4.1 pyyaml==6.0.2 pillow==11.1.0 timm==1.0.12 wandb==0.19.9 qwen-vl-utils==0.0.10 addict matplotlib mergekit
 
 RUN python -c "import torch; print(f'PyTorch: {torch.__version__}')" && \
     python -c "import transformers; print(f'Transformers: {transformers.__version__}')" && \
