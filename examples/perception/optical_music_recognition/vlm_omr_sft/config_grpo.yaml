@@ -1,0 +1,55 @@
+# GRPO (RL) for OMR — targets part structure + pitch accuracy
+# Starts from the openscore MXC2 SFT adapter.
+#
+# Reward functions:
+#   1. part_structure_reward: correct part count (+2.0 exact, -0.5/extra part)
+#   2. pitch_similarity_reward: pitch match on first 50 notes (-1→+2 scale)
+#   3. length_control_reward: penalize overgeneration (coverage > 150%)
+
+model:
+  name: "unsloth/Qwen3.5-9B"
+  load_in_4bit: true
+  use_gradient_checkpointing: "unsloth"
+  # SFT adapter to start from (the openscore MXC2 model)
+  sft_adapter: "outputs/5fmmwne6/final_model"
+
+lora:
+  r: 32
+  alpha: 32
+  dropout: 0
+  finetune_vision_layers: false   # GRPO: language only
+  finetune_language_layers: true
+  finetune_attention_modules: true
+  finetune_mlp_modules: true
+
+dataset:
+  repo: "zzsi/openscore"
+  config: "pages_transcribed"
+  split: "train"
+  drop_beams: true
+  corpora:
+    - lieder
+
+wandb:
+  project: "openscore-omr"
+  run_name: null
+
+training:
+  output_dir: "outputs/grpo"
+  learning_rate: 2.0e-6
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
+  num_generations: 4
+  max_prompt_length: 512
+  max_completion_length: 4096
+  max_steps: 200
+  save_steps: 50
+  logging_steps: 1
+  warmup_ratio: 0.05
+  max_grad_norm: 0.1
+  weight_decay: 0.001
+  lr_scheduler_type: "cosine"
+  optim: "adamw_torch_fused"
+  beta: 0.1
+  loss_type: "dr_grpo"
+  seed: 3407
