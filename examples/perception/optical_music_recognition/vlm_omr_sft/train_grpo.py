@@ -59,78 +59,72 @@ def _count_notes(text):
                if re.match(r"\s*[+]?N\s", line))
 
 
-def part_structure_reward(completions, ref_mxc2, **kwargs):
-    """Reward for correct part count and ordering."""
-    scores = []
-    for pred, ref in zip(completions, ref_mxc2):
-        ref_parts = _extract_parts(ref)
-        pred_parts = _extract_parts(pred)
-
-        if not pred_parts:
-            scores.append(-1.0)
-            continue
-
-        score = 0.0
-        # Correct number of parts: big reward
-        if len(pred_parts) == len(ref_parts):
-            score += 2.0
-        else:
-            # Partial credit: penalize proportional to error
-            score -= min(abs(len(pred_parts) - len(ref_parts)), 3) * 0.5
-
-        # Has at least one measure marker
-        if re.search(r"^M \d+", pred, re.MULTILINE):
-            score += 0.5
-
-        scores.append(score)
-    return scores
+def _lcs_length(a, b):
+    """Longest common subsequence length (O(n*m) but capped for speed)."""
+    # Cap to prevent slow reward computation
+    a = a[:80]
+    b = b[:80]
+    n, m = len(a), len(b)
+    if n == 0 or m == 0:
+        return 0
+    # Space-optimized LCS
+    prev = [0] * (m + 1)
+    for i in range(1, n + 1):
+        curr = [0] * (m + 1)
+        for j in range(1, m + 1):
+            if a[i - 1] == b[j - 1]:
+                curr[j] = prev[j - 1] + 1
+            else:
+                curr[j] = max(prev[j], curr[j - 1])
+        prev = curr
+    return prev[m]
 
 
-def pitch_similarity_reward(completions, ref_mxc2, **kwargs):
-    """Reward for pitch sequence accuracy."""
+def combined_reward(completions, ref_mxc2, **kwargs):
+    """Single combined reward to reduce reward hacking.
+
+    Components (weighted sum, not separate optimizable targets):
+    - Pitch LCS similarity: 60% weight (primary metric)
+    - Part count accuracy: 20% weight
+    - Length control: 20% weight
+    """
     scores = []
     for pred, ref in zip(completions, ref_mxc2):
         pred_pitches = _extract_pitches(pred)
         ref_pitches = _extract_pitches(ref)
-
-        if not pred_pitches or not ref_pitches:
-            scores.append(-1.0)
-            continue
-
-        # Compare first N pitches (aligned)
-        n = min(len(pred_pitches), len(ref_pitches), 50)
-        matches = sum(1 for a, b in zip(pred_pitches[:n], ref_pitches[:n]) if a == b)
-        similarity = matches / n
-
-        # Scale: 0% → -1.0, 50% → 0.0, 100% → 2.0
-        score = (similarity - 0.5) * 4.0
-        scores.append(score)
-    return scores
-
-
-def length_control_reward(completions, ref_mxc2, **kwargs):
-    """Penalize overgeneration (coverage >> 100%)."""
-    scores = []
-    for pred, ref in zip(completions, ref_mxc2):
+        pred_parts = _extract_parts(pred)
+        ref_parts = _extract_parts(ref)
         pred_notes = _count_notes(pred)
         ref_notes = _count_notes(ref)
 
-        if ref_notes == 0:
-            scores.append(0.0)
-            continue
-
-        coverage = pred_notes / ref_notes
-        # Perfect coverage (0.9-1.1): reward
-        # Overgeneration (>1.5): penalize
-        # Undergeneration (<0.5): penalize
-        if 0.8 <= coverage <= 1.2:
-            score = 1.0
-        elif coverage > 1.5:
-            score = -min((coverage - 1.0) * 1.0, 2.0)
-        elif coverage < 0.5:
-            score = -1.0
+        # ── Pitch LCS (60% weight) ────────────────────────────────────
+        if pred_pitches and ref_pitches:
+            lcs = _lcs_length(pred_pitches, ref_pitches)
+            # Normalize by reference length (recall-oriented)
+            pitch_score = lcs / min(len(ref_pitches), 80)
         else:
-            score = 0.0
+            pitch_score = 0.0
+
+        # ── Part count (20% weight) ───────────────────────────────────
+        if ref_parts:
+            part_score = 1.0 if len(pred_parts) == len(ref_parts) else 0.0
+        else:
+            part_score = 0.5
+
+        # ── Length control (20% weight) ───────────────────────────────
+        if ref_notes > 0:
+            coverage = pred_notes / ref_notes
+            if 0.7 <= coverage <= 1.3:
+                length_score = 1.0
+            elif coverage > 2.0 or coverage < 0.3:
+                length_score = 0.0
+            else:
+                length_score = 0.5
+        else:
+            length_score = 0.5
+
+        # Combined: scale to [-1, +3] range for GRPO
+        score = (pitch_score * 0.6 + part_score * 0.2 + length_score * 0.2) * 4.0 - 1.0
         scores.append(score)
     return scores
 
@@ -292,11 +286,7 @@ def main():
         model=model,
         args=training_args,
         processing_class=processor,
-        reward_funcs=[
-            part_structure_reward,
-            pitch_similarity_reward,
-            length_control_reward,
-        ],
+        reward_funcs=[combined_reward],
         train_dataset=train_dataset,
     )
 
