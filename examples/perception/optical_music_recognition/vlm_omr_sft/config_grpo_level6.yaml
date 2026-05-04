@@ -1,0 +1,42 @@
+# GRPO on synthetic Level 6 MXC2 — simplest test (95% SFT baseline)
+# Can RL push a near-perfect model higher?
+# Uses the L9 MXC2 adapter (which includes L6 knowledge via curriculum).
+
+model:
+  name: "unsloth/Qwen3.5-9B"
+  load_in_4bit: true
+  use_gradient_checkpointing: "unsloth"
+  sft_adapter: "outputs/tamqjf4k/final_model"  # L9 MXC2 adapter
+
+lora:
+  r: 32
+  alpha: 32
+
+dataset:
+  repo: "zzsi/synthetic-scores"
+  config: "level6"
+  split: "train"
+  drop_beams: true
+
+wandb:
+  project: "openscore-omr"
+
+training:
+  output_dir: "outputs/grpo_level6"
+  learning_rate: 5.0e-7       # very low — model is already 95%
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
+  num_generations: 4
+  max_prompt_length: 512
+  max_completion_length: 4096
+  max_steps: 50               # short — just test if RL works
+  save_steps: 25
+  logging_steps: 1
+  warmup_ratio: 0.1
+  max_grad_norm: 0.1
+  weight_decay: 0.001
+  lr_scheduler_type: "cosine"
+  optim: "adamw_torch_fused"
+  beta: 1.0                   # very high KL — barely deviate from SFT
+  loss_type: "dr_grpo"
+  seed: 3407

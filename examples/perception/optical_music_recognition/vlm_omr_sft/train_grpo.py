@@ -161,37 +161,43 @@ def main():
         print(f"WandB: {wandb.run.url}")
 
     # ── Model ──────────────────────────────────────────────────────────────
-    print(f"Loading model: {model_config['name']} ...")
-    model, processor = FastVisionModel.from_pretrained(
-        model_config["name"],
-        load_in_4bit=model_config.get("load_in_4bit", True),
-        use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
-    )
-
-    model = FastVisionModel.get_peft_model(
-        model,
-        finetune_vision_layers=lora_config.get("finetune_vision_layers", False),
-        finetune_language_layers=lora_config.get("finetune_language_layers", True),
-        finetune_attention_modules=lora_config.get("finetune_attention_modules", True),
-        finetune_mlp_modules=lora_config.get("finetune_mlp_modules", True),
-        r=lora_config["r"],
-        lora_alpha=lora_config["alpha"],
-        lora_dropout=lora_config.get("dropout", 0),
-        bias="none",
-        random_state=training_config.get("seed", 3407),
-        use_rslora=False,
-        loftq_config=None,
-    )
-
-    # Load SFT adapter weights if specified
     sft_adapter = model_config.get("sft_adapter")
+
     if sft_adapter:
-        print(f"Loading SFT adapter: {sft_adapter} ...")
-        import safetensors.torch
-        from peft import set_peft_model_state_dict
-        state = safetensors.torch.load_file(f"{sft_adapter}/adapter_model.safetensors")
-        set_peft_model_state_dict(model, state)
-        print(f"  Loaded {len(state)} tensors")
+        # Load the SFT adapter directly — this preserves the exact LoRA config
+        # (target_modules, r, alpha) from SFT training, including vision layers.
+        # IMPORTANT: get_peft_model + set_peft_model_state_dict silently drops
+        # weights when target_modules don't match (e.g., SFT trained vision+language
+        # but GRPO config says language-only). Loading directly avoids this.
+        print(f"Loading model + SFT adapter: {sft_adapter} ...")
+        model, processor = FastVisionModel.from_pretrained(
+            sft_adapter,
+            load_in_4bit=model_config.get("load_in_4bit", True),
+            use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
+        )
+        print(f"  SFT adapter loaded — LoRA config preserved from SFT")
+    else:
+        # Fresh LoRA from base model
+        print(f"Loading model: {model_config['name']} ...")
+        model, processor = FastVisionModel.from_pretrained(
+            model_config["name"],
+            load_in_4bit=model_config.get("load_in_4bit", True),
+            use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
+        )
+        model = FastVisionModel.get_peft_model(
+            model,
+            finetune_vision_layers=lora_config.get("finetune_vision_layers", False),
+            finetune_language_layers=lora_config.get("finetune_language_layers", True),
+            finetune_attention_modules=lora_config.get("finetune_attention_modules", True),
+            finetune_mlp_modules=lora_config.get("finetune_mlp_modules", True),
+            r=lora_config["r"],
+            lora_alpha=lora_config["alpha"],
+            lora_dropout=lora_config.get("dropout", 0),
+            bias="none",
+            random_state=training_config.get("seed", 3407),
+            use_rslora=False,
+            loftq_config=None,
+        )
 
     # ── Dataset ────────────────────────────────────────────────────────────
     repo = dataset_config["repo"]
@@ -237,7 +243,6 @@ def main():
         }
 
     print("Converting to GRPO format ...")
-    train_dataset = make_conversation(dataset[0])  # test one
     train_dataset = dataset.map(make_conversation)
 
     # Apply chat template
