@@ -1,0 +1,11 @@
+outputs/
+checkpoints/
+weights/
+logs/
+__pycache__/
+*.pyc
+*.pt
+*.pth
+*.bin
+*.safetensors
+.DS_Store
