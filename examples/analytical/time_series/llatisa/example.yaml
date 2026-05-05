@@ -1,0 +1,48 @@
+name: llatisa
+capability: analytical/time_series/reasoning
+modalities:
+  - time_series
+  - vision_language
+datasets:
+  - HiTSR
+stability: experimental
+resources:
+  gpu: 1
+  cpu_cores: 4
+  disk_gb: 20
+presets:
+  build:
+    script: build.sh
+    description: "Build the container image"
+  infer:
+    script: infer.sh
+    description: "Run dual-view VLM reasoning on a time series"
+  infer-synthetic:
+    script: infer.sh
+    args: --series-length 200 --question-preset l2_trend
+    description: "Run reasoning on a synthetic time series"
+  infer-minmax:
+    script: infer.sh
+    args: --question-preset l1_minmax
+    description: "Run min/max value extraction on a synthetic series"
+  images-only:
+    script: infer.sh
+    args: --images-only
+    description: "Generate dual-view images without VLM inference"
+tags:
+  - vlm
+  - time-series-reasoning
+  - chain-of-thought
+  - multimodal
+  - qwen-vl
+  - llatisa
+tasks:
+  - reasoning
+  - time_series_analysis
+frameworks:
+  - pytorch
+  - transformers
+description: >-
+  VLM-based time series reasoning using dual-view input (line plot +
+  numerical table) following the LLaTiSA approach for chain-of-thought
+  temporal analysis.
