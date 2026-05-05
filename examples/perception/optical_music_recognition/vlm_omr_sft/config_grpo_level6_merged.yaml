@@ -1,0 +1,43 @@
+# GRPO on Level 6 using merged model (vision LoRA baked into base)
+# This avoids the vision LoRA / vLLM incompatibility.
+# Language-only LoRA is freshly initialized (random) — GRPO fine-tunes it.
+# The base model already has full SFT knowledge (100% on Level 9).
+
+model:
+  name: "outputs/tamqjf4k_merged"  # merged base (vision LoRA baked in)
+  load_in_4bit: true
+  use_gradient_checkpointing: "unsloth"
+  # No sft_adapter — the merged model IS the SFT model
+
+lora:
+  r: 32
+  alpha: 32
+
+dataset:
+  repo: "zzsi/synthetic-scores"
+  config: "level6"
+  split: "train"
+  drop_beams: true
+
+wandb:
+  project: "openscore-omr"
+
+training:
+  output_dir: "outputs/grpo_level6_merged"
+  learning_rate: 5.0e-7
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
+  num_generations: 4
+  max_prompt_length: 512
+  max_completion_length: 4096
+  max_steps: 50
+  save_steps: 25
+  logging_steps: 1
+  warmup_ratio: 0.1
+  max_grad_norm: 0.1
+  weight_decay: 0.001
+  lr_scheduler_type: "cosine"
+  optim: "adamw_torch_fused"
+  beta: 1.0
+  loss_type: "dr_grpo"
+  seed: 3407
