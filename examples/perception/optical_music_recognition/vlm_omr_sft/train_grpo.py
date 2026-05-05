@@ -65,41 +65,78 @@ def main():
     # ── Model ──────────────────────────────────────────────────────────────
     sft_adapter = model_config.get("sft_adapter")
 
+    # Step 1: Load base model
+    print(f"Loading base model: {model_config['name']} ...")
+    model, processor = FastVisionModel.from_pretrained(
+        model_config["name"],
+        load_in_4bit=model_config.get("load_in_4bit", True),
+        use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
+    )
+
+    # Step 2: Create LoRA structure for GRPO
+    # finetune_vision_layers=False is REQUIRED — vLLM (used by GRPO for
+    # generation) does not support LoRA on vision/encoder layers.
+    model = FastVisionModel.get_peft_model(
+        model,
+        finetune_vision_layers=False,
+        finetune_language_layers=True,
+        finetune_attention_modules=True,
+        finetune_mlp_modules=True,
+        r=lora_config["r"],
+        lora_alpha=lora_config["alpha"],
+        lora_dropout=lora_config.get("dropout", 0),
+        bias="none",
+        random_state=training_config.get("seed", 3407),
+        use_rslora=False,
+        loftq_config=None,
+    )
+
+    # Step 3: Load SFT adapter weights (if provided)
+    # Uses PeftModel.from_pretrained which properly loads saved LoRA weights
+    # into the existing model structure. Vision LoRA weights from SFT are
+    # loaded but frozen during GRPO (language layers only are trainable).
     if sft_adapter:
-        # Load the SFT adapter directly — this preserves the exact LoRA config
-        # (target_modules, r, alpha) from SFT training, including vision layers.
-        # IMPORTANT: get_peft_model + set_peft_model_state_dict silently drops
-        # weights when target_modules don't match (e.g., SFT trained vision+language
-        # but GRPO config says language-only). Loading directly avoids this.
-        print(f"Loading model + SFT adapter: {sft_adapter} ...")
-        model, processor = FastVisionModel.from_pretrained(
-            sft_adapter,
-            load_in_4bit=model_config.get("load_in_4bit", True),
-            use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
-        )
-        print(f"  SFT adapter loaded — LoRA config preserved from SFT")
+        from peft import PeftModel
+        print(f"Loading SFT adapter: {sft_adapter} ...")
+        model = PeftModel.from_pretrained(model, sft_adapter)
+        print(f"  SFT adapter loaded via PeftModel.from_pretrained")
+
+    # ── Step-0 verification: check SFT quality before GRPO ──────────────
+    print("\n=== Step-0 verification: testing SFT quality ===")
+    FastVisionModel.for_inference(model)
+    _verify_ds = load_dataset(
+        dataset_config["repo"], dataset_config["config"],
+        split=dataset_config.get("split", "train"),
+    )
+    _sample = _verify_ds[0]
+    from train import prepare_inference_inputs
+    _inputs = prepare_inference_inputs(processor, _sample["image"], INSTRUCTION_MXC2).to("cuda")
+    with torch.no_grad():
+        _out = model.generate(**_inputs, max_new_tokens=2048, use_cache=True, do_sample=False)
+    _pred = processor.decode(_out[0][_inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+    _ref_xml = strip_musicxml_header(_sample["musicxml"])
+    try:
+        _ref = xml_to_mxc2(_ref_xml, drop_beams=dataset_config.get("drop_beams", True))
+    except Exception:
+        _ref = _ref_xml
+    from grpo_rewards import _extract_pitches, _lcs_length
+    _pred_p = _extract_pitches(_pred)
+    _ref_p = _extract_pitches(_ref)
+    if _pred_p and _ref_p:
+        _lcs = _lcs_length(_pred_p, _ref_p)
+        _sim = _lcs / min(len(_ref_p), 80)
+        print(f"  Pred pitches: {len(_pred_p)}, Ref pitches: {len(_ref_p)}")
+        print(f"  LCS pitch similarity: {_sim:.1%}")
+        print(f"  Pred first 10: {_pred_p[:10]}")
+        print(f"  Ref first 10:  {_ref_p[:10]}")
+        if _sim < 0.1:
+            print(f"  WARNING: SFT quality is very low ({_sim:.1%}). "
+                  f"The adapter may not be loaded correctly!")
     else:
-        # Fresh LoRA from base model
-        print(f"Loading model: {model_config['name']} ...")
-        model, processor = FastVisionModel.from_pretrained(
-            model_config["name"],
-            load_in_4bit=model_config.get("load_in_4bit", True),
-            use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
-        )
-        model = FastVisionModel.get_peft_model(
-            model,
-            finetune_vision_layers=lora_config.get("finetune_vision_layers", False),
-            finetune_language_layers=lora_config.get("finetune_language_layers", True),
-            finetune_attention_modules=lora_config.get("finetune_attention_modules", True),
-            finetune_mlp_modules=lora_config.get("finetune_mlp_modules", True),
-            r=lora_config["r"],
-            lora_alpha=lora_config["alpha"],
-            lora_dropout=lora_config.get("dropout", 0),
-            bias="none",
-            random_state=training_config.get("seed", 3407),
-            use_rslora=False,
-            loftq_config=None,
-        )
+        print(f"  WARNING: No pitches extracted. Pred={len(_pred_p)}, Ref={len(_ref_p)}")
+        print(f"  Pred first 200 chars: {_pred[:200]}")
+    print("=== End step-0 verification ===\n")
+    del _verify_ds, _sample, _inputs, _out, _pred, _ref
 
     # ── Dataset ────────────────────────────────────────────────────────────
     repo = dataset_config["repo"]
