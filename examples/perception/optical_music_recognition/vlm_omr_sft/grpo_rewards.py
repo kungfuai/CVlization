@@ -1,9 +1,25 @@
 """GRPO reward functions for OMR.
 
 Separated from train_grpo.py so they can be unit-tested without torch/unsloth.
+
+The reward uses the EXACT same computation as the eval metric
+(SequenceMatcher.ratio on pitched-only sequences) to ensure
+reward and accuracy move in the same direction.
 """
 
 import re
+from difflib import SequenceMatcher
+
+
+def _extract_pitches(text):
+    """Extract pitched-note pitch tokens from MXC/MXC2 text."""
+    pitches = []
+    for line in text.split("\n"):
+        # Match N <pitch> or +N <pitch> (not R = rests)
+        m = re.match(r"[+]?N\s+(\S+)", line.strip())
+        if m:
+            pitches.append(m.group(1))
+    return pitches
 
 
 def _extract_parts(text):
@@ -14,16 +30,6 @@ def _extract_parts(text):
         if line.startswith("P") and not line.startswith("print"):
             parts.append(line.split()[0])
     return parts
-
-
-def _extract_pitches(text):
-    """Extract pitch sequence from MXC2 text."""
-    pitches = []
-    for line in text.split("\n"):
-        m = re.match(r"[+]?N\s+(\S+)", line.strip())
-        if m:
-            pitches.append(m.group(1))
-    return pitches
 
 
 def _count_notes(text):
@@ -52,47 +58,27 @@ def _lcs_length(a, b):
 
 
 def combined_reward(completions, ref_mxc2, **kwargs):
-    """Single combined reward for GRPO.
+    """Reward that directly mirrors the eval metric.
 
-    Components (weighted sum):
-    - Pitch LCS similarity: 60% weight
-    - Part count accuracy: 20% weight
-    - Length control: 20% weight
+    Uses SequenceMatcher.ratio() on pitched-only sequences — the EXACT
+    same computation as pitched_only_similarity in eval_mxc.py.
+
+    This ensures reward and accuracy move in the same direction.
+    Previous versions used a custom LCS that was misaligned: reward
+    went up while accuracy went down.
     """
     scores = []
     for pred, ref in zip(completions, ref_mxc2):
         pred_pitches = _extract_pitches(pred)
         ref_pitches = _extract_pitches(ref)
-        pred_parts = _extract_parts(pred)
-        ref_parts = _extract_parts(ref)
-        pred_notes = _count_notes(pred)
-        ref_notes = _count_notes(ref)
 
-        # Pitch LCS (60%)
         if pred_pitches and ref_pitches:
-            lcs = _lcs_length(pred_pitches, ref_pitches)
-            pitch_score = lcs / min(len(ref_pitches), 80)
+            # Exact same computation as eval_mxc.py pitched_only_similarity
+            sim = SequenceMatcher(None, pred_pitches, ref_pitches).ratio()
         else:
-            pitch_score = 0.0
+            sim = 0.0
 
-        # Part count (20%)
-        if ref_parts:
-            part_score = 1.0 if len(pred_parts) == len(ref_parts) else 0.0
-        else:
-            part_score = 0.5
-
-        # Length control (20%)
-        if ref_notes > 0:
-            coverage = pred_notes / ref_notes
-            if 0.7 <= coverage <= 1.3:
-                length_score = 1.0
-            elif coverage > 2.0 or coverage < 0.3:
-                length_score = 0.0
-            else:
-                length_score = 0.5
-        else:
-            length_score = 0.5
-
-        score = (pitch_score * 0.6 + part_score * 0.2 + length_score * 0.2) * 4.0 - 1.0
+        # Scale to [-1, +3] range: 0% → -1.0, 50% → +1.0, 100% → +3.0
+        score = sim * 4.0 - 1.0
         scores.append(score)
     return scores

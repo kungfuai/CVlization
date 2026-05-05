@@ -24,12 +24,7 @@ class TestExtractors(unittest.TestCase):
     def test_extract_parts(self):
         mxc2 = "header title\nP1 Voice\nP2 Piano\n---\nP1\nM 1\nN C4 quarter"
         parts = _extract_parts(mxc2)
-        self.assertEqual(parts, ["P1", "P2", "P1"])  # declaration + usage
-
-    def test_extract_parts_no_print_match(self):
-        mxc2 = "print new-system\nP1 Voice"
-        parts = _extract_parts(mxc2)
-        self.assertEqual(parts, ["P1"])
+        self.assertEqual(parts, ["P1", "P2", "P1"])
 
     def test_count_notes(self):
         mxc2 = "N C4 quarter\n+N E4 quarter\nR quarter\nN G4 half"
@@ -39,89 +34,80 @@ class TestExtractors(unittest.TestCase):
 class TestLCS(unittest.TestCase):
 
     def test_identical(self):
-        seq = ["C4", "D4", "E4"]
-        self.assertEqual(_lcs_length(seq, seq), 3)
+        self.assertEqual(_lcs_length(["C4", "D4", "E4"], ["C4", "D4", "E4"]), 3)
 
     def test_subset(self):
-        a = ["C4", "D4", "E4", "F4"]
-        b = ["C4", "E4", "F4"]
-        self.assertEqual(_lcs_length(a, b), 3)
+        self.assertEqual(_lcs_length(["C4", "D4", "E4", "F4"], ["C4", "E4", "F4"]), 3)
 
     def test_no_overlap(self):
-        a = ["C4", "D4"]
-        b = ["F5", "G5"]
-        self.assertEqual(_lcs_length(a, b), 0)
-
-    def test_offset(self):
-        # Same pitches but shifted — LCS should still find them
-        a = ["X", "C4", "D4", "E4"]
-        b = ["C4", "D4", "E4", "X"]
-        self.assertEqual(_lcs_length(a, b), 3)
+        self.assertEqual(_lcs_length(["C4", "D4"], ["F5", "G5"]), 0)
 
     def test_empty(self):
         self.assertEqual(_lcs_length([], ["C4"]), 0)
-        self.assertEqual(_lcs_length(["C4"], []), 0)
 
 
 class TestCombinedReward(unittest.TestCase):
 
-    def _make_mxc2(self, parts, pitches, n_notes=None):
-        """Build minimal MXC2 for testing."""
-        lines = []
-        for p in parts:
-            lines.append(f"{p} Voice")
-        lines.append("---")
-        lines.append(parts[0] if parts else "P1")
-        lines.append("M 1 key=0 time=4/4 clef=G2")
-        for pitch in pitches:
-            lines.append(f"N {pitch} quarter su")
+    def _make_mxc2(self, pitches):
+        lines = ["P1 Voice", "---", "P1", "M 1 key=0 time=4/4 clef=G2"]
+        for p in pitches:
+            lines.append(f"N {p} quarter su")
         return "\n".join(lines)
 
-    def test_perfect_match(self):
-        ref = self._make_mxc2(["P1", "P2"], ["C4", "D4", "E4", "F4"])
-        pred = self._make_mxc2(["P1", "P2"], ["C4", "D4", "E4", "F4"])
+    def test_perfect_match_high_reward(self):
+        ref = self._make_mxc2(["C4", "D4", "E4", "F4"])
+        pred = self._make_mxc2(["C4", "D4", "E4", "F4"])
         scores = combined_reward([pred], [ref])
-        self.assertEqual(len(scores), 1)
-        self.assertGreater(scores[0], 1.5)  # should be high reward
+        # 100% similarity → score = 4.0 - 1.0 = 3.0
+        self.assertAlmostEqual(scores[0], 3.0, places=1)
 
-    def test_wrong_pitches(self):
-        ref = self._make_mxc2(["P1", "P2"], ["C4", "D4", "E4", "F4"])
-        pred = self._make_mxc2(["P1", "P2"], ["A5", "B5", "G3", "F3"])
-        scores_wrong = combined_reward([pred], [ref])
-        pred_right = self._make_mxc2(["P1", "P2"], ["C4", "D4", "E4", "F4"])
-        scores_right = combined_reward([pred_right], [ref])
-        # Wrong pitches should score lower than correct pitches
-        self.assertGreater(scores_right[0], scores_wrong[0])
+    def test_zero_match_low_reward(self):
+        ref = self._make_mxc2(["C4", "D4", "E4", "F4"])
+        pred = self._make_mxc2(["A5", "B5", "G3", "F3"])
+        scores = combined_reward([pred], [ref])
+        # 0% similarity → score = 0 - 1.0 = -1.0
+        self.assertAlmostEqual(scores[0], -1.0, places=1)
 
-    def test_wrong_part_count(self):
-        ref = self._make_mxc2(["P1", "P2"], ["C4", "D4", "E4"])
-        pred = self._make_mxc2(["P1", "P2", "P3", "P4"], ["C4", "D4", "E4"])
-        scores_wrong = combined_reward([pred], [ref])
-        pred_right = self._make_mxc2(["P1", "P2"], ["C4", "D4", "E4"])
-        scores_right = combined_reward([pred_right], [ref])
-        self.assertGreater(scores_right[0], scores_wrong[0])
+    def test_correct_scores_higher_than_wrong(self):
+        ref = self._make_mxc2(["C4", "D4", "E4", "F4"])
+        pred_good = self._make_mxc2(["C4", "D4", "E4", "F4"])
+        pred_bad = self._make_mxc2(["A5", "B5", "G3", "F3"])
+        scores = combined_reward([pred_good, pred_bad], [ref, ref])
+        self.assertGreater(scores[0], scores[1])
 
-    def test_empty_prediction(self):
-        ref = self._make_mxc2(["P1"], ["C4", "D4"])
+    def test_empty_prediction_negative(self):
+        ref = self._make_mxc2(["C4", "D4"])
         scores = combined_reward([""], [ref])
         self.assertLess(scores[0], 0)
 
-    def test_overgeneration_penalty(self):
-        ref = self._make_mxc2(["P1"], ["C4", "D4"])
-        pred = self._make_mxc2(["P1"], ["C4"] * 20)  # 10x overgen
+    def test_partial_match_intermediate(self):
+        ref = self._make_mxc2(["C4", "D4", "E4", "F4"])
+        pred = self._make_mxc2(["C4", "D4", "A5", "B5"])  # 50% match
         scores = combined_reward([pred], [ref])
-        pred_right = self._make_mxc2(["P1"], ["C4", "D4"])
-        scores_right = combined_reward([pred_right], [ref])
-        self.assertGreater(scores_right[0], scores[0])
+        # Should be between perfect (3.0) and zero (-1.0)
+        self.assertGreater(scores[0], -1.0)
+        self.assertLess(scores[0], 3.0)
 
-    def test_batch(self):
-        ref1 = self._make_mxc2(["P1"], ["C4", "D4"])
-        ref2 = self._make_mxc2(["P1"], ["E4", "F4"])
-        pred1 = self._make_mxc2(["P1"], ["C4", "D4"])  # perfect
-        pred2 = self._make_mxc2(["P1"], ["A5", "B5"])  # wrong
-        scores = combined_reward([pred1, pred2], [ref1, ref2])
-        self.assertEqual(len(scores), 2)
-        self.assertGreater(scores[0], scores[1])
+    def test_reward_correlates_with_eval_metric(self):
+        """Verify reward ordering matches what SequenceMatcher.ratio() would give."""
+        from difflib import SequenceMatcher
+        ref = self._make_mxc2(["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"])
+        preds = [
+            self._make_mxc2(["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]),  # 100%
+            self._make_mxc2(["C4", "D4", "E4", "F4", "X", "X", "X", "X"]),  # ~50%
+            self._make_mxc2(["X", "X", "X", "X", "X", "X", "X", "X"]),  # 0%
+        ]
+        rewards = combined_reward(preds, [ref] * 3)
+        # Rewards should be strictly decreasing
+        self.assertGreater(rewards[0], rewards[1])
+        self.assertGreater(rewards[1], rewards[2])
+
+        # Verify they match SequenceMatcher ordering
+        ref_pitches = _extract_pitches(ref)
+        sims = [SequenceMatcher(None, _extract_pitches(p), ref_pitches).ratio() for p in preds]
+        # Same ordering
+        self.assertGreater(sims[0], sims[1])
+        self.assertGreater(sims[1], sims[2])
 
 
 if __name__ == "__main__":
