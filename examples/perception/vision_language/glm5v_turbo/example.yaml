@@ -1,0 +1,58 @@
+name: glm5v-turbo
+capability: perception/vision_language
+modalities:
+  - vision
+  - text
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 1
+image: glm5v-turbo
+presets:
+  build:
+    script: build.sh
+    description: Build Docker image (lightweight, no GPU required)
+  predict:
+    script: predict.sh
+    description: Run inference via Z.ai API
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--images"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Smoke test (requires ZAI_API_KEY)
+tags:
+  - glm
+  - vlm
+  - zai
+  - zhipu
+  - agent
+  - gui-grounding
+  - visual-tool-use
+  - multimodal-agent
+  - api-based
+tasks:
+  - image_captioning
+  - ocr
+  - visual_question_answering
+  - visual_reasoning
+  - gui_grounding
+frameworks:
+  - openai-compatible-api
+description: >
+  GLM-5V-Turbo multimodal agent VLM via the Z.ai API.
+  A native foundation model for multimodal agents with integrated
+  perception, reasoning, planning, and tool use. Supports GUI grounding,
+  visual tool use, multimodal coding, and deep visual reasoning.
+  API-based -- no local GPU required.
+
+verification:
+  last_verified: "2026-05-05"
+  last_verification_note: >
+    Initial implementation. API-based inference using OpenAI-compatible
+    Z.ai endpoint. No open weights available -- model is accessed via API.
