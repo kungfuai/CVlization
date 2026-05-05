@@ -1,0 +1,51 @@
+name: tide-dllm-distill
+capability: generative/llm
+modalities:
+  - text
+datasets:
+  - alpaca
+  - tulu-3-sft-mixture
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24  # Self-distillation ~5GB; full WeDLM-8B teacher ~20GB
+  cpu_cores: 4
+  disk_gb: 30
+image: cvlization/tide-dllm-distill:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run TIDE distillation training
+  predict:
+    script: predict.sh
+    description: Run inference with distilled model
+  test:
+    script: test.sh
+    description: Smoke test (self-distill 10 steps + predict)
+tags:
+  - dllm
+  - diffusion
+  - distillation
+  - tide
+  - bd3lm
+  - tidal
+  - comp-demo
+  - knowledge-distillation
+  - training
+  - inference
+  - pytorch
+tasks:
+  - text_generation
+  - knowledge_distillation
+frameworks:
+  - pytorch
+  - transformers
+description: >
+  TIDE cross-architecture distillation for diffusion LLMs. Distills knowledge
+  from a frozen teacher dLLM into a smaller student using TIDAL scheduling and
+  Complementary Demonstration (CompDemo). Based on "Turning the Tide" (arXiv
+  2604.26951). Supports Pipeline B (shared-tokenizer, e.g. WeDLM-8B teacher ->
+  Qwen3-0.6B-BD3LM student).
