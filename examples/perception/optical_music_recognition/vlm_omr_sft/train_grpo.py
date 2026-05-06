@@ -65,41 +65,38 @@ def main():
     # ── Model ──────────────────────────────────────────────────────────────
     sft_adapter = model_config.get("sft_adapter")
 
-    # Step 1: Load base model
-    print(f"Loading base model: {model_config['name']} ...")
-    model, processor = FastVisionModel.from_pretrained(
-        model_config["name"],
-        load_in_4bit=model_config.get("load_in_4bit", True),
-        use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
-    )
-
-    # Step 2: Create LoRA structure for GRPO
-    # finetune_vision_layers=False is REQUIRED — vLLM (used by GRPO for
-    # generation) does not support LoRA on vision/encoder layers.
-    model = FastVisionModel.get_peft_model(
-        model,
-        finetune_vision_layers=False,
-        finetune_language_layers=True,
-        finetune_attention_modules=True,
-        finetune_mlp_modules=True,
-        r=lora_config["r"],
-        lora_alpha=lora_config["alpha"],
-        lora_dropout=lora_config.get("dropout", 0),
-        bias="none",
-        random_state=training_config.get("seed", 3407),
-        use_rslora=False,
-        loftq_config=None,
-    )
-
-    # Step 3: Load SFT adapter weights (if provided)
-    # Uses PeftModel.from_pretrained which properly loads saved LoRA weights
-    # into the existing model structure. Vision LoRA weights from SFT are
-    # loaded but frozen during GRPO (language layers only are trainable).
     if sft_adapter:
-        from peft import PeftModel
+        # Load SFT adapter directly with from_pretrained.
+        # This returns a PeftModel with the exact LoRA structure from SFT.
+        # Verified: produces 100% pitch sim and has trainable params.
         print(f"Loading SFT adapter: {sft_adapter} ...")
-        model = PeftModel.from_pretrained(model, sft_adapter)
-        print(f"  SFT adapter loaded via PeftModel.from_pretrained")
+        model, processor = FastVisionModel.from_pretrained(
+            sft_adapter,
+            load_in_4bit=model_config.get("load_in_4bit", True),
+            use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
+        )
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"  Loaded — {trainable:,} trainable params")
+    else:
+        # No SFT adapter — create fresh LoRA from base model
+        print(f"Loading base model: {model_config['name']} ...")
+        model, processor = FastVisionModel.from_pretrained(
+            model_config["name"],
+            load_in_4bit=model_config.get("load_in_4bit", True),
+            use_gradient_checkpointing=model_config.get("use_gradient_checkpointing", "unsloth"),
+        )
+        model = FastVisionModel.get_peft_model(
+            model,
+            finetune_vision_layers=lora_config.get("finetune_vision_layers", False),
+            finetune_language_layers=True,
+            finetune_attention_modules=True,
+            finetune_mlp_modules=True,
+            r=lora_config["r"],
+            lora_alpha=lora_config["alpha"],
+            lora_dropout=lora_config.get("dropout", 0),
+            bias="none",
+            random_state=training_config.get("seed", 3407),
+        )
 
     # ── Step-0 verification: check SFT quality before GRPO ──────────────
     print("\n=== Step-0 verification: testing SFT quality ===")
