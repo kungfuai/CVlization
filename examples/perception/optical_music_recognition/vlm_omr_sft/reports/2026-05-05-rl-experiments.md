@@ -85,18 +85,79 @@ with greedy decoding.
 
 ## Next steps
 
-### 1. GRPO v5 with fixed reward (immediate)
-- Reward: `SequenceMatcher.ratio()` on pitched-only (exact eval metric)
-- Model: SFT with `finetune_vision_layers=False` (no merge needed)
-- Data: Level 6 (95% SFT baseline)
-- Config: beta=1.0, LR=5e-7, 50 steps
+### GRPO v5: fixed reward (SequenceMatcher), correct adapter loading
 
-### 2. Retrain SFT chain with vision=False
-- Level 7a(vision=False) → Level 9 → openscore
-- Use MXC2 throughout
-- This creates RL-compatible adapters at every level
+**v5 diagnostic (Level 7a, 10 steps):**
+- Step-0: 100% pitch sim (adapter loaded correctly)
+- All 10 steps: reward=+3.0, std=0, grad_norm=0
+- Model too good on Level 7a — no variance between generations
+- Result: 97% → 97% (no-op, but confirmed pipeline works)
 
-### 3. DPO as GRPO alternative
-- Generate best/worst pairs from best-of-8 sampling
-- Train DPO (no reward function needed)
-- More stable for long-form structured output
+**v5 diagnostic (Level 9, 10 steps):**
+- Step-0: 100% pitch sim
+- Reward has variance: +1.22 to +2.88, grad_norm up to 11.75
+- Result: **84% → 84%** — first non-degrading GRPO run!
+
+**v5 full (Level 9, 100 steps):**
+- Reward first 10 avg: +2.33, last 10 avg: +2.04 (slight decline)
+- Result: **84% → 84%** — maintained but did NOT improve
+
+### All GRPO runs summary
+
+| Run | Issue | Step-0 | After | Improved? |
+|---|---|---|---|---|
+| v1 | Broken adapter (vision LoRA dropped) | ~0% | 3% | No — degraded |
+| v2 | Same adapter bug | ~0% | 5% | No — degraded |
+| v3 | vLLM ignores vision LoRA | ~95% | 25% | No — degraded |
+| v4 | Misaligned reward (LCS ≠ eval) | 69% | 28% | No — degraded |
+| v5 L7a | None (too easy, no gradient) | 100% | 97% | N/A — no-op |
+| v5 L9 diag | None (correct) | 100% | 84% | No — maintained |
+| **v5 L9 full** | **None (correct, 100 steps)** | **100%** | **84%** | **No — maintained** |
+
+### Why GRPO doesn't improve accuracy on synthetic data
+
+After fixing all infrastructure bugs, GRPO correctly maintains the SFT
+model (84%) but cannot push it higher. The reasons:
+
+1. **The model is at its LoRA capacity ceiling.** With r=32 (102M
+   trainable params out of 9.5B), the model may have already learned
+   everything it can from the SFT data. GRPO can't teach new knowledge
+   — it can only make the model more consistently pick its best outputs.
+
+2. **Generation variance is too low on synthetic data.** On Level 9,
+   many steps had reward_std close to 0 (all 4 generations were equally
+   good). GRPO needs variance to compute gradients. The SFT model
+   is already very consistent on synthetic data.
+
+3. **The SFT-to-RL gap hypothesis is wrong for this task.** In math/code
+   RL, the model knows the answer sometimes but doesn't always produce
+   it — RL makes it more consistent. For OMR, the model's errors are
+   systematic (misreading specific notation features), not random. RL
+   can't fix systematic errors because there's no "better generation"
+   in the model's distribution for those cases.
+
+4. **Best-of-8 showed only +16pp on Level 7** (6% → 22%), and that was
+   on out-of-distribution data (L9 adapter tested on L7). On in-
+   distribution data (L9 on L9), the variance is much lower — best-of-4
+   during GRPO barely differs from greedy.
+
+### What could still work
+
+1. **GRPO on openscore (23% baseline).** The model has much more
+   variance on real data. Best-of-8 showed consistent improvement.
+   But the 23% baseline may be too weak for stable RL.
+
+2. **DPO with rejection sampling.** Generate 8 outputs per openscore
+   image, rank by eval metric, train DPO on (best, worst) pairs.
+   Avoids the variance problem (DPO uses pairs, not group ranking).
+
+3. **Larger LoRA rank (r=64 or r=128).** If the model is at capacity
+   with r=32, a higher rank might allow GRPO to learn new patterns.
+
+4. **More generations per step (8 or 16).** With only 4 generations,
+   variance is low on synthetic data. More generations = better
+   ranking signal.
+
+5. **Train on openscore directly with SFT vision=False.** The 97%
+   Level 7a result with vision=False suggests the base encoder is
+   strong. A clean SFT→RL pipeline with vision=False may work.
