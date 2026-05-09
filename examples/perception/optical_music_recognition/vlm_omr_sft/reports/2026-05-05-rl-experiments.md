@@ -117,29 +117,31 @@ with greedy decoding.
 ### Why GRPO doesn't improve accuracy on synthetic data
 
 After fixing all infrastructure bugs, GRPO correctly maintains the SFT
-model (84%) but cannot push it higher. The reasons:
+model (84%) but cannot push it higher, despite having learning signal.
 
-1. **The model is at its LoRA capacity ceiling.** With r=32 (102M
-   trainable params out of 9.5B), the model may have already learned
-   everything it can from the SFT data. GRPO can't teach new knowledge
-   — it can only make the model more consistently pick its best outputs.
+**Variance analysis (100-step full run):**
 
-2. **Generation variance is too low on synthetic data.** On Level 9,
-   many steps had reward_std close to 0 (all 4 generations were equally
-   good). GRPO needs variance to compute gradients. The SFT model
-   is already very consistent on synthetic data.
+| Variance bucket | Steps | % | Gradient? |
+|---|---|---|---|
+| Zero std (<0.01) | 37 | 37% | No |
+| Low std (0.01-0.3) | 27 | 27% | Weak |
+| Medium std (0.3-1.0) | 27 | 27% | Yes |
+| High std (>1.0) | 9 | 9% | Strong |
 
-3. **The SFT-to-RL gap hypothesis is wrong for this task.** In math/code
-   RL, the model knows the answer sometimes but doesn't always produce
-   it — RL makes it more consistent. For OMR, the model's errors are
-   systematic (misreading specific notation features), not random. RL
-   can't fix systematic errors because there's no "better generation"
-   in the model's distribution for those cases.
+36% of steps have useful gradient. The model DOES produce varying
+quality outputs. But:
 
-4. **Best-of-8 showed only +16pp on Level 7** (6% → 22%), and that was
-   on out-of-distribution data (L9 adapter tested on L7). On in-
-   distribution data (L9 on L9), the variance is much lower — best-of-4
-   during GRPO barely differs from greedy.
+1. **Reward slightly degraded over training.** First 50 steps: avg
+   reward +2.13, 20 perfect, 8 poor. Last 50: +1.97, 18 perfect,
+   12 poor. GRPO is slowly making the model worse even with beta=1.0.
+
+2. **4 generations per step is too few.** With 37% zero-variance steps,
+   most of the training is no-ops. The 9% high-variance steps are too
+   rare to drive consistent improvement.
+
+3. **LR and beta may be mistuned.** LR=5e-7 + beta=1.0 makes updates
+   extremely small. The useful gradient steps produce tiny weight
+   changes that can't accumulate fast enough.
 
 ### What could still work
 
