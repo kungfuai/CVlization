@@ -143,23 +143,46 @@ quality outputs. But:
    extremely small. The useful gradient steps produce tiny weight
    changes that can't accumulate fast enough.
 
-### What could still work
+### Literature review: RL for document understanding (2025-2026)
 
-1. **GRPO on openscore (23% baseline).** The model has much more
-   variance on real data. Best-of-8 showed consistent improvement.
-   But the 23% baseline may be too weak for stable RL.
+Multiple systems have successfully applied GRPO/RL to document OCR:
 
-2. **DPO with rejection sampling.** Generate 8 outputs per openscore
-   image, rank by eval metric, train DPO on (best, worst) pairs.
-   Avoids the variance problem (DPO uses pairs, not group ranking).
+| System | Task | SFT→RL gain | Technique |
+|---|---|---|---|
+| FD-RL | Document OCR | 87→90% | Format-decoupled rewards |
+| HunyuanOCR | Text spotting | significant | IoU + edit distance |
+| Infinity-Parser | Document parsing | SOTA | Hungarian matching |
+| RL-Struct | JSON generation | 65→90% | Hierarchical rewards |
 
-3. **Larger LoRA rank (r=64 or r=128).** If the model is at capacity
-   with r=32, a higher rank might allow GRPO to learn new patterns.
+Key differences from our setup:
+- **16 generations per prompt** (we used 4) — DeepSeek-R1 recipe
+- **Decomposed rewards** (validity + structure + content, not one scalar)
+- **reward=0 for unparseable output** (hard constraint on validity)
+- **Token-level loss** (not per-sequence averaging which penalizes long output)
+- **Large batch sizes** (512+ total samples)
 
-4. **More generations per step (8 or 16).** With only 4 generations,
-   variance is low on synthetic data. More generations = better
-   ranking signal.
+Also relevant: "SFT Memorizes, RL Generalizes" paper found that
+excessive SFT locks the model into rigid patterns that RL cannot
+escape. Our model had extensive SFT (3 curriculum stages × 3 epochs).
 
-5. **Train on openscore directly with SFT vision=False.** The 97%
-   Level 7a result with vision=False suggests the base encoder is
-   strong. A clean SFT→RL pipeline with vision=False may work.
+### What to try next
+
+1. **num_generations=16** — the most impactful change. DeepSeek-R1
+   uses 16. With 4, we had 37% zero-variance steps.
+
+2. **Decomposed reward**:
+   - Validity: does the output parse as MXC2? (0 or 1)
+   - Structure: correct part count? (0 or 1)
+   - Content: SequenceMatcher.ratio per part (0 to 1)
+   - Weight: validity=0 (hard gate), structure=0.2, content=0.8
+
+3. **DAPO fixes**: token-level loss aggregation, dynamic sampling to
+   skip zero-variance batches, entropy monitoring.
+
+4. **Less SFT before RL**: try RL from a 1-epoch SFT model instead
+   of the full curriculum chain. The "SFT Memorizes" paper suggests
+   minimal SFT + RL outperforms extensive SFT + RL.
+
+5. **Try openscore**: the model has much more variance on real data
+   (23% baseline). But need to verify the model produces parseable
+   output first.
