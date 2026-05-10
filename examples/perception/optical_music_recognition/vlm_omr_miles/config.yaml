@@ -4,8 +4,12 @@
 # Smoke test config (low values). For full training, see commented section.
 
 model:
-  # Qwen3-VL-8B — natively multimodal, supported by Miles mbridge
-  name: "Qwen/Qwen3-VL-8B-Instruct"
+  # Merged SFT checkpoint: Qwen3.5-9B with SFT LoRA baked into base weights.
+  # Created by: model.save_pretrained_merged() from the L9 MXC2 adapter.
+  # Path is relative to the workspace mount.
+  name: "../vlm_omr_sft/outputs/tamqjf4k_merged"
+  # Fallback: use base model (no SFT) for testing
+  # name: "unsloth/Qwen3.5-9B"
 
 dataset:
   # Synthetic Level 9 for initial RL testing (84% SFT baseline)
