@@ -186,3 +186,110 @@ escape. Our model had extensive SFT (3 curriculum stages × 3 epochs).
 5. **Try openscore**: the model has much more variance on real data
    (23% baseline). But need to verify the model produces parseable
    output first.
+
+### GRPO v6b: 8 generations on Level 9 (2026-05-09)
+
+Same setup as v5 but: num_generations=8, LR=1e-6, beta=0.5.
+
+- Steps: 50 optimizer steps × 4 grad_accum = **200 weight updates**
+- Total rollouts: 50 × 8 = **400 generated completions**
+- Zero-variance: 4/50 (8%) — much better than v5's 37%
+- Reward trend: +2.13 → +2.32 (slight increase, vs v5's −0.29 decrease)
+- **Eval: 84% pitched-only (same as SFT baseline, no change)**
+
+### Honest assessment
+
+**What we proved:** Our GRPO recipe correctly maintains the SFT model
+on Level 9 (84% → 84%) when reward and adapter loading are correct.
+This is a baseline working pipeline, not a failure.
+
+**What we did NOT prove:** That RL cannot improve Level 9. We have
+not tried:
+
+| Knob | Used | Literature/recommended |
+|---|---|---|
+| Total steps | 50-100 | 500-3000 (DeepSeek-R1) |
+| Total rollouts | 200-400 | 8K-50K |
+| Generations/prompt | 4-8 | 16 (we OOM'd at 16) |
+| Learning rate | 5e-7 - 1e-6 | 1e-6 - 1e-5 |
+| KL penalty (beta) | 0.5 - 1.0 | 0.0 - 0.1 |
+| Reward decomposition | Single scalar | Validity + structure + content |
+| Training type | LoRA r=32 | Full fine-tune (Miles default) |
+| Loss aggregation | Per-sequence | Token-level (DAPO) |
+| Sampling | Standard | Dynamic (skip zero-var batches) |
+
+The 16% errors on Level 9 are systematic but "systematic" ≠ "RL can't
+fix." Greedy decoding consistently makes the same errors, but with
+enough exploration (higher temp, more gens, longer training), RL might
+find better paths.
+
+### Training accuracy diagnostic
+
+The reward IS a proxy for training accuracy (it's SequenceMatcher.ratio
+× 4 − 1, the exact eval metric). Across 100 v5 steps:
+- Steps with reward > +2.6 (~90% accuracy): 38/100
+- Steps with reward < +1.0 (~50% accuracy): 20/100
+- Mean reward: +2.05 (~76% accuracy)
+- Trend: −0.29 over training (slight degradation)
+
+In v6b (50 steps, 8 gens):
+- Mean reward: +2.22 (~80% accuracy)
+- Trend: +0.19 (slight improvement)
+
+So training "accuracy" hovered at 76-83%, matching the 84% eval — no
+meaningful improvement during training.
+
+### Better metrics for RL diagnosis
+
+Beyond reward mean/std, the literature recommends tracking:
+
+1. **Reward distribution histogram** — not just mean. Is the tail of
+   poor samples shrinking? Are perfect samples increasing? Per-sample
+   improvement matters more than mean.
+
+2. **Best-of-N gap** (max_reward − mean_reward per prompt) — measures
+   headroom. If max=+3 but mean=+1, there's room to improve. If
+   max=mean, the model is already producing its best.
+
+3. **Entropy of generated outputs** — Miles tracks `rollout/entropy`.
+   Declining entropy = mode collapse imminent.
+
+4. **KL divergence from reference** — Miles tracks `train/ppo_kl`.
+   Should grow slowly. Spikes indicate policy drift.
+
+5. **Clip fraction** — Miles tracks `train/pg_clipfrac`. High clip
+   fraction (>0.2) means updates are too aggressive.
+
+6. **Per-sample tracking** — which prompts improve vs degrade. RL
+   often helps hard samples but hurts easy ones (net zero).
+
+7. **Output length distribution** — Miles tracks `response_length_*`.
+   Mode collapse often manifests as outputs getting shorter or longer.
+
+8. **Pitched vs non-pitched accuracy separately** — our eval already
+   does this; the reward could too. If pitched improves but rhythm
+   degrades, the reward is biased.
+
+9. **Header accuracy** (key/time/parts) — checks structural
+   understanding separately from content.
+
+10. **Greedy eval every N steps** — true test-time accuracy, not just
+    sampled reward. We currently only eval at the end.
+
+### Miles logging
+
+Miles already tracks the key RL metrics via WandB/MLflow:
+- `rollout/entropy` — for mode collapse detection
+- `train/kl_loss`, `train/ppo_kl` — policy drift
+- `train/pg_clipfrac` — update aggressiveness
+- `raw_response_length/{mean,max,min}` — length distribution
+- `rollout/log_probs`, `rollout/ref_log_probs` — on-policy verification
+- Custom rewards via `--custom-rm-path` (our reward.py)
+
+**Gaps in Miles default logging that we should add:**
+- Per-sample reward tracking (CSV dump every N steps)
+- Reward histogram bins (e.g., counts in 0-0.25, 0.25-0.5, etc.)
+- Best-of-N gap
+- Periodic greedy eval on a fixed dev set (not just sampled reward)
+
+These are easy to add via a custom callback in Miles' tracking utils.
