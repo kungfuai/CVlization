@@ -137,7 +137,9 @@ def build_command(config: dict, dataset_path: Path, model_path: Path) -> list:
     checkpoint_dir = output_dir / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    reward_path = str(Path(__file__).parent / "reward.py")
+    # Miles loads custom RM via importlib (module.submodule.function path),
+    # not a filesystem path. /workspace is on PYTHONPATH (set in train.sh).
+    reward_path = "reward.reward_fn"
 
     cmd = [
         sys.executable, "/root/miles/train.py",
