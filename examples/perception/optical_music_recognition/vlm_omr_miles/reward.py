@@ -1,10 +1,12 @@
 """OMR reward function for Miles GRPO.
 
-Miles calls `compute_score(response, label)` for each generated response.
-Returns a float reward.
+Miles calls `async def reward_fn(args, sample, **kwargs)` where:
+  - args: training arguments namespace
+  - sample: has .response (generated text), .label (reference XML), .prompt
+  - returns a float reward
 
 The reward uses SequenceMatcher.ratio() on pitched-only sequences —
-the same computation as the eval metric (pitched_only_similarity).
+the same computation as eval_mxc.py pitched_only_similarity.
 """
 
 import re
@@ -22,7 +24,6 @@ def _extract_pitches(text: str) -> list[str]:
 
 
 def _strip_musicxml_header(xml: str) -> str:
-    """Remove boilerplate from MusicXML."""
     xml = re.sub(r'<\?xml[^?]*\?>\s*', '', xml)
     xml = re.sub(r'<!DOCTYPE[^>]*>\s*', '', xml)
     xml = re.sub(r'\s*<identification>.*?</identification>', '', xml, flags=re.DOTALL)
@@ -31,47 +32,54 @@ def _strip_musicxml_header(xml: str) -> str:
     return xml.strip()
 
 
-def _xml_to_mxc2_pitches(xml: str) -> list[str]:
-    """Convert MusicXML to pitch list via MXC2.
+def _xml_to_pitches(xml: str) -> list[str]:
+    """Extract pitch list from MusicXML.
 
-    Falls back to extracting pitches directly from XML if mxc2 import fails.
+    Tries MXC2 converter from vlm_omr_sft (mounted at /cvlization_repo);
+    falls back to direct regex extraction.
     """
     try:
-        import sys, os
-        # Try importing mxc2 from the vlm_omr_sft directory
-        sft_dir = os.path.join(os.path.dirname(__file__), "..", "vlm_omr_sft")
+        import sys
+        sft_dir = "/cvlization_repo/examples/perception/optical_music_recognition/vlm_omr_sft"
         if sft_dir not in sys.path:
             sys.path.insert(0, sft_dir)
         from mxc2 import xml_to_mxc2
         mxc2 = xml_to_mxc2(_strip_musicxml_header(xml), drop_beams=True)
         return _extract_pitches(mxc2)
     except Exception:
-        # Fallback: extract pitches directly from XML
         pitches = []
-        for m in re.finditer(r'<step>(\w)</step>.*?<octave>(\d)</octave>', xml, re.DOTALL):
-            pitches.append(f"{m.group(1)}{m.group(2)}")
+        for note in re.finditer(r'<pitch>(.*?)</pitch>', xml, re.DOTALL):
+            content = note.group(1)
+            step_m = re.search(r'<step>(\w)</step>', content)
+            oct_m = re.search(r'<octave>(\d)</octave>', content)
+            alter_m = re.search(r'<alter>(-?\d+)</alter>', content)
+            if step_m and oct_m:
+                step = step_m.group(1)
+                octave = oct_m.group(1)
+                if alter_m:
+                    a = int(alter_m.group(1))
+                    if a > 0:
+                        step += '#' * a
+                    elif a < 0:
+                        step += 'b' * (-a)
+                pitches.append(f"{step}{octave}")
         return pitches
 
 
-def compute_score(response: str, label: str) -> float:
-    """Compute OMR reward for a single response.
+async def reward_fn(args, sample, **kwargs) -> float:
+    """Async OMR reward for Miles GRPO.
 
-    Args:
-        response: Model-generated MXC2 text.
-        label: Reference MusicXML (raw from dataset).
-
-    Returns:
-        Float reward in [-1, 3] range.
-        -1.0 = no pitch match, +3.0 = perfect match.
+    Returns SequenceMatcher.ratio scaled to [-1, +3].
+    -1.0 = no match, +3.0 = perfect match.
     """
+    response = sample.response if hasattr(sample, "response") else str(sample)
+    label = sample.label if hasattr(sample, "label") else ""
+
     pred_pitches = _extract_pitches(response)
-    ref_pitches = _xml_to_mxc2_pitches(label)
+    ref_pitches = _xml_to_pitches(label)
 
     if not pred_pitches or not ref_pitches:
         return -1.0
 
-    # Same computation as eval_mxc.py pitched_only_similarity
     sim = SequenceMatcher(None, pred_pitches, ref_pitches).ratio()
-
-    # Scale to [-1, +3]
     return sim * 4.0 - 1.0

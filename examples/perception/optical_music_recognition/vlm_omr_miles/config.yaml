@@ -1,39 +1,31 @@
 # Miles GRPO for VLM OMR
-# Uses Qwen3-VL-8B on synthetic Level 9 data with MXC2 format.
-#
-# Smoke test config (low values). For full training, see commented section.
+# Uses Qwen3.5-9B (VLM) merged SFT checkpoint on synthetic Level 9.
 
 model:
-  # Merged SFT checkpoint: Qwen3.5-9B with SFT LoRA baked into base weights.
-  # Created by: model.save_pretrained_merged() from the L9 MXC2 adapter.
-  # Path is relative to the workspace mount.
-  name: "../vlm_omr_sft/outputs/tamqjf4k_merged"
-  # Fallback: use base model (no SFT) for testing
-  # name: "unsloth/Qwen3.5-9B"
+  # Merged SFT checkpoint inside the SFT directory mount.
+  # train.sh mounts $SFT_DIR -> /sft_workspace
+  name: "/sft_workspace/outputs/tamqjf4k_merged"
 
 dataset:
-  # Synthetic Level 9 for initial RL testing (84% SFT baseline)
   name: "zzsi/synthetic-scores"
   config: "level9"
   split: "train"
   max_samples: 200
-  # Column mapping for Miles multimodal support
   image_key: "image"
-  prompt_key: "musicxml"    # raw XML — reward function converts to MXC2
 
 training:
   output_dir: "outputs"
   num_rollout: 20
   rollout_batch_size: 2
-  n_samples_per_prompt: 8     # 8 generations per image (more variance)
+  n_samples_per_prompt: 8
   global_batch_size: 16
   max_response_len: 4096
   temperature: 0.7
   learning_rate: 1.0e-6
   weight_decay: 0.1
   save_interval: 10
-  rm_type: "custom"           # use our custom reward function
-  num_gpus: 1
+  rm_type: "custom"
+  num_gpus: 2                  # use both GPUs
   max_tokens_per_gpu: 4096
   sglang_mem_fraction: 0.4
 
@@ -43,11 +35,3 @@ grpo:
   entropy_coef: 0.0
   eps_clip: 0.2
   eps_clip_high: 0.28
-
-# Full training (uncomment):
-# training:
-#   num_rollout: 500
-#   rollout_batch_size: 8
-#   n_samples_per_prompt: 8
-#   global_batch_size: 64
-#   max_response_len: 4096
