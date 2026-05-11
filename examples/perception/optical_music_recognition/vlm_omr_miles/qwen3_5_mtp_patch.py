@@ -1,73 +1,31 @@
-"""Patch for Miles qwen3_5 mbridge MTP layer naming.
+"""Patch for Miles + megatron-bridge Qwen3.5-VLM MTP layer name mismatch.
 
-Bug: slime issue #1894 — Megatron-LM upstream renamed `transformer_layer` to
-`mtp_model_layer` in MTP submodule. Miles' qwen3_5.py mbridge still checks
-for the old name, causing AttributeError: 'NoneType' object has no attribute
-'megatron_module' during HF→Megatron weight conversion.
+Bug (slime issue #1894): Megatron-LM produces MTP parameters named
+`transformer_layer.*`, but megatron-bridge's qwen35_vl_bridge.py registers
+mappings using `mtp_model_layer.*` (recent upstream rename).
 
-Applied at container build time. Replaces in-place:
-  - The "transformer_layer" check on line ~272 to accept both names
-  - The string-substitution to handle both naming conventions
+The fix is in megatron-bridge PR #3769 but unmerged as of 2026-05-11.
+
+Apply the established compat shim (already in glm45_bridge.py and mimo_bridge.py):
+text-replace the new name with the old name throughout the VL bridge file.
+Once megatron-bridge releases the proper fix, this patch can be removed.
 """
 
-import re
 import sys
+from pathlib import Path
 
-TARGET = "/root/miles/miles_plugins/mbridge/qwen3_5.py"
+VL_BRIDGE = Path("/usr/local/lib/python3.12/dist-packages/megatron/bridge/models/qwen_vl/qwen35_vl_bridge.py")
 
-OLD_BLOCK = '''        if "mtp.layers." not in name:
-            raise NotImplementedError(f"Invalid MTP parameter name: {name}")
+if not VL_BRIDGE.exists():
+    print(f"FAIL: {VL_BRIDGE} not found", file=sys.stderr)
+    sys.exit(1)
 
-        parts = name.split(".")
-        mtp_layer_idx = parts[2]  # mtp.layers.{idx}'''
-
-NEW_BLOCK = '''        if "mtp.layers." not in name:
-            raise NotImplementedError(f"Invalid MTP parameter name: {name}")
-
-        # VLM checkpoints prefix params with "language_model." — locate the
-        # "mtp.layers" segment and read the actual layer index after it.
-        parts = name.split(".")
-        mtp_idx_pos = parts.index("layers", parts.index("mtp")) + 1
-        mtp_layer_idx = parts[mtp_idx_pos]'''
-
-DUAL_NAME_OLD = '''        if "transformer_layer" in name:
-            proxy_name = name.replace(
-                f"mtp.layers.{mtp_layer_idx}.transformer_layer",
-                f"decoder.layers.{mtp_layer_idx}",
-            )'''
-
-DUAL_NAME_NEW = '''        if "transformer_layer" in name or "mtp_model_layer" in name:
-            mtp_sublayer = "mtp_model_layer" if "mtp_model_layer" in name else "transformer_layer"
-            proxy_name = name.replace(
-                f"mtp.layers.{mtp_layer_idx}.{mtp_sublayer}",
-                f"decoder.layers.{mtp_layer_idx}",
-            )'''
-
-with open(TARGET) as f:
-    src = f.read()
-
-if NEW_BLOCK in src and DUAL_NAME_NEW in src:
-    print(f"Patch already fully applied to {TARGET}")
+text = VL_BRIDGE.read_text()
+if "mtp_model_layer" not in text:
+    print(f"Patch already applied (no occurrences of mtp_model_layer in {VL_BRIDGE})")
     sys.exit(0)
 
-changes = 0
-if OLD_BLOCK in src:
-    src = src.replace(OLD_BLOCK, NEW_BLOCK)
-    changes += 1
-    print(f"  Applied VLM prefix fix (parts[mtp_idx_pos] lookup)")
-elif NEW_BLOCK not in src:
-    print(f"FAIL: VLM prefix patch target not found in {TARGET}", file=sys.stderr)
-    sys.exit(1)
-
-if DUAL_NAME_OLD in src:
-    src = src.replace(DUAL_NAME_OLD, DUAL_NAME_NEW)
-    changes += 1
-    print(f"  Applied transformer_layer/mtp_model_layer dual-name fix")
-elif DUAL_NAME_NEW not in src:
-    print(f"FAIL: dual-name patch target not found in {TARGET}", file=sys.stderr)
-    sys.exit(1)
-
-with open(TARGET, "w") as f:
-    f.write(src)
-
-print(f"Patched {TARGET}: {changes} change(s) applied")
+count = text.count("mtp_model_layer")
+text = text.replace("mtp_model_layer", "transformer_layer")
+VL_BRIDGE.write_text(text)
+print(f"Patched {VL_BRIDGE}: replaced {count} occurrences of mtp_model_layer -> transformer_layer")
