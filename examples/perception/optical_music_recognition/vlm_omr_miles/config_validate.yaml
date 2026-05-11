@@ -1,0 +1,36 @@
+# Minimal end-to-end validation: 2 rollouts × 2 generations.
+# Goal: catch failure modes (image format, batch shapes, mbridge edge cases)
+# in the fastest possible run before committing to longer experiments.
+
+model:
+  name: "/sft_workspace/outputs/tamqjf4k_merged"
+
+dataset:
+  name: "zzsi/synthetic-scores"
+  config: "level9"
+  split: "train"
+  max_samples: 20            # tiny pool for validation
+  image_key: "image"
+
+training:
+  output_dir: "outputs_validate"
+  num_rollout: 2             # 2 iterations only
+  rollout_batch_size: 1
+  n_samples_per_prompt: 2    # 2 generations per prompt
+  global_batch_size: 2
+  max_response_len: 2048     # shorter for speed
+  temperature: 0.7
+  learning_rate: 1.0e-6
+  weight_decay: 0.1
+  save_interval: 100         # never save during validation
+  rm_type: "custom"
+  num_gpus: 2
+  max_tokens_per_gpu: 4096
+  sglang_mem_fraction: 0.4
+
+grpo:
+  kl_coef: 0.5
+  kl_type: "low_var_kl"
+  entropy_coef: 0.0
+  eps_clip: 0.2
+  eps_clip_high: 0.28

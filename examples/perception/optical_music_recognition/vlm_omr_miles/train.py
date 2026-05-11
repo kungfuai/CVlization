@@ -55,10 +55,12 @@ def prepare_dataset(config: dict) -> Path:
     name = dc.get("name", "zzsi/synthetic-scores")
     cfg = dc.get("config", "level9")
     split = dc.get("split", "train")
-    max_samples = dc.get("max_samples", 200)
+    max_samples = dc.get("max_samples")  # None → use all
 
-    print(f"Loading {name} config={cfg} split={split} (max {max_samples})")
-    ds = load_dataset(name, cfg, split=f"{split}[:{max_samples}]")
+    slice_spec = f"{split}[:{max_samples}]" if max_samples else split
+    print(f"Loading {name} config={cfg} split={slice_spec}")
+    ds = load_dataset(name, cfg, split=slice_spec)
+    print(f"  Loaded {len(ds)} samples")
 
     output_dir = Path(config.get("training", {}).get("output_dir", "outputs"))
     output_dir.mkdir(parents=True, exist_ok=True)

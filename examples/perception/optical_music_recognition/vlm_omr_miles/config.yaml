@@ -10,7 +10,8 @@ dataset:
   name: "zzsi/synthetic-scores"
   config: "level9"
   split: "train"
-  max_samples: 200
+  # null → use full split (3115 samples for Level 9)
+  max_samples: null
   image_key: "image"
 
 training:
