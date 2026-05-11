@@ -15,7 +15,6 @@ import argparse
 import json
 import logging
 import os
-import re
 import subprocess
 import sys
 import warnings
@@ -71,11 +70,9 @@ def prepare_dataset(config: dict) -> Path:
     dataset_path = output_dir / "train_data.jsonl"
     with open(dataset_path, "w") as f:
         for i, example in enumerate(ds):
-            # Save image
             img = example["image"]
             img_path = image_dir / f"{i:06d}.png"
-            if not img_path.exists():
-                img.save(img_path)
+            img.save(img_path)
 
             # Build prompt with image reference
             prompt_messages = [

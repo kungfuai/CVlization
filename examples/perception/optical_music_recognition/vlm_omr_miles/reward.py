@@ -10,60 +10,65 @@ the same computation as eval_mxc.py pitched_only_similarity.
 """
 
 import re
+import sys
 from difflib import SequenceMatcher
 
+# Import shared OMR helpers from the SFT codebase.
+# /cvlization_repo is the mounted CVlization root (see train.sh).
+_SFT_DIR = "/cvlization_repo/examples/perception/optical_music_recognition/vlm_omr_sft"
+if _SFT_DIR not in sys.path:
+    sys.path.insert(0, _SFT_DIR)
 
-def _extract_pitches(text: str) -> list[str]:
-    """Extract pitched-note pitch tokens from MXC/MXC2 text."""
-    pitches = []
-    for line in text.split("\n"):
-        m = re.match(r"[+]?N\s+(\S+)", line.strip())
-        if m:
-            pitches.append(m.group(1))
-    return pitches
+try:
+    from grpo_rewards import _extract_pitches
+    from train import strip_musicxml_header as _strip_musicxml_header
+    from mxc2 import xml_to_mxc2 as _xml_to_mxc2
+    _MXC2_AVAILABLE = True
+except ImportError:
+    _MXC2_AVAILABLE = False
 
+    def _extract_pitches(text):
+        pitches = []
+        for line in text.split("\n"):
+            m = re.match(r"[+]?N\s+(\S+)", line.strip())
+            if m:
+                pitches.append(m.group(1))
+        return pitches
 
-def _strip_musicxml_header(xml: str) -> str:
-    xml = re.sub(r'<\?xml[^?]*\?>\s*', '', xml)
-    xml = re.sub(r'<!DOCTYPE[^>]*>\s*', '', xml)
-    xml = re.sub(r'\s*<identification>.*?</identification>', '', xml, flags=re.DOTALL)
-    xml = re.sub(r'\s*<defaults>.*?</defaults>', '', xml, flags=re.DOTALL)
-    xml = re.sub(r'\s*<movement-title>tmp[^<]*</movement-title>', '', xml)
-    return xml.strip()
+    def _strip_musicxml_header(xml):
+        return xml
 
 
 def _xml_to_pitches(xml: str) -> list[str]:
     """Extract pitch list from MusicXML.
 
-    Tries MXC2 converter from vlm_omr_sft (mounted at /cvlization_repo);
-    falls back to direct regex extraction.
+    Uses MXC2 converter when available; falls back to regex if the SFT
+    module isn't mounted.
     """
-    try:
-        import sys
-        sft_dir = "/cvlization_repo/examples/perception/optical_music_recognition/vlm_omr_sft"
-        if sft_dir not in sys.path:
-            sys.path.insert(0, sft_dir)
-        from mxc2 import xml_to_mxc2
-        mxc2 = xml_to_mxc2(_strip_musicxml_header(xml), drop_beams=True)
-        return _extract_pitches(mxc2)
-    except Exception:
-        pitches = []
-        for note in re.finditer(r'<pitch>(.*?)</pitch>', xml, re.DOTALL):
-            content = note.group(1)
-            step_m = re.search(r'<step>(\w)</step>', content)
-            oct_m = re.search(r'<octave>(\d)</octave>', content)
-            alter_m = re.search(r'<alter>(-?\d+)</alter>', content)
-            if step_m and oct_m:
-                step = step_m.group(1)
-                octave = oct_m.group(1)
-                if alter_m:
-                    a = int(alter_m.group(1))
-                    if a > 0:
-                        step += '#' * a
-                    elif a < 0:
-                        step += 'b' * (-a)
-                pitches.append(f"{step}{octave}")
-        return pitches
+    if _MXC2_AVAILABLE:
+        try:
+            mxc2 = _xml_to_mxc2(_strip_musicxml_header(xml), drop_beams=True)
+            return _extract_pitches(mxc2)
+        except (ValueError, KeyError, AttributeError):
+            pass
+
+    pitches = []
+    for note in re.finditer(r'<pitch>(.*?)</pitch>', xml, re.DOTALL):
+        content = note.group(1)
+        step_m = re.search(r'<step>(\w)</step>', content)
+        oct_m = re.search(r'<octave>(\d)</octave>', content)
+        alter_m = re.search(r'<alter>(-?\d+)</alter>', content)
+        if step_m and oct_m:
+            step = step_m.group(1)
+            octave = oct_m.group(1)
+            if alter_m:
+                a = int(alter_m.group(1))
+                if a > 0:
+                    step += '#' * a
+                elif a < 0:
+                    step += 'b' * (-a)
+            pitches.append(f"{step}{octave}")
+    return pitches
 
 
 async def reward_fn(args, sample, **kwargs) -> float:
