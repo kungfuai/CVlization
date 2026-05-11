@@ -23,7 +23,7 @@ docker run --rm --gpus=all \
   --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
   $SFT_MOUNT \
   --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
-  --env "PYTHONPATH=/cvlization_repo" \
+  --env "PYTHONPATH=/cvlization_repo:/root/Megatron-LM" \
   --env "PYTHONUNBUFFERED=1" \
   ${WANDB_API_KEY:+--env "WANDB_API_KEY=${WANDB_API_KEY}"} \
   --shm-size=16g \
