@@ -38,6 +38,11 @@ def load_config(path: str = "config.yaml") -> dict:
 
 
 def download_model(name: str) -> Path:
+    """Resolve model path: local directory or HuggingFace repo ID."""
+    local = Path(name)
+    if local.is_absolute() and local.exists():
+        print(f"Using local model: {local}")
+        return local
     from huggingface_hub import snapshot_download
     print(f"Ensuring model downloaded: {name}")
     return Path(snapshot_download(repo_id=name))
@@ -98,43 +103,62 @@ def prepare_dataset(config: dict) -> Path:
     return dataset_path
 
 
+QWEN35_9B_MODEL_ARGS = [
+    "--spec", "miles_plugins.models.qwen3_5", "get_qwen3_5_spec",
+    "--disable-bias-linear",
+    "--qk-layernorm",
+    "--group-query-attention",
+    "--num-attention-heads", "16",
+    "--num-query-groups", "4",
+    "--kv-channels", "256",
+    "--num-layers", "32",
+    "--hidden-size", "4096",
+    "--ffn-hidden-size", "12288",
+    "--normalization", "RMSNorm",
+    "--apply-layernorm-1p",
+    "--position-embedding-type", "rope",
+    "--norm-epsilon", "1e-6",
+    "--rotary-percent", "0.25",
+    "--swiglu",
+    "--untie-embeddings-and-output-weights",
+    "--vocab-size", "248320",
+    "--rotary-base", "10000000",
+    "--attention-output-gate",  # qwen3.5 specific
+]
+
+
 def build_command(config: dict, dataset_path: Path, model_path: Path) -> list:
-    """Build Miles training command for VLM GRPO."""
+    """Build Miles training command for VLM GRPO (Megatron backend)."""
     tc = config.get("training", {})
     gc = config.get("grpo", {})
+    num_gpus = tc.get("num_gpus", 2)
 
     output_dir = Path(tc.get("output_dir", "outputs"))
     checkpoint_dir = output_dir / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    # Path to the reward module
     reward_path = str(Path(__file__).parent / "reward.py")
 
-    miles_script = "/root/miles/train.py"
     cmd = [
-        sys.executable, miles_script,
+        sys.executable, "/root/miles/train.py",
 
-        # Model
         "--hf-checkpoint", str(model_path),
         "--ref-load", str(model_path),
+        "--load", str(model_path),
         "--save", str(checkpoint_dir),
         "--save-interval", str(tc.get("save_interval", 10)),
 
-        # Dataset
         "--prompt-data", str(dataset_path),
         "--input-key", "prompt",
         "--label-key", "label",
         "--apply-chat-template",
         "--rollout-shuffle",
 
-        # Multimodal — tell Miles to pass images
         "--multimodal-keys", '{"image": "images"}',
 
-        # Reward
         "--rm-type", "custom",
         "--custom-rm-path", reward_path,
 
-        # Training loop
         "--num-rollout", str(tc.get("num_rollout", 20)),
         "--rollout-batch-size", str(tc.get("rollout_batch_size", 2)),
         "--n-samples-per-prompt", str(tc.get("n_samples_per_prompt", 8)),
@@ -142,7 +166,6 @@ def build_command(config: dict, dataset_path: Path, model_path: Path) -> list:
         "--rollout-temperature", str(tc.get("temperature", 0.7)),
         "--global-batch-size", str(tc.get("global_batch_size", 16)),
 
-        # GRPO
         "--advantage-estimator", "grpo",
         "--use-kl-loss",
         "--kl-loss-coef", str(gc.get("kl_coef", 0.5)),
@@ -151,7 +174,6 @@ def build_command(config: dict, dataset_path: Path, model_path: Path) -> list:
         "--eps-clip", str(gc.get("eps_clip", 0.2)),
         "--eps-clip-high", str(gc.get("eps_clip_high", 0.28)),
 
-        # Optimizer
         "--optimizer", "adam",
         "--lr", str(tc.get("learning_rate", 1e-6)),
         "--lr-decay-style", "constant",
@@ -159,24 +181,34 @@ def build_command(config: dict, dataset_path: Path, model_path: Path) -> list:
         "--adam-beta1", "0.9",
         "--adam-beta2", "0.98",
 
-        # Backend
-        "--train-backend", "fsdp",
-        "--gradient-checkpointing",
-        "--fsdp-state-dict-cpu-offload",
+        # Megatron backend with in-memory bridge conversion
+        "--train-backend", "megatron",
+        "--tensor-model-parallel-size", str(num_gpus),
+        "--sequence-parallel",
+        "--pipeline-model-parallel-size", "1",
+        "--context-parallel-size", "1",
+        "--expert-model-parallel-size", "1",
+        "--expert-tensor-parallel-size", "1",
+        "--recompute-granularity", "full",
+        "--recompute-method", "uniform",
+        "--recompute-num-layers", "1",
+        "--accumulate-allreduce-grads-in-fp32",
+        "--attention-softmax-in-fp32",
+        "--attention-backend", "flash",
+        "--attention-dropout", "0.0",
+        "--hidden-dropout", "0.0",
+        "--megatron-to-hf-mode", "bridge",
 
-        # GPU
         "--actor-num-nodes", "1",
-        "--actor-num-gpus-per-node", str(tc.get("num_gpus", 1)),
+        "--actor-num-gpus-per-node", str(num_gpus),
         "--colocate",
 
-        # SGLang inference
-        "--rollout-num-gpus-per-engine", "1",
+        "--rollout-num-gpus-per-engine", str(num_gpus),
         "--sglang-mem-fraction-static", str(tc.get("sglang_mem_fraction", 0.4)),
 
-        # Memory
         "--use-dynamic-batch-size",
         "--max-tokens-per-gpu", str(tc.get("max_tokens_per_gpu", 4096)),
-    ]
+    ] + QWEN35_9B_MODEL_ARGS
 
     return cmd
 
