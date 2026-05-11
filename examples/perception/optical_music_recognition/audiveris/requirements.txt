@@ -1,1 +1,4 @@
-huggingface_hub>=0.20.0
+huggingface_hub==1.14.0
+datasets==4.8.5
+music21==9.9.1
+pillow==12.2.0

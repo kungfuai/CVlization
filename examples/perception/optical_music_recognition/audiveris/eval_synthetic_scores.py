@@ -56,10 +56,13 @@ def main():
     parser.add_argument("--output", default="audiveris_level9_results.jsonl")
     parser.add_argument("--workdir", default=None,
                         help="Directory for intermediate files (default: tempdir)")
+    parser.add_argument("--upscale", type=float, default=2.5,
+                        help="Image upscale factor before Audiveris "
+                             "(synthetic-scores images are ~150 DPI; Audiveris needs ~300)")
     args = parser.parse_args()
 
     from datasets import load_dataset
-    from eval_mxc import evaluate_pair
+    from eval_mxc import evaluate_pair, _ensure_mxc
 
     print(f"Loading {args.dataset_repo} config={args.dataset_config} split={args.split}")
     ds = load_dataset(args.dataset_repo, args.dataset_config, split=args.split)
@@ -86,14 +89,25 @@ def main():
             sample = ds[i]
             sample_id = sample.get("score_id", f"sample_{i:04d}")
             img_path = img_dir / f"{i:04d}.png"
-            sample["image"].save(img_path)
+            img = sample["image"]
+            if args.upscale and args.upscale != 1.0:
+                from PIL import Image
+                w, h = img.size
+                img = img.resize(
+                    (int(w * args.upscale), int(h * args.upscale)),
+                    Image.LANCZOS,
+                )
+            img.save(img_path)
             sample_out_dir = out_dir / f"{i:04d}"
 
             try:
                 mxl = run_audiveris(audiveris_bin, img_path, sample_out_dir, verbose=False)
                 pred_xml = read_mxl(mxl)
                 ref_xml = sample["musicxml"]
-                r = evaluate_pair(pred_xml, ref_xml, score_id=sample_id)
+                # evaluate_pair auto-converts ref XML→MXC but assumes pred is already
+                # MXC; convert pred XML explicitly so both go through the same parser.
+                pred_mxc = _ensure_mxc(pred_xml)
+                r = evaluate_pair(pred_mxc, ref_xml, score_id=sample_id)
 
                 rec = {
                     "i": i,
