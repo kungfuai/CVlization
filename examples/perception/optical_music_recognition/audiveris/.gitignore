@@ -1,6 +1,5 @@
 outputs/
-__pycache__/
-*.pyc
-*.omr
+debug_workdir/
+audiveris_*.jsonl
 *.mxl
-.env
+*.omr
