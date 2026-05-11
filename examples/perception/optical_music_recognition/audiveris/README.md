@@ -1,6 +1,6 @@
 # Audiveris — Classical OMR Baseline
 
-Rule-based Optical Music Recognition using [Audiveris 5.9.0](https://github.com/Audiveris/audiveris). Takes a scanned sheet music image and outputs **MusicXML** (`.mxl`) — directly playable and editable in MuseScore, Sibelius, Finale, etc.
+Rule-based Optical Music Recognition using [Audiveris 5.10.2](https://github.com/Audiveris/audiveris). Takes a scanned sheet music image and outputs **MusicXML** (`.mxl`) — directly playable and editable in MuseScore, Sibelius, Finale, etc.
 
 No GPU required. Useful as a **baseline** against learned OMR models such as `smt-omr`.
 

@@ -10,13 +10,13 @@ RUN apt-get update \
         xvfb \
         python3 \
         python3-pip \
-    # Download and install Audiveris 5.9.0 (bundled JRE; apt-get resolves all deps).
+    # Download and install Audiveris 5.10.2 (bundled JRE; apt-get resolves all deps).
     # The postinst script registers desktop MIME types via xdg-utils, which fails
     # in a headless Docker container — ignore that failure; the binary still installs.
-    && wget -q "https://github.com/Audiveris/audiveris/releases/download/5.9.0/Audiveris-5.9.0-ubuntu24.04-x86_64.deb" \
-    && (apt-get install -y ./Audiveris-5.9.0-ubuntu24.04-x86_64.deb || true) \
+    && wget -q "https://github.com/Audiveris/audiveris/releases/download/5.10.2/Audiveris-5.10.2-ubuntu24.04-x86_64.deb" \
+    && (apt-get install -y ./Audiveris-5.10.2-ubuntu24.04-x86_64.deb || true) \
     && test -f /opt/audiveris/bin/Audiveris \
-    && rm Audiveris-5.9.0-ubuntu24.04-x86_64.deb \
+    && rm Audiveris-5.10.2-ubuntu24.04-x86_64.deb \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/opt/audiveris/bin:${PATH}"

@@ -3,7 +3,7 @@
 Audiveris — classical rule-based Optical Music Recognition baseline.
 
 Takes a scanned sheet music image and outputs MusicXML (.mxl) using
-Audiveris 5.9.0 in headless batch mode. No GPU required.
+Audiveris 5.10.2 in headless batch mode. No GPU required.
 
 Repository: https://github.com/Audiveris/audiveris
 License: AGPL-3.0
@@ -44,7 +44,7 @@ except ImportError:
         return path if os.path.isabs(path) else os.path.join(base_dir, path)
 
 
-AUDIVERIS_VERSION = "5.9.0"
+AUDIVERIS_VERSION = "5.10.2"
 CACHE_DIR = Path.home() / ".cache" / "huggingface" / "cvl_data" / "audiveris"
 
 
