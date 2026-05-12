@@ -480,6 +480,31 @@ def main():
     print("Converting to conversation format ...")
     train_data = [convert_to_conversation(s, _hint_pool=hints_train) for s in dataset]
 
+    # Pre-filter samples that would exceed max_length (image tokens cannot be
+    # truncated safely — they cause runtime errors). Conservative estimate:
+    # ~975 image tokens + 200 instruction + 0.4 chars/token for text content.
+    max_len = model_config.get("max_length", 8192)
+    if hints_train:  # only when hint augmentation is active
+        IMG_TOK = 1000
+        WRAP_TOK = 250
+        MARGIN = 500
+        max_text_chars = (max_len - IMG_TOK - WRAP_TOK - MARGIN) // 0.4
+        before = len(train_data)
+        filtered = []
+        for item in train_data:
+            # Total text content = user text + assistant text
+            text_chars = 0
+            for msg in item["messages"]:
+                for chunk in msg["content"]:
+                    if chunk.get("type") == "text":
+                        text_chars += len(chunk["text"])
+            if text_chars <= max_text_chars:
+                filtered.append(item)
+        train_data = filtered
+        dropped = before - len(train_data)
+        print(f"  Length filter: kept {len(train_data)}/{before} "
+              f"(dropped {dropped} samples >{int(max_text_chars)} chars)")
+
     # ── Validation split: prefer HF dev split, fall back to manual carve-out ──
     val_data = None
     val_raw  = None
