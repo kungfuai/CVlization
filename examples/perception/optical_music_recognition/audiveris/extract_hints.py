@@ -29,6 +29,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("-n", "--n-samples", type=int, default=50)
+    p.add_argument("--start", type=int, default=0,
+                   help="Start index (for sharding across parallel workers)")
     p.add_argument("--dataset-repo", default="zzsi/synthetic-scores")
     p.add_argument("--dataset-config", default="level9")
     p.add_argument("--split", default="test")
@@ -43,8 +45,8 @@ def main():
 
     print(f"Loading {args.dataset_repo}/{args.dataset_config}/{args.split}")
     ds = load_dataset(args.dataset_repo, args.dataset_config, split=args.split)
-    n = min(args.n_samples, len(ds))
-    print(f"Processing {n} samples")
+    end = min(args.start + args.n_samples, len(ds))
+    print(f"Processing samples [{args.start}, {end}) of {len(ds)}")
 
     audiveris_bin = find_audiveris()
     workdir = Path(tempfile.mkdtemp(prefix="audiveris_hints_"))
@@ -56,7 +58,7 @@ def main():
     t0 = time.time()
     n_ok, n_fail = 0, 0
     with open(args.output, "w") as fout:
-        for i in range(n):
+        for j, i in enumerate(range(args.start, end)):
             sample = ds[i]
             sample_id = sample.get("score_id", f"sample_{i:04d}")
             img = sample["image"]
@@ -89,8 +91,8 @@ def main():
             elapsed = time.time() - t0
             status = "OK" if not record.get("audiveris_failed") else "FAIL"
             hint_len = len(record.get("audiveris_mxc2", ""))
-            print(f"  [{i:3d}/{n}] {sample_id}: {status}  hint={hint_len} chars  "
-                  f"({elapsed/(i+1):.0f}s/sample)")
+            print(f"  [{j+1:4d}/{end-args.start}] idx={i} {sample_id}: {status} "
+                  f"hint={hint_len}  ({elapsed/(j+1):.0f}s/sample)")
 
     print(f"\nDone. {n_ok} ok, {n_fail} failed. Total: {time.time()-t0:.0f}s")
     print(f"Wrote {args.output}")

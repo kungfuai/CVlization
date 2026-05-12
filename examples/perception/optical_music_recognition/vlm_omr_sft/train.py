@@ -418,7 +418,14 @@ def main():
             return xml_to_mxc(text)
         return text
 
-    def convert_to_conversation(sample):
+    # Optional hint injection (set by train_with_hints.py before calling main)
+    hints_train = globals().get("_INJECTED_HINTS_TRAIN") or {}
+    hints_dev = globals().get("_INJECTED_HINTS_DEV") or {}
+    hint_instruction = globals().get("_INJECTED_INSTRUCTION_WITH_HINT")
+    if hints_train or hints_dev:
+        print(f"Hint injection enabled: {len(hints_train)} train, {len(hints_dev)} dev")
+
+    def convert_to_conversation(sample, _hint_pool=None):
         text = strip_musicxml_header(sample[col["musicxml"]])
         if target_format in ("mxc", "mxc2"):
             try:
@@ -432,12 +439,21 @@ def main():
                     ) from e
                 mxc_failures.record(sample_id, e)
                 # fall back to cleaned XML for malformed samples
+
+        # Build instruction (with hint if available)
+        instr = instruction
+        if _hint_pool is not None and hint_instruction:
+            sample_id = sample.get(col["id"])
+            hint = _hint_pool.get(sample_id) if sample_id else None
+            if hint:
+                instr = hint_instruction.format(hint=hint[:8000])
+
         return {
             "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text",  "text": instruction},
+                        {"type": "text",  "text": instr},
                         {"type": "image", "image": sample[col["image"]]},
                     ],
                 },
@@ -453,7 +469,7 @@ def main():
         print(f"Dataset shuffled (seed={training_config['seed']})")
 
     print("Converting to conversation format ...")
-    train_data = [convert_to_conversation(s) for s in dataset]
+    train_data = [convert_to_conversation(s, _hint_pool=hints_train) for s in dataset]
 
     # ── Validation split: prefer HF dev split, fall back to manual carve-out ──
     val_data = None
@@ -464,7 +480,7 @@ def main():
             corpus_col = col["corpus"]
             dev_split = dev_split.filter(lambda r: r[corpus_col] in set(corpora))
         if len(dev_split) > 0:
-            val_data = [convert_to_conversation(s) for s in dev_split]
+            val_data = [convert_to_conversation(s, _hint_pool=hints_dev) for s in dev_split]
             val_raw  = dev_split
             print(f"Validation: {len(val_data)} rows from HF dev split")
         else:
