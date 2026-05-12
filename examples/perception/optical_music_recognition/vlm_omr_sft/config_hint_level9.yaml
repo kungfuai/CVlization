@@ -7,7 +7,7 @@ model:
   name: "unsloth/Qwen3.5-9B"
   load_in_4bit: true
   use_gradient_checkpointing: "unsloth"
-  max_length: 12288        # need more context for image + hint + target
+  max_length: 16384        # image (~975) + compressed hint (~1500) + target (~3000) + buffer
   chat_template: null
 
 # Resume from existing SFT adapter so the model already speaks MXC2

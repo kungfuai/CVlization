@@ -423,7 +423,16 @@ def main():
     hints_dev = globals().get("_INJECTED_HINTS_DEV") or {}
     hint_instruction = globals().get("_INJECTED_INSTRUCTION_WITH_HINT")
     if hints_train or hints_dev:
-        print(f"Hint injection enabled: {len(hints_train)} train, {len(hints_dev)} dev")
+        # Compress hints (drops Audiveris noise: articulations, dynamics, voice
+        # markers, stem directions, etc.) — ~25% size reduction with no info loss.
+        from hint_compress import compress_hint
+        hints_train = {k: compress_hint(v) for k, v in hints_train.items()}
+        hints_dev = {k: compress_hint(v) for k, v in hints_dev.items()}
+        train_lens = [len(v) for v in hints_train.values()]
+        if train_lens:
+            print(f"Hint injection enabled: {len(hints_train)} train, "
+                  f"{len(hints_dev)} dev. Compressed hint chars: "
+                  f"avg={sum(train_lens)/len(train_lens):.0f} max={max(train_lens)}")
 
     def convert_to_conversation(sample, _hint_pool=None):
         text = strip_musicxml_header(sample[col["musicxml"]])
@@ -446,7 +455,7 @@ def main():
             sample_id = sample.get(col["id"])
             hint = _hint_pool.get(sample_id) if sample_id else None
             if hint:
-                instr = hint_instruction.format(hint=hint[:8000])
+                instr = hint_instruction.format(hint=hint[:3500])
 
         return {
             "messages": [
