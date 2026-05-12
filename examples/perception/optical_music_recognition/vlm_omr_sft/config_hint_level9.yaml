@@ -7,7 +7,7 @@ model:
   name: "unsloth/Qwen3.5-9B"
   load_in_4bit: true
   use_gradient_checkpointing: "unsloth"
-  max_length: 24576        # image + compressed hint + target with headroom for outliers
+  max_length: 8192         # matches working SFT runs; all hint samples fit (max ~6051 tokens)
   chat_template: null
 
 # Resume from existing SFT adapter so the model already speaks MXC2
