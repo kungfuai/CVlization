@@ -83,9 +83,15 @@ def main():
 
             prompt = INSTRUCTION_TEXTONLY.format(hint=hint_text)
 
-            # Text-only chat template (no image content)
+            # Text-only chat template (no image content). Qwen3.5's template
+            # inserts `<think>` after the assistant role, putting the model in
+            # reasoning mode — but our SFT data has no thinking content, so the
+            # model emits English prose instead of MXC2. Strip the trailing
+            # <think> to keep the model in direct-output mode.
             messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
             text = processor.apply_chat_template(messages, add_generation_prompt=True)
+            import re as _re
+            text = _re.sub(r"<think>\s*\n*$", "", text)
             inputs = processor.tokenizer(text, return_tensors="pt", add_special_tokens=False).to("cuda")
 
             try:
