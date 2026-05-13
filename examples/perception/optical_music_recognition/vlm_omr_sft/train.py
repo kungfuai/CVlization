@@ -418,6 +418,29 @@ def main():
             return xml_to_mxc(text)
         return text
 
+    # When hints are injected, also pad all images to a uniform size so the
+    # image-token count is constant across the dataset. Different image
+    # heights produce different image-token counts, which can drift out of
+    # sync with the chat template's text-side count → trainer mismatch error.
+    pad_to_uniform = bool(globals().get("_INJECTED_HINTS_TRAIN"))
+    PAD_W, PAD_H = 1240, 1792   # safe size for synthetic-scores Level 9
+
+    def _pad_image(img):
+        from PIL import Image
+        w, h = img.size
+        if w == PAD_W and h == PAD_H:
+            return img
+        # Inscribe if larger than the canvas (preserves aspect ratio)
+        if w > PAD_W or h > PAD_H:
+            scale = min(PAD_W / w, PAD_H / h)
+            new_w, new_h = int(w * scale), int(h * scale)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+            w, h = img.size
+        # Pad with white, original at top-left
+        canvas = Image.new("RGB", (PAD_W, PAD_H), "white")
+        canvas.paste(img.convert("RGB") if img.mode != "RGB" else img, (0, 0))
+        return canvas
+
     # Optional hint injection (set by train_with_hints.py before calling main)
     hints_train = globals().get("_INJECTED_HINTS_TRAIN") or {}
     hints_dev = globals().get("_INJECTED_HINTS_DEV") or {}
@@ -457,13 +480,17 @@ def main():
             if hint:
                 instr = hint_instruction.format(hint=hint[:3500])
 
+        img = sample[col["image"]]
+        if pad_to_uniform:
+            img = _pad_image(img)
+
         return {
             "messages": [
                 {
                     "role": "user",
                     "content": [
                         {"type": "text",  "text": instr},
-                        {"type": "image", "image": sample[col["image"]]},
+                        {"type": "image", "image": img},
                     ],
                 },
                 {
