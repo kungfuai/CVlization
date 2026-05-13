@@ -480,18 +480,26 @@ def main():
             if hint:
                 instr = hint_instruction.format(hint=hint[:3500])
 
-        img = sample[col["image"]]
-        if pad_to_uniform:
-            img = _pad_image(img)
+        # Text-only mode: skip the image entirely. Used when the input is
+        # purely an Audiveris-generated transcription (no image). Sidesteps
+        # the unsloth multimodal tokenizer mismatch bug.
+        text_only = dataset_config.get("text_only", False)
+        if text_only:
+            user_content = [{"type": "text", "text": instr}]
+        else:
+            img = sample[col["image"]]
+            if pad_to_uniform:
+                img = _pad_image(img)
+            user_content = [
+                {"type": "text",  "text": instr},
+                {"type": "image", "image": img},
+            ]
 
         return {
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "text",  "text": instr},
-                        {"type": "image", "image": img},
-                    ],
+                    "content": user_content,
                 },
                 {
                     "role": "assistant",
