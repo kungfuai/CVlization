@@ -237,14 +237,119 @@ The bottleneck is **training infrastructure for Qwen3.5-VL**, not
 algorithmic. Earlier we found the same pattern with Miles: the model
 is willing, the ecosystem isn't ready.
 
+## Step 6: Text-only denoising (image-free)
+
+To sidestep the unsloth multimodal SFT bug, we tried training the model
+without the image: input = Audiveris MXC2, output = corrected MXC2.
+Same Qwen3.5-9B base, same SFT adapter as starting point, just dropping
+the image from the user message.
+
+### Training
+
+- 1 epoch on 3115 Level 9 hint→reference pairs (~80 min)
+- `text_only: true` flag in `convert_to_conversation`: skips image, only text
+- Clean loss decay: 1.05 → 0.18 over 779 steps
+- Eval loss: 0.177 — looks like solid convergence
+- No crashes — text-only path bypasses the multimodal bug entirely
+
+### Eval — and the surprise
+
+Initial eval gave **0% across the board**. Root cause: Qwen3.5's chat
+template inserts `<think>` after the assistant role, putting the model
+in reasoning mode. Our training data has no thinking content, so the
+model produced English reasoning prose instead of MXC2.
+
+Fix: strip `<think>\\s*\\n*$` from the rendered prompt at inference
+time. The model then produces MXC2 directly (with a token `</think>`
+prefix it emits to "close" the absent thinking).
+
+Final result with the fix:
+
+| Metric | Score |
+|---|---|
+| Pitched-only similarity | 69.7% |
+| Rhythm similarity | 65.2% |
+| Combined similarity | 77.0% |
+| Note coverage | 92.0% |
+
+### The decisive per-sample analysis
+
+Comparing the text-only denoiser to Audiveris alone on the same 48 samples:
+
+| Outcome | Count |
+|---|---|
+| Improved by ≥5pp over Audiveris | **0 / 48** |
+| Degraded by ≥5pp | 12 / 48 |
+| Within ±5pp (essentially copied) | 36 / 48 |
+
+**The denoiser never improves on Audiveris.** It either copies the input
+(36 samples) or makes it worse (12 samples). On no sample does it
+recover from Audiveris's mistakes.
+
+### Why this fails
+
+During training, most of the 3115 samples have Audiveris already at
+80-99% correct. The minimum-loss action is to copy the input. The
+model learned exactly that.
+
+- **Easy samples (most of training):** copying is optimal → 0pp improvement
+- **Hard samples (few, where Audiveris is wrong):** no image → no way
+  to know the right answer
+
+The model never developed a "verify and correct" capability because
+the training signal couldn't differentiate it from "copy".
+
+### Cross-experiment comparison
+
+| Approach | Pitched-only | What it can do |
+|---|---|---|
+| Audiveris alone (rule-based) | 76.5% | Bimodal: great on clean, fails on dense |
+| Text-only denoiser (this run) | **69.7%** | Copies Audiveris; can never improve it |
+| VLM image+hint zero-shot | 77.0% | Anchors on hint, ignores image |
+| VLM image-only (SFT baseline) | **84.0%** | **Best — uses image as primary signal** |
+
+### Conclusion: Audiveris hints don't help us
+
+The fundamental signal source is **the image**. The VLM at 84% already
+does better than Audiveris (76.5%). Adding Audiveris as a hint:
+- Multimodally: the model anchors on the hint and corrupts image-based reasoning (77% zero-shot)
+- Text-only: the model degenerates to a copy function (69.7%)
+
+In retrospect this should have been the prior: a learned multimodal
+model has more capacity than a rule-based pipeline, so its native
+output should dominate. The 84% ceiling needs a different break.
+
 ## Recommendations for next steps
 
-If continuing the hint-augmented SFT direction:
-1. Try TRL `SFTTrainer` directly without unsloth's `FastVisionModel` wrapper
-2. Or wait 2-4 weeks for unsloth multimodal SFT to stabilize on Qwen3.5
-3. Or train on a different VLM (Qwen3-VL-8B) where the ecosystem is more mature
+The 84% Level 9 plateau is **not** solvable by adding Audiveris as
+auxiliary information. The bottleneck is the image-only model's
+capacity, not its information access.
 
-If pivoting:
-1. **Per-measure denoising approach**: smaller LLM trained to fix Audiveris output one measure at a time — less context per call, simpler task
-2. **Best-of-N inference**: our earlier finding showed +16pp on Level 7 just from sampling 8 generations and picking the best. No SFT needed.
-3. **Larger VLM**: 32B model with more capacity might break the 84% plateau without RL or hints.
+Real candidates to break the plateau:
+
+1. **Larger VLM (Qwen3-VL-32B or similar)** — more parameters, more
+   capacity for the visual reasoning the 9B model is missing on dense
+   polyphony.
+2. **Best-of-N inference** — earlier finding showed +16pp on Level 7
+   from sampling 8 generations and picking the best. The model has
+   better outputs in its distribution; we just need to surface them.
+3. **Per-measure / per-staff transcription** — break the page into
+   smaller units, transcribe each individually, then reassemble. Avoids
+   the full-page visual-reasoning challenge.
+4. **Stronger SFT data** — augment with more diverse synthetic levels
+   (handwritten-style, different engravings, scaled fonts).
+5. **The hint-augmented SFT direction is closed** — confirmed
+   experimentally that Audiveris hints (multimodal or text-only) do
+   not help, regardless of the unsloth bug. No reason to retry once
+   that bug is fixed.
+
+### What this experiment is worth keeping
+
+- The Audiveris infrastructure (`audiveris/extract_hints.py`,
+  `eval_synthetic_scores.py`, the 5.10.2 Docker image with 2.5× upscale)
+  is a useful **baseline** for OMR.
+- The 3504 (image, audiveris_mxc2, reference_mxc2) triples are useful
+  training data for any future denoiser/distillation experiments.
+- The hint compressor (`hint_compress.py`) is reusable.
+- The text-only training mode added to `train.py` is reusable for any
+  future text-to-text SFT experiments on the same model.
