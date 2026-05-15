@@ -1,0 +1,51 @@
+# GRPO on Qwen3-VL Level 7a, resuming from safckylj (vision-LoRA SFT, 70% mean / 96.6% median).
+#
+# Why Level 7a is the right RL testbed:
+#   - Bimodal SFT distribution (27 samples >=95%, 17 samples <50%)
+#   - Variance for GRPO to extract signal
+#   - Failure mode is identified: model miscounts mid-range key signatures
+#   - Clear hypothesis: RL should push consistent behavior across all keys
+#
+# Hyperparameters from our Qwen3.5 GRPO v5/v6b learnings:
+#   - 8 generations per prompt (more variance than 4)
+#   - LR 1e-6, beta 0.5 (gentle updates, keep close to SFT)
+#   - 50 steps initially (diagnostic-style)
+
+model:
+  name: "unsloth/Qwen3-VL-8B-Instruct"
+  load_in_4bit: true
+  use_gradient_checkpointing: "unsloth"
+  sft_adapter: "outputs/safckylj/final_model"   # Level 7a vision=True SFT
+
+lora:
+  r: 32
+  alpha: 32
+
+dataset:
+  repo: "zzsi/synthetic-scores"
+  config: "level7a"
+  split: "train"
+  drop_beams: true
+
+wandb:
+  project: "openscore-omr"
+
+training:
+  output_dir: "outputs/grpo_qwen3vl_l7a"
+  learning_rate: 1.0e-6
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
+  num_generations: 8
+  max_prompt_length: 512
+  max_completion_length: 4096
+  max_steps: 50
+  save_steps: 25
+  logging_steps: 1
+  warmup_ratio: 0.1
+  max_grad_norm: 0.1
+  weight_decay: 0.001
+  lr_scheduler_type: "cosine"
+  optim: "adamw_torch_fused"
+  beta: 0.5
+  loss_type: "dr_grpo"
+  seed: 3407
