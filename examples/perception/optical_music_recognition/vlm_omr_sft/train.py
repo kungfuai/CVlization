@@ -540,6 +540,49 @@ def main():
         print(f"  Length filter: kept {len(train_data)}/{before} "
               f"(dropped {dropped} samples >{int(max_text_chars)} chars)")
 
+    # ── Auxiliary key-signature task (optional data mixing) ──────────────────
+    # Mixes in dedicated "what is the key signature?" examples to give the
+    # model direct gradient pressure on the key=N token. The token is a
+    # negligible fraction of a full transcription's loss, so the model
+    # otherwise never learns to read key signatures reliably. On a key-only
+    # example, key=N IS the whole target — large fraction of that example's
+    # loss. Enable via dataset.key_aux_ratio (0 = off).
+    key_aux_ratio = dataset_config.get("key_aux_ratio", 0.0)
+    if key_aux_ratio > 0:
+        import random as _random
+        import re as _re
+        KEY_QUESTION = (
+            "What is the key signature of this score? Answer in the form "
+            "key=N, where N is the number of sharps (positive) or flats "
+            "(negative), or key=0 for no sharps or flats."
+        )
+        rng = _random.Random(training_config["seed"])
+        aux = []
+        for sample in dataset:
+            if rng.random() >= key_aux_ratio:
+                continue
+            m = _re.search(r"<fifths>(-?\d+)</fifths>", sample[col["musicxml"]])
+            if not m:
+                continue
+            img = sample[col["image"]]
+            if pad_to_uniform:
+                img = _pad_image(img)
+            aux.append({
+                "messages": [
+                    {"role": "user", "content": [
+                        {"type": "text", "text": KEY_QUESTION},
+                        {"type": "image", "image": img},
+                    ]},
+                    {"role": "assistant",
+                     "content": [{"type": "text", "text": f"key={m.group(1)}"}]},
+                ]
+            })
+        train_data = train_data + aux
+        if dataset_config.get("shuffle", False):
+            _random.Random(training_config["seed"]).shuffle(train_data)
+        print(f"  Key-aux mixing: added {len(aux)} key-only examples "
+              f"(ratio={key_aux_ratio}); train_data now {len(train_data)}")
+
     # ── Validation split: prefer HF dev split, fall back to manual carve-out ──
     val_data = None
     val_raw  = None
