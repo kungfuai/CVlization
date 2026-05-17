@@ -284,11 +284,47 @@ Separately, the page-slicing bug shows the real-data pipeline has a
 label-integrity problem orthogonal to the model — also worth fixing
 since corrupted labels cap achievable accuracy regardless of the model.
 
-## Next: DPI hypothesis test
+## DPI hypothesis — cheap probe result: leans NEGATIVE (2026-05-17)
 
-Plan: re-render Level 7a at 300 DPI (vs current 150), retrain SFT
-identically, eval by key signature. Level 7a chosen because it
-reproduces the failure (Level 3 is too sparse to reproduce it; Level 9
-is denser with worse context pressure). At 300 DPI a page is ~8400 image
-tokens — needs max_length ~16384. Cheap preliminary probe first: feed
-300-DPI broken-key pages to the existing model and ask the key directly.
+Re-rendered 7 Level 7a samples at 150 and 300 DPI, fed both to the
+existing `safckylj` model, asked the key signature directly.
+
+| Sample | Ref key | 150 DPI | 300 DPI |
+|---|---|---|---|
+| L7a_04517 | 1 | 2 ✗ | 2 ✗ |
+| L7a_04521 | 1 | 2 ✗ | 2 ✗ |
+| L7a_04526 | −1 | −2 ✗ | −2 ✗ |
+| L7a_04519 | 3 | 4 ✗ | 4 ✗ |
+| L7a_04532 | 2 | 2 ✓ | 2 ✓ |
+| L7a_04500 | 4 | 4 ✓ | 4 ✓ |
+| L7a_04508 | 0 | 0 ✓ | 0 ✓ |
+
+**Every sample gave a byte-identical answer at both resolutions.**
+Doubling input resolution shifted nothing.
+
+Caveat: confounded — the model was trained at 150 DPI, so it may not
+*use* 300-DPI detail. The probe cannot fully rule out that a model
+*trained* at 300 DPI would improve.
+
+But two signals lean against the resolution hypothesis:
+1. Not one answer shifted — if 2× pixels gave any extra signal, at
+   least one borderline sample should flip. None did.
+2. Errors are **systematic off-by-one away from zero** (1→2, 3→4,
+   −1→−2), not noisy. A resolution problem produces blurry errors that
+   change with resolution. A consistent off-by-one looks like a learned
+   **counting / representation** miscalibration, not a "can't see the
+   pixels" problem.
+
+Updated read: the bottleneck looks less like raw pixel resolution and
+more like the model's learned image→count mapping. Holding off on the
+expensive 300-DPI full retrain (lower expected value now).
+
+## Next: crop-and-zoom probe
+
+Crop just the key-signature region, feed it large and isolated. This
+separates three hypotheses:
+- Model still miscounts a big isolated key signature → counting /
+  representation deficit (not resolution, not distraction)
+- Model gets it right when isolated → attention-spread over the busy
+  full page is the issue
+- (Resolution per se already argued against by the DPI probe)
