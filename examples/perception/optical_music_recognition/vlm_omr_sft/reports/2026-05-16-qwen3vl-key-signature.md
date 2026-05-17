@@ -146,20 +146,82 @@ Build-time augmentation (not per-step collator):
 2. Mixing ratio — 25% is a starting guess; may need tuning.
 3. Does it generalize across all 9 key signatures or just the trained set?
 
+## Auxiliary key-signature task — RESULT: failed (2026-05-17)
+
+Ran Level 7a SFT with `key_aux_ratio=0.25` (4000 transcription + 1012
+key-only examples). Result: **made things worse.**
+
+| Key | r=32 baseline | key-aux | Δ |
+|---|---|---|---|
+| −4 | 97.9% | 96.8% | −1.1 |
+| −3 | 32.5% | 32.4% | 0 |
+| −2 | 84.4% | **25.4%** | **−59** |
+| −1 | 13.8% | 4.7% | −9 |
+| 0 | 96.5% | 96.9% | +0.4 |
+| +1 | 15.1% | 15.3% | 0 |
+| +2 | 26.9% | 30.4% | +3.5 |
+| +3 | 26.0% | 26.1% | 0 |
+| +4 | 99.1% | 95.4% | −3.7 |
+| **Overall** | **70.2%** | **61.1%** | **−9** |
+
+Broken keys did not improve; key=−2 collapsed (84→25%); overall −9pp from
+interference. **The loss-insensitivity hypothesis is refuted** — if it were
+purely a gradient-pressure problem, the auxiliary task (where `key=N` is the
+whole loss) would have fixed it. It didn't.
+
+## Revised root cause: input-resolution bottleneck (2026-05-17)
+
+The model does NOT downsample our images — Qwen3-VL's processor cap is
+`longest_edge=16777216` px; our 1240×1754 images (2.2M px) are far below it,
+processed at full resolution → 2145 image tokens.
+
+But the **tokenization granularity is coarse**: `patch_size=16, merge_size=2`
+→ each image token covers a **32×32 pixel block**.
+
+In our 150-DPI renderings:
+- A single sharp/flat symbol ≈ 12×30 px
+- A 3-sharp key signature ≈ 45 px wide
+- At 32 px/token, the **entire key signature spans only ~2 tokens**
+
+To distinguish "2 sharps" from "3 sharps," the model must count symbols that
+are individually *sub-token-sized*, packed into ~2 tokens. It can't. Instead
+it pattern-matches the *gross shape* of the key signature into buckets:
+- key=0 (empty): trivially distinguishable
+- key=±4 (widest): distinguishable by gross width
+- key=±1,2,3 (intermediate): require sub-token counting → fails
+
+This is a genuine **perception** bottleneck, not a training-objective one —
+which is why neither RL, larger LoRA, nor auxiliary data mixing helped, and
+why one of them actively hurt. It matches the frontier doc-AI consensus:
+fine-detail perception is fixed by resolution / better encoder / region
+processing, never by training-objective tricks.
+
 ## Status
 
-- Qwen3-VL-8B SFT pipeline: working (no unsloth bug)
+- Qwen3-VL-8B SFT pipeline: working
 - Best SFT checkpoint: r=32 vision=True (`outputs/safckylj`), 70% mean / 96.6% median
-- Root cause: loss-insensitivity to key-signature tokens — confirmed
-- RL on Level 7a: no improvement — confirmed and mechanistically explained
-- Next: auxiliary key-signature task via data mixing
+- key-aux checkpoint (`sf4lrr47`) is *worse* — do not use
+- Root cause: **input-resolution bottleneck** — key signature spans only
+  ~2 image tokens at 150 DPI / 32-px-per-token granularity
+
+### Ruled out experimentally
+- ❌ RL (zero rollout variance on broken samples)
+- ❌ LoRA capacity (r=128 no help)
+- ❌ Auxiliary data mixing (no help, −9pp interference)
+- ❌ Loss-insensitivity as the *sole* cause (refuted by the above)
+
+### Remaining levers — all perception-side
+1. Higher render DPI (300+) so the key signature spans more tokens
+2. Region crop-and-zoom on the key signature (Reducto-style)
+3. Stronger / higher-resolution base VLM
 
 ## Cross-experiment thread
 
-This is the same lesson as the Audiveris and RL arcs: the OMR plateau is not
-an information problem (the image has the signal; the model can perceive it)
-— it's a *training-objective* problem. The token-loss doesn't value the
-fine-grained details (key signatures, accidentals) that dominate the eval
-metric. Fixes that align the objective with the goal (data mixing, loss
-weighting) are the productive direction; fixes that add information
-(Audiveris hints) or assume the model is merely inconsistent (RL) are not.
+The OMR plateau is a **perception** problem, not an information or
+training-objective problem. The image technically *contains* the key
+signature, but at our render resolution × the model's token granularity,
+the fine accidental marks are not resolvable. Every downstream fix that
+assumed the model could see the detail (RL to improve consistency,
+Audiveris hints to add information, data mixing to add gradient pressure)
+was attacking the wrong layer. The productive direction is to make the
+detail physically resolvable in the model's input.
