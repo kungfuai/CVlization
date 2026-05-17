@@ -319,12 +319,62 @@ Updated read: the bottleneck looks less like raw pixel resolution and
 more like the model's learned image→count mapping. Holding off on the
 expensive 300-DPI full retrain (lower expected value now).
 
-## Next: crop-and-zoom probe
+## Crop-and-zoom probe — DECISIVE: it's a VLM counting deficit (2026-05-17)
 
-Crop just the key-signature region, feed it large and isolated. This
-separates three hypotheses:
-- Model still miscounts a big isolated key signature → counting /
-  representation deficit (not resolution, not distraction)
-- Model gets it right when isolated → attention-spread over the busy
-  full page is the issue
-- (Resolution per se already argued against by the DPI probe)
+Cropped the key-signature region (clef + key signature only), upscaled,
+fed to the existing model.
+
+| Sample | Ref key | Full page | Key crop (huge, isolated) |
+|---|---|---|---|
+| L7a_04517 | 1 | 3 ✗ | 3 ✗ |
+| L7a_04521 | 1 | 2 ✗ | 3 ✗ |
+| L7a_04526 | −1 | 0 ✗ | 1 ✗ (wrong sign) |
+| L7a_04519 | 3 | 4 ✗ | 4 ✗ |
+| L7a_04532 | 2 | 3 ✗ | 3 ✗ |
+| L7a_04500 | 4 | 3 ✗ | 4 ✓ |
+| L7a_04508 | 0 | 0 ✓ | 0 ✓ |
+
+The L7a_04517 crop was visually verified: it shows **exactly one sharp,
+giant and isolated**. The model said "3".
+
+This rules out everything perception-environmental:
+- ❌ Not resolution — the crop is huge
+- ❌ Not page distraction — the crop is isolated, only clef + key sig
+- ❌ Not attention spread — nothing else in the image
+
+**Smoking gun:** the model's answer *changes with question phrasing*.
+DPI probe ("What is the key signature, key=N") gave L7a_04517="2".
+Crop probe ("How many sharps or flats") gave L7a_04517="3". Same image,
+different answer. The model is **confabulating** a plausible number, not
+reading the image.
+
+### Final diagnosis: VLM counting deficit
+
+The model cannot count discrete glyphs in an image — a well-documented,
+fundamental VLM weakness ("how many X" is notoriously hard for VLMs).
+The keys it "gets right" (0, ±4) were never *read*: they are gross-shape
+associations (empty staff-start ≈ 0, wide cluster ≈ 4). There was never
+a counting skill to lose.
+
+This explains why *every* lever failed — all of them assumed the model
+could perceive-but-not-prioritize:
+- ❌ RL (zero rollout variance)
+- ❌ LoRA capacity (r=128)
+- ❌ Auxiliary data mixing (−9pp)
+- ❌ Higher resolution (DPI probe: identical answers)
+- ❌ Crop-and-zoom (still miscounts a giant isolated key sig)
+
+None address a counting deficit.
+
+### What addresses a counting deficit
+1. **Reframe to avoid counting** — output named accidentals
+   (`key_sharps=F#,C#,G#`) instead of a count. Recognition, not counting;
+   list length is self-verifying.
+2. **Specialist classifier / tool** — a tiny CNN that reads the key-sig
+   crop (Reducto / DianJin-OCR-R1 style tool use).
+3. **Stronger base VLM** — newer/larger VLMs count better; uncertain.
+
+Note: the counting deficit is likely **broader than key signatures** —
+ledger-line counting (octave), beam-flag counting (note duration) are
+the same class of problem. Decomposition + crop-zoom enlarges glyphs
+(helps perception generally) but counting-by-deficit can still bite.
