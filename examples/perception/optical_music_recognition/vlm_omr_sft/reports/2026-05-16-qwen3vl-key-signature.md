@@ -215,6 +215,60 @@ processing, never by training-objective tricks.
 2. Region crop-and-zoom on the key signature (Reducto-style)
 3. Stronger / higher-resolution base VLM
 
+## Visual confirmation of the resolution bottleneck (2026-05-17)
+
+Rendered images of a broken vs good sample, side by side:
+
+- **L7a_04500 (key=+4, model correct):** after each clef, a chunky
+  `####` cluster — wide, dense, visually distinctive.
+- **L7a_04517 (key=+1, model misreads as key=3):** after each clef, a
+  single tiny `#` — one ~12 px mark.
+
+The model reads key signatures by gross shape, not by counting. A 4-sharp
+block is a distinctive wide shape; a 1-sharp mark is a single symbol near
+the token-resolution floor. This *is* the diagnosis, visible to the eye.
+
+Note: the key signature is repeated on every staff of every system —
+3 systems × 3 staves = **9 copies on one page**. The model has 9 chances
+and still fails. Redundancy does not rescue a per-instance resolution
+problem; more copies at the same coarse granularity don't help. A
+multi-page score with 30 copies would fail identically.
+
+## SEPARATE BUG: openscore/PDMX page-slicing drops global key/clef (2026-05-17)
+
+While investigating multi-page handling, found a real data bug in the
+*real-data* pipeline (does NOT affect synthetic Level 7a/9).
+
+`datasets/omr/pipeline.py::slice_musicxml` uses music21's
+`score.measures(start, end)` to slice a multi-page score into per-page
+MusicXML. Verified empirically (key=+4 score, music21 9.9.1):
+
+| Slice | Key in sliced MusicXML | Clefs |
+|---|---|---|
+| measures 1-10 (incl. m1) | fifths=[4,4,4] ✅ | [G,G,F] ✅ |
+| measures 20-30 (mid-score) | **fifths=[] ✗** | [G,G,G] ✗ (bass clef lost) |
+| measures 40-48 (end) | **fifths=[] ✗** | [G,G,G] ✗ |
+
+**music21's `.measures()` does not carry the global key signature or
+non-default clefs into mid-score slices** — only the slice containing
+measure 1 keeps them.
+
+Consequence: for openscore/PDMX, every page after page 1 gets a
+**corrupted reference label** — the page image (rendered from the full
+score) visually shows key=4 on every system, but the sliced reference
+MXC2 says key=0 (default, `<fifths>` absent). The model would be trained
+"image with 4 sharps → output key=0" on every non-first page.
+
+This is a serious data-integrity issue for the multi-page real-data
+corpora. It is independent of the resolution bottleneck. It must be
+fixed before any further openscore/PDMX training — likely explains part
+of the historically poor openscore accuracy.
+
+**Fix:** after slicing, explicitly inject the active key signature and
+clef into the first measure's `<attributes>` of each sliced page (query
+music21 for the active KeySignature/Clef context at the slice start, or
+post-process the MusicXML).
+
 ## Cross-experiment thread
 
 The OMR plateau is a **perception** problem, not an information or
@@ -225,3 +279,16 @@ assumed the model could see the detail (RL to improve consistency,
 Audiveris hints to add information, data mixing to add gradient pressure)
 was attacking the wrong layer. The productive direction is to make the
 detail physically resolvable in the model's input.
+
+Separately, the page-slicing bug shows the real-data pipeline has a
+label-integrity problem orthogonal to the model — also worth fixing
+since corrupted labels cap achievable accuracy regardless of the model.
+
+## Next: DPI hypothesis test
+
+Plan: re-render Level 7a at 300 DPI (vs current 150), retrain SFT
+identically, eval by key signature. Level 7a chosen because it
+reproduces the failure (Level 3 is too sparse to reproduce it; Level 9
+is denser with worse context pressure). At 300 DPI a page is ~8400 image
+tokens — needs max_length ~16384. Cheap preliminary probe first: feed
+300-DPI broken-key pages to the existing model and ask the key directly.
