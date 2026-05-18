@@ -378,3 +378,53 @@ Note: the counting deficit is likely **broader than key signatures** —
 ledger-line counting (octave), beam-flag counting (note duration) are
 the same class of problem. Decomposition + crop-zoom enlarges glyphs
 (helps perception generally) but counting-by-deficit can still bite.
+
+## CORRECTION: "counting deficit" is REFUTED (2026-05-18)
+
+The crop-zoom probe used the *wrong checkpoint* (`safckylj`, never
+trained on the key question) with an *out-of-distribution question
+phrasing*. That made the "VLM counting deficit" conclusion unsound.
+
+Clean test: evaluated the key-aux checkpoint (`sf4lrr47`) — which WAS
+trained on 1012 key-recognition examples — on the key-recognition task
+using the **exact instruction it was trained on**.
+
+| Key | Recognition accuracy |
+|---|---|
+| 0 | 9/9 ✓ |
+| +1 | **6/6 ✓** |
+| +2 | **2/2 ✓** |
+| +3 | 0/3 ✗ (→4) |
+| +4 | 7/7 ✓ |
+| −1 | 0/2 ✗ (→−2) |
+| −2 | 0/7 ✗ (→−1) |
+| −3 | 0/4 ✗ (→−4) |
+| −4 | 10/10 ✓ |
+| **Total** | **34/50 = 68%** |
+
+**The model recognizes key=+1 perfectly (6/6) and key=+2 (2/2)** — the
+exact keys it gets wrong in transcription. So it CAN count sharps. The
+"counting deficit" diagnosis was wrong.
+
+Two real findings replace it:
+
+**1. Transfer gap.** The model learned key recognition for +1/+2 from
+the auxiliary task but does NOT apply that skill during transcription
+(still wrong there). The skill exists in "answer-the-key mode" and
+doesn't activate in "transcribe mode." The key-aux experiment didn't
+fail because the model can't learn keys — it failed to *transfer* the
+learned skill into the transcription objective.
+
+**2. Sharp/flat asymmetry.** Working: {0, +1, +2, +4, −4}. Failing:
+{+3, −1, −2, −3}. Sharps work, flats mostly fail (only −4 survives, by
+extreme-anchoring). A flats-specific perception/representation gap, not
+a general counting deficit.
+
+### Revised diagnosis
+
+The bottleneck is NOT perception-absolute and NOT a counting deficit.
+It is (a) a **skill-transfer failure** between the dedicated key task
+and the transcription objective, and (b) a **flats-specific** weakness.
+The model demonstrably *can* read sharp key signatures when asked
+directly — the productive question is how to make that ability show up
+during full transcription.
