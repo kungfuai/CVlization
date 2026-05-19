@@ -1,0 +1,66 @@
+name: soulx-flashtalk
+description: Audio-driven streaming talking-avatar video generation using SoulX-FlashTalk (InfiniteTalk/Wan2.1, 4-step distilled)
+capability: generative/video_generation
+tags:
+  - video-generation
+  - talking-head
+  - lip-sync
+  - audio-to-video
+  - streaming
+  - diffusion
+  - distillation
+
+image: soulx_flashtalk
+
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate a lip-synced talking-avatar video from audio and image
+    path_args:
+      - flag: --audio
+        type: file
+      - flag: --image
+        type: file
+      - flag: --output
+        type: file
+
+hardware:
+  gpu_required: true
+  min_vram_gb: 40
+  recommended_vram_gb: 48
+  min_ram_gb: 64
+
+models:
+  - name: SoulX-FlashTalk-14B
+    source: huggingface
+    repo_id: Soul-AILab/SoulX-FlashTalk-14B
+    size_gb: 50
+  - name: chinese-wav2vec2-base
+    source: huggingface
+    repo_id: TencentGameMate/chinese-wav2vec2-base
+    size_gb: 1.5
+
+verification:
+  last_verified: 2026-05-19
+  last_verification_note: |
+    Verified on an NVIDIA A100-PCIE-40GB (host "acasia").
+    - Docker image builds successfully (soulx_flashtalk:latest, ~30GB). The
+      py3.11 base provides torch 2.7.1+cu128; the cp311 flash-attn wheel and
+      all frozen requirements install cleanly.
+    - End-to-end inference verified by running predict.py inside the
+      container (single GPU, --cpu_offload, bundled sample man.png +
+      cantonese_16k.wav): models downloaded from the HF cache, all 34 chunks
+      generated (~35s per 33-frame chunk, GPU at 100% util and 39.2GB VRAM,
+      fits a 40GB card), ffmpeg-muxed inside the container, output written to
+      the mounted path. Result: a 37.5s 448x768 25fps MP4 with audio.
+    Not verified: the `cvl run` CLI path specifically (the example was
+    exercised via a direct `docker run` mirroring predict.sh's mounts, on a
+    standalone host without the CVlization repo checked out).
+
+references:
+  paper: https://arxiv.org/abs/2512.23379
+  github: https://github.com/Soul-AILab/SoulX-FlashTalk
+  project_page: https://soul-ailab.github.io/soulx-flashtalk/
