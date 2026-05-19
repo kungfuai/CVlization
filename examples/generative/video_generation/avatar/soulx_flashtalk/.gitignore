@@ -1,0 +1,13 @@
+# Model weights
+ckpt/
+models/
+
+# Cache
+__pycache__/
+*.pyc
+
+# Outputs
+output/
+outputs/
+sample_results/
+*.mp4

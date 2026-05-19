@@ -1,0 +1,36 @@
+# Versions frozen from a verified working environment
+# (8x A100-40GB host "acasia", Python 3.10, torch 2.7.1+cu128).
+#
+# torch / torchvision / torchaudio are provided by the base Docker image
+# (pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel) and must NOT be reinstalled.
+# flash-attn is installed separately from a prebuilt wheel in the Dockerfile.
+
+accelerate==1.13.0
+diffusers==0.37.1
+transformers==5.8.1
+tokenizers==0.22.2
+xformers==0.0.31
+xfuser==0.4.5
+optimum-quanto==0.2.6
+
+# Audio / video / image processing
+librosa==0.11.0
+pyloudnorm==0.2.0
+decord==0.6.0
+imageio==2.37.3
+imageio-ffmpeg==0.6.0
+# headless-only: this runs in a container with no display. (Upstream lists both
+# opencv-python and -headless; installing both is redundant and they collide.)
+opencv-python-headless==4.13.0.92
+scikit-image==0.25.2
+
+# Utils
+numpy==2.2.6
+einops==0.8.2
+easydict==1.13
+ftfy==6.3.1
+loguru==0.7.3
+pyyaml==6.0.3
+safetensors==0.7.0
+sentencepiece==0.2.1
+huggingface_hub==1.15.0
