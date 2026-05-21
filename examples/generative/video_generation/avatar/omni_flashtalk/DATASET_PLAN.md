@@ -90,24 +90,38 @@ for the full set; even a ~1% sample gives us ~700 items.
 - **Downside**: TTS quality bottleneck; synthetic-only training risks audio
   distribution mismatch at inference (real human speech).
 
-## Recommended approach for `omni_flashtalk` v0
+## Recommended approach for `omni_flashtalk` v0 (locked in after E2.5)
 
-Hybrid, ordered by quick wins:
+**Fully CVL-native pipeline** — all generators are CVL examples; no external
+dataset downloads beyond what we already have.
 
-1. **Smoke set (100 items, Option A random pairing)** to validate the full
-   data → SoulX → LMDB → student pipeline. Use:
-   - 100 prompts from `synthetic_prompts_32k.csv`
-   - 100 random ~5s clips from LibriSpeech `dev-clean` (a small, free subset)
-   - 10-20 portraits from a small public set (CelebA-HQ thumbnails, or
-     even the few bundled in LiveAvatar/SoulX examples, cycled)
+- **Prompts**: Hallo's `synthetic_prompts_32k.csv` (on acasia).
+  Parse each into `(scene_description, spoken_text)` via the `<S>...<E>` tags.
+- **Portraits**: **Flux** (`cvl run flux predict --prompt-file ... --output ...`).
+  Chosen via E2.5 A/B vs SD-1.5 — Flux noticeably stronger on stylized prompts
+  (anime, dwarf) and photoreal humans. ~16s per 768x768 image on RTX PRO 6000
+  Blackwell.
+- **Audio**: CosyVoice3 (`cvl run cosyvoice3 predict --input ... --output ...`).
+  Zero-shot TTS, multilingual, ~8GB VRAM. ~5s per ~5s clip.
+- **SoulX trajectory generation**: run on acasia (where SoulX is already set up,
+  ~35s per 33-frame chunk), or on drifter if memory permits the 14B model.
 
-2. **v0 set (2k items, Option A + Option C)**:
-   - Half: random pairing as above.
-   - Half: TTS-generated audio coupled to prompts (Cosyvoice or F5-TTS).
-   - Same portrait pool, ~100 distinct portraits.
+### Concrete v0 plan
+1. **Smoke set (100 items)** — random pairing, all generators on drifter for
+   throughput (96GB Blackwell). Compute estimate:
+   - TTS: ~10 min (serial) / ~2 min (8-way)
+   - Flux portraits: ~27 min (serial) / ~14 min (2-GPU parallel on drifter)
+   - SoulX trajectories: ~5 hr (serial on acasia) / ~40 min (8-way on acasia)
+   - Total wall: ~1 hr at parallel; ~6 hr serial.
+2. **v0 set (2k items)** if smoke shows convergent training signal.
+3. **v1 set (10-32k items)** only if v0 metrics warrant scale-up.
 
-3. **v1 set (10-32k items, CelebV-Text + Option C bulk)** — only after v0
-   gives signal that the recipe works.
+### Stratification (mix anime + edge cases for diversity)
+Sample from Hallo's CSV using keyword buckets to ensure variety:
+- **70% realistic humans** — default; matches SoulX teacher distribution best.
+- **20% anime/cartoon** — keyword filter: `anime|cartoon|stylized|illustrated`.
+- **10% edge cases** — dwarves/fantasy/creature characters (Hallo CSV has these);
+  cap animals at ~2-3% (teacher quality may degrade — keep as OOD probe).
 
 ## Implementation sketch — `data/sample_ode_data.py`
 
