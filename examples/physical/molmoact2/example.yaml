@@ -33,28 +33,41 @@ inputs:
   - state: Raw robot state vector (e.g. 8-dim for LIBERO)
 
 outputs:
-  - actions: Predicted action chunk in robot scale (continuous or discrete)
+  - actions.npy: Predicted action chunk in robot scale
   - depth_bins: 10x10 depth codes (Think variants only)
   - metrics.json: Action statistics summary
 
 presets:
-  default:
-    description: LIBERO continuous actions with sample images
-    command: python inference.py
+  build:
+    description: Build Docker image
+    command: ./build.sh
+  predict:
+    description: Run inference with default LIBERO checkpoint and sample images
+    command: python predict.py
   think:
     description: Think variant with depth-token reasoning
     command: >
-      python inference.py
+      python predict.py
       --model allenai/MolmoAct2-Think-LIBERO
+      --norm-tag libero
       --enable-depth-reasoning
   discrete:
     description: Discrete FAST tokenizer actions
-    command: python inference.py --action-mode discrete
+    command: python predict.py --action-mode discrete
 
 resources:
   gpu: required
   vram_gb: 24
   disk_gb: 25
+
+verification:
+  last_verified: 2026-05-21
+  last_verification_note: >
+    Verified build, smoke tests (6/6), and inference on NVIDIA RTX PRO 6000 Blackwell
+    Max-Q (97.9 GB VRAM). Model loads ~18.7 GB VRAM in FP32. Inference time ~11s
+    (model cached). Outputs actions.npy (10-step chunk, 7-dim) and metrics.json
+    saved to host via CVL_OUTPUTS mount. Sample images auto-downloaded from zzsi/cvl.
+    Tested with pytorch/pytorch:2.10.0-cuda12.8-cudnn9-runtime base image.
 
 references:
   - https://arxiv.org/abs/2605.02881
