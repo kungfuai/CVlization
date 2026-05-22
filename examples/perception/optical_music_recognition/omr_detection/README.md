@@ -115,12 +115,16 @@ omr_detection/
 3. ✅ **`train_detector.py`** — YOLOv8n via Ultralytics in Docker. Trained on
    500 L7a pages → mAP50=0.995 on all three classes. See
    `reports/2026-05-22-yolov8n-l7a-baseline.md`.
-4. ⏳ **`eval_detector.py`** — mAP and per-class IoU on a held-out dev set.
-   Per-class metrics currently come from an inline `YOLO.val()` call;
-   this script is still a stub.
-5. ⏳ **`pipeline.py`** — orchestrate detector + (existing) safckylj transcription
-   + per-cell respell. Validate on L7a dev first, then extend. Still a stub.
-   Needs cell derivation (staff ∩ barline gaps) implemented first.
+4. ✅ **`eval_detector.py`** — per-class P/R/mAP via `YOLO.val()`, plus a
+   cell-derivation sanity check: predicted-derived vs GT-derived measure
+   count, and GT-derived vs the true `n_measures` from MusicXML. On L7a
+   dev both are 100% exact.
+5. ✅ **`cells.py` + `pipeline.py`** — `derive_cells()` turns detected
+   staves + barlines into measure cells (staff ∩ barline gaps).
+   `pipeline.py` runs detection + derivation on a page and can dump
+   per-class crops + montages for inspection (`detect.sh`).
+   ⏳ Remaining: wire per-cell transcription (a documented hook,
+   `transcribe_cell` — left to `vlm_omr_sft`) and page-level stitching.
 
 Optional stages:
 - Per-measure-per-staff focused transcription model (instead of safckylj).

@@ -40,6 +40,7 @@ Usage:
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -57,6 +58,18 @@ import xml.etree.ElementTree as ET  # noqa: E402
 
 DPI = 150
 PX_PER_MM = DPI / 25.4  # ~= 5.9055
+
+
+def _count_measures(mxl_text: str) -> int:
+    """True measure count from MusicXML (= measures of one part).
+
+    Used as detector ground truth. Note SVG bar-number text is unreliable:
+    LilyPond prints a trailing number after the final barline that does
+    not correspond to a real measure.
+    """
+    n_parts = max(len(re.findall(r"<part\s+id", mxl_text)), 1)
+    n_measure_tags = len(re.findall(r"<measure[\s>]", mxl_text))
+    return n_measure_tags // n_parts
 
 
 # Renders both SVG and PNG of a single MXL through Docker in one shot.
@@ -186,6 +199,7 @@ def build(output_dir: Path, limit: int | None, split: str) -> int:
         for i, row in enumerate(ds):
             score_id = row.get("score_id") or f"row_{i:06d}"
             mxl = row["musicxml"]
+            n_measures = _count_measures(mxl)
             with tempfile.TemporaryDirectory() as tmp:
                 tmp = Path(tmp)
                 svgs, pngs = _render_one(mxl, tmp)
@@ -215,6 +229,7 @@ def build(output_dir: Path, limit: int | None, split: str) -> int:
                         "score_id": score_id,
                         "page": page_idx,
                         "n_pages": n_pages,
+                        "n_measures": n_measures,  # true count, from MusicXML
                         "image": f"images/{out_png.name}",
                         "width": pw,
                         "height": ph,
