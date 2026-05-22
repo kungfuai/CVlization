@@ -83,7 +83,7 @@ Our Stage-1 trainer = this scaffold + audio conditioning + our student.
 S6 (debugging the first run) dominate.
 
 ## Status
-- [ ] S1 — video→latent encode pass
+- [x] S1 — video→latent encode pass (100/100, encode_targets.py)
 - [ ] S2 — LMDB packing
 - [ ] S3 — audio embedding precompute
 - [ ] S4 — conditional_dict construction
