@@ -366,6 +366,26 @@ def main():
     print(f"Loading dataset: {repo} (config={cfg}, split={split}) ...")
     dataset = load_dataset(repo, cfg, split=split)
 
+    # Optionally append more synthetic configs (e.g. level9 in addition to
+    # level7a) — useful for the key classifier where we want broader key /
+    # rendering variety than a single level provides.
+    extra_cfgs = dataset_config.get("extra_configs", [])
+    if extra_cfgs:
+        from datasets import concatenate_datasets, Value
+        parts = [dataset]
+        for ec in extra_cfgs:
+            print(f"  + appending {repo} (config={ec}, split={split}) ...")
+            parts.append(load_dataset(repo, ec, split=split))
+        # Reduce to a common schema (only the columns we need) — different
+        # synthetic configs have inconsistent dtypes on metadata columns.
+        keep = list({col["image"], col["musicxml"], col["id"]})
+        for i, p in enumerate(parts):
+            drop = [c for c in p.column_names if c not in keep]
+            if drop:
+                parts[i] = p.remove_columns(drop)
+        dataset = concatenate_datasets(parts)
+        print(f"  combined size: {len(dataset)} samples")
+
     if corpora and col["corpus"] in dataset.column_names:
         print(f"Filtering to corpora: {corpora} ...")
         corpus_col = col["corpus"]
@@ -480,6 +500,18 @@ def main():
             if hint:
                 instr = hint_instruction.format(hint=hint[:3500])
 
+        # Optionally inject the ground-truth key signature into the prompt.
+        # Tests whether transcription becomes reliable when the model is
+        # handed the key instead of having to read it. Enable via
+        # dataset.inject_gt_key.
+        if dataset_config.get("inject_gt_key", False):
+            import re as _re_k
+            mk = _re_k.search(r"<fifths>(-?\d+)</fifths>",
+                              sample[col["musicxml"]])
+            if mk:
+                instr = (f"{instr} The key signature is key={mk.group(1)} "
+                         f"(N = sharps if positive, flats if negative).")
+
         # Text-only mode: skip the image entirely. Used when the input is
         # purely an Audiveris-generated transcription (no image). Sidesteps
         # the unsloth multimodal tokenizer mismatch bug.
@@ -513,7 +545,47 @@ def main():
         print(f"Dataset shuffled (seed={training_config['seed']})")
 
     print("Converting to conversation format ...")
-    train_data = [convert_to_conversation(s, _hint_pool=hints_train) for s in dataset]
+    # Per-measure mode: expand each page into per-measure (image, prompt, slice)
+    # rows using the stateless MXC2 slicer. The model is trained to localize
+    # and transcribe a specific measure given the page image.
+    if dataset_config.get("per_measure", False):
+        from mxc2_slice import iter_measures
+        from mxc2 import xml_to_mxc2 as _xml_to_mxc2
+        import random as _random_pm
+        sample_k = dataset_config.get("per_measure_sample_k", 0)
+        rng_pm = _random_pm.Random(training_config["seed"])
+        train_data = []
+        for s in dataset:
+            try:
+                mxc2_full = _xml_to_mxc2(
+                    strip_musicxml_header(s[col["musicxml"]]),
+                    drop_beams=dataset_config.get("drop_beams", False),
+                )
+                slices = list(iter_measures(mxc2_full))
+                if sample_k and len(slices) > sample_k:
+                    slices = rng_pm.sample(slices, sample_k)
+                img = s[col["image"]]
+                if pad_to_uniform:
+                    img = _pad_image(img)
+                for p_idx, m_num, slice_text in slices:
+                    prompt = (f"Transcribe measure {m_num} of part {p_idx} "
+                              f"on this page.")
+                    train_data.append({
+                        "messages": [
+                            {"role": "user", "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image", "image": img},
+                            ]},
+                            {"role": "assistant",
+                             "content": [{"type": "text", "text": slice_text}]},
+                        ]
+                    })
+            except Exception as e:
+                print(f"  per_measure: skipping sample (error: {e})")
+        print(f"  Per-measure expansion: {len(train_data)} measure-level "
+              f"training rows (sample_k={sample_k or 'all'})")
+    else:
+        train_data = [convert_to_conversation(s, _hint_pool=hints_train) for s in dataset]
 
     # Pre-filter samples that would exceed max_length (image tokens cannot be
     # truncated safely — they cause runtime errors). Conservative estimate:
@@ -556,6 +628,29 @@ def main():
             "key=N, where N is the number of sharps (positive) or flats "
             "(negative), or key=0 for no sharps or flats."
         )
+        # Chain-of-thought target — forces the model to enumerate accidentals
+        # before naming the key, breaking the +3/+4 cluster the simple
+        # "key=N" target collapsed into.
+        _SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"]
+        _FLAT_ORDER = ["B", "E", "A", "D", "G", "C", "F"]
+        _NUM_WORDS = {0: "no", 1: "one", 2: "two", 3: "three", 4: "four",
+                      5: "five", 6: "six", 7: "seven"}
+
+        def _key_to_cot(fifths: int) -> str:
+            if fifths == 0:
+                return "No sharps or flats. key=0"
+            if fifths > 0:
+                names = _SHARP_ORDER[:fifths]
+                return (f"Sharps: {' '.join(names)}. "
+                        f"{_NUM_WORDS[fifths].capitalize()} sharps. "
+                        f"key={fifths}")
+            n = -fifths
+            names = _FLAT_ORDER[:n]
+            return (f"Flats: {' '.join(names)}. "
+                    f"{_NUM_WORDS[n].capitalize()} flats. "
+                    f"key={fifths}")
+
+        use_cot = dataset_config.get("key_cot", False)
         rng = _random.Random(training_config["seed"])
         aux = []
         for sample in dataset:
@@ -567,6 +662,9 @@ def main():
             img = sample[col["image"]]
             if pad_to_uniform:
                 img = _pad_image(img)
+            fifths_val = int(m.group(1))
+            target_text = (_key_to_cot(fifths_val) if use_cot
+                           else f"key={m.group(1)}")
             aux.append({
                 "messages": [
                     {"role": "user", "content": [
@@ -574,14 +672,22 @@ def main():
                         {"type": "image", "image": img},
                     ]},
                     {"role": "assistant",
-                     "content": [{"type": "text", "text": f"key={m.group(1)}"}]},
+                     "content": [{"type": "text", "text": target_text}]},
                 ]
             })
-        train_data = train_data + aux
+        # `key_aux_only`: replace transcription examples with key-only.
+        # Used for training a focused image→key=N classifier as Stage 1
+        # of the re-spell pipeline (see respell.py).
+        if dataset_config.get("key_aux_only", False):
+            train_data = aux
+            print(f"  Key-aux ONLY mode: replaced transcription with "
+                  f"{len(aux)} key-only examples")
+        else:
+            train_data = train_data + aux
+            print(f"  Key-aux mixing: added {len(aux)} key-only examples "
+                  f"(ratio={key_aux_ratio}); train_data now {len(train_data)}")
         if dataset_config.get("shuffle", False):
             _random.Random(training_config["seed"]).shuffle(train_data)
-        print(f"  Key-aux mixing: added {len(aux)} key-only examples "
-              f"(ratio={key_aux_ratio}); train_data now {len(train_data)}")
 
     # ── Validation split: prefer HF dev split, fall back to manual carve-out ──
     val_data = None

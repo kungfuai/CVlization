@@ -1,0 +1,66 @@
+# Stage 1: Image → key=N classifier (focused, single-task).
+#
+# Trains the model to answer KEY_QUESTION for every image. The target is
+# just `key=N` — no full transcription. This is the dedicated focused
+# subtask that the re-spell pipeline depends on.
+#
+# Goal: ~99% per-key accuracy on all 9 intermediate keys (including the
+# previously-broken +1, +2, +3, -1, -3 from the L7a investigation).
+
+model:
+  name: "unsloth/Qwen3-VL-8B-Instruct"
+  load_in_4bit: true
+  use_gradient_checkpointing: "unsloth"
+  max_length: 8192
+  chat_template: null
+
+lora:
+  r: 32
+  alpha: 32
+  dropout: 0
+  finetune_vision_layers: true
+  finetune_language_layers: true
+  finetune_attention_modules: true
+  finetune_mlp_modules: true
+
+dataset:
+  repo: "zzsi/synthetic-scores"
+  config: "level7a"
+  split: "train"
+  dev_split: "dev"
+  shuffle: true
+  target_format: "mxc2"
+  drop_beams: true
+  # New flag — replace ALL transcription examples with key-only examples.
+  # Implemented in train.py via key_aux_only=true + key_aux_ratio=1.0.
+  key_aux_only: true
+  key_aux_ratio: 1.0
+  columns:
+    image: "image"
+    musicxml: "musicxml"
+    id: "score_id"
+    label: "level"
+
+wandb:
+  project: "openscore-omr"
+  run_name: null
+  log_examples_every_n_steps: 200
+  n_examples: 3
+  inference_max_new_tokens: 64    # short — just `key=N`
+
+training:
+  output_dir: "outputs"
+  per_device_train_batch_size: 4   # short targets allow bigger batch
+  gradient_accumulation_steps: 1
+  max_grad_norm: 0.1
+  warmup_ratio: 0.03
+  num_train_epochs: 2              # short outputs train fast
+  learning_rate: 5.0e-5
+  logging_steps: 5
+  save_steps: 600
+  val_steps: 200
+  optim: "adamw_torch_fused"
+  weight_decay: 0.001
+  lr_scheduler_type: "cosine"
+  seed: 3407
+  test_after_training: false

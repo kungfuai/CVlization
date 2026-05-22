@@ -234,40 +234,48 @@ and still fails. Redundancy does not rescue a per-instance resolution
 problem; more copies at the same coarse granularity don't help. A
 multi-page score with 30 copies would fail identically.
 
-## SEPARATE BUG: openscore/PDMX page-slicing drops global key/clef (2026-05-17)
+## RETRACTED: the openscore/PDMX page-slicing "key-drop bug" does not exist (2026-05-18)
 
-While investigating multi-page handling, found a real data bug in the
-*real-data* pipeline (does NOT affect synthetic Level 7a/9).
+Earlier drafts (2026-05-17) claimed `slice_musicxml` drops the global key
+signature on mid-score slices, and a 2026-05-18 scan put the rate at
+~29%. **Both claims were wrong.** Rigorous re-verification:
 
-`datasets/omr/pipeline.py::slice_musicxml` uses music21's
-`score.measures(start, end)` to slice a multi-page score into per-page
-MusicXML. Verified empirically (key=+4 score, music21 9.9.1):
+**1. Direct slice tests — 7 source scores, bug never reproduces.**
+Downloaded source `.mxl` for the audiveris fixture, Bizet `lc5079521`,
+and 5 scores my scan had flagged as "dropped" (`lc8835588`,
+`lc31239911`, `lc8712405`, `lc29585942`, `lc31741250`). Swept mid-score
+slices on each and compared the sliced key to the genuinely-active key
+in the source. **Every slice correct — with *and* without any fix.**
+music21's `.measures()` carries the key signature correctly.
 
-| Slice | Key in sliced MusicXML | Clefs |
-|---|---|---|
-| measures 1-10 (incl. m1) | fifths=[4,4,4] ✅ | [G,G,F] ✅ |
-| measures 20-30 (mid-score) | **fifths=[] ✗** | [G,G,G] ✗ (bass clef lost) |
-| measures 40-48 (end) | **fifths=[] ✗** | [G,G,G] ✗ |
+**2. The HF dataset itself is clean.** In `zzsi/openscore`
+`pages_transcribed`, every page that contains actual notes has the
+correct `<fifths>`. Scanned ~12k rows: **all 2,754 rows with no
+`<fifths>` tag contain zero notes** — they are empty/failed slices, not
+key-drops.
 
-**music21's `.measures()` does not carry the global key signature or
-non-default clefs into mid-score slices** — only the slice containing
-measure 1 keeps them.
+**3. What the bad "29%" scan actually measured.** It compared page-1's
+key to each later page's key and counted any *difference* as a drop.
+That conflated two non-bugs:
+- **Genuine key changes.** Lieder and quartets modulate constantly.
+  Bizet `lc5079521` — my supposed "decisive example" — genuinely
+  changes key to C major at measure 55 (`<key>` element present in the
+  source). The page-3 label `fifths=0` is **correct**.
+- **Empty pages.** Page-range computation sometimes yields degenerate
+  ranges (`bar_start > bar_end`) or failed slices → an empty MusicXML
+  shell with no `<fifths>` and no notes.
 
-Consequence: for openscore/PDMX, every page after page 1 gets a
-**corrupted reference label** — the page image (rendered from the full
-score) visually shows key=4 on every system, but the sliced reference
-MXC2 says key=0 (default, `<fifths>` absent). The model would be trained
-"image with 4 sharps → output key=0" on every non-first page.
+**Conclusion: no key-signature data bug in openscore/PDMX. No dataset
+needs re-production on this account.** The key labels are correct. A
+slicing "fix" was implemented and then reverted — it addressed a
+non-existent bug. Lesson: the original verification compared the wrong
+things; always compare a slice's key to the *genuinely-active* key at
+that measure, never to page 1's key.
 
-This is a serious data-integrity issue for the multi-page real-data
-corpora. It is independent of the resolution bottleneck. It must be
-fixed before any further openscore/PDMX training — likely explains part
-of the historically poor openscore accuracy.
-
-**Fix:** after slicing, explicitly inject the active key signature and
-clef into the first measure's `<attributes>` of each sliced page (query
-music21 for the active KeySignature/Clef context at the slice start, or
-post-process the MusicXML).
+**Separate, real, lower-priority issue:** the dataset contains empty
+pages (degenerate bar ranges / failed slices) — a page-detection /
+bar-range problem, not a key problem. Worth cleaning up eventually but
+unrelated to the key-signature investigation.
 
 ## Cross-experiment thread
 
@@ -280,9 +288,9 @@ Audiveris hints to add information, data mixing to add gradient pressure)
 was attacking the wrong layer. The productive direction is to make the
 detail physically resolvable in the model's input.
 
-Separately, the page-slicing bug shows the real-data pipeline has a
-label-integrity problem orthogonal to the model — also worth fixing
-since corrupted labels cap achievable accuracy regardless of the model.
+(The previously-listed "page-slicing key-drop bug" was retracted on
+2026-05-18 after rigorous re-verification — see the RETRACTED section.
+openscore/PDMX key labels are correct; no re-production needed.)
 
 ## DPI hypothesis — cheap probe result: leans NEGATIVE (2026-05-17)
 
@@ -428,3 +436,165 @@ and the transcription objective, and (b) a **flats-specific** weakness.
 The model demonstrably *can* read sharp key signatures when asked
 directly — the productive question is how to make that ability show up
 during full transcription.
+
+## Flats investigation (2026-05-18)
+
+Why does the model read sharps but not flats? Ruled out:
+
+| Hypothesis | Test | Verdict |
+|---|---|---|
+| Data/label bug for flats | MusicXML `<fifths>` vs MXC2 `key=` | ❌ 500/500 correct, flats included |
+| Flats visually harder to resolve | Rendered 3-flat vs 3-sharp crops, compared | ❌ Both equally clear — 3 distinct, countable symbols |
+| Model can't tell flat from sharp | key-aux probe: flat answers' sign | ❌ Sign always correct on flats (−1→−2 etc.) — it knows they're flats, just miscounts |
+
+**Conclusion: a model-internal bias, most likely a pretraining prior.**
+Qwen3-VL's pretraining saw far more sharp-key music and far more `♯`-like
+symbols (sharps dominate pop/rock; `#` = hashtag / "sharp sign" in text)
+than `♭` symbols. The base model arrived with stronger sharp priors;
+uniform-key SFT did not overcome it.
+
+Fix direction: overcome the prior with data — oversample flat keys.
+
+## Status & next step
+
+- Diagnosis settled: model *can* read key signatures (sharps proven);
+  failures are (a) skill doesn't transfer into transcription, (b)
+  flats under-learned due to a pretraining sharp-bias.
+- Next: dedicated key-recognition SFT with flat keys oversampled 2-3×.
+  If flats reach sharp-level accuracy → a reliable key-recognition pass
+  exists → the "key as given context" plan for transcription becomes
+  viable (transcription is handed the key, never has to read it).
+
+### Decomposition note (2026-05-18)
+
+Per-*system* spatial decomposition was considered and rejected as the
+de-risking experiment: the Level 7a failure is the key signature, which
+is replicated on every system — chopping the page per-system leaves the
+same misread key on every piece. Old ablations also show measure count
+costs only ~1pp (16m→24m), so scope reduction recovers little. The
+productive decomposition is **task** decomposition (separate the
+key-reading sub-task), not **spatial** decomposition.
+
+## DECISIVE: key-in-prompt experiment refutes the key-signature diagnosis (2026-05-19)
+
+Tested the premise of the whole key-as-context direction: if the model
+is *handed* `key=N` and no longer has to read it, does L7a transcription
+become reliable?
+
+Setup: `train.py` gained a `dataset.inject_gt_key` flag that appends the
+ground-truth key signature to the transcription prompt. Trained a fresh
+Qwen3-VL-8B L7a SFT with it (run `cj882p8z`, same recipe as the
+`safckylj` vision SFT). Evaluated per-key on L7a dev (n=50).
+
+| key | n | safckylj no-inject | safckylj +inject (OOD probe) | trained key-in-prompt |
+|----|---|------|------|------|
+| −4 | 7 | 99% | 84% | **23%** |
+| −3 | 1 | 26% | 98% | 0% |
+| −2 | 4 | 97% | 97% | 97% |
+| −1 | 5 | 19% | 46% | 48% |
+| +0 | 4 | 99% | 99% | 100% |
+| +1 | 5 | 14% | 17% | **40%** |
+| +2 | 7 | 31% | 42% | 90% |
+| +3 | 10 | 30% | 81% | **42%** |
+| +4 | 7 | 97% | 98% | 98% |
+
+Overall: trained key-in-prompt = 62.5% mean / 90.4% median — **no better
+than (worse on mean than) the untrained OOD probe (71.5%)**, and it
+regressed −4 from 99% to 23%.
+
+**Verdict: NEGATIVE. Handing the model the key signature does not fix
+L7a.** +1, +3, −1 stay broken even with `key=N` given for free and
+echoed correctly (key_acc 100%).
+
+### The key signature was a symptom, not the cause
+
+Per-sample inspection of the eval shows the failure is **per-sample, not
+per-key**: within a single key, samples are bimodal. key=+3 has 2
+near-perfect samples (L7a_04004, _04030) and 8 broken; key=−1 and key=−4
+likewise mix perfect and broken. The key correlated with failure only
+because broken samples happen to cluster in certain keys — but removing
+the key-reading burden entirely does not fix them.
+
+This retroactively explains why **every** prior fix failed — RL, Audiveris
+hints, data mixing, r=128, key-aux, and now key-as-context — they all
+assumed the key signature was the bottleneck. It is not. The earlier
+"L7a plateau = key-signature reading failure" diagnosis is **retracted**.
+
+Next: stop theorizing about the key; inspect broken samples' actual
+predictions vs references to find what is really wrong.
+
+## Broken-sample autopsy — two distinct failure modes (2026-05-19)
+
+Dumped pred vs ref MXC2 for 5 broken + 4 perfect L7a dev samples
+(key-in-prompt model `cj882p8z`). The "broken" bucket is **not one bug**.
+
+### Mode 1 — off-by-one accidental (sharp keys: +1, +3)
+
+`L7a_04009` (key=+3): of 41 differing note lines, **38 are `D#` (pred)
+vs `D` (ref)** — the model sharps every D on the page. key=+3 (A major)
+sharps F/C/G; the 4th sharp is D#. The model transcribed the entire
+page as **key=+4**. `L7a_04023` (+3): same, D→D#. `L7a_04017` (+1):
+C→C#, i.e. transcribed as +2.
+
+- Structurally intact (pred line count ≈ ref).
+- A *single* key miscount → dozens of wrong notes → metric collapses to
+  ~10-30%. This is the bimodal "perfect or garbage" pattern: one binary
+  decision amplified ~38×.
+- **Persists with key=N given in the prompt and written in the header**
+  (key_ok=True). Note spelling is driven by the model's *visual*
+  perception of the key-signature region, disconnected from the textual
+  key. This is exactly why key-in-prompt failed — the injection point
+  (prompt) is not wired to the failure point (per-note accidental).
+- Direction is consistent: the model reads *one extra sharp*.
+
+### Mode 2 — format / generation derailment (flat keys: −4, −1)
+
+`L7a_04011` (key=−4): the prediction **omits all `M` measure headers**,
+invents an off-format `P1 Voice (key=-4 time=4/4)` part header, over-
+generates (384 vs 300 lines), and loops (`F2/A2 F2/A2 …`) at the end.
+Also drops flats (`A4` for `Ab4`). `L7a_04020` (−1): no `M` headers,
+277 vs 253 notes. These are MXC2-malformed — the model abandoned the
+trained format mid-generation.
+
+### Implication
+
+The L7a plateau is **not** a single key-reading bug. It is:
+1. a **vision counting error** — the encoder miscounts the key signature
+   by one (off-by-one too many sharps) on certain pages, cascading
+   through every accidental-affected note; and
+2. a **generation-stability failure** — on some pages the decoder
+   derails out of the MXC2 format entirely.
+
+Neither is addressed by injecting the key (Mode 1 ignores it; Mode 2 is
+not about the key at all). The "key signature" framing captured only
+Mode 1, and only its symptom.
+
+## Mode 1 deep-dive (2026-05-19)
+
+Ruled out two cheap explanations for the off-by-one accidental error:
+
+1. **Not a data/rendering bug.** Pulled the broken samples' images and
+   cropped the key-signature region. `L7a_04009` (label fifths=3) renders
+   **3 sharps** — and is visually **identical** to the perfect `+3`
+   sample `L7a_04004`. The image is correct; the label is correct; the
+   model is wrong.
+
+2. **Not key-glyph misperception, and not over-generalised from an
+   explicit accidental.** `L7a_04009` and `L7a_04004` have the *same*
+   3-sharp key signature yet one breaks and one is perfect — so the wrong
+   key belief is not computed from the key-signature glyphs alone. And
+   the broken `+3`/`+1` samples (`04023`, `04017`) contain **no explicit
+   D#/C#** in their music, so the model isn't extrapolating a printed
+   accidental across the page either.
+
+What remains: the model forms a **confident, deterministic, wrong key
+belief — wrong by exactly +1 sharp** — for certain pages, from something
+beyond the key-signature glyphs. It then writes F#/C#/G# correctly *and*
+adds D#, i.e. transcribes A major as E major. The per-sample trigger is
+unidentified; the model nails {0, ±4} and breaks on intermediates,
+consistent with holistic key-bucket classification rather than reading.
+
+Note positions are essentially correct (the model gets the D staff
+position right — only the accidental is wrong). The plateau is one
+confident wrong key decision per broken page, amplified ~38× by the
+metric because absolute pitch bundles position + key.

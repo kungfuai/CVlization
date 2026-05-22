@@ -56,6 +56,7 @@ class EvalResult:
     # Pitched-only metrics — excludes rests, measures only actual note accuracy
     pitched_only_similarity: float = 0.0  # sequence similarity of pitched notes only
     pitched_only_positional: float = 0.0  # positional match of pitched notes only
+    position_only_similarity: float = 0.0  # accidentals stripped (D#4=D4) — isolates staff-position skill from key
 
     # Note-type metrics — compares e/q/s/h/w regardless of raw duration values
     note_type_similarity: float = 0.0     # sequence similarity of note types only (resolution-independent)
@@ -190,6 +191,12 @@ def evaluate_pair(pred_text: str, ref_text: str, score_id: str = "", step: int =
         n = min(len(pred_pitched), len(ref_pitched))
         result.pitched_only_positional = (
             sum(1 for p, r in zip(pred_pitched[:n], ref_pitched[:n]) if p == r) / n
+        )
+        _strip = lambda p: re.sub(r"^([A-G])[#bn0]*(-?\d+)$", r"\1\2", p)
+        pred_positions = [_strip(p) for p in pred_pitched]
+        ref_positions = [_strip(p) for p in ref_pitched]
+        result.position_only_similarity = (
+            SequenceMatcher(None, pred_positions, ref_positions).ratio()
         )
         # Note-type similarity (e/q/s/h/w — resolution-independent rhythm accuracy)
         pred_note_types = [e.note_type for e in pred_pitched_events]

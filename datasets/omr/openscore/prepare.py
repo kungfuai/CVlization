@@ -413,72 +413,451 @@ def build_dataset(all_rows: list[dict]):
 # Dataset card
 # ---------------------------------------------------------------------------
 
-DATASET_CARD = """\
----
+DATASET_CARD = r"""---
 license: cc-by-sa-4.0
 task_categories:
-  - image-to-text
+- image-to-text
 language:
-  - en
+- en
 tags:
-  - music
-  - optical-music-recognition
-  - omr
-  - sheet-music
-  - musicxml
-  - lilypond
+- music
+- optical-music-recognition
+- omr
+- sheet-music
+- musicxml
+- lilypond
 size_categories:
-  - 1K<n<10K
+- 10K<n<100K
+configs:
+- config_name: pages
+  data_files:
+  - split: dev
+    path: pages/dev-*
+  - split: test
+    path: pages/test-*
+  - split: train
+    path: pages/train-*
+- config_name: pages-lieder
+  data_files:
+  - split: train
+    path: pages-lieder/train-*
+  - split: dev
+    path: pages-lieder/dev-*
+  - split: test
+    path: pages-lieder/test-*
+- config_name: pages_transcribed
+  data_files:
+  - split: dev
+    path: pages_transcribed/dev-*
+  - split: test
+    path: pages_transcribed/test-*
+  - split: train
+    path: pages_transcribed/train-*
+- config_name: scores
+  data_files:
+  - split: train
+    path: scores/train-*
+  - split: test
+    path: scores/test-*
+  - split: dev
+    path: scores/dev-*
+dataset_info:
+- config_name: pages
+  features:
+  - name: image
+    dtype: image
+  - name: score_id
+    dtype: string
+  - name: corpus
+    dtype: string
+  - name: page
+    dtype: int64
+  - name: n_pages
+    dtype: int64
+  - name: composer
+    dtype: string
+  - name: opus
+    dtype: string
+  - name: title
+    dtype: string
+  splits:
+  - name: dev
+    num_bytes: 27048193
+    num_examples: 339
+  - name: test
+    num_bytes: 31131909
+    num_examples: 478
+  - name: train
+    num_bytes: 1181562028
+    num_examples: 16225
+  download_size: 977001946
+  dataset_size: 1239742130
+- config_name: pages-lieder
+  features:
+  - name: score_id
+    dtype: string
+  - name: corpus
+    dtype: string
+  - name: page
+    dtype: int64
+  - name: n_pages
+    dtype: int64
+  - name: bar_start
+    dtype: int64
+  - name: bar_end
+    dtype: int64
+  - name: musicxml
+    dtype: string
+  splits:
+  - name: train
+    num_bytes: 511960929
+    num_examples: 3415
+  - name: dev
+    num_bytes: 28971937
+    num_examples: 195
+  - name: test
+    num_bytes: 31504305
+    num_examples: 218
+  download_size: 53578761
+  dataset_size: 572437171
+- config_name: pages_transcribed
+  features:
+  - name: score_id
+    dtype: string
+  - name: corpus
+    dtype: string
+  - name: page
+    dtype: int64
+  - name: n_pages
+    dtype: int64
+  - name: bar_start
+    dtype: int64
+  - name: bar_end
+    dtype: int64
+  - name: musicxml
+    dtype: string
+  - name: image
+    dtype: image
+  - name: composer
+    dtype: string
+  - name: opus
+    dtype: string
+  - name: title
+    dtype: string
+  splits:
+  - name: dev
+    num_bytes: 81654956
+    num_examples: 329
+  - name: test
+    num_bytes: 89237566
+    num_examples: 455
+  - name: train
+    num_bytes: 3160588563
+    num_examples: 14129
+  download_size: 1135929995
+  dataset_size: 3331481085
+- config_name: scores
+  features:
+  - name: score_id
+    dtype: string
+  - name: composer
+    dtype: string
+  - name: opus
+    dtype: string
+  - name: title
+    dtype: string
+  - name: corpus
+    dtype: string
+  - name: instruments
+    list: string
+  - name: page
+    dtype: int64
+  - name: n_pages
+    dtype: int64
+  - name: musicxml
+    dtype: string
+  splits:
+  - name: train
+    num_bytes: 1468576392
+    num_examples: 1424
+  - name: test
+    num_bytes: 54739890
+    num_examples: 79
+  - name: dev
+    num_bytes: 54992179
+    num_examples: 79
+  download_size: 154745773
+  dataset_size: 1578308461
 ---
 
-# OpenScore — Full-Page Score Images
+# zzsi/openscore — OpenScore Sheet Music Pages
 
-Full-page score images rendered from the [OpenScore](https://github.com/OpenScore)
-corpora via [LilyPond](https://lilypond.org), paired with source MusicXML.
+Rendered sheet music pages from three open-score corpora, paired with
+per-page MusicXML ground truth. Intended for optical music recognition (OMR)
+research and supervised fine-tuning of vision-language models.
+
+Images are rendered from source MusicXML via
+[LilyPond](https://lilypond.org) (Emmentaler font). Per-page MusicXML is
+extracted by parsing bar numbers from the rendered SVGs and slicing the source
+score with [music21](https://web.mit.edu/music21/).
+
+---
 
 ## Corpora
 
-| Corpus | Scores | Staves/system | Source |
-|--------|--------|---------------|--------|
-| Lieder | ~1,460 | 3 (voice + piano) | [OpenScore/Lieder](https://github.com/OpenScore/Lieder) |
-| Quartets | ~122 | 4 (violin I/II + viola + cello) | [OpenScore/StringQuartets](https://github.com/OpenScore/StringQuartets) |
-| Orchestra | ~94 movements | 10–20+ (full orchestra) | [MarkGotham/Hauptstimme](https://github.com/MarkGotham/Hauptstimme) |
+| Corpus | Scores | Instrumentation | Source |
+|--------|-------:|-----------------|--------|
+| `lieder` | ~1,460 | Voice + piano (3 staves) | [OpenScore/Lieder](https://github.com/OpenScore/Lieder) |
+| `quartets` | ~122 | String quartet (4 staves) | [OpenScore/StringQuartets](https://github.com/OpenScore/StringQuartets) |
+| `orchestra` | ~94 movements | Full orchestra (10–20+ staves) | [MarkGotham/Hauptstimme](https://github.com/MarkGotham/Hauptstimme) |
 
-## Format
+---
 
-```python
-{
-    "image":       PIL.Image,   # full-page score render (LilyPond Emmentaler font)
-    "score_id":    str,         # e.g. "lc6583477"
-    "composer":    str,
-    "opus":        str,
-    "title":       str,
-    "corpus":      str,         # "lieder" or "quartets"
-    "instruments": list[str],
-    "page":        int,         # 1-indexed
-    "n_pages":     int,
-}
-```
+## ⚠️ Known issue — broken `musicxml` labels in the `quartets` corpus
+
+In the `pages_transcribed` config, the per-page `musicxml` slicing
+**fails on a large fraction of `quartets` pages**: the page image shows
+real music, but the `musicxml` label is an empty stub (one measure per
+part, `<attributes>` + end barline, **no notes**). Verified 2026-05-18
+by a full scan of all splits.
+
+| Corpus | Scores w/ empty pages | Empty pages | Genuine failed slices |
+|--------|----------------------:|-------------|----------------------:|
+| `quartets`  | 97 / 109   | 3,746 / 6,410 (58.4%) | 3,578 |
+| `lieder`    | 13 / 1,018 | 70 / 3,392 (2.1%)     | 13 |
+| `orchestra` | 14 / 91    | 251 / 5,111 (4.9%)    | 0 (spurious `bar_start > bar_end` pages) |
+
+**Do not train on the `quartets` portion of `pages_transcribed`** until
+the slicer is fixed — empty labels teach a model "page of music →
+empty output". `lieder` and `orchestra` are usable (`lieder` has 13
+stray failed-slice pages, listed below; `orchestra` has zero). The
+`pages` config (images only) and `scores` config are unaffected. Key
+signatures in non-empty labels are correct.
+
+<details>
+<summary>Broken quartet scores — <code>score_id (empty_pages/total_pages)</code> (97)</summary>
+
+sq10307350 (14/26), sq10313029 (53/88), sq10328092 (8/16),
+sq10372717 (12/25), sq10381459 (9/20), sq10406164 (53/128),
+sq10414906 (13/22), sq10490761 (5/10), sq10517302 (116/198),
+sq10527526 (67/115), sq10675759 (74/101), sq11154985 (79/119),
+sq11164006 (134/204), sq11539384 (23/61), sq12113164 (21/34),
+sq12536479 (50/115), sq12701461 (9/25), sq12772795 (9/25),
+sq14720995 (12/25), sq15049456 (18/26), sq15230467 (14/19),
+sq15624112 (38/60), sq15730717 (16/22), sq16138966 (49/79),
+sq7103818 (46/62), sq7108150 (65/129), sq7114183 (9/21),
+sq7123582 (52/88), sq7127785 (44/54), sq7224846 (54/68),
+sq7249986 (21/34), sq7284122 (12/20), sq7294793 (33/48),
+sq7295726 (63/81), sq7300376 (9/18), sq7302602 (47/59),
+sq7302710 (33/65), sq7330550 (52/77), sq7353137 (16/28),
+sq7354505 (166/299), sq7358579 (95/125), sq7358708 (22/40),
+sq7383977 (14/38), sq7384409 (80/139), sq7397765 (63/161),
+sq7434431 (11/17), sq7471661 (14/36), sq7483523 (118/156),
+sq7524617 (15/33), sq7541288 (39/68), sq7551068 (17/26),
+sq7556360 (81/118), sq7577795 (44/60), sq7588853 (25/38),
+sq7872392 (79/127), sq8071278 (23/41), sq8075304 (9/18),
+sq8088531 (10/22), sq8437280 (5/14), sq8437358 (4/11),
+sq8438840 (2/9), sq8438915 (1/5), sq8438999 (2/10),
+sq8454356 (42/68), sq8455808 (15/26), sq8461409 (9/13),
+sq8509238 (17/26), sq8556926 (6/12), sq8561633 (42/62),
+sq8623643 (64/104), sq8630159 (83/92), sq8796660 (13/20),
+sq8806134 (10/14), sq8806746 (7/15), sq8806881 (9/13),
+sq8807040 (13/23), sq8807667 (11/17), sq8811375 (74/102),
+sq8818128 (68/109), sq8823783 (187/314), sq8853405 (12/31),
+sq8885439 (79/175), sq8885571 (72/129), sq8907120 (18/33),
+sq8913219 (46/61), sq8938822 (107/151), sq8940236 (21/57),
+sq9010547 (50/62), sq9094235 (78/162), sq9137469 (26/52),
+sq9146376 (9/17), sq9199617 (6/14), sq9396439 (16/24),
+sq9529900 (70/80), sq9608209 (19/43), sq9719026 (41/55),
+sq9961690 (15/28).
+
+</details>
+
+The 12 unaffected quartet scores: sq10502527, sq14387632, sq7070319,
+sq7070781, sq7075297, sq7078259, sq7082029, sq7093885, sq7095930,
+sq7236909, sq7648382, sq8812200.
+
+Lieder scores with one stray failed-slice page each: lc6197282,
+lc6486038, lc6593095, lc6613436, lc6613481, lc6614760, lc6624112,
+lc6625925, lc6667483, lc6669339, lc6670960, lc6764425, lc8873154.
+
+---
+
+## Configs
+
+### `pages_transcribed` — image + per-page MusicXML (SFT-ready)
+
+Each row is one rendered page paired with the MusicXML for the bars on that
+page. Suitable for supervised fine-tuning of OMR models.
+
+| Split | Rows |
+|-------|-----:|
+| train | 14,129 |
+| test  |    455 |
+| dev   |    329 |
+
+Fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `image` | PIL.Image | Full-page score render |
+| `score_id` | str | Score identifier (e.g. `lc6583477`) |
+| `corpus` | str | `lieder`, `quartets`, or `orchestra` |
+| `composer` | str | |
+| `opus` | str | |
+| `title` | str | |
+| `page` | int | 1-indexed page number |
+| `n_pages` | int | Total pages in the score |
+| `bar_start` | int | First bar number on this page |
+| `bar_end` | int | Last bar number on this page (inclusive) |
+| `musicxml` | str | MusicXML for `bar_start`–`bar_end` |
+
+---
+
+### `pages` — image only, all corpora
+
+Same rows as `pages_transcribed` but without the `musicxml`, `bar_start`, and
+`bar_end` fields. Useful for unsupervised pre-training or image-only tasks.
+
+| Split | Rows |
+|-------|-----:|
+| train | 16,225 |
+| test  |    478 |
+| dev   |    339 |
+
+---
+
+### `scores` — full MusicXML per score
+
+One row per score (not per page). Contains the complete MusicXML for the
+entire piece plus metadata.
+
+| Split | Rows |
+|-------|-----:|
+| train | 1,424 |
+| test  |    79 |
+| dev   |    79 |
+
+Fields: `score_id`, `composer`, `opus`, `title`, `corpus`, `instruments`
+(list), `page` (total pages), `n_pages`, `musicxml` (full score).
+
+---
 
 ## Usage
 
+### Load `pages_transcribed`
+
 ```python
 from datasets import load_dataset
-ds = load_dataset("zzsi/openscore")
+
+ds = load_dataset("zzsi/openscore", "pages_transcribed")
 example = ds["train"][0]
 example["image"].show()
+print(example["musicxml"][:500])
 ```
+
+### Filter by corpus (streaming)
+
+The dataset is sorted by `corpus` within each split, so row groups in the
+parquet files are corpus-homogeneous. This means streaming with a corpus
+filter is efficient: non-matching row groups are skipped without being
+downloaded.
+
+```python
+from datasets import load_dataset
+
+# Lieder only
+ds = load_dataset("zzsi/openscore", "pages_transcribed",
+                  streaming=True, split="train")
+ds = ds.filter(lambda r: r["corpus"] == "lieder")
+
+# Lieder + quartets (no orchestra)
+ds = ds.filter(lambda r: r["corpus"] in {"lieder", "quartets"})
+```
+
+### Quick subset for testing
+
+```python
+# First 100 rows (any corpus)
+ds = load_dataset("zzsi/openscore", "pages_transcribed",
+                  streaming=True, split="train")
+sample = list(ds.take(100))
+```
+
+### Fine-tuning example (Qwen-VL style)
+
+```python
+from datasets import load_dataset
+
+ds = load_dataset("zzsi/openscore", "pages_transcribed", split="train")
+
+def to_chat(row):
+    return {
+        "messages": [
+            {"role": "user", "content": [
+                {"type": "image", "image": row["image"]},
+                {"type": "text",  "text": "Transcribe this sheet music page to MusicXML."},
+            ]},
+            {"role": "assistant", "content": row["musicxml"]},
+        ]
+    }
+
+ds = ds.map(to_chat)
+```
+
+---
+
+## Construction
+
+1. **Render**: Source MusicXML is converted to LilyPond (`.ly`) format and
+   rendered to SVG pages using a Docker image containing LilyPond 2.24.
+   Bar numbers are made visible on every bar (`all-bar-numbers-visible`).
+2. **Align**: Bar numbers are parsed from each SVG page to determine which
+   bars appear on each page.
+3. **Slice**: music21 slices the source MusicXML to the bar range for each
+   page and re-exports it as a self-contained MusicXML fragment.
+
+Pages whose bar numbers could not be reliably parsed (e.g. continuation
+pages with no bar number printed) are excluded.
+
+---
+
+## Known Limitations
+
+- **Pickup bars**: Scores with a pickup bar (anacrusis) have an implicit
+  measure 0 that is accounted for in `bar_start`/`bar_end`.
+- **Orchestra page alignment**: Orchestra scores frequently render to a
+  different page count than the original due to `\RemoveEmptyStaves` in
+  LilyPond. Alignment is based on bar numbers embedded in the rendered SVG,
+  not on page index.
+- **MusicXML slice quality**: Sliced MusicXML may be missing some cross-page
+  spanners (slurs, hairpins). Inexpressible rhythms (rare) cause individual
+  pages to be dropped.
+- **Render failures**: ~6% of lieder scores, 3% of quartet scores, and 2
+  orchestra movements failed to render and are absent from the dataset.
+
+---
 
 ## License
 
-Source scores: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
-LilyPond renders: same license as source scores.
+Source scores are released under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+LilyPond renders and derived MusicXML slices carry the same license.
+
+---
 
 ## Attribution
 
-- OpenScore Lieder corpus: https://github.com/OpenScore/Lieder
-- OpenScore String Quartets: https://github.com/OpenScore/StringQuartets
-- OpenScore Orchestra (Hauptstimme): https://github.com/MarkGotham/Hauptstimme
+- **OpenScore Lieder** — scores transcribed by the OpenScore community:
+  https://github.com/OpenScore/Lieder
+- **OpenScore String Quartets** — scores transcribed by the OpenScore community:
+  https://github.com/OpenScore/StringQuartets
+- **Hauptstimme (Orchestra)** — scores curated by Mark Gotham:
+  https://github.com/MarkGotham/Hauptstimme
+
+Rendering pipeline uses [LilyPond](https://lilypond.org) and
+[music21](https://web.mit.edu/music21/). Dataset construction code:
+https://github.com/zhudotexe/CVlization
 """
 
 
