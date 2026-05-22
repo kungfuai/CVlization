@@ -1,0 +1,8 @@
+161c161
+<                 )[:, :, :-padded_length].transpose(2, 1)
+---
+>                 ).transpose(2, 1)[:, :q.shape[1]]
+192c192
+<                 )[:, :, :-padded_length].transpose(2, 1)
+---
+>                 ).transpose(2, 1)[:, :q.shape[1]]

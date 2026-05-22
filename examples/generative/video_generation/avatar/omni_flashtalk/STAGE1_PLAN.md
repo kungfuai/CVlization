@@ -53,13 +53,26 @@ Our Stage-1 trainer = this scaffold + audio conditioning + our student.
   `F_latent` (see ARCH_COMPARISON.md / EXPERIMENT_QUEUE.md A1).
 - Precompute and cache per item (cheap; do it in S2's pack step).
 
-### S4 — conditional_dict construction
-- The student `_forward_train` needs: `x` (33-ch input = noisy video latent +
-  ref-image latent + mask), `t`, `context` (T5), `audio_emb`.
-- Reverse-engineer OmniAvatar's exact 33-channel assembly from
-  `OmniAvatar/wan_video.py` (`encode_image` builds the mask + image latent).
-- Build a `make_conditional_dict(item)` helper.
-- Highest-uncertainty sub-task — budget debugging time.
+### S4 — conditional_dict construction  [SOLVED — see findings below]
+OmniAvatar's 33-channel DiT input, reverse-engineered from
+`scripts/inference.py` L266-275:
+```
+x[0:16]   noisy video latent      (the 16-ch thing being denoised)
+x[16:32]  ref-portrait latent     VAE-encode portrait -> [16,1,h,w], tiled to T
+x[32:33]  mask                    0 at frame 0 (anchor), 1 elsewhere
+```
+i.e. `y = cat([ref_latent.repeat(1,1,T,1,1), mask], dim=ch)` -> 17ch;
+`dit_input = cat([noisy_latent, y], dim=ch)` -> 33ch. Flow-matching noise is
+applied ONLY to x[0:16]; ref + mask are clean conditioning.
+
+Audio (`scripts/inference.py` L236-256): librosa.load(16k) ->
+Wav2Vec2FeatureExtractor -> OmniAvatar's custom `Wav2VecModel` with
+`output_hidden_states=True`; concatenate `last_hidden_state` + all 13 hidden
+layers -> [T_audio, 10752]. T_audio = ceil(seconds * fps=25).
+
+Text context: **smoke uses ZERO text context** — the dominant Stage-1 signal
+is audio + ref + video reconstruction, and skipping it avoids wiring the
+~11B umt5-xxl encoder. Real T5 conditioning is a v0 addition.
 
 ### S5 — Wire OmniAudioCausalWanModel into trainer/ode.py
 - Replace Self-Forcing's `WanDiffusionWrapper` student with our
@@ -84,10 +97,10 @@ S6 (debugging the first run) dominate.
 
 ## Status
 - [x] S1 — video→latent encode pass (100/100, encode_targets.py)
-- [ ] S2 — LMDB packing
-- [ ] S3 — audio embedding precompute
-- [ ] S4 — conditional_dict construction
-- [ ] S5 — wire student into trainer
-- [ ] S6 — first Stage-1 run
+- [x] S2/S3 — per-item .pt (no LMDB needed at smoke scale); audio precomputed
+- [x] (folded into S2: precompute_audio.py, 100/100)
+- [x] S4 — 33-ch input solved (see findings above)
+- [x] S5 — train_stage1.py (lean standalone trainer, reuses omni_causal_adapter)
+- [x] S6 — first run GATE PASSED: loss 1.07->0.28 in 3 steps on real targets, no NaN, 8.7GB
 
-Next concrete action: **S1**.
+Next: longer Stage-1 runs + decode-quality eval; then scale dataset to v0 (2k).
