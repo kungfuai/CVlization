@@ -1,0 +1,76 @@
+name: molmoact2
+description: >
+  MolmoAct2 vision-language-action inference for robot manipulation.
+  5B-parameter VLA combining a Molmo2-ER VLM backbone with a flow-matching
+  continuous action expert. Supports depth-token reasoning (Think variant)
+  and discrete FAST tokenizer actions.
+capability: physical/vla
+stability: experimental
+tags:
+  - vla
+  - molmoact2
+  - inference
+  - robot-manipulation
+  - vision-language-action
+  - flow-matching
+  - depth-reasoning
+
+docker:
+  image: molmoact2-inference:latest
+  gpu: required
+  vram_gb: 24
+
+model:
+  name: allenai/MolmoAct2-LIBERO
+  size_gb: 20
+  params: 5B
+  type: vision-language-action
+  license: Apache-2.0
+
+inputs:
+  - images: Camera RGB images (order must match checkpoint training cameras)
+  - task: Natural language manipulation instruction
+  - state: Raw robot state vector (e.g. 8-dim for LIBERO)
+
+outputs:
+  - actions.npy: Predicted action chunk in robot scale
+  - depth_bins: 10x10 depth codes (Think variants only)
+  - metrics.json: Action statistics summary
+
+presets:
+  build:
+    description: Build Docker image
+    command: ./build.sh
+  predict:
+    description: Run inference with default LIBERO checkpoint and sample images
+    command: python predict.py
+  think:
+    description: Think variant with depth-token reasoning
+    command: >
+      python predict.py
+      --model allenai/MolmoAct2-Think-LIBERO
+      --norm-tag libero
+      --enable-depth-reasoning
+  discrete:
+    description: Discrete FAST tokenizer actions
+    command: python predict.py --action-mode discrete
+
+resources:
+  gpu: required
+  vram_gb: 24
+  disk_gb: 25
+
+verification:
+  last_verified: 2026-05-21
+  last_verification_note: >
+    Verified build, smoke tests (6/6), and inference on NVIDIA RTX PRO 6000 Blackwell
+    Max-Q (97.9 GB VRAM). Model loads ~18.7 GB VRAM in FP32. Inference time ~11s
+    (model cached). Outputs actions.npy (10-step chunk, 7-dim) and metrics.json
+    saved to host via CVL_OUTPUTS mount. Sample images auto-downloaded from zzsi/cvl.
+    Tested with pytorch/pytorch:2.10.0-cuda12.8-cudnn9-runtime base image.
+
+references:
+  - https://arxiv.org/abs/2605.02881
+  - https://github.com/allenai/molmoact2
+  - https://github.com/allenai/lerobot-molmoact2
+  - https://huggingface.co/collections/allenai/molmoact2-models-69f81e05242e2499606b1be6
