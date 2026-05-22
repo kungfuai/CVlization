@@ -1,0 +1,22 @@
+# Starter detection config for L7a (synthetic) layout detection.
+# Fill in once a backbone is chosen.
+
+data:
+  repo: "zzsi/synthetic-detection"   # to be created by labels/make_dataset.py
+  config: "l7a"
+  split: "train"
+  dev_split: "dev"
+
+model:
+  backbone: "yolov8n"        # or "rtdetr_r18", "deformable_detr_r50", ...
+  num_classes: 5             # system, staff, barline, key_signature, clef
+
+training:
+  epochs: 50
+  batch_size: 16
+  lr: 1.0e-3
+  image_size: 1280           # let detector see fine-grained barlines
+  optimizer: "adamw"
+  weight_decay: 1.0e-4
+  output_dir: "outputs/detector_l7a"
+  seed: 3407
