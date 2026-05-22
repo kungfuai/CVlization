@@ -1,0 +1,35 @@
+name: omr-detection
+description: >
+  Layout detection for sheet-music pages. Detects systems, staves, and
+  barlines so a downstream transcription model can operate per-cell
+  (one measure of one staff). Trained on synthetic L7a data from
+  zzsi/synthetic-scores; bbox ground truth is extracted from the
+  LilyPond SVG of each page.
+capability: perception/optical_music_recognition
+modalities:
+  - image
+stability: experimental
+resources:
+  gpu: 1
+  disk_gb: 5
+image: cvlization/omr-detection:latest
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Train YOLOv8 on a prepared detection dataset
+tags:
+  - omr
+  - detection
+  - yolo
+  - sheet-music
+tasks:
+  - object_detection
+  - optical_music_recognition
+frameworks:
+  - ultralytics
+model:
+  name: YOLOv8n (layout)
+  source: https://docs.ultralytics.com/
