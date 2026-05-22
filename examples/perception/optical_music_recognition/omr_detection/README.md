@@ -107,16 +107,20 @@ omr_detection/
 
 ## Build order
 
-1. **`labels/extract_bboxes.py`** — get bboxes out of LilyPond SVGs.
-   Concrete goal: for one L7a sample, output `{systems, staves, barlines}`
-   bboxes that visually match the rendered page.
-2. **`labels/make_dataset.py`** — build a Hugging Face detection dataset from
-   step 1. Coverage: synthetic L7a + L9 first, openscore lieder later.
-3. **`models/layout_detector.py`** — start with a small YOLO-style model
-   (Ultralytics or our own minimal head). Train on synthetic.
-4. **`eval_detector.py`** — mAP and per-class IoU on a held-out dev set.
-5. **`pipeline.py`** — orchestrate detector + (existing) safckylj transcription
-   + per-cell respell. Validate on L7a dev first, then extend.
+1. ✅ **`labels/extract_bboxes.py`** — get bboxes out of LilyPond SVGs.
+   Outputs `{systems, staves, barlines}` bboxes; visually verified on L7a.
+2. ✅ **`labels/make_dataset.py`** — builds a local JSONL detection dataset
+   (PNG + pixel bboxes). HF push deferred until the detector is validated.
+   Coverage so far: synthetic L7a. L9 + openscore lieder later.
+3. ✅ **`train_detector.py`** — YOLOv8n via Ultralytics in Docker. Trained on
+   500 L7a pages → mAP50=0.995 on all three classes. See
+   `reports/2026-05-22-yolov8n-l7a-baseline.md`.
+4. ⏳ **`eval_detector.py`** — mAP and per-class IoU on a held-out dev set.
+   Per-class metrics currently come from an inline `YOLO.val()` call;
+   this script is still a stub.
+5. ⏳ **`pipeline.py`** — orchestrate detector + (existing) safckylj transcription
+   + per-cell respell. Validate on L7a dev first, then extend. Still a stub.
+   Needs cell derivation (staff ∩ barline gaps) implemented first.
 
 Optional stages:
 - Per-measure-per-staff focused transcription model (instead of safckylj).
