@@ -30,6 +30,12 @@ import yaml
 CLASS_NAMES = ["system", "staff", "barline_single", "barline_heavy"]
 NUM_CLASSES = len(CLASS_NAMES)
 
+# YOLOv8 struggles with sub-pixel-wide boxes. Real barlines are ~1.3 px
+# wide at our 1280px imgsz, which the detector can't localize. We widen
+# them in the YOLO label space; downstream we only care about x-center,
+# so the inflated box doesn't hurt cell derivation.
+MIN_BARLINE_W_PX = 8
+
 
 def _xywh_to_yolo(x: float, y: float, w: float, h: float,
                   img_w: int, img_h: int) -> tuple[float, float, float, float]:
@@ -58,6 +64,10 @@ def _record_to_yolo_lines(rec: dict) -> list[str]:
         out.append(f"1 {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
     for _sys, x, y, w, h, heavy in rec["bboxes"]["barlines"]:
         cls = 3 if heavy else 2
+        if w < MIN_BARLINE_W_PX:
+            # widen around the x-center so the YOLO box is detectable
+            x = x + w / 2 - MIN_BARLINE_W_PX / 2
+            w = MIN_BARLINE_W_PX
         cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
         out.append(f"{cls} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
     return out
