@@ -14,19 +14,19 @@ presets:
   build:
     script: build.sh
     description: "Build the container image"
-  infer:
-    script: infer.sh
+  predict:
+    script: predict.sh
     description: "Run dual-view VLM reasoning on a time series"
-  infer-synthetic:
-    script: infer.sh
+  predict-synthetic:
+    script: predict.sh
     args: --series-length 200 --question-preset l2_trend
     description: "Run reasoning on a synthetic time series"
-  infer-minmax:
-    script: infer.sh
+  predict-minmax:
+    script: predict.sh
     args: --question-preset l1_minmax
     description: "Run min/max value extraction on a synthetic series"
   images-only:
-    script: infer.sh
+    script: predict.sh
     args: --images-only
     description: "Generate dual-view images without VLM inference"
 tags:
@@ -46,3 +46,6 @@ description: >-
   VLM-based time series reasoning using dual-view input (line plot +
   numerical table) following the LLaTiSA approach for chain-of-thought
   temporal analysis.
+verification:
+  last_verified: "2026-05-22"
+  last_verification_note: "Verified build, images-only inference, and full VLM inference (Qwen2.5-VL-7B-Instruct) with synthetic data on NVIDIA RTX PRO 6000 Blackwell (98GB VRAM). Model runs on CPU fallback due to PyTorch 2.4/CUDA 11.8 not supporting sm_120."

@@ -16,13 +16,22 @@ import argparse
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+
+try:
+    from cvlization.paths import resolve_input_path, resolve_output_path
+except ImportError:
+    # Standalone mode without cvlization package installed
+    def resolve_input_path(path, input_dir=None):
+        return path
+
+    def resolve_output_path(path=None, output_dir=None, default_filename="result.txt"):
+        return path or default_filename
 
 
 # ---------------------------------------------------------------------------
@@ -370,12 +379,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    out_dir = Path(args.output_dir)
+
+    # Use CVL_OUTPUTS if set (cvl run mode), otherwise use --output-dir
+    cvl_out = os.environ.get("CVL_OUTPUTS")
+    out_dir = Path(cvl_out) if cvl_out else Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Load or generate series ---
     if args.input is not None:
-        input_path = args.input
+        input_path = resolve_input_path(args.input)
         print(f"Loading time series from {input_path} ...", flush=True)
         if input_path.endswith(".csv"):
             try:

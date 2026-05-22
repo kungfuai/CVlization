@@ -24,7 +24,9 @@ DOCKER_ARGS=(
     "--shm-size" "16G"
     "--workdir" "/workspace"
     "--mount" "type=bind,src=${SCRIPT_DIR},dst=/workspace"
+    "--mount" "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly"
     "--mount" "type=bind,src=${HF_CACHE},dst=/root/.cache/huggingface"
+    "--env" "PYTHONPATH=/cvlization_repo"
     "--env" "PYTHONUNBUFFERED=1"
     "--env" "HF_HOME=/root/.cache/huggingface"
 )
@@ -33,7 +35,7 @@ DOCKER_ARGS=(
 [[ "${CVL_ENABLE_GPU:-1}" == "1" ]] && DOCKER_ARGS+=("--gpus" "all")
 [[ -n "${HF_TOKEN:-}" ]] && DOCKER_ARGS+=("--env" "HF_TOKEN=${HF_TOKEN}")
 
-DOCKER_ARGS+=("$IMG" "python" "infer.py")
+DOCKER_ARGS+=("$IMG" "python" "predict.py")
 
 # Forward all script arguments to the Python script
 for arg in "$@"; do DOCKER_ARGS+=("$arg"); done

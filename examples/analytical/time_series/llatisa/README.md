@@ -3,6 +3,40 @@
 VLM-based time series reasoning using dual-view input following the
 [LLaTiSA](https://arxiv.org/abs/2604.17295) approach (ACL 2026 Findings).
 
+## What to Expect
+
+- **First-run cost**: ~15 GB model download (Qwen2.5-VL-7B-Instruct),
+  cached in `~/.cache/huggingface/` afterward
+- **What it does**: generates a line plot and numerical table from a time
+  series, then queries a VLM for chain-of-thought reasoning
+- **Where output goes**: saves to `artifacts/` in the example directory
+  (or host cwd when using `cvl run`)
+- **Output format**: `plot.png` (line chart), `numeric_table.png`
+  (index-value grid), `result.json` (question + VLM response)
+- **Runtime**: ~3 min on an A100 (model loading dominates); images-only
+  mode completes in seconds on CPU
+
+## Sample
+
+**Input** -- synthetic series (200 steps, trend + seasonality + anomaly spike):
+
+![Sample plot](https://huggingface.co/datasets/zzsi/cvl/resolve/main/llatisa/plot.png)
+
+**Dual-view numerical table**:
+
+![Numeric table](https://huggingface.co/datasets/zzsi/cvl/resolve/main/llatisa/numeric_table.png)
+
+**Output** -- VLM reasoning (Qwen2.5-VL-7B-Instruct, `l2_trend` preset):
+
+```
+The time series exhibits a complex pattern rather than a simple increase,
+decrease, or stationarity. It shows an upward trend from index 0 to ~25,
+a decline to ~40, a second rise to ~60-70 with a sharp peak (the highest
+point in the series), followed by a decline and then fluctuating trends.
+Multiple peaks and troughs indicate a complex pattern with a significant
+peak at around index 70.
+```
+
 ## Why LLaTiSA?
 
 Existing time series analysis methods treat numerical data in isolation.
@@ -38,20 +72,20 @@ The original paper defines four reasoning levels:
 bash build.sh
 
 # Run with synthetic data (images + VLM reasoning)
-bash infer.sh
+bash predict.sh
 
 # Generate images only (no GPU required for this step)
-bash infer.sh --images-only
+bash predict.sh --images-only
 
 # Ask a specific question
-bash infer.sh --question "What is the period of the seasonal component?"
+bash predict.sh --question "What is the period of the seasonal component?"
 
 # Use a preset question type
-bash infer.sh --question-preset l1_minmax
+bash predict.sh --question-preset l1_minmax
 
 # Use your own data
-bash infer.sh --input /path/to/series.json
-bash infer.sh --input /path/to/data.csv --csv-column temperature
+bash predict.sh --input /path/to/series.json
+bash predict.sh --input /path/to/data.csv --csv-column temperature
 ```
 
 ## Input Formats
@@ -69,8 +103,8 @@ bash infer.sh --input /path/to/data.csv --csv-column temperature
 **CSV** -- any CSV file; specify the column with `--csv-column`:
 
 ```bash
-bash infer.sh --input data.csv --csv-column 1        # by index
-bash infer.sh --input data.csv --csv-column temperature  # by name
+bash predict.sh --input data.csv --csv-column 1        # by index
+bash predict.sh --input data.csv --csv-column temperature  # by name
 ```
 
 If no input is provided, a synthetic series with trend, seasonality, and
@@ -117,10 +151,10 @@ Other compatible models:
 
 ```bash
 # Smaller variant (less GPU memory)
-bash infer.sh --model Qwen/Qwen2.5-VL-2B-Instruct
+bash predict.sh --model Qwen/Qwen2.5-VL-2B-Instruct
 
 # Larger variant (better reasoning)
-bash infer.sh --model Qwen/Qwen2.5-VL-72B-Instruct
+bash predict.sh --model Qwen/Qwen2.5-VL-72B-Instruct
 ```
 
 ## References
