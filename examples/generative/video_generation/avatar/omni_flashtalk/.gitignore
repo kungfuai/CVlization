@@ -1,0 +1,17 @@
+# Generated KD dataset artifacts — never commit (live on the GPU hosts)
+data/manifest*.jsonl
+data/portraits/
+data/audio/
+data/lmdb/
+data/hallo_prompts.csv
+data/outputs/
+*.png
+*.wav
+*.mp4
+*.pt
+*.safetensors
+
+# Python
+__pycache__/
+*.pyc
+.venv/
