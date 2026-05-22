@@ -101,6 +101,22 @@ S6 (debugging the first run) dominate.
 - [x] (folded into S2: precompute_audio.py, 100/100)
 - [x] S4 — 33-ch input solved (see findings above)
 - [x] S5 — train_stage1.py (lean standalone trainer, reuses omni_causal_adapter)
-- [x] S6 — first run GATE PASSED: loss 1.07->0.28 in 3 steps on real targets, no NaN, 8.7GB
+- [x] S6 — trainer runs stably; eval metric added.
+      HONEST RESULT: 1000-step run shows NO learning. Fixed-timestep eval
+      0.516 -> 0.575 (+11.5%, slightly WORSE). The raw per-step loss is pure
+      timestep noise. Trainer is correct mechanically (no NaN, ~9GB, 7s/step)
+      but the recipe as configured does not improve the student.
 
-Next: longer Stage-1 runs + decode-quality eval; then scale dataset to v0 (2k).
+## S6 result — no learning in 1000 steps. Candidate causes (untested):
+- Too few steps / lr too low — real distillation is 6-8k+ steps; lr 1e-4 on
+  a pretrained model is conservative. 1000 steps may simply be too short.
+- Zero text context — OmniAvatar was trained WITH text conditioning; feeding
+  zeros pushes the text cross-attn off-distribution. May need real T5.
+- Zero-init audio_cond_projs barely move at lr 1e-4 in 1000 steps.
+- Velocity parameterization verified correct (cross-checked vs SoulX
+  pipeline: raw model output = noise - x0 = our v_target).
+
+Next: debug the training (lr sweep, longer run, real text context, check
+audio-module weight movement). This is open-ended ML debugging — the "S6
+dominates" risk in the effort estimate. Recommend a deliberate diagnostic
+pass rather than blind longer runs.
