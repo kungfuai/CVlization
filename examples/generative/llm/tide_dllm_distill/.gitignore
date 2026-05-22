@@ -1,5 +1,6 @@
 outputs/
 checkpoints/
+checkpoint-*/
 weights/
 logs/
 __pycache__/
@@ -8,4 +9,7 @@ __pycache__/
 *.pth
 *.bin
 *.safetensors
+result.txt
+result.json
+training_state.json
 .DS_Store

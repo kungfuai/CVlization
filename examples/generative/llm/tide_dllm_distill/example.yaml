@@ -49,3 +49,6 @@ description: >
   Complementary Demonstration (CompDemo). Based on "Turning the Tide" (arXiv
   2604.26951). Supports Pipeline B (shared-tokenizer, e.g. WeDLM-8B teacher ->
   Qwen3-0.6B-BD3LM student).
+verification:
+  last_verified: "2026-05-22"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8. Verified build, self-distillation training (10 steps, loss 5.37->4.59, TIDAL lambda 0.38->0.88), and inference ('What is 2+2?' -> '4') on RTX PRO 6000 Blackwell (98GB VRAM). Peak VRAM: 8.5GB (self-distillation). HF cache verified. Verification skill: verify-training-pipeline."

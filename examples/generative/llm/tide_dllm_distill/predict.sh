@@ -20,5 +20,6 @@ docker run --rm --gpus=all --shm-size 16G \
   --env "CVL_INPUTS=${CVL_INPUTS:-/mnt/cvl/workspace}" \
   --env "CVL_OUTPUTS=${CVL_OUTPUTS:-/mnt/cvl/workspace}" \
   ${HF_TOKEN:+-e HF_TOKEN=$HF_TOKEN} \
+  ${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"} \
   "$IMG" \
   python predict.py "$@"
