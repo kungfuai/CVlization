@@ -98,7 +98,13 @@ ships three workarounds applied automatically:
 - `gpu_utils.py` sets `VLLM_USE_FLASHINFER_SAMPLER=0` for SM120+, falling back
   to the PyTorch-native sampler.
 
-Combined they let vLLM 0.21 run cleanly on SM120 without losing model coverage.
+Combined they let vLLM 0.21 run cleanly on SM120 for BF16 models.
+
+**Known regression**: `mistralai/Ministral-3-8B-Instruct-2512` (fp8 VLM) worked on
+vLLM 0.19.0 but fails on 0.21.0 because the FP8 GEMM path now routes through
+FlashInfer, whose JIT compiles `compute_120f` kernels that need CUDA ≥ 12.9
+nvcc — our base image ships CUDA 12.8 nvcc. Fixing requires a CUDA 13.0-devel
+base image. Other FP8 models on different archs may hit the same issue.
 
 ## Reasoning models
 
