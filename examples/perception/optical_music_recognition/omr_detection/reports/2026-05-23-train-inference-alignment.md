@@ -332,3 +332,54 @@ What's actually limiting openscore key accuracy at 63%:
    musicxml's first `<fifths>` may not be what's drawn on that page).
 
 Fixing any of these requires data-side work, not architecture.
+
+## Better openscore GT: per-page fifths set, per-box accuracy
+
+Earlier we compared the page's *majority* prediction to the *first*
+`<fifths>` in the musicxml. That conflates two things:
+
+1. Multi-key pages where the model gets some systems right and others wrong.
+2. Real CNN errors.
+
+Each openscore HF row's musicxml is a slice corresponding to its
+`bar_start`-`bar_end` range, so the musicxml contains ALL key changes
+visible on that page. Better metric: extract every `<fifths>` in the
+slice, treat each as a valid GT.
+
+Per-source detector quality (multi-source detector, on combined dev):
+
+```
+                       P       R    GT
+l7a/system        1.000   1.000   291
+l7a/staff         0.952   1.000   873
+l7a/key_signature 1.000   1.000   291
+l9/system         0.896   1.000   129
+l9/staff          0.771   0.860   387
+l9/key_signature  0.771   0.860   129
+openscore/system  0.865   0.941   238
+openscore/staff   0.891   0.898   737
+openscore/key_signature 0.887 0.891 238
+```
+
+System recall is high enough (>=0.94) everywhere that per-system
+evaluation is viable -- the bottleneck is mapping musicxml measures
+to detected systems, which we don't have for HF images.
+
+Page-level openscore eval (60 unique dev pages, L7a-only detector +
+multi-source CNN):
+
+| Metric                                         | Result |
+|---|---|
+| Strict: page-majority == first `<fifths>`      | 47/60 = 78.3% |
+| Lenient: page-majority in page's `<fifths>` set | 48/60 = 80.0% |
+| Any-box-in-set: any predicted keysig in set    | 54/60 = 90.0% |
+| Per-box accuracy: each predicted keysig in set | 196/273 = 71.8% |
+| Multi-key pages on the page                     | 9/60 |
+
+`any-box-in-set = 90%` is the most honest page-level number; the
+remaining 10% are pages where every detected keysig predicts a value
+not in the musicxml's set (real CNN failures + occasional
+musicxml/display mismatches).
+
+The 78.3% strict number understated by ~12 points. Going forward we
+report 90% any-box / 72% per-box as the openscore quality figure.
