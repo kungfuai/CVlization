@@ -225,6 +225,11 @@ def _process_split(src_dir: Path, split: str, out_dir: Path) -> tuple[int, int]:
                     bottom = min(page_img.height, int(y + h + pad_y))
                     if right <= left or bottom <= top:
                         continue
+                    cw, ch = right - left, bottom - top
+                    # Skip degenerate slivers (unsloth refuses aspect > 200,
+                    # and aspect > 20 is musically implausible for a measure).
+                    if max(cw / max(ch, 1), ch / max(cw, 1)) > 20:
+                        continue
                     crop = page_img.crop((left, top, right, bottom))
                     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", sid)[:60]
                     name = f"{source_tag}_{safe}_p{rec.get('page',1)}_m{abs_m:03d}.png"
