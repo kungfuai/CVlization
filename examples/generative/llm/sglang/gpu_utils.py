@@ -8,6 +8,12 @@ import torch
 # Mapped to the backend that works for them.
 _MODEL_ATTENTION_BACKEND_OVERRIDES: dict[str, str] = {
     "lfm2": "torch_native",  # LiquidAI/LFM2-* (pure Mamba SSM)
+    # Nemotron-3 / Nemotron-Nano-v2 (NemotronH: hybrid Mamba2 + Attention).
+    # SGLang's triton attention backend asserts the first layer is attention,
+    # which NemotronH violates; torch_native handles the hybrid layout.
+    "nemotron-3-nano": "torch_native",
+    "nemotron-labs-3": "torch_native",
+    "nemotron-nano-9b-v2": "torch_native",
 }
 
 _MODEL_EXTRA_SERVER_ARGS: dict[str, list[str]] = {}

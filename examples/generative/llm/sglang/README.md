@@ -99,6 +99,14 @@ bash examples/generative/llm/sglang/predict.sh --max-tokens 1024
 MODEL_ID=zai-org/GLM-4.7-Flash \
 SGLANG_CONTEXT_LENGTH=8192 SGLANG_MEM_FRACTION_STATIC=0.85 \
 bash examples/generative/llm/sglang/predict.sh --max-tokens 1024
+
+# NVIDIA Nemotron-3 (NemotronH: Mamba2 + Attention hybrid) — needs `torch_native`
+# attention backend; sglang's triton backend asserts the first layer is attention.
+# `gpu_utils.py` auto-applies this for `nemotron-3-nano` / `nemotron-labs-3` /
+# `nemotron-nano-9b-v2` model ids.
+MODEL_ID=nvidia/NVIDIA-Nemotron-Labs-3-Elastic-30B-A3B-BF16 \
+SGLANG_CONTEXT_LENGTH=8192 SGLANG_MEM_FRACTION_STATIC=0.85 \
+bash examples/generative/llm/sglang/predict.sh --max-tokens 1024
 ```
 
 ## Notes
@@ -111,6 +119,8 @@ sglang 0.5.12, PyTorch 2.11.0+CUDA 13.0, RTX PRO 6000 Blackwell (98GB VRAM), SM1
 - ✅ `Qwen/Qwen3.6-27B` (bf16, ctx=8192, mem_frac=0.85) — GDN hybrid, VLM, reasoning; type=`Qwen3_5ForConditionalGeneration`; load 13s, KV pool 252K tokens
 - ✅ `Qwen/Qwen3.6-35B-A3B` (bf16, ctx=8192, mem_frac=0.85) — MoE+GDN, ~3B active, VLM, reasoning; type=`Qwen3_5MoeForConditionalGeneration`; load 22s, KV pool 403K tokens
 - ✅ `zai-org/GLM-4.7-Flash` (bf16, ctx=8192, mem_frac=0.85) — Glm4MoeLite MoE, ~3B active, reasoning; type=`Glm4MoeLiteForCausalLM`; load 6s, KV pool 470K tokens. **Needs Dockerfile patch**: `Glm4MoeLiteSparseMoeBlock` inherits `DeepseekV2MoE`'s forward, which reads `self._shared_expert_tp1`, but the GLM subclass never sets it; Dockerfile injects a class-level `_shared_expert_tp1 = False` default.
+- ✅ `nvidia/NVIDIA-Nemotron-Labs-3-Elastic-30B-A3B-BF16` (bf16, ctx=8192, mem_frac=0.85) — NemotronH MoE+Mamba2+Attn, ~3B active, reasoning; type=`NemotronHForCausalLM`; load 9s, mem 58.9 GB, KV pool **1.88M** tokens. Uses `torch_native` attention backend via `gpu_utils.py` override — sglang's triton backend asserts the first layer is attention, which NemotronH violates.
+- ❌ `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16` — sglang 0.5.12 has no model file for HF arch `NemotronH_Nano_Omni_Reasoning_V3`. Same status on vLLM 0.19.0. Needs a backend bump or transformers-backend fallback.
 
 ## Verification (RTX PRO 6000 / Blackwell SM120, Apr 2026)
 sglang 0.5.10, PyTorch 2.11.0+CUDA 13.0, RTX PRO 6000 Blackwell (98GB VRAM), SM120.
