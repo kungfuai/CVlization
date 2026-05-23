@@ -60,48 +60,44 @@ Rare-key sub-classes (`key_+5`, `key_+6`, `key_+7`) under-perform
 - Staff-relative barline widening
 - Set-based GT eval (recovered the metric, didn't change the model).
 
-## Status
-
-End-to-end on 10 L7a dev pages, mode=page:
-
-| Pipeline | Key acc | Pitch mean | Pitch median | Rhythm median |
-|---|---|---|---|---|
-| Raw VLM (safckylj, no respell) | — | 47.4% | 36.9% | 100% |
-| v2 detector (re-rendered) + yolocrop CNN + detect-on-HF-via-tmp | 10/10 | 95.4% | 99.6% | 100% |
-| v3 detector (HF-matched) + legacy fixed-crop CNN | 10/10 | 95.4% | 99.6% | 100% |
-| v3 detector (HF-matched) + yolocrop CNN | 10/10 | 95.4% | 99.6% | 100% |
-
-All three pipelines converge to the same number on L7a -- which means the
-detection workstream on L7a is at parity with the legacy approach.
-The win is structural, not numeric:
-
-- **Mid-piece key changes** are now handled. Detected keysig boxes are
-  per system; legacy fixed-crop only ever sees the top-left page.
-- **Layout-robust**: detector finds the keysig wherever it is, not at
-  a hard-coded page fraction.
-- **No cross-distribution scaling** needed after v3.
-
 ## Architecture, end-to-end
 
+Current (multi-task detector):
+
 ```
-HF page image  (or equivalent: any page rendered like HF)
+HF page image
    │
    ▼
-YOLOv8n (5 classes: system, staff, barline_single, barline_heavy,
-                    key_signature)
+YOLOv8n (19 classes: 4 structural + 15 keysig sub-classes
+         key_-7 ... key_+7)
    │   ─→ systems, staves, barlines  ─→ cells.derive_cells / measures
-   │   ─→ key_signature boxes
-   ▼
-SmallKeyCNN (98K params, trained on YOLO-detected crops)
-   │
-   ─→ per-detection key prediction ─→ majority vote
-   │
-   ▼
+   │   ─→ keysig boxes with key value baked into class id
+   ▼ (key = detected_class - 11; majority vote across detections)
 safckylj VLM (whole-page MXC2)
    │
    ▼
 respell.respell_mxc2(pred, key)  ─→ corrected MXC2
 ```
+
+Fallback (2-model, kept for L9 parity):
+
+```
+HF page image -> YOLOv8n (5 classes: system/staff/barline/keysig)
+              -> for each keysig box: SmallKeyCNN (15 classes) -> majority vote
+              -> safckylj VLM -> respell -> MXC2
+```
+
+## L7a-only legacy baseline (for reference)
+
+The original L7a-only landing point, before openscore generalisation:
+
+| Pipeline | Key acc (L7a, 10 pages) | Pitch mean | Pitch median |
+|---|---|---|---|
+| Raw VLM (no respell)                                 | — | 47.4% | 36.9% |
+| v3 detector + yolocrop CNN + respell                 | 10/10 | 95.4% | 99.6% |
+
+All variants converge to ~95% pitched on L7a; the gains from there were
+about generalisation (L9, openscore), not L7a quality.
 
 ## Three things that bit us
 
