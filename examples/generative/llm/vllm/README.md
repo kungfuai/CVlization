@@ -1,7 +1,7 @@
 # vLLM Serve + Predict (auto-tuned)
 
 Dockerized vLLM preset with sensible defaults and optional auto-tuning based on your GPU. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
-- `build.sh`: builds the image (torch 2.9.1 + vLLM 0.19.0 + transformers 5.5.0, OpenAI SDK 2.12.0).
+- `build.sh`: builds the image (vLLM 0.21.0 brings torch 2.11.0 + CUDA 13.0; we still pin transformers 5.5.0; OpenAI SDK 2.12.0).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible server with heuristics for tensor-parallel size, max context, dtype, and GPU memory utilization (overridable).
 - `predict.sh`/`predict.py`: runs a quick test. Default mode is **chat** (loads the model inside the container with vLLM, no server needed). Supports VLMs via `--image` flag. `embed` and `rerank` modes use transformers locally (not vLLM) for encoder models.
 
@@ -77,10 +77,28 @@ MODEL_ID=nvidia/NVIDIA-Nemotron-Labs-3-Elastic-30B-A3B-BF16 \
 VLLM_MAX_MODEL_LEN=8192 VLLM_ENFORCE_EAGER=1 \
 bash examples/generative/llm/vllm/predict.sh --max-tokens 1024
 
-# Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16 — NOT supported on vLLM 0.19.0:
-# HF config declares arch `NemotronH_Nano_Omni_Reasoning_V3`, not in 0.19's registry.
-# Needs a vLLM bump (>=0.20) or `--model-impl transformers`.
+# Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16 (NemotronH_Nano_Omni_Reasoning_V3,
+# omni-modal MoE+Mamba2+Attn, ~3B active, reasoning) — ~62GB BF16 weights. vLLM
+# 0.21.0 registers the arch (maps to NemotronH_Nano_VL_V2 class). Requires the
+# SM120 FlashInfer patches in the Dockerfile + gpu_utils.py (see below).
+MODEL_ID=nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16 \
+VLLM_MAX_MODEL_LEN=8192 VLLM_ENFORCE_EAGER=1 \
+bash examples/generative/llm/vllm/predict.sh --max-tokens 1024
 ```
+
+## SM120 (consumer Blackwell) notes
+
+vLLM 0.21's default MoE/sampler kernel choices route through FlashInfer, whose
+CUDA-arch detection is broken on SM120 (RTX 5090 / RTX PRO 6000). The example
+ships three workarounds applied automatically:
+
+- `Dockerfile` patches `flashinfer.jit.core.check_cuda_arch` to a no-op.
+- `Dockerfile` reorders the vLLM MoE backend priority list so TRITON is tried
+  before FlashInfer on CUDA platforms.
+- `gpu_utils.py` sets `VLLM_USE_FLASHINFER_SAMPLER=0` for SM120+, falling back
+  to the PyTorch-native sampler.
+
+Combined they let vLLM 0.21 run cleanly on SM120 without losing model coverage.
 
 ## Reasoning models
 

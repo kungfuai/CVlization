@@ -20,3 +20,13 @@ def configure_flash_attn_for_gpu():
     if sm_version > 100 and "VLLM_FLASH_ATTN_VERSION" not in os.environ:
         os.environ["VLLM_FLASH_ATTN_VERSION"] = "2"
         print(f"Auto-configured VLLM_FLASH_ATTN_VERSION=2 for SM {sm_version}")
+    # vLLM 0.21+ defaults to FlashInfer for sampler and MoE. FlashInfer
+    # 0.6.8's CUDA arch detection is broken on SM120 (consumer Blackwell):
+    # TARGET_CUDA_ARCHS comes back empty / major=None, so downstream code
+    # fails with "No supported CUDA architectures found for major versions
+    # None". Disable FlashInfer for the sampler; vLLM falls back to its
+    # native PyTorch sampler.
+    if sm_version > 100:
+        os.environ.setdefault("TORCH_CUDA_ARCH_LIST", f"{major}.{minor}")
+        os.environ.setdefault("VLLM_USE_FLASHINFER_SAMPLER", "0")
+        print(f"Auto-configured TORCH_CUDA_ARCH_LIST={major}.{minor}, VLLM_USE_FLASHINFER_SAMPLER=0")
