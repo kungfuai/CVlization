@@ -1,7 +1,7 @@
 # SGLang Serve + Predict (OpenAI-compatible)
 
 Dockerized SGLang preset with sensible defaults. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
-- `build.sh`: builds the image (torch 2.11.0 + CUDA 13.0 + sglang 0.5.10, OpenAI SDK 2.6.1).
+- `build.sh`: builds the image (torch 2.11.0 + CUDA 13.0 + sglang 0.5.12, OpenAI SDK 2.6.1).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible HTTP server with heuristics for tensor-parallel size, context length, dtype, and static memory fraction (overridable).
 - `predict.sh`/`predict.py`: spins up a local server inside the container, sends a chat completion via the OpenAI client, then tears the server down. Supports VLMs via `--image` flag.
 
@@ -85,12 +85,32 @@ bash examples/generative/llm/sglang/predict.sh
 MODEL_ID=Qwen/Qwen3-8B \
 SGLANG_CONTEXT_LENGTH=2048 SGLANG_MEM_FRACTION_STATIC=0.88 \
 bash examples/generative/llm/sglang/predict.sh
+
+# Qwen3.6 (GDN hybrid, VLM, reasoning) — ~51GB (27B) / ~66GB (35B-A3B) BF16 weights.
+# Requires sglang>=0.5.11 (introduced Qwen3.6 support); current pin is 0.5.12.
+MODEL_ID=Qwen/Qwen3.6-27B \
+SGLANG_CONTEXT_LENGTH=8192 SGLANG_MEM_FRACTION_STATIC=0.85 \
+bash examples/generative/llm/sglang/predict.sh --max-tokens 1024
+# MoE variant: MODEL_ID=Qwen/Qwen3.6-35B-A3B (~3B active params)
+
+# GLM-4.7-Flash (Glm4MoeLite, ~3B active, reasoning) — ~56GB BF16 weights.
+# Dockerfile injects a class-level `_shared_expert_tp1 = False` default; without it
+# sglang 0.5.12 crashes during forward (AttributeError from inherited deepseek_v2 path).
+MODEL_ID=zai-org/GLM-4.7-Flash \
+SGLANG_CONTEXT_LENGTH=8192 SGLANG_MEM_FRACTION_STATIC=0.85 \
+bash examples/generative/llm/sglang/predict.sh --max-tokens 1024
 ```
 
 ## Notes
 - Mounts `~/.cache/huggingface` into the container for model pulls. Set `HF_TOKEN` if needed.
 - OpenAI client base URL is `http://127.0.0.1:${PORT}/v1`; API key is ignored but required by the SDK (defaults to `sk-noauth`).
 - CPU-only will work for tiny models but uses conservative defaults (`context_length=4096`, `dtype=float32`).
+
+## Verification (RTX PRO 6000 / Blackwell SM120, May 2026)
+sglang 0.5.12, PyTorch 2.11.0+CUDA 13.0, RTX PRO 6000 Blackwell (98GB VRAM), SM120. transformers 5.6.0 (sglang 0.5.12 deps; was 5.3.0 on 0.5.10).
+- ✅ `Qwen/Qwen3.6-27B` (bf16, ctx=8192, mem_frac=0.85) — GDN hybrid, VLM, reasoning; type=`Qwen3_5ForConditionalGeneration`; load 13s, KV pool 252K tokens
+- ✅ `Qwen/Qwen3.6-35B-A3B` (bf16, ctx=8192, mem_frac=0.85) — MoE+GDN, ~3B active, VLM, reasoning; type=`Qwen3_5MoeForConditionalGeneration`; load 22s, KV pool 403K tokens
+- ✅ `zai-org/GLM-4.7-Flash` (bf16, ctx=8192, mem_frac=0.85) — Glm4MoeLite MoE, ~3B active, reasoning; type=`Glm4MoeLiteForCausalLM`; load 6s, KV pool 470K tokens. **Needs Dockerfile patch**: `Glm4MoeLiteSparseMoeBlock` inherits `DeepseekV2MoE`'s forward, which reads `self._shared_expert_tp1`, but the GLM subclass never sets it; Dockerfile injects a class-level `_shared_expert_tp1 = False` default.
 
 ## Verification (RTX PRO 6000 / Blackwell SM120, Apr 2026)
 sglang 0.5.10, PyTorch 2.11.0+CUDA 13.0, RTX PRO 6000 Blackwell (98GB VRAM), SM120.
