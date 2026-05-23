@@ -1,0 +1,6 @@
+outputs/
+*.wav
+*.flac
+*.mp3
+moshi_*.wav
+!example.yaml
