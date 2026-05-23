@@ -75,11 +75,25 @@ def _count_measures(mxl_text: str) -> int:
 # Renders both SVG and PNG of a single MXL through Docker in one shot.
 # We need PNG and SVG generated from the same .ly so their coordinate
 # spaces match (mm in SVG; mm * PX_PER_MM in PNG).
+#
+# We deliberately MATCH the HF zzsi/synthetic-scores rendering settings:
+#   - No `all-bar-numbers-visible` injection (HF doesn't have it).
+#   - PNG at -dresolution=150 (HF synthetic_scores/generate.py uses 150).
+# That makes our detection-training PNGs visually identical to the
+# images safckylj was trained on, so the YOLO trained here can be
+# applied directly to HF images at inference -- no cross-rendering
+# coordinate scaling.
+#
+# `MATCH_HF_RENDER` toggles this. When False (legacy), bar numbers are
+# injected and DPI is LilyPond's default (~101). When True (default),
+# we match HF exactly.
 _RENDER_PY = r"""
-import sys, shutil, tempfile, re
+import sys, shutil, subprocess, tempfile, re
 from pathlib import Path
 sys.path.insert(0, '/workspace')
-from predict import musicxml_to_ly, patch_ly, render_ly
+from predict import musicxml_to_ly, patch_ly
+
+MATCH_HF_RENDER = __MATCH_HF_RENDER__
 
 mxl = Path('/data/score.musicxml')
 out = Path('/out')
@@ -87,28 +101,43 @@ with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
     ly = musicxml_to_ly(mxl, tmp)
     patch_ly(ly)
-    text = ly.read_text()
-    bar_ctx = ('\n  \\context {\n'
-               '    \\Score\n'
-               '    \\override BarNumber.break-visibility = ##(#t #t #t)\n'
-               '    barNumberVisibility = #all-bar-numbers-visible\n'
-               '  }')
-    if r'\layout' in text:
-        text = re.sub(r'\\layout\s*\{', lambda m: m.group(0) + bar_ctx, text, count=1)
-    else:
-        text += '\n\\layout {\n' + bar_ctx + '\n}\n'
-    ly.write_text(text)
-    for f in render_ly(ly, 'svg', tmp):
-        shutil.copy(f, out / f.name)
-    for f in render_ly(ly, 'png', tmp):
+    if not MATCH_HF_RENDER:
+        text = ly.read_text()
+        bar_ctx = ('\n  \\context {\n'
+                   '    \\Score\n'
+                   '    \\override BarNumber.break-visibility = ##(#t #t #t)\n'
+                   '    barNumberVisibility = #all-bar-numbers-visible\n'
+                   '  }')
+        if r'\layout' in text:
+            text = re.sub(r'\\layout\s*\{', lambda m: m.group(0) + bar_ctx,
+                          text, count=1)
+        else:
+            text += '\n\\layout {\n' + bar_ctx + '\n}\n'
+        ly.write_text(text)
+
+    # SVG render -- vector, DPI-independent
+    subprocess.run(['lilypond', '--svg', str(ly)], cwd=str(tmp),
+                   capture_output=True, check=True)
+    # PNG render -- match HF DPI when requested
+    png_cmd = ['lilypond', '--png']
+    if MATCH_HF_RENDER:
+        png_cmd.append('-dresolution=150')
+    png_cmd.append(str(ly))
+    subprocess.run(png_cmd, cwd=str(tmp), capture_output=True, check=True)
+
+    for f in sorted(tmp.glob('*.svg')) + sorted(tmp.glob('*.png')):
         shutil.copy(f, out / f.name)
 """
 
 
-def _render_one(mxl_text: str, work_dir: Path) -> tuple[list[Path], list[Path]]:
+def _render_one(mxl_text: str, work_dir: Path,
+                match_hf: bool = True) -> tuple[list[Path], list[Path]]:
     """Render an MXL text to per-page SVG + PNG via Docker.
 
     Returns (svg_files, png_files) sorted by page index.
+    `match_hf=True` skips the bar-number injection and renders PNG at
+    150 DPI so the output matches the HF synthetic-scores PNGs that
+    safckylj was trained on.
     """
     data_dir = work_dir / "data"
     out_dir = work_dir / "out"
@@ -116,7 +145,8 @@ def _render_one(mxl_text: str, work_dir: Path) -> tuple[list[Path], list[Path]]:
     out_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "score.musicxml").write_text(mxl_text)
     script = work_dir / "_render.py"
-    script.write_text(_RENDER_PY)
+    script.write_text(_RENDER_PY.replace("__MATCH_HF_RENDER__",
+                                          "True" if match_hf else "False"))
 
     cmd = [
         "docker", "run", "--rm",
