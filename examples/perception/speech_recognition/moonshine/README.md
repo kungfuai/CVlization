@@ -5,6 +5,15 @@ tiny (~27M) and base (~61M) models optimised for on-device / real-time
 transcription. Beats similarly-sized Whisper variants on WER and is roughly
 5× faster on 10-second clips at the same accuracy.
 
+| | |
+|---|---|
+| Best for | On-device / CPU / low-latency |
+| Default model | `moonshine/base` (~130 MB); `moonshine/tiny` (~85 MB) also available |
+| Language | English only |
+| Latency, this preset | ~12 s wall on a single x86 CPU (cold container + Keras import + inference); inference itself is sub-second |
+| Image size | ~9.9 GB (driven by `useful-moonshine`'s torch CUDA wheels — only the runtime libs are large) |
+| Output | text transcript; JSON / TXT |
+
 ## Why Moonshine vs Whisper / Parakeet
 
 - **Moonshine** — on-device / low-latency, CPU-friendly, tiny / base only
@@ -31,7 +40,7 @@ bash examples/perception/speech_recognition/moonshine/predict.sh
 
 ## What to expect
 
-- **First run**: downloads ~250 MB for `moonshine/base` (or ~80 MB for
+- **First run**: downloads ~130 MB for `moonshine/base` (or ~85 MB for
   `moonshine/tiny`) into the shared HF cache (~/.cache/cvlization). Cached
   thereafter.
 - **What it does**: transcribes one audio file. Defaults to the bundled
@@ -41,8 +50,9 @@ bash examples/perception/speech_recognition/moonshine/predict.sh
 - **Output**: a JSON file (default `moonshine_transcript.json`) in your
   current directory when run via `cvl run`. Fields: `text`, `model`,
   `audio`, `task`, `created_at`. `--format txt` also supported.
-- **Runtime** on a single x86 CPU core: ~3–5 s for `tiny` and ~5–8 s for
-  `base` on a 6-second clip — useful budget for real-time / on-device.
+- **Runtime**: ~12 s wall end-to-end on a single x86 CPU on the bundled
+  ~6 s clip (container spin-up + Keras/torch import + inference). Inference
+  itself is well under a second — useful budget for real-time / on-device.
 
 ## Sample
 
@@ -60,17 +70,24 @@ bash examples/perception/speech_recognition/moonshine/predict.sh
 }
 ```
 
+> Note the literal `"It's a amazing"` — `moonshine/base` occasionally drops
+> short function words (here, the article "an"). It's a known size/quality
+> tradeoff of the smaller model family; `faster-whisper` and `parakeet-tdt`
+> get this clip word-perfect. If you need higher accuracy and have a GPU,
+> reach for `parakeet-tdt`; if you need lower latency on commodity CPU,
+> Moonshine is still the right choice.
+
 Overrides:
 
 ```bash
 # Tiny model (smaller / faster, slightly lower accuracy)
-./predict.sh --model moonshine/tiny --audio /path/to.wav
+cvl run moonshine predict -- --model moonshine/tiny --audio /path/to.wav
 
 # Use a GPU if available
-USE_GPU=1 ./predict.sh --audio /path/to.wav
+USE_GPU=1 cvl run moonshine predict -- --audio /path/to.wav
 
 # Plain-text transcript instead of JSON
-./predict.sh --audio sample --format txt --output transcript.txt
+cvl run moonshine predict -- --audio sample --format txt --output transcript.txt
 ```
 
 ## Audio requirements

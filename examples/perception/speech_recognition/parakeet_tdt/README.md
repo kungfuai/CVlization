@@ -5,6 +5,15 @@ High-throughput English speech recognition with **NVIDIA NeMo Parakeet-TDT**
 decoder's blank-skipping path is what delivers the ~2000x RTFx headline on
 the Hugging Face Open-ASR leaderboard.
 
+| | |
+|---|---|
+| Best for | Server-side, high-throughput, GPU |
+| Default model | `nvidia/parakeet-tdt-1.1b` (~4.0 GB) |
+| Language | English only |
+| Latency, this preset | ~12 s wall on RTX PRO 6000 (cold container + cached weights); inference itself is sub-second |
+| Image size | ~15.7 GB (NeMo + PyTorch CUDA) |
+| Output | lowercase transcript; JSON / TXT / SRT |
+
 ## Why NeMo (not HF transformers)?
 
 There's a transformers adapter for Parakeet, but it's a generic-transducer
@@ -32,7 +41,7 @@ Defaults: `nvidia/parakeet-tdt-1.1b`, auto-device (CUDA if visible), JSON output
 
 ## What to expect
 
-- **First run**: downloads ~4.5 GB of model weights from Hugging Face
+- **First run**: downloads ~4.0 GB of model weights from Hugging Face
   (`nvidia/parakeet-tdt-1.1b`) into the shared HF cache (~/.cache/cvlization).
   Cached on subsequent runs.
 - **What it does**: transcribes one audio file. Defaults to the bundled
@@ -44,9 +53,10 @@ Defaults: `nvidia/parakeet-tdt-1.1b`, auto-device (CUDA if visible), JSON output
   transcript, as Parakeet emits no casing), `model`, `device`, `audio`,
   `task`, `created_at`, and `segments` if `--word-timestamps` is passed.
   `--format txt` and `--format srt` (with timestamps) also supported.
-- **Runtime** on RTX PRO 6000 (single GPU): ~10 s warm / ~50 s with NeMo's
-  startup import on a cached model. The transcription itself is well under
-  a second for short clips.
+- **Runtime** on RTX PRO 6000 (single GPU): **~12 s wall** end-to-end with the
+  model already cached on disk (container spin-up + NeMo import + GPU model
+  load + inference). The transcription step itself is well under a second
+  for short clips; the rest is mostly NeMo's import / model construction.
 
 ## Sample
 
@@ -69,13 +79,13 @@ Defaults: `nvidia/parakeet-tdt-1.1b`, auto-device (CUDA if visible), JSON output
 
 ```bash
 # Lighter / newer 0.6B variant (often faster + comparable accuracy)
-./predict.sh --model nvidia/parakeet-tdt-0.6b-v2 --audio /path/to.wav
+cvl run parakeet-tdt predict -- --model nvidia/parakeet-tdt-0.6b-v2 --audio /path/to.wav
 
 # Multilingual TDT (0.6B-v3)
-./predict.sh --model nvidia/parakeet-tdt-0.6b-v3 --audio /path/to.wav
+cvl run parakeet-tdt predict -- --model nvidia/parakeet-tdt-0.6b-v3 --audio /path/to.wav
 
 # Word timestamps in JSON
-./predict.sh --audio sample --word-timestamps --format json
+cvl run parakeet-tdt predict -- --audio sample --word-timestamps --format json
 ```
 
 Output formats: `json` (default; includes segments if `--word-timestamps`),
@@ -88,15 +98,13 @@ are auto-resampled (via librosa) to a sibling `*.16k.wav` before inference.
 
 ## Transformers fallback (lean, slower)
 
-```bash
-pip install transformers torchaudio
-# In a Python shell:
-from transformers import AutoModelForCTC, AutoProcessor   # adapter API
-```
-
-Use the transformers path only when the NeMo install is impractical (e.g.
-edge devices). Quality matches; throughput typically lags the NeMo path
-because TDT's blank-skipping isn't fully ported.
+Hugging Face transformers has a Parakeet integration too (see the
+[official model card](https://huggingface.co/nvidia/parakeet-tdt-1.1b)
+for the current API — it's a transducer, not a CTC model, so the right
+auto-class differs by transformers version). It's an option only when the
+NeMo install is impractical (e.g. edge devices). Quality matches; throughput
+typically lags the NeMo path because TDT's blank-skipping isn't fully
+ported. This preset does **not** ship the transformers fallback.
 
 ## Notes
 
