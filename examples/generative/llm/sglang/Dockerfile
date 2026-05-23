@@ -41,10 +41,25 @@ p = pathlib.Path("/usr/local/lib/python3.12/dist-packages/sglang/srt/configs/mod
 old = '        self.v_head_dim = getattr(\n            self.hf_text_config,\n            "v_head_dim",\n            self.head_dim,\n        )'
 new = '        _v_head_dim = getattr(self.hf_text_config, "v_head_dim", None)\n        self.v_head_dim = _v_head_dim if _v_head_dim is not None else self.head_dim'
 text = p.read_text()
-assert old in text, f"v_head_dim patch target not found in {p} -- update patch for new SGLang version"
-p.write_text(text.replace(old, new, 1))
-print("SGLang v_head_dim null-safety patch applied")
+# Best-effort: skip cleanly if upstream fixed it in this SGLang version.
+if old in text:
+    p.write_text(text.replace(old, new, 1))
+    print("SGLang v_head_dim null-safety patch applied")
+else:
+    print("SGLang v_head_dim patch target not found -- assuming upstream fix")
 EOF
+
+# Fix SGLang GLM-4.7-Flash AttributeError: Glm4MoeLiteSparseMoeBlock(DeepseekV2MoE)
+# inherits deepseek_v2.py's forward path which reads `self._shared_expert_tp1`, but
+# its __init__ never sets the attribute. Add a class-level default so the inherited
+# forward path can read it. Instance assignments still shadow this if/when set.
+RUN sed -i \
+    '/^class Glm4MoeLiteSparseMoeBlock(DeepseekV2MoE):$/a\    _shared_expert_tp1 = False  # CVL patch: SGLang 0.5.12 forgets to set this' \
+    /usr/local/lib/python3.12/dist-packages/sglang/srt/models/glm4_moe_lite.py \
+ && grep -q "CVL patch: SGLang 0.5.12 forgets" \
+    /usr/local/lib/python3.12/dist-packages/sglang/srt/models/glm4_moe_lite.py \
+ && echo "Glm4MoeLite _shared_expert_tp1 class default applied" \
+ || echo "Glm4MoeLite patch target not found -- assuming upstream fix"
 
 # Fix Voxtral/MistralCommonBackend tokenizer: sglang calls tokenizer.get_added_vocab()
 # unconditionally, but Mistral's MistralCommonBackend doesn't implement it.
