@@ -103,3 +103,38 @@ def measures_per_system(cells: list[Cell]) -> dict[int, int]:
         if c.staff == 0:
             out[c.system] = out.get(c.system, 0) + 1
     return out
+
+
+@dataclass
+class Measure:
+    """One measure on the page, covering all staves of its system.
+
+    More natural transcription unit than Cell -- a measure crop shows
+    vertically-stacked staves of one part-group at once, mirroring how
+    the safckylj VLM was trained (whole-page input).
+    """
+    system: int    # system index on the page
+    measure: int   # measure index within the system (0-based)
+    bbox: Box      # (x, y, w, h) spanning all staves at this measure
+
+
+def derive_measures(systems: list[Box], staves: list[Box],
+                    barlines: list[Box],
+                    x_tol_frac: float = 0.012) -> list[Measure]:
+    """Like derive_cells but one box per measure (across all staves)."""
+    cells = derive_cells(systems, staves, barlines, x_tol_frac)
+    if not cells:
+        return []
+    # Group by (system, measure); union vertical extent across staves.
+    grouped: dict[tuple[int, int], list[Cell]] = {}
+    for c in cells:
+        grouped.setdefault((c.system, c.measure), []).append(c)
+    out: list[Measure] = []
+    for (sys_i, m_i), members in grouped.items():
+        x0 = min(c.bbox[0] for c in members)
+        y0 = min(c.bbox[1] for c in members)
+        x1 = max(c.bbox[0] + c.bbox[2] for c in members)
+        y1 = max(c.bbox[1] + c.bbox[3] for c in members)
+        out.append(Measure(sys_i, m_i, (x0, y0, x1 - x0, y1 - y0)))
+    out.sort(key=lambda m: (m.system, m.measure))
+    return out

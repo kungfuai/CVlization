@@ -1,0 +1,14 @@
+# Combined image for the full detection -> VLM transcription -> stitch
+# pipeline. Extends the vlm-omr-sft image (which already carries
+# pytorch 2.9.1+cu128, unsloth, transformers, bitsandbytes, trl, peft,
+# qwen-vl-utils, etc.) with ultralytics for the detector.
+FROM cvlization/vlm-omr-sft:latest
+
+# Ultralytics pulls cv2; cv2 needs libGL at runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir ultralytics==8.3.40
+
+WORKDIR /workspace

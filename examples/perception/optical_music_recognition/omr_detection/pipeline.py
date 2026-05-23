@@ -25,10 +25,16 @@ Usage (inside Docker via detect.sh):
 import argparse
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
-from cells import Cell, derive_cells, measures_per_system
+from cells import Cell, Measure, derive_cells, derive_measures, measures_per_system
+
+# Where vlm_omr_sft lives (sibling folder). Imported lazily by the
+# transcription helpers; detection-only paths don't touch it.
+_THIS_DIR = Path(__file__).resolve().parent
+_VLM_DIR = _THIS_DIR.parent / "vlm_omr_sft"
 
 # Detector class ids (see train_detector.CLASS_NAMES).
 CLS_SYSTEM, CLS_STAFF, CLS_BARLINE, CLS_BARLINE_HEAVY = 0, 1, 2, 3
@@ -76,16 +82,109 @@ def detect_layout(model, image_path: str, imgsz: int = 1280,
     return out
 
 
-def transcribe_cell(cell_crop) -> str:
-    """HOOK: transcribe one measure cell to MXC2.
+# ---------------------------------------------------------------------------
+# Transcription via the safckylj VLM (vlm_omr_sft).
+# ---------------------------------------------------------------------------
+# These helpers import unsloth + the vlm_omr_sft module lazily so the
+# detection-only entry points stay light. They must run inside the
+# cvlization/omr-pipeline image (vlm-omr-sft base + ultralytics).
 
-    Deliberately unimplemented. The detection workstream stops at cells;
-    transcription is a separate model in vlm_omr_sft. Wire a per-cell
-    transcriber here (or pass one into run_pipeline) when integrating.
+
+def load_vlm(checkpoint: str):
+    """Load the safckylj VLM checkpoint via unsloth FastVisionModel."""
+    sys.path.insert(0, str(_VLM_DIR))
+    from unsloth import FastVisionModel  # type: ignore
+    model, processor = FastVisionModel.from_pretrained(
+        checkpoint, load_in_4bit=True)
+    FastVisionModel.for_inference(model)
+    return model, processor
+
+
+def _vlm_generate(model, processor, image_pil, instruction: str,
+                  max_new_tokens: int = 8192) -> str:
+    """One inference call. Returns the model's generated text."""
+    sys.path.insert(0, str(_VLM_DIR))
+    from train import prepare_inference_inputs  # type: ignore
+    import torch
+    inputs = prepare_inference_inputs(processor, image_pil,
+                                       instruction).to("cuda")
+    with torch.no_grad():
+        out = model.generate(**inputs, max_new_tokens=max_new_tokens,
+                              use_cache=True, do_sample=False)
+    gen = out[0][inputs["input_ids"].shape[1]:]
+    return processor.decode(gen, skip_special_tokens=True).strip()
+
+
+_PAGE_INSTRUCTION = "Transcribe this sheet music page to MXC2 (compact MusicXML)."
+_MEASURE_INSTRUCTION = (
+    "Transcribe this single measure of sheet music to MXC2 "
+    "(compact MusicXML). Output only the measure(s) shown.")
+
+
+def transcribe_page(model, processor, image_pil) -> str:
+    """Whole-page transcription -- the model's native training mode."""
+    return _vlm_generate(model, processor, image_pil, _PAGE_INSTRUCTION)
+
+
+def transcribe_measure(model, processor, page_image_pil, measure: Measure,
+                       pad: int = 8) -> str:
+    """Per-measure transcription on a measure crop.
+
+    The model was trained on whole pages; cropping to a single measure is
+    off-distribution and quality is expected to degrade. Kept here so the
+    architectural plumbing is real and future per-cell-trained models can
+    drop in.
     """
+    from PIL import Image  # noqa: F401
+    crop = _crop(page_image_pil, measure.bbox, pad)
+    return _vlm_generate(model, processor, crop, _MEASURE_INSTRUCTION,
+                          max_new_tokens=2048)
+
+
+def stitch_measures_naive(measure_outputs: list[tuple[Measure, str]]) -> str:
+    """Best-effort stitch of per-measure MXC2 fragments into a page MXC2.
+
+    Strategy: take the part declarations + separator from the first
+    non-empty fragment, then concatenate the per-part-per-measure bodies
+    in reading order with `M <num>` renumbered globally. Honestly: the
+    underlying per-measure outputs are off-distribution, so this is more
+    of a wiring demonstration than a quality path.
+    """
+    if not measure_outputs:
+        return ""
+    # Use header (P-declarations + ---) from the first fragment that has one.
+    header_lines: list[str] = []
+    for _, text in measure_outputs:
+        if "---" in text:
+            head = text.split("---", 1)[0].rstrip()
+            header_lines = head.splitlines()
+            break
+    out = []
+    if header_lines:
+        out.extend(header_lines)
+        out.append("---")
+    out.append("P1")
+    running = 1
+    for _, text in measure_outputs:
+        body = text.split("---", 1)[1] if "---" in text else text
+        # Drop any leading P-line; keep only this measure's M body.
+        body = re.sub(r"^\s*P\d+.*\n", "", body, count=1)
+        # Take just the first M-section if multiple were emitted.
+        chunks = re.split(r"(?=^M )", body, flags=re.MULTILINE)
+        m_chunk = next((c for c in chunks if c.strip().startswith("M ")), "")
+        if not m_chunk:
+            continue
+        m_chunk = re.sub(r"^M\s+\S+", f"M {running}", m_chunk, count=1)
+        out.append(m_chunk.rstrip())
+        running += 1
+    return "\n".join(out) + "\n"
+
+
+def transcribe_cell(cell_crop) -> str:
+    """Deprecated: prefer transcribe_measure (per-measure across staves)."""
     raise NotImplementedError(
-        "Per-cell transcription is out of scope for omr_detection. "
-        "Plug in a vlm_omr_sft transcriber here.")
+        "Per-(staff,measure) cell transcription is not wired -- use "
+        "transcribe_measure on a derived Measure box instead.")
 
 
 def _crop(img, box, pad: int):
