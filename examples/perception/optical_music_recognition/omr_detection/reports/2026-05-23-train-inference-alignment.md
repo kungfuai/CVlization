@@ -419,3 +419,62 @@ musicxml/display mismatches).
 
 The 78.3% strict number understated by ~12 points. Going forward we
 report 90% any-box / 72% per-box as the openscore quality figure.
+
+## Multi-task detector: 15 keysig sub-classes inside YOLO
+
+Tried Option A: replace YOLO's single `key_signature` class with 15
+sub-classes (one per fifths value, `key_-7` ... `key_+7`). 19 classes
+total. Same YOLOv8n architecture, no head surgery -- YOLO does
+classification per detection natively.
+
+Implementation:
+- `make_dataset` now stores `key_first` and `key_set` per record
+  (from the page's musicxml slice; for openscore that captures every
+  key visible on the page).
+- `train_detector --multitask` maps each keysig box's `key_first` to
+  one of 15 sub-classes during YOLO label conversion. Records with
+  `|key_first| > 7` or missing key contribute no keysig labels (their
+  structural labels still go through).
+- Inference: `fifths = predicted_class - 4 - 7` for classes 4..18.
+
+Per-class metrics on combined dev (`detector_mt`):
+- Common keys (|fifths| ≤ 4): mAP50 0.79-0.97
+- Rare keys (|fifths| ≥ 5): mAP50 0.24-0.75, key_+7 had no instances
+- Structural classes: comparable to the single-class version
+
+End-to-end key accuracy, 2-model pipeline vs multi-task detector:
+
+| source | metric | 2-model | multi-task |
+|---|---|---|---|
+| L7a       | strict      | 100% | 100% |
+| L7a       | per-box     | 100% | 100% |
+| L9        | strict      | 100% | 98.3% |
+| L9        | per-box     | 100% | 97.5% |
+| openscore | strict      | 78.3% | **89.5%** |
+| openscore | any-box     | 90.0% | **94.7%** |
+| **openscore** | **per-box** | **71.8%** | **90.3%** |
+
+Where the win comes from: the multi-task detector classifies each
+keysig from features at the detection site, with whole-page receptive
+field via the YOLO backbone. The two-model pipeline's CNN classifies
+from a tight crop + resize-to-256x96 input, which loses signal
+especially on openscore (smaller staves, different DPI). The biggest
+delta is **per-box (+18.5 pts on openscore)** -- per-system the
+multi-task model is much more reliable, suggesting it's the right
+architecture going forward.
+
+Trade-offs:
+- L9 dropped 1.7-2.5 pts vs the 2-model. Small regression on
+  in-distribution L9 data, probably from the keysig class signal being
+  diluted across 15 sub-classes. Could be helped by class-balanced
+  sampling.
+- Rare keys still under-perform (key_+5 mAP=0.243, key_+7=0.000). Same
+  data imbalance bottleneck the 2-model had.
+- Detector becomes the keysig classifier -- improving keysig
+  classification means a full detector retrain instead of a 3-min CNN
+  retrain.
+
+**Decision**: multi-task detector is the right architecture for
+openscore. Updated pipeline replaces (detector → crop → CNN) with
+(detector → done) for key prediction. Keep the 2-model fallback if
+L9 regression matters.

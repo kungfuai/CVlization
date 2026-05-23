@@ -31,6 +31,32 @@ CLASS_NAMES = ["system", "staff", "barline_single", "barline_heavy",
                "key_signature"]
 NUM_CLASSES = len(CLASS_NAMES)
 
+# Multi-task variant: replace the single key_signature class with 15
+# sub-classes, one per fifths value -7..+7. The detector simultaneously
+# localises and classifies the keysig in one forward pass -- no
+# downstream CNN needed.
+MULTITASK_BASE_CLASSES = ["system", "staff", "barline_single", "barline_heavy"]
+KEY_MIN_MT, KEY_MAX_MT = -7, 7
+CLASS_NAMES_MT = MULTITASK_BASE_CLASSES + [
+    f"key_{i:+d}" for i in range(KEY_MIN_MT, KEY_MAX_MT + 1)
+]
+NUM_CLASSES_MT = len(CLASS_NAMES_MT)   # 4 + 15 = 19
+
+
+def _keysig_class_for_fifths(fifths: int) -> int | None:
+    """In multi-task mode, the YOLO class index for a keysig of N fifths."""
+    if fifths < KEY_MIN_MT or fifths > KEY_MAX_MT:
+        return None
+    return len(MULTITASK_BASE_CLASSES) + (fifths - KEY_MIN_MT)
+
+
+def fifths_from_multitask_class(cls: int) -> int | None:
+    """Inverse of _keysig_class_for_fifths. Returns None for non-keysig classes."""
+    base = len(MULTITASK_BASE_CLASSES)
+    if cls < base or cls >= NUM_CLASSES_MT:
+        return None
+    return cls - base + KEY_MIN_MT
+
 # YOLOv8 struggles with sub-pixel-wide boxes. Real barlines are ~1 px
 # wide at our 1280px imgsz, which the detector can't localize. We widen
 # them in the YOLO label space; downstream we only care about x-center,
@@ -71,11 +97,15 @@ def _staff_space_px(rec: dict) -> float | None:
     return (sum(heights) / len(heights)) / 4.0
 
 
-def _record_to_yolo_lines(rec: dict) -> list[str]:
-    """Convert one JSONL detection record into YOLO label lines."""
+def _record_to_yolo_lines(rec: dict, multitask: bool = False) -> list[str]:
+    """Convert one JSONL detection record into YOLO label lines.
+
+    multitask=True: keysig boxes are emitted as one of 15 keysig
+    sub-classes (key_-7 ... key_+7) based on rec['key_first']. Records
+    with missing or out-of-range key_first contribute no keysig labels
+    (their structural labels still go through)."""
     img_w, img_h = rec["width"], rec["height"]
     out: list[str] = []
-    # staff-relative minimum barline width: one recipe for every source.
     ss = _staff_space_px(rec)
     min_bar_w = max(MIN_BARLINE_W_PX_FLOOR,
                     (MIN_BARLINE_W_STAFF_FRAC * ss) if ss else 0)
@@ -92,13 +122,24 @@ def _record_to_yolo_lines(rec: dict) -> list[str]:
             w = min_bar_w
         cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
         out.append(f"{cls} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
-    for _sys, x, y, w, h in rec["bboxes"].get("key_sigs", []):
-        cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
-        out.append(f"4 {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
+
+    # Key signatures: one class in standard mode, 15 sub-classes in multitask.
+    if multitask:
+        key = rec.get("key_first")
+        cls_keysig = _keysig_class_for_fifths(key) if key is not None else None
+        if cls_keysig is not None:
+            for _sys, x, y, w, h in rec["bboxes"].get("key_sigs", []):
+                cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
+                out.append(f"{cls_keysig} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
+    else:
+        for _sys, x, y, w, h in rec["bboxes"].get("key_sigs", []):
+            cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
+            out.append(f"4 {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
     return out
 
 
-def _build_yolo_split(src_data: Path, jsonl_name: str, dst_dir: Path) -> int:
+def _build_yolo_split(src_data: Path, jsonl_name: str, dst_dir: Path,
+                       multitask: bool = False) -> int:
     """Symlink images + write YOLO .txt labels for one split. Returns count."""
     images_out = dst_dir / "images"
     labels_out = dst_dir / "labels"
@@ -116,22 +157,22 @@ def _build_yolo_split(src_data: Path, jsonl_name: str, dst_dir: Path) -> int:
                 continue
             dst_img = images_out / src_img.name
             if not dst_img.exists():
-                # symlink so we don't duplicate bytes; ultralytics is fine with it
                 dst_img.symlink_to(src_img.resolve())
             dst_lbl = labels_out / (src_img.stem + ".txt")
-            dst_lbl.write_text("\n".join(_record_to_yolo_lines(rec)))
+            dst_lbl.write_text("\n".join(_record_to_yolo_lines(rec, multitask=multitask)))
             n += 1
     return n
 
 
-def prepare_yolo_layout(src_data: Path, dst_root: Path) -> Path:
+def prepare_yolo_layout(src_data: Path, dst_root: Path,
+                        multitask: bool = False) -> Path:
     """Produce <dst_root>/{train,val}/{images,labels} + dataset.yaml."""
     if dst_root.exists():
         shutil.rmtree(dst_root)
     train_dir = dst_root / "train"
     val_dir = dst_root / "val"
-    n_train = _build_yolo_split(src_data, "labels_train.jsonl", train_dir)
-    n_val = _build_yolo_split(src_data, "labels_dev.jsonl", val_dir)
+    n_train = _build_yolo_split(src_data, "labels_train.jsonl", train_dir, multitask=multitask)
+    n_val = _build_yolo_split(src_data, "labels_dev.jsonl", val_dir, multitask=multitask)
     # If only one split exists, mirror it (single-source smoke runs)
     if n_train and not n_val:
         n_val = _build_yolo_split(src_data, "labels_train.jsonl", val_dir)
@@ -140,13 +181,15 @@ def prepare_yolo_layout(src_data: Path, dst_root: Path) -> Path:
 
     print(f"YOLO layout: train={n_train} val={n_val}", flush=True)
 
+    nc = NUM_CLASSES_MT if multitask else NUM_CLASSES
+    names = CLASS_NAMES_MT if multitask else CLASS_NAMES
     ds_yaml = dst_root / "dataset.yaml"
     ds_yaml.write_text(yaml.safe_dump({
         "path": str(dst_root.resolve()),
         "train": "train/images",
         "val": "val/images",
-        "nc": NUM_CLASSES,
-        "names": CLASS_NAMES,
+        "nc": nc,
+        "names": names,
     }))
     return ds_yaml
 
@@ -162,6 +205,9 @@ def main():
                    help="override cfg.training.epochs")
     p.add_argument("--limit-epochs-for-smoke", type=int, default=None,
                    help="cap epochs for fast smoke testing")
+    p.add_argument("--multitask", action="store_true",
+                   help="replace single key_signature class with 15 "
+                        "keysig sub-classes (key_-7 ... key_+7). 19 total.")
     args = p.parse_args()
 
     cfg = yaml.safe_load(args.config.read_text())
@@ -175,7 +221,10 @@ def main():
     backbone = cfg.get("model", {}).get("backbone", "yolov8n")
 
     yolo_root = args.output / "yolo_data"
-    ds_yaml = prepare_yolo_layout(args.data, yolo_root)
+    ds_yaml = prepare_yolo_layout(args.data, yolo_root, multitask=args.multitask)
+    if args.multitask:
+        print(f"Multi-task mode: 19 classes "
+              f"(4 structural + 15 keysig sub-classes)", flush=True)
 
     # Import ultralytics lazily so --help works without it.
     from ultralytics import YOLO  # type: ignore

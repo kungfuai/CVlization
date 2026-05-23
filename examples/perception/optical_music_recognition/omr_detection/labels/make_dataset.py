@@ -72,6 +72,15 @@ def _count_measures(mxl_text: str) -> int:
     return n_measure_tags // n_parts
 
 
+def _all_fifths(mxl_text: str) -> list[int]:
+    """Every <fifths>N</fifths> value in the musicxml, in order seen.
+
+    For openscore the row's musicxml is a per-page slice, so all key
+    changes visible on that page appear here. For L7a/L9 it's the
+    whole synthetic score (always single-key)."""
+    return [int(m) for m in re.findall(r"<fifths>(-?\d+)</fifths>", mxl_text or "")]
+
+
 # Renders both SVG and PNG of a single MXL through Docker in one shot.
 # We need PNG and SVG generated from the same .ly so their coordinate
 # spaces match (mm in SVG; mm * PX_PER_MM in PNG).
@@ -265,6 +274,9 @@ def build(output_dir: Path, limit: int | None, split: str,
                 n_measures = _count_measures(mxl)
             except Exception:
                 n_measures = None
+            fifths_seq = _all_fifths(mxl)
+            key_first = fifths_seq[0] if fifths_seq else None
+            key_set = sorted(set(fifths_seq)) if fifths_seq else []
             with tempfile.TemporaryDirectory() as tmp:
                 tmp = Path(tmp)
                 try:
@@ -306,6 +318,8 @@ def build(output_dir: Path, limit: int | None, split: str,
                         "page": page_idx,
                         "n_pages": n_pages,
                         "n_measures": n_measures,
+                        "key_first": key_first,    # first <fifths> in slice
+                        "key_set": key_set,         # all distinct fifths on page
                         "image": f"images/{out_png.name}",
                         "width": pw,
                         "height": ph,
