@@ -1,0 +1,27 @@
+name: llama-cpp
+capability: generative/llm
+modalities: [text]
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 8
+image: cvl-llama-cpp
+
+presets:
+  build:
+    script: build.sh
+    description: Build llama.cpp container (ghcr.io/ggml-org/llama.cpp full-cuda image + Python wrappers)
+  predict:
+    script: predict.sh
+    description: "Run a local llama.cpp chat (starts llama-server + client in one container). Default model: Qwen/Qwen3-8B-GGUF:Q4_K_M."
+  serve:
+    script: serve.sh
+    description: Launch OpenAI-compatible llama-server with auto-tuning
+tags: [llama-cpp, gguf, openai-api, llm, serving, text-generation]
+tasks: [text_generation, serving]
+
+verification:
+  last_verified: "2026-05-23"
+  last_verification_note: "Scaffolded on llama.cpp ghcr.io/ggml-org/llama.cpp:full-cuda (build b9294) on RTX PRO 6000 Blackwell (SM120, 98GB VRAM). Verified Qwen/Qwen3-8B-GGUF:Q4_K_M via predict.sh: nvidia-smi-based GPU detection picks ngl=999 + ctx=4096, llama-server launches, OpenAI chat returns clean content ('Hello! How can I assist you today?') with reasoning trace split into the response `reasoning` field via --reasoning-format auto. Defaults: --jinja on (HF chat template), -fa on (flash attention). Other models in README overrides (unsloth/Phi-4-mini-instruct-GGUF, unsloth/gemma-3-4b-it-GGUF, unsloth/GLM-4.7-Flash-GGUF, bartowski/Llama-3.3-70B-Instruct-GGUF Q2_K, nvidia/NVIDIA-Nemotron-3-Nano-4B-GGUF) are listed but not yet exercised."
+  status: VERIFIED
