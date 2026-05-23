@@ -1,0 +1,2 @@
+# Inherited from the cvl-llama-cpp image; this example uses llama-diffusion-cli
+# directly (no OpenAI client needed).

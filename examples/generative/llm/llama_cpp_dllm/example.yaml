@@ -1,0 +1,24 @@
+name: llama-cpp-dllm
+capability: generative/llm
+modalities: [text]
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 8
+image: cvl-llama-cpp
+
+presets:
+  build:
+    script: build.sh
+    description: Reuse the cvl-llama-cpp image (built by ../llama_cpp); diffusion-cli is bundled in the same upstream llama.cpp image.
+  predict:
+    script: predict.sh
+    description: "Run a diffusion LM (LLaDA / Dream GGUF) via llama-diffusion-cli. Default: mradermacher/LLaDA-8B-Instruct-GGUF:Q4_K_M."
+tags: [llama-cpp, gguf, llm, diffusion-lm, llada, dream, text-generation]
+tasks: [text_generation]
+
+verification:
+  last_verified: "2026-05-23"
+  last_verification_note: "Reuses cvl-llama-cpp image (llama.cpp full-cuda b9294); invokes llama-diffusion-cli instead of llama-server because LLaDA/Dream don't drive the autoregressive logits path that powers /v1/chat/completions. Verified mradermacher/LLaDA-8B-Instruct-GGUF:Q4_K_M (LLaDA family, auto-defaults: --diffusion-block-length 32, --diffusion-eps 0, --diffusion-cfg-scale 0; algorithm 4 confidence-based, 128 steps) on RTX PRO 6000 Blackwell (SM120, 98GB VRAM): 'Say hello in one sentence.' generated 'Hello!' (and 'Hello! How can I assist you?' on a separate run — dLLMs are non-deterministic). predict.py runs the CLI, captures stdout+stderr, and extracts the final generation by trimming everything up to and including the last 'total time:' marker. LLaDA 2.0/2.1 (the stronger family) have no community GGUFs yet — only inclusionAI/LLaDA2.{0,1}-mini/flash as native HF checkpoints; revisit when GGUF quants land."
+  status: VERIFIED
