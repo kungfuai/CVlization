@@ -1,0 +1,15 @@
+outputs/
+checkpoints/
+checkpoint-*/
+weights/
+logs/
+__pycache__/
+*.pyc
+*.pt
+*.pth
+*.bin
+*.safetensors
+result.txt
+result.json
+training_state.json
+.DS_Store
