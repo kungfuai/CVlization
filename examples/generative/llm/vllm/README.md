@@ -70,6 +70,16 @@ bash examples/generative/llm/vllm/predict.sh --max-tokens 1024
 MODEL_ID=zai-org/GLM-4.7-Flash \
 VLLM_MAX_MODEL_LEN=8192 VLLM_ENFORCE_EAGER=1 \
 bash examples/generative/llm/vllm/predict.sh --max-tokens 1024
+
+# NVIDIA-Nemotron-Labs-3-Elastic-30B-A3B-BF16 (NemotronHForCausalLM, MoE+Mamba2+Attn,
+# ~3B active, reasoning) — ~59GB BF16 weights.
+MODEL_ID=nvidia/NVIDIA-Nemotron-Labs-3-Elastic-30B-A3B-BF16 \
+VLLM_MAX_MODEL_LEN=8192 VLLM_ENFORCE_EAGER=1 \
+bash examples/generative/llm/vllm/predict.sh --max-tokens 1024
+
+# Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16 — NOT supported on vLLM 0.19.0:
+# HF config declares arch `NemotronH_Nano_Omni_Reasoning_V3`, not in 0.19's registry.
+# Needs a vLLM bump (>=0.20) or `--model-impl transformers`.
 ```
 
 ## Reasoning models
