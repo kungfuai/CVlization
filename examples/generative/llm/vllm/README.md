@@ -56,7 +56,42 @@ bash examples/generative/llm/vllm/predict.sh
 MODEL_ID=Qwen/Qwen3-8B \
 VLLM_MAX_MODEL_LEN=2048 VLLM_GPU_MEMORY_UTILIZATION=0.88 \
 bash examples/generative/llm/vllm/predict.sh
+
+# Qwen3.6 (GDN hybrid attention, VLM, reasoning) — needs ~51GB (27B) / ~66GB (35B-A3B)
+# BF16 weights, so an 80GB+ GPU. VLLM_ENFORCE_EAGER=1 avoids GDN CUDA-graph issues;
+# raise --max-tokens since the reasoning <think> trace counts against the budget.
+MODEL_ID=Qwen/Qwen3.6-27B \
+VLLM_MAX_MODEL_LEN=8192 VLLM_ENFORCE_EAGER=1 \
+bash examples/generative/llm/vllm/predict.sh --max-tokens 1024
+# MoE variant: MODEL_ID=Qwen/Qwen3.6-35B-A3B (~3B active params)
+
+# GLM-4.7-Flash (Glm4MoeLiteForCausalLM, MoE ~3B active, reasoning) — ~56GB BF16
+# weights. Natively supported by vLLM 0.19.0.
+MODEL_ID=zai-org/GLM-4.7-Flash \
+VLLM_MAX_MODEL_LEN=8192 VLLM_ENFORCE_EAGER=1 \
+bash examples/generative/llm/vllm/predict.sh --max-tokens 1024
 ```
+
+## Reasoning models
+
+Reasoning models (Qwen3 / Qwen3.5 / Qwen3.6, GLM-4.7-Flash, OLMo-3-Think, etc.)
+emit a `<think>...</think>` trace before their answer. (Note: Qwen3.x strips the
+`<think>`/`</think>` delimiters as special tokens, whereas GLM-4.7-Flash emits a
+literal `</think>` tag in the text.)
+
+- **Serving (`serve.sh`)** — pass a reasoning parser so the trace is returned in a
+  separate `reasoning` field instead of being mixed into `content`:
+  ```bash
+  MODEL_ID=Qwen/Qwen3.6-27B \
+  VLLM_EXTRA_ARGS="--reasoning-parser qwen3 --enforce-eager" \
+  bash examples/generative/llm/vllm/serve.sh
+  ```
+  The parser name follows the model family — `qwen3` for the Qwen3.x line,
+  `glm45` for GLM-4.x (incl. GLM-4.7-Flash). `--enforce-eager` guards against
+  the GDN CUDA-graph issue on Qwen3.6.
+- **Local predict (`predict.sh`)** — the offline `LLM` path has no reasoning
+  parser, so the trace stays inline in the output text. Raise `--max-tokens` so
+  the final answer isn't truncated by a long trace.
 
 ## Client usage
 ```bash
