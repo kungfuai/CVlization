@@ -1,9 +1,45 @@
 # Detection-first OMR: train/inference distribution alignment
 
-Two days of pipeline plumbing -- detect → transcribe → respell. The
-quality number stayed the same as the legacy fixed-crop baseline, but
-along the way three things tripped me up. Worth writing down so we
-don't re-hit them on the next dataset.
+Multiple days of pipeline plumbing -- detect → transcribe → respell --
+on a goal of going from L7a-only key prediction to multi-source
+generalisation (L9 + openscore). Doc grew organically. Headline numbers
+and the architectural lessons are up top; full chronology below.
+
+## TL;DR (current state)
+
+**Chosen pipeline**: L7a-only YOLOv8n detector (`detector_l7a_500_v3`)
++ multi-source 15-class SmallKeyCNN (`keysig_cnn_multisource_v2`) +
+safckylj VLM + respell. Two clean models, decoupled.
+
+**Page-level key accuracy on 60 unique dev pages per source**:
+
+| source | strict (page-majority == first `<fifths>`) | any-box-in-set | per-box |
+|---|---|---|---|
+| L7a       | 100% | 100% | 100% |
+| L9        | 100% | 100% | 100% |
+| openscore | 78.3% | **90.0%** | 71.8% |
+
+**Per-source detector quality** (`detector_mix2` on combined dev):
+
+| source | system R | staff R | keysig R |
+|---|---|---|---|
+| L7a       | 1.000 | 1.000 | 1.000 |
+| L9        | 1.000 | 0.860 | 0.860 |
+| openscore | 0.941 | 0.898 | 0.891 |
+
+**What's actually limiting openscore key accuracy**:
+1. Multi-key pages + page-majority-vote eval (closes from 78% → 90% with
+   "any-box-in-set" metric).
+2. Real CNN miscounts on rare keys (|fifths| ≥ 5).
+3. MusicXML `<fifths>` ≠ what's drawn (transposing instruments / metadata
+   bugs); not fixable downstream.
+
+**Things tried that didn't move the number**:
+- Multi-source detector training (regressed everywhere)
+- Re-trained CNN on the multi-source detector's crops (regressed)
+- Staff-relative barline widening (no measurable effect)
+- Page-level eval with set-based GT (recovered the metric, didn't actually
+  change the model).
 
 ## Status
 
