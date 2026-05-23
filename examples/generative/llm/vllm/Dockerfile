@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
+FROM pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -16,11 +16,9 @@ RUN apt-get update && \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-# Pin transformers 5.5.0 for stable behaviour across the example's verified
-# models. vLLM 0.21.0's deps want 5.9.0, but 5.5.0 has been the verified
-# baseline since vLLM 0.19.0 (covers OLMo-3, LFM2, DeepSeekVL2, Pixtral, etc.).
-# Install after vLLM so the explicit version overrides vLLM's transitive pull.
-RUN pip install --no-cache-dir transformers==5.5.0
+# Let vLLM 0.21.0 pick its own transformers; it now explicitly excludes 5.5.0
+# (vllm 0.21 requires transformers!=5.0.*,!=5.1.*,!=5.2.*,!=5.3.*,!=5.4.*,!=5.5.0,>=4.56.0).
+# Pip resolves this to transformers 5.9.0 at the time of this build.
 
 # Patch FlashInfer 0.6.8's misleading check_cuda_arch on SM120 (consumer
 # Blackwell): TARGET_CUDA_ARCHS comes back empty, the eligibility loop
@@ -29,7 +27,8 @@ RUN pip install --no-cache-dir transformers==5.5.0
 # imports FlashInfer eagerly so we can't simply uninstall it.
 RUN python - <<'EOF'
 import pathlib, re
-p = pathlib.Path("/opt/conda/lib/python3.11/site-packages/flashinfer/jit/core.py")
+import flashinfer.jit.core as _fi_core
+p = pathlib.Path(_fi_core.__file__)
 text = p.read_text()
 needle = "def check_cuda_arch():"
 if needle in text:
@@ -53,7 +52,8 @@ EOF
 # False (rare; would also fail later on SM120, but matches upstream behavior).
 RUN python - <<'EOF'
 import pathlib
-p = pathlib.Path("/opt/conda/lib/python3.11/site-packages/vllm/model_executor/layers/fused_moe/oracle/unquantized.py")
+import vllm.model_executor.layers.fused_moe.oracle.unquantized as _m
+p = pathlib.Path(_m.__file__)
 text = p.read_text()
 old = (
     "    elif current_platform.is_cuda():\n"

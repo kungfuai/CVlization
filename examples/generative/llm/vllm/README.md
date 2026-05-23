@@ -1,7 +1,7 @@
 # vLLM Serve + Predict (auto-tuned)
 
 Dockerized vLLM preset with sensible defaults and optional auto-tuning based on your GPU. Supports both **text LLMs** and **vision-language models (VLMs)**. Includes:
-- `build.sh`: builds the image (vLLM 0.21.0 brings torch 2.11.0 + CUDA 13.0; we still pin transformers 5.5.0; OpenAI SDK 2.12.0).
+- `build.sh`: builds the image (base `pytorch/pytorch:2.11.0-cuda13.0-cudnn9-devel`, vLLM 0.21.0, transformers 5.9.0 via vLLM's deps, OpenAI SDK 2.12.0).
 - `serve.sh`/`serve.py`: starts an OpenAI-compatible server with heuristics for tensor-parallel size, max context, dtype, and GPU memory utilization (overridable).
 - `predict.sh`/`predict.py`: runs a quick test. Default mode is **chat** (loads the model inside the container with vLLM, no server needed). Supports VLMs via `--image` flag. `embed` and `rerank` modes use transformers locally (not vLLM) for encoder models.
 
@@ -98,13 +98,9 @@ ships three workarounds applied automatically:
 - `gpu_utils.py` sets `VLLM_USE_FLASHINFER_SAMPLER=0` for SM120+, falling back
   to the PyTorch-native sampler.
 
-Combined they let vLLM 0.21 run cleanly on SM120 for BF16 models.
-
-**Known regression**: `mistralai/Ministral-3-8B-Instruct-2512` (fp8 VLM) worked on
-vLLM 0.19.0 but fails on 0.21.0 because the FP8 GEMM path now routes through
-FlashInfer, whose JIT compiles `compute_120f` kernels that need CUDA ≥ 12.9
-nvcc — our base image ships CUDA 12.8 nvcc. Fixing requires a CUDA 13.0-devel
-base image. Other FP8 models on different archs may hit the same issue.
+Combined they let vLLM 0.21 run cleanly on SM120 for BF16 and FP8 models. The
+CUDA 13.0-devel base also ensures FlashInfer's FP8 JIT can build `compute_120f`
+kernels (CUDA 12.8's nvcc could not).
 
 ## Reasoning models
 
