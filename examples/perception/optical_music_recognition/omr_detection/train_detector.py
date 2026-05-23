@@ -27,7 +27,8 @@ from pathlib import Path
 
 import yaml
 
-CLASS_NAMES = ["system", "staff", "barline_single", "barline_heavy"]
+CLASS_NAMES = ["system", "staff", "barline_single", "barline_heavy",
+               "key_signature"]
 NUM_CLASSES = len(CLASS_NAMES)
 
 # YOLOv8 struggles with sub-pixel-wide boxes. Real barlines are ~1.3 px
@@ -70,6 +71,9 @@ def _record_to_yolo_lines(rec: dict) -> list[str]:
             w = MIN_BARLINE_W_PX
         cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
         out.append(f"{cls} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
+    for _sys, x, y, w, h in rec["bboxes"].get("key_sigs", []):
+        cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
+        out.append(f"4 {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
     return out
 
 

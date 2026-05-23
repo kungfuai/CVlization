@@ -166,10 +166,15 @@ def _scale_bboxes(layout: dict, scale: float) -> dict:
         [item["system"], *s(item["bbox"]), int(item["heavy"])]
         for item in layout["barlines"]
     ]
+    key_sigs = [
+        [item["system"], *s(item["bbox"])]
+        for item in layout.get("key_sigs", [])
+    ]
     return {
         "systems": systems,
         "staves": staves,
         "barlines": barlines,
+        "key_sigs": key_sigs,
         "bar_numbers": layout["bar_numbers"],
     }
 

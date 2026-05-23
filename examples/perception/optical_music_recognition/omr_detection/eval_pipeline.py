@@ -29,6 +29,7 @@ sys.path.insert(0, str(_THIS))
 from cells import derive_measures  # noqa: E402
 from pipeline import (  # noqa: E402
     detect_layout, load_detector, load_vlm,
+    predict_keys_from_detections,
     transcribe_page, transcribe_measure, stitch_measures_naive,
 )
 
@@ -39,8 +40,15 @@ def _load_gt_mxc2(mxl_text: str, drop_beams: bool = True) -> str:
     return xml_to_mxc2(strip_musicxml_header(mxl_text), drop_beams=drop_beams)
 
 
-def _load_keysig_cnn(ckpt_path: str):
-    """Load the small CNN key classifier (trained in vlm_omr_sft)."""
+def _load_keysig_cnn(ckpt_path: str, on_crop: bool = False):
+    """Load the small CNN key classifier.
+
+    on_crop=False: expects the full page and uses the legacy fixed
+        top-left fraction (crop_keysig).
+    on_crop=True:  expects an already-cropped region (e.g. a YOLO-
+        detected key_signature box). Skips crop_keysig and applies only
+        the resize+normalize transform.
+    """
     import torch
     from train_keyclf_cnn import (  # type: ignore
         SmallKeyCNN, crop_keysig, _EVAL_TFM, label_to_fifths,
@@ -50,11 +58,18 @@ def _load_keysig_cnn(ckpt_path: str):
     cnn.load_state_dict(state["state_dict"])
     cnn.eval()
 
-    def predict(image_pil) -> int:
-        x = _EVAL_TFM(crop_keysig(image_pil.convert("RGB"))).unsqueeze(0).cuda()
-        with torch.no_grad():
-            logits = cnn(x)
-        return label_to_fifths(int(logits.argmax(1).item()))
+    if on_crop:
+        def predict(crop_pil) -> int:
+            x = _EVAL_TFM(crop_pil.convert("RGB")).unsqueeze(0).cuda()
+            with torch.no_grad():
+                logits = cnn(x)
+            return label_to_fifths(int(logits.argmax(1).item()))
+    else:
+        def predict(image_pil) -> int:
+            x = _EVAL_TFM(crop_keysig(image_pil.convert("RGB"))).unsqueeze(0).cuda()
+            with torch.no_grad():
+                logits = cnn(x)
+            return label_to_fifths(int(logits.argmax(1).item()))
     return predict
 
 
@@ -83,7 +98,8 @@ def _hf_index() -> dict:
 def evaluate(data_dir: Path, det_ckpt: str, vlm_ckpt: str,
              n: int, mode: str, imgsz: int,
              cnn_ckpt: str | None = None,
-             use_gt_key: bool = False) -> None:
+             use_gt_key: bool = False,
+             detector_key: bool = False) -> None:
     from eval_mxc import evaluate_pair  # type: ignore
     from respell import respell_mxc2  # type: ignore
 
@@ -92,18 +108,29 @@ def evaluate(data_dir: Path, det_ckpt: str, vlm_ckpt: str,
     labels = data_dir / "labels_dev.jsonl"
     with labels.open() as f:
         recs = [json.loads(line) for line in f][:n]
-    key_src = "GT" if use_gt_key else ("CNN" if cnn_ckpt else "no-respell")
+    if use_gt_key:
+        key_src = "GT"
+    elif detector_key and cnn_ckpt:
+        key_src = "YOLO-keysig+CNN"
+    elif cnn_ckpt:
+        key_src = "fixed-crop CNN"
+    else:
+        key_src = "no-respell"
     print(f"Evaluating {len(recs)} dev pages, mode={mode}, key={key_src}",
           flush=True)
 
     print("Loading detector ...", flush=True)
-    det = load_detector(det_ckpt) if mode == "measure" else None
+    det = load_detector(det_ckpt) if (mode == "measure" or detector_key) else None
     print("Loading VLM ...", flush=True)
     vlm_model, processor = load_vlm(vlm_ckpt)
     cnn_predict = None
+    cnn_predict_oncrop = None
     if cnn_ckpt and not use_gt_key:
         print(f"Loading key-sig CNN {cnn_ckpt} ...", flush=True)
-        cnn_predict = _load_keysig_cnn(cnn_ckpt)
+        if detector_key:
+            cnn_predict_oncrop = _load_keysig_cnn(cnn_ckpt, on_crop=True)
+        else:
+            cnn_predict = _load_keysig_cnn(cnn_ckpt, on_crop=False)
 
     pitched_base, pitched_resp, rhythm, times = [], [], [], []
     key_correct = key_seen = 0
@@ -149,6 +176,26 @@ def evaluate(data_dir: Path, det_ckpt: str, vlm_ckpt: str,
         # Stage 3: respell with predicted/oracle key
         if use_gt_key:
             key = _gt_key(mxl)
+        elif cnn_predict_oncrop is not None:
+            # Detect on the HF image *directly*. The detector trained on
+            # our re-rendered PNGs generalises here, and box coordinates
+            # are then already in HF-image pixel space -- no scaling.
+            # (Linear scaling from re-rendered px would mis-place boxes
+            # because the two are *separate renderings*, not the same
+            # image at different scales.)
+            hf_tmp = Path(f"/tmp/_eval_hf_{sid}.png")
+            img.save(hf_tmp)
+            try:
+                layout = detect_layout(det, str(hf_tmp), imgsz=imgsz)
+            finally:
+                hf_tmp.unlink(missing_ok=True)
+            preds = predict_keys_from_detections(layout, img,
+                                                  cnn_predict_oncrop)
+            if not preds:
+                key = None
+            else:
+                from collections import Counter
+                key = Counter(preds).most_common(1)[0][0]
         elif cnn_predict is not None:
             key = cnn_predict(img)
         else:
@@ -212,9 +259,13 @@ def main():
                    help="keysig CNN .pt; if given, respell with predicted key")
     p.add_argument("--use-gt-key", action="store_true",
                    help="respell with GT key from MusicXML (oracle)")
+    p.add_argument("--detector-key", action="store_true",
+                   help="use YOLO key_signature boxes + CNN per crop "
+                        "(majority vote) instead of fixed top-left crop")
     args = p.parse_args()
     evaluate(args.data, args.det_ckpt, args.vlm_ckpt, args.n, args.mode,
-             args.imgsz, cnn_ckpt=args.cnn_ckpt, use_gt_key=args.use_gt_key)
+             args.imgsz, cnn_ckpt=args.cnn_ckpt, use_gt_key=args.use_gt_key,
+             detector_key=args.detector_key)
 
 
 if __name__ == "__main__":

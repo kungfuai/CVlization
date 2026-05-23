@@ -118,6 +118,20 @@ class Measure:
     bbox: Box      # (x, y, w, h) spanning all staves at this measure
 
 
+def derive_keysig_areas(systems: list[Box], staves: list[Box],
+                        barlines: list[Box],
+                        x_tol_frac: float = 0.012) -> list[Box]:
+    """One bbox per system: the top staff's first measure.
+
+    That slab contains the clef + key signature (and a few leading notes).
+    It matches what the safckylj-era key-sig CNN was trained on (the
+    top-left fraction of the page), so cropping it and feeding the CNN
+    gives a per-system key prediction.
+    """
+    cells = derive_cells(systems, staves, barlines, x_tol_frac)
+    return [c.bbox for c in cells if c.staff == 0 and c.measure == 0]
+
+
 def derive_measures(systems: list[Box], staves: list[Box],
                     barlines: list[Box],
                     x_tol_frac: float = 0.012) -> list[Measure]:

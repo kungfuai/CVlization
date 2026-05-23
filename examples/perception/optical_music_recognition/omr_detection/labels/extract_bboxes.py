@@ -218,11 +218,30 @@ def extract_layout(svg_path: Path) -> dict:
         for j, s in enumerate(sysd["staves"]):
             staves_out.append({"system": sysd["idx"], "idx": j, "bbox": s["bbox"]})
 
+    # Key-sig area per system: top staff's first measure (clef + keysig slab).
+    # Derived geometrically from staves + barlines so it stays in lockstep
+    # with cell derivation. We reuse the same logic at make_dataset/eval
+    # time via cells.derive_keysig_areas.
+    sys_boxes = [s["bbox"] for s in systems]
+    staff_boxes = [s["bbox"] for s in staves_out]
+    bar_boxes = [b["bbox"] for b in barlines]
+    try:
+        # cells.py lives one dir up; importable at make_dataset call time.
+        import sys as _sys
+        from pathlib import Path as _Path
+        _sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+        from cells import derive_keysig_areas  # noqa: E402
+        key_sig_boxes = derive_keysig_areas(sys_boxes, staff_boxes, bar_boxes)
+    except Exception:
+        key_sig_boxes = []
+
+    key_sigs = [{"system": i, "bbox": b} for i, b in enumerate(key_sig_boxes)]
+
     return {
         "systems": [{"idx": s["idx"], "bbox": s["bbox"]} for s in systems],
         "staves": staves_out,
         "barlines": barlines,
-        "key_sigs": [],
+        "key_sigs": key_sigs,
         "clefs": [],
         "bar_numbers": bar_numbers,
     }

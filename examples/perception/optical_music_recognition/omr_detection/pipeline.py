@@ -37,7 +37,7 @@ _THIS_DIR = Path(__file__).resolve().parent
 _VLM_DIR = _THIS_DIR.parent / "vlm_omr_sft"
 
 # Detector class ids (see train_detector.CLASS_NAMES).
-CLS_SYSTEM, CLS_STAFF, CLS_BARLINE, CLS_BARLINE_HEAVY = 0, 1, 2, 3
+CLS_SYSTEM, CLS_STAFF, CLS_BARLINE, CLS_BARLINE_HEAVY, CLS_KEYSIG = 0, 1, 2, 3, 4
 
 # Horizontal/vertical padding (px) applied when cropping for inspection,
 # per class. Barlines are ~8 px wide -- useless to eyeball without context.
@@ -65,7 +65,8 @@ def detect_layout(model, image_path: str, imgsz: int = 1280,
     """
     res = model.predict(source=image_path, imgsz=imgsz, conf=conf,
                          verbose=False)[0]
-    out = {"systems": [], "staves": [], "barlines": [], "barlines_heavy": []}
+    out = {"systems": [], "staves": [], "barlines": [],
+           "barlines_heavy": [], "key_signatures": []}
     for box, cls in zip(res.boxes.xyxy.tolist(), res.boxes.cls.tolist()):
         x1, y1, x2, y2 = box
         xywh = (x1, y1, x2 - x1, y2 - y1)
@@ -79,7 +80,35 @@ def detect_layout(model, image_path: str, imgsz: int = 1280,
         elif cls == CLS_BARLINE_HEAVY:
             out["barlines"].append(xywh)
             out["barlines_heavy"].append(xywh)
+        elif cls == CLS_KEYSIG:
+            out["key_signatures"].append(xywh)
     return out
+
+
+def predict_keys_from_detections(layout: dict, page_image_pil, cnn_predict,
+                                  pad: int = 4,
+                                  target_aspect: float = 3.0) -> list[int]:
+    """Crop each detected keysig box and run the CNN classifier.
+
+    The detected keysig box hugs a single staff (~6:1 aspect). The CNN
+    was trained on a roughly 3:1 top-left page fraction that includes
+    extra vertical context. Before classifying, we pad the box
+    vertically (with surrounding page content, not blank space) so its
+    aspect matches the training distribution.
+
+    Returns one (fifths) prediction per detected box in top-to-bottom
+    reading order.
+    """
+    boxes = sorted(layout.get("key_signatures", []), key=lambda b: b[1])
+    preds: list[int] = []
+    for x, y, w, h in boxes:
+        # Inflate downward only: legacy crop puts the staff in the top
+        # half of the crop, not the middle. Match that.
+        target_h = w / target_aspect if target_aspect > 0 else h
+        h_inflated = max(h, target_h)
+        crop = _crop(page_image_pil, (x, y, w, h_inflated), pad)
+        preds.append(cnn_predict(crop))
+    return preds
 
 
 # ---------------------------------------------------------------------------
