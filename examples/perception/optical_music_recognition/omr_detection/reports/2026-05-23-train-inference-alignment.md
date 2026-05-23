@@ -270,3 +270,65 @@ What it suggests for the future:
 End-to-end best on openscore right now: **63% key accuracy** with the
 L7a-only YOLO detector + the multi-source 15-class CNN. Up from 0%
 with the L7a-only CNN at the start of this thread.
+
+## After dedup + staff-relative widening: same picture
+
+Two clean-up improvements:
+- `make_dataset.dedup_by_score_id` -- the openscore HF dataset has ~4 rows per unique score (each = one page slice). Without dedup we were re-rendering the same score multiple times. With dedup we got 353 unique-train + 79 unique-dev openscore pages (vs 113+39 before, plus matching ~600 unique scores in dev/train).
+- `train_detector.MIN_BARLINE_W_STAFF_FRAC = 0.7` -- replaces the L7a-tuned 8-px floor with a per-record staff-relative width (`0.7 * staff_space`). One inference recipe everywhere.
+
+Re-built the multi-source detector (`detector_mix2`) on this larger, cleaner data:
+
+```
+                L7a-only detector    detector_mix2 (this run)
+system          mAP50 0.995          mAP50 0.991
+staff           mAP50 0.995          mAP50 0.951
+barline         mAP50 0.608          mAP50 0.622
+key_signature   mAP50 0.863          mAP50 0.947  (+0.084)
+```
+
+Keysig mAP improved meaningfully. Then re-trained CNN on the new
+detector's crops (`keysig_cnn_multisource_v3`):
+
+```
+                         L7a    L9     openscore
+v2 (L7a-only det crops)  100%   96%    68%
+v3 (mix2 det crops)      67%    62%    32%  <- worse everywhere
+```
+
+Surprising: the better detector produces *worse* crops for CNN training.
+Investigation showed v3 collected ~60% the number of crops v2 did
+(mix2 detector's per-box confidence is lower, so more keysigs fall
+below the conf=0.25 threshold at training time) and the boxes that
+*do* clear threshold have higher position/size variance.
+
+Final 2×2×3 grid on 30 dev pages per source (HF originals):
+
+| detector | CNN | L7a | L9 | openscore |
+|---|---|---|---|---|
+| L7a-only | yolocrop (L7a) | 100% | 93% | 46% |
+| **L7a-only** | **multi-source v2** | **100%** | **100%** | **63%** ← best |
+| mix2 (multi-source) | yolocrop (L7a) | 100% | 90% | 41% |
+| mix2 (multi-source) | multi-source v2 | 100% | 100% | 57% |
+| mix2 (multi-source) | multi-source v3 | 67% | 62% | 32% |
+
+**Decision**: keep the L7a-only detector + multi-source v2 CNN. Two
+days of trying to improve openscore via better detector data did not
+move the downstream number; the bottleneck is the classifier's
+training distribution, not the detector.
+
+What's actually limiting openscore key accuracy at 63%:
+
+1. **Transposing-instrument GT mismatch** (multiple cases inspected):
+   musicxml `<fifths>` is concert pitch; the visible page can be the
+   transposed key. The CNN reads what's drawn. Counted as "wrong" by
+   our eval. Maybe ~5-10% of openscore.
+
+2. **Rare-key class imbalance**: keys with `|fifths| in {5, 6, 7}` are
+   under-represented in the training mix. The CNN under-counts the
+   last 1-2 accidentals in those signatures.
+
+3. **Possible mid-piece key changes** affecting the per-page GT (the
+   musicxml's first `<fifths>` may not be what's drawn on that page).
+
+Fixing any of these requires data-side work, not architecture.
