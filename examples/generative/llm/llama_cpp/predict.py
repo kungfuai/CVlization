@@ -32,7 +32,9 @@ from serve import build_cmd  # reuse the auto-tuned llama-server cmd builder
 
 def load_image(src: str, max_size: int = 1280) -> Image.Image:
     if src.startswith(("http://", "https://")):
-        resp = requests.get(src, timeout=30)
+        # Set a UA — some hosts (e.g. wikipedia) 403 the default requests UA.
+        headers = {"User-Agent": "cvl-llama-cpp/0.1 (+https://github.com/kungfuai/CVlization)"}
+        resp = requests.get(src, timeout=30, headers=headers)
         resp.raise_for_status()
         img = Image.open(BytesIO(resp.content)).convert("RGB")
     else:
@@ -124,6 +126,9 @@ def main():
         image = load_image(src, args.max_image_size)
         print(f"Loaded image: {args.image} ({image.size[0]}x{image.size[1]})")
 
+    # Make sure serve.build_cmd sees the same host/port the client will hit.
+    os.environ["HOST"] = args.host
+    os.environ["PORT"] = str(args.port)
     cmd = build_cmd()
     print("Spawning llama-server...")
     server = subprocess.Popen(cmd, env=os.environ.copy())

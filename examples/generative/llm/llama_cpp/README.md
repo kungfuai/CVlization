@@ -52,6 +52,22 @@ bash examples/generative/llm/llama_cpp/predict.sh \
   --image /path/to/image.jpg \
   --prompt "Describe this image."
 
+# Qwen3.5-9B (vision via mmproj sidecar) — `-hf` auto-fetches both the text
+# GGUF and the paired mmproj-*.gguf from this repo. Use --max-tokens >= 1500
+# so the reasoning trace doesn't crowd out the final content.
+MODEL_ID=lmstudio-community/Qwen3.5-9B-GGUF:Q4_K_M \
+bash examples/generative/llm/llama_cpp/predict.sh \
+  --image /path/to/image.jpg \
+  --prompt "Describe this image." \
+  --max-tokens 1500
+
+# Qwen3.6-27B (coding flagship; Hybrid GDN + Gated Attention) — ~17GB Q4_K_M.
+# Heavy reasoner; bump --max-tokens to give the thinking trace room to finish.
+MODEL_ID=unsloth/Qwen3.6-27B-GGUF:Q4_K_M \
+LLAMA_CONTEXT_LENGTH=8192 \
+bash examples/generative/llm/llama_cpp/predict.sh --max-tokens 3000 \
+  --prompt "Write a single-line Python function 'fib(n)'."
+
 # GLM-4.7-Flash GGUF (MoE reasoning) — exercises --reasoning-format
 MODEL_ID=unsloth/GLM-4.7-Flash-GGUF:Q4_K_M \
 LLAMA_REASONING_FORMAT=auto \
@@ -77,6 +93,11 @@ llama-server has a built-in equivalent to vLLM/SGLang's `--reasoning-parser`:
 `--reasoning-format <auto|none|deepseek>`. With `auto` (default in this preset),
 the server splits `<think>` traces into a separate `reasoning_content` field
 on the OpenAI response, leaving `content` clean. predict.py prints both.
+
+**Token-budget caveat:** Qwen3.x and other reasoning models with `--jinja` enabled
+will burn most of their generation budget on the `<think>` trace. If you see
+`content` come back empty but a long `reasoning` block, raise `--max-tokens`
+(2000–3000 is reasonable for a meaningful coding/math answer).
 
 ## Notes
 - llama.cpp's `-hf` downloads to `LLAMA_CACHE` (we point it at `~/.cache/huggingface/llama_cpp` so GGUFs sit alongside the rest of the HF cache).
