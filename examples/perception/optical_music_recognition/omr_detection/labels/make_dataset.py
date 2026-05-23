@@ -213,7 +213,8 @@ def build(output_dir: Path, limit: int | None, split: str,
           repo: str = "zzsi/synthetic-scores",
           config: str = "level7a",
           streaming: bool = False,
-          source_tag: str | None = None) -> int:
+          source_tag: str | None = None,
+          dedup_by_score_id: bool = True) -> int:
     """Iterate HF rows and emit detection records.
 
     Returns number of pages written.
@@ -250,9 +251,13 @@ def build(output_dir: Path, limit: int | None, split: str,
 
     pages_written = 0
     failed_render = 0
+    seen_score_ids: set[str] = set()
     with labels_path.open("w") as f_out:
         for i, row in enumerate(rows_iter):
             score_id = row.get("score_id") or f"{tag}_{split}_{i:06d}"
+            if dedup_by_score_id and score_id in seen_score_ids:
+                continue
+            seen_score_ids.add(score_id)
             mxl = row.get("musicxml")
             if not mxl:
                 continue

@@ -31,11 +31,18 @@ CLASS_NAMES = ["system", "staff", "barline_single", "barline_heavy",
                "key_signature"]
 NUM_CLASSES = len(CLASS_NAMES)
 
-# YOLOv8 struggles with sub-pixel-wide boxes. Real barlines are ~1.3 px
+# YOLOv8 struggles with sub-pixel-wide boxes. Real barlines are ~1 px
 # wide at our 1280px imgsz, which the detector can't localize. We widen
 # them in the YOLO label space; downstream we only care about x-center,
 # so the inflated box doesn't hurt cell derivation.
-MIN_BARLINE_W_PX = 8
+#
+# Width is expressed as a multiple of staff-space (one of the 4 gaps
+# between a staff's 5 lines), so the same recipe works across image
+# resolutions and engraving styles. ~0.7 staff-space gives an 8-9 px
+# wide bbox at L7a's HF rendering and scales naturally elsewhere.
+MIN_BARLINE_W_STAFF_FRAC = 0.7
+# Absolute floor for sources where staff height is unknown.
+MIN_BARLINE_W_PX_FLOOR = 6
 
 
 def _xywh_to_yolo(x: float, y: float, w: float, h: float,
@@ -53,10 +60,25 @@ def _xywh_to_yolo(x: float, y: float, w: float, h: float,
     return cx, cy, nw, nh
 
 
+def _staff_space_px(rec: dict) -> float | None:
+    """Average staff-space (gap between two staff lines) in this record's
+    pixel space, derived from the staff bboxes (5 lines = 4 gaps).
+    Returns None if no staves were detected."""
+    staves = rec["bboxes"]["staves"]
+    if not staves:
+        return None
+    heights = [s[5] for s in staves]  # (sys, idx, x, y, w, h) -> h
+    return (sum(heights) / len(heights)) / 4.0
+
+
 def _record_to_yolo_lines(rec: dict) -> list[str]:
     """Convert one JSONL detection record into YOLO label lines."""
     img_w, img_h = rec["width"], rec["height"]
     out: list[str] = []
+    # staff-relative minimum barline width: one recipe for every source.
+    ss = _staff_space_px(rec)
+    min_bar_w = max(MIN_BARLINE_W_PX_FLOOR,
+                    (MIN_BARLINE_W_STAFF_FRAC * ss) if ss else 0)
     for x, y, w, h in rec["bboxes"]["systems"]:
         cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
         out.append(f"0 {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
@@ -65,10 +87,9 @@ def _record_to_yolo_lines(rec: dict) -> list[str]:
         out.append(f"1 {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
     for _sys, x, y, w, h, heavy in rec["bboxes"]["barlines"]:
         cls = 3 if heavy else 2
-        if w < MIN_BARLINE_W_PX:
-            # widen around the x-center so the YOLO box is detectable
-            x = x + w / 2 - MIN_BARLINE_W_PX / 2
-            w = MIN_BARLINE_W_PX
+        if w < min_bar_w:
+            x = x + w / 2 - min_bar_w / 2
+            w = min_bar_w
         cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
         out.append(f"{cls} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
     for _sys, x, y, w, h in rec["bboxes"].get("key_sigs", []):
