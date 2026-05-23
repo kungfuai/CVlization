@@ -1,0 +1,12 @@
+# NeMo's ASR collection pulls torchaudio, hydra-core, omegaconf, pytorch-lightning,
+# librosa, soundfile, sentencepiece, etc. It's chunky (~2GB) but it's the
+# canonical backend for the TDT decoder (blank-skipping path that gives the
+# ~2000x RTFx headline). Use the transformers-only path (in README) if you
+# want a leaner install at the cost of speed.
+nemo_toolkit[asr]==2.5.1
+# NeMo 2.5's ASR model factory imports megatron transitively even for
+# encoder-only models like Parakeet; install megatron-core to satisfy it.
+megatron-core==0.13.0
+huggingface_hub>=0.30.0
+soundfile>=0.12.1
+librosa>=0.10.1

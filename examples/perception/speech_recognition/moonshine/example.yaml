@@ -1,0 +1,49 @@
+name: moonshine
+capability: perception/speech_recognition
+modalities:
+  - audio
+  - text
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 3
+image: moonshine
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image (python:3.11-slim + useful-moonshine, Keras-on-Torch backend)
+  predict:
+    script: predict.sh
+    description: Transcribe audio with Moonshine (default model moonshine/base, CPU-only by default)
+    path_args:
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run a CPU smoke transcription with moonshine/tiny on the bundled CVL sample
+tags:
+  - asr
+  - speech-recognition
+  - transcription
+  - speech-to-text
+  - moonshine
+  - on-device
+  - low-latency
+  - useful-sensors
+tasks:
+  - automatic_speech_recognition
+  - speech_to_text
+frameworks:
+  - keras
+  - pytorch
+description: Low-latency on-device English speech transcription with Useful Sensors Moonshine (tiny / base).
+
+verification:
+  last_verified: "2026-05-23"
+  last_verification_note: "Full verify-inference-example sweep. Docker build OK (python:3.11-slim base + useful-moonshine==20241016, Keras-on-Torch backend; image ~9.9GB driven by the torch CUDA wheels). CPU inference of BOTH `moonshine/tiny` (via ./test.sh; tail garbled to 'I love gold gold') and `moonshine/base` (via `cvl run moonshine predict` from /tmp cwd; transcript 'It's a amazing gift and a unique privilege and i love going'). Host persistence confirmed: output landed in /tmp/cvl_stt_test/result_moonshine.json. Cache reuse confirmed: 0 'downloading' messages on the second run vs 1 on the first. Auto-resamples non-16kHz/non-mono inputs via librosa to *.16k.wav. CVL CLI discovery (`cvl info moonshine`) shows correct metadata."
+  status: VERIFIED
