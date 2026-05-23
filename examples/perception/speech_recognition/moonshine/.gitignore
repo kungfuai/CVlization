@@ -1,0 +1,6 @@
+outputs/
+*.json
+!example.yaml
+*.wav
+*.mp3
+*.flac

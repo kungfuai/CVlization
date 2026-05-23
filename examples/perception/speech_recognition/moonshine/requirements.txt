@@ -1,0 +1,10 @@
+# Moonshine ships its inference under `useful-moonshine`. The package supports
+# JAX, TensorFlow, and PyTorch backends (selected via KERAS_BACKEND env var).
+# We default to the PyTorch backend to match the rest of the CVL stack.
+useful-moonshine==20241016
+keras>=3.6.0
+torch>=2.0
+huggingface_hub>=0.30.0
+soundfile>=0.12.1
+librosa>=0.10.1
+numpy

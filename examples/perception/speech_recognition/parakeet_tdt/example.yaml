@@ -1,0 +1,50 @@
+name: parakeet-tdt
+capability: perception/speech_recognition
+modalities:
+  - audio
+  - text
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 6
+  disk_gb: 12
+image: parakeet-tdt
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image (PyTorch CUDA + NeMo asr)
+  predict:
+    script: predict.sh
+    description: Transcribe speech with Parakeet-TDT via NeMo
+    path_args:
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run a smoke transcription on the default CVL sample audio
+tags:
+  - asr
+  - speech-recognition
+  - transcription
+  - speech-to-text
+  - parakeet
+  - parakeet-tdt
+  - nemo
+  - fastconformer
+  - tdt
+tasks:
+  - automatic_speech_recognition
+  - speech_to_text
+frameworks:
+  - nemo
+  - pytorch
+description: High-throughput English speech transcription with NVIDIA NeMo Parakeet-TDT (FastConformer + Token-and-Duration Transducer).
+
+verification:
+  last_verified: "2026-05-23"
+  last_verification_note: "Verified Docker build (NeMo asr extras + megatron-core 0.13.0; image ~15.7GB) and CUDA inference of nvidia/parakeet-tdt-1.1b on RTX PRO 6000 Blackwell. On the shared CVL sample (zzsi/cvl::livetalk/example.wav) the model produced the lowercase transcript 'it's an amazing gift and a unique privilege and i love going' -- word-for-word match (modulo casing) to the faster_whisper reference on the same clip. NeMo 2.5's ASR model factory imports megatron transitively even for encoder-only models, so megatron-core is pinned in requirements. NeMo stdout is silenced by default; pass --verbose to restore."
+  status: VERIFIED
