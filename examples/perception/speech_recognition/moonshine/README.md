@@ -17,9 +17,47 @@ This preset is for the "fast and small, CPU is fine, English only" niche.
 ## Quick start
 
 ```bash
+cvl run moonshine build
+cvl run moonshine predict          # transcribes the bundled CVL sample
+```
+
+Or the direct shell path:
+
+```bash
 bash examples/perception/speech_recognition/moonshine/build.sh
 bash examples/perception/speech_recognition/moonshine/predict.sh
 # default: moonshine/base on CPU, sample audio, JSON output
+```
+
+## What to expect
+
+- **First run**: downloads ~250 MB for `moonshine/base` (or ~80 MB for
+  `moonshine/tiny`) into the shared HF cache (~/.cache/cvlization). Cached
+  thereafter.
+- **What it does**: transcribes one audio file. Defaults to the bundled
+  ~6-second 16 kHz mono CVL sample (`zzsi/cvl::livetalk/example.wav`); pass
+  `--audio /path/to.wav` for your own. Non-16-kHz / non-mono inputs are
+  auto-resampled (librosa).
+- **Output**: a JSON file (default `moonshine_transcript.json`) in your
+  current directory when run via `cvl run`. Fields: `text`, `model`,
+  `audio`, `task`, `created_at`. `--format txt` also supported.
+- **Runtime** on a single x86 CPU core: ~3–5 s for `tiny` and ~5–8 s for
+  `base` on a 6-second clip — useful budget for real-time / on-device.
+
+## Sample
+
+**Input** — bundled CVL audio clip (~6 s, 16 kHz mono, auto-downloaded):
+
+[`livetalk/example.wav`](https://huggingface.co/datasets/zzsi/cvl/resolve/main/livetalk/example.wav)
+
+**Output** — JSON transcript (`moonshine/base`):
+
+```json
+{
+  "text": "It's a amazing gift and a unique privilege and i love going",
+  "model": "moonshine/base",
+  "task": "transcribe"
+}
 ```
 
 Overrides:

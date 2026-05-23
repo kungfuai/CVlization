@@ -15,13 +15,55 @@ non-starter, see "Transformers fallback" below.
 ## Quick start
 
 ```bash
+cvl run parakeet-tdt build
+cvl run parakeet-tdt predict      # transcribes the bundled CVL sample
+```
+
+Or the direct shell path:
+
+```bash
 bash examples/perception/speech_recognition/parakeet_tdt/build.sh
 bash examples/perception/speech_recognition/parakeet_tdt/predict.sh \
   --audio sample \
-  --output outputs/transcript.json
+  --output transcript.json
 ```
 
 Defaults: `nvidia/parakeet-tdt-1.1b`, auto-device (CUDA if visible), JSON output.
+
+## What to expect
+
+- **First run**: downloads ~4.5 GB of model weights from Hugging Face
+  (`nvidia/parakeet-tdt-1.1b`) into the shared HF cache (~/.cache/cvlization).
+  Cached on subsequent runs.
+- **What it does**: transcribes one audio file. Defaults to the bundled
+  ~6-second 16 kHz mono CVL sample (`zzsi/cvl::livetalk/example.wav`); pass
+  `--audio /path/to.wav` for your own. Non-16-kHz / non-mono inputs are
+  auto-resampled (librosa) to a sibling `*.16k.wav`.
+- **Output**: a JSON file (default `parakeet_tdt_transcript.json`) in your
+  current directory when run via `cvl run`. Fields: `text` (lowercase
+  transcript, as Parakeet emits no casing), `model`, `device`, `audio`,
+  `task`, `created_at`, and `segments` if `--word-timestamps` is passed.
+  `--format txt` and `--format srt` (with timestamps) also supported.
+- **Runtime** on RTX PRO 6000 (single GPU): ~10 s warm / ~50 s with NeMo's
+  startup import on a cached model. The transcription itself is well under
+  a second for short clips.
+
+## Sample
+
+**Input** — bundled CVL audio clip (~6 s, 16 kHz mono, auto-downloaded):
+
+[`livetalk/example.wav`](https://huggingface.co/datasets/zzsi/cvl/resolve/main/livetalk/example.wav)
+
+**Output** — JSON transcript:
+
+```json
+{
+  "text": "it's an amazing gift and a unique privilege and i love going",
+  "model": "nvidia/parakeet-tdt-1.1b",
+  "device": "cuda",
+  "task": "transcribe"
+}
+```
 
 ## Model overrides
 
