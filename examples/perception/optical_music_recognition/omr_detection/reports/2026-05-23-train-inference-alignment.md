@@ -170,6 +170,39 @@ images**, with keys from each source MusicXML. The detector already
 gives the right crops; we just need a classifier trained on the union
 distribution.
 
+## Multi-source CNN (train_keysig_multisource.py)
+
+Done. Trainer pulls L7a + L9 + openscore HF images, runs YOLO on each
+to produce keysig crops, labels with `<fifths>` from each MusicXML.
+
+**Leak prevention**: uses HF's own `train`/`dev` splits for each config
+and asserts zero `score_id` overlap between train and dev across all
+sources before training. (passes: 1146 train scores, 239 dev scores,
+0 overlap.)
+
+**Class range**: extended from -4..+4 (9 classes) to -7..+7 (15 classes)
+to cover everything in standard Western tonal notation. Openscore had
+~16% of pages with `|fifths|` in {5, 6}; under the 9-class CNN they'd
+have triggered a CUDA index error in cross-entropy. -7..+7 covers it
+all without expansion ever being needed -- 8+ sharps/flats are written
+enharmonically by every composer.
+
+**Result** (500 train + 100 dev pages per source, 30 epochs):
+
+| Source | dev accuracy |
+|---|---|
+| L7a | 290/290 = 100.0% |
+| L9  | 297/310 = 95.8% |
+| openscore | 273/400 = 68.3% |
+| Overall | 860/1000 = 86.0% |
+
+L7a + L9 stay at near-perfect (same engraving family). Openscore went
+from 0% (L7a-only CNN) to 68% (multi-source) -- still climbing at
+epoch 30, and likely improves further with (a) more openscore training
+data (we used 500 of thousands available), (b) augmentation that
+narrows the staff-size variation across sources, or (c) staff-spacing
+normalisation in the crop step before the CNN sees it.
+
 ## Next
 
 L7a doesn't exercise the new architecture's full value (no mid-piece
