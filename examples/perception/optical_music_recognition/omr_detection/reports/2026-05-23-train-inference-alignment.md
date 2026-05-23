@@ -7,39 +7,58 @@ and the architectural lessons are up top; full chronology below.
 
 ## TL;DR (current state)
 
-**Chosen pipeline**: L7a-only YOLOv8n detector (`detector_l7a_500_v3`)
-+ multi-source 15-class SmallKeyCNN (`keysig_cnn_multisource_v2`) +
-safckylj VLM + respell. Two clean models, decoupled.
+**Chosen pipeline**: **multi-task YOLOv8n detector** (`detector_mt`)
+with 19 classes -- 4 structural (system / staff / barline_single /
+barline_heavy) + 15 keysig sub-classes (`key_-7` ... `key_+7`). Detector
+classifies the key from features at the detection site, no downstream
+CNN needed. Trained on the L7a+L9+openscore mix.
 
-**Page-level key accuracy on 60 unique dev pages per source**:
+For end-to-end OMR: detector → safckylj VLM (whole-page MXC2) →
+respell with the detected key.
 
-| source | strict (page-majority == first `<fifths>`) | any-box-in-set | per-box |
+**Page-level key accuracy** (60 unique dev pages per source):
+
+| source | strict | any-box | per-box |
 |---|---|---|---|
-| L7a       | 100% | 100% | 100% |
-| L9        | 100% | 100% | 100% |
-| openscore | 78.3% | **90.0%** | 71.8% |
+| L7a       | 100%   | 100%   | 100% |
+| L9        | 98.3%  | 100%   | 97.5% |
+| openscore | **89.5%** | **94.7%** | **90.3%** |
 
-**Per-source detector quality** (`detector_mix2` on combined dev):
+**Versus the 2-model pipeline** (L7a-only detector + multi-source
+15-class SmallKeyCNN, kept as a fallback):
 
-| source | system R | staff R | keysig R |
+| source | metric | 2-model | multi-task | Δ |
+|---|---|---|---|---|
+| openscore | strict   | 78.3% | 89.5% | **+11.2** |
+| openscore | per-box  | 71.8% | 90.3% | **+18.5** |
+| L9 | per-box | 100% | 97.5% | -2.5 |
+
+Multi-task wins on openscore by a clear margin; L9 dips slightly due to
+keysig signal being spread across 15 sub-classes (could be helped with
+class-balanced sampling).
+
+**Per-source detector quality** (`detector_mt` on combined dev):
+
+| source | system R | staff R | keysig R (common keys) |
 |---|---|---|---|
-| L7a       | 1.000 | 1.000 | 1.000 |
-| L9        | 1.000 | 0.860 | 0.860 |
-| openscore | 0.941 | 0.898 | 0.891 |
+| L7a       | 1.000 | 1.000 | ~1.000 |
+| L9        | 1.000 | 0.860 | ~0.95 |
+| openscore | 0.941 | 0.898 | ~0.90 |
 
-**What's actually limiting openscore key accuracy**:
-1. Multi-key pages + page-majority-vote eval (closes from 78% → 90% with
-   "any-box-in-set" metric).
-2. Real CNN miscounts on rare keys (|fifths| ≥ 5).
-3. MusicXML `<fifths>` ≠ what's drawn (transposing instruments / metadata
-   bugs); not fixable downstream.
+Rare-key sub-classes (`key_+5`, `key_+6`, `key_+7`) under-perform
+(mAP50 0.24-0.75) -- the data imbalance bottleneck again.
+
+**What's still limiting openscore**:
+1. Class imbalance for `|fifths| ≥ 5` -- would benefit from
+   class-balanced sampling or extra openscore training data.
+2. MusicXML `<fifths>` ≠ what's drawn (transposing instruments /
+   metadata bugs); not fixable downstream.
 
 **Things tried that didn't move the number**:
-- Multi-source detector training (regressed everywhere)
-- Re-trained CNN on the multi-source detector's crops (regressed)
-- Staff-relative barline widening (no measurable effect)
-- Page-level eval with set-based GT (recovered the metric, didn't actually
-  change the model).
+- Multi-source detector with single keysig class (`detector_mix2`)
+- Re-trained CNN on the multi-source detector's crops
+- Staff-relative barline widening
+- Set-based GT eval (recovered the metric, didn't change the model).
 
 ## Status
 
