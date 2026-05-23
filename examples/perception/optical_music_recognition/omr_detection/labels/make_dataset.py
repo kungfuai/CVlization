@@ -209,62 +209,98 @@ def _scale_bboxes(layout: dict, scale: float) -> dict:
     }
 
 
-def build(output_dir: Path, limit: int | None, split: str) -> int:
-    """Iterate L7a rows from HF and emit detection records.
+def build(output_dir: Path, limit: int | None, split: str,
+          repo: str = "zzsi/synthetic-scores",
+          config: str = "level7a",
+          streaming: bool = False,
+          source_tag: str | None = None) -> int:
+    """Iterate HF rows and emit detection records.
 
     Returns number of pages written.
+    `source_tag` defaults to the config name and is recorded on each row
+    so that downstream training can stratify by source.
     """
     # Lazy import so the stub-time `--help` doesn't pull in heavy deps.
     from datasets import load_dataset
     from PIL import Image
 
-    print(f"Loading zzsi/synthetic-scores config=level7a split={split} ...",
-          flush=True)
-    ds = load_dataset("zzsi/synthetic-scores", "level7a", split=split)
-    if limit:
-        ds = ds.select(range(min(limit, len(ds))))
-    print(f"  {len(ds)} source scores", flush=True)
+    tag = source_tag or config
+    print(f"Loading {repo} config={config} split={split} "
+          f"(streaming={streaming}) ...", flush=True)
+    ds = load_dataset(repo, config, split=split, streaming=streaming)
+
+    def _iter(ds, limit):
+        if streaming:
+            it = iter(ds)
+            for _ in range(limit if limit else 10**9):
+                try:
+                    yield next(it)
+                except StopIteration:
+                    return
+        else:
+            n = len(ds) if limit is None else min(limit, len(ds))
+            for i in range(n):
+                yield ds[i]
+
+    rows_iter = _iter(ds, limit)
 
     images_dir = output_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
     labels_path = output_dir / f"labels_{split}.jsonl"
 
     pages_written = 0
+    failed_render = 0
     with labels_path.open("w") as f_out:
-        for i, row in enumerate(ds):
-            score_id = row.get("score_id") or f"row_{i:06d}"
-            mxl = row["musicxml"]
-            n_measures = _count_measures(mxl)
+        for i, row in enumerate(rows_iter):
+            score_id = row.get("score_id") or f"{tag}_{split}_{i:06d}"
+            mxl = row.get("musicxml")
+            if not mxl:
+                continue
+            try:
+                n_measures = _count_measures(mxl)
+            except Exception:
+                n_measures = None
             with tempfile.TemporaryDirectory() as tmp:
                 tmp = Path(tmp)
-                svgs, pngs = _render_one(mxl, tmp)
+                try:
+                    svgs, pngs = _render_one(mxl, tmp)
+                except Exception as e:
+                    failed_render += 1
+                    if failed_render <= 5:
+                        print(f"  WARN {score_id}: render failed ({e!r})",
+                              flush=True)
+                    continue
                 if not svgs or not pngs:
-                    print(f"  WARN {score_id}: no SVG/PNG output", flush=True)
+                    failed_render += 1
                     continue
                 n_pages = len(svgs)
                 for page_idx, svg_path in enumerate(svgs, start=1):
-                    # Pair SVG and PNG by page index. If only one PNG exists
-                    # for a single-page render, use it for page 1.
                     png_path = pngs[page_idx - 1] if page_idx - 1 < len(pngs) else pngs[0]
 
-                    layout = extract_layout(svg_path)
-                    # ViewBox tells us the SVG canvas in mm.
+                    try:
+                        layout = extract_layout(svg_path)
+                    except Exception as e:
+                        if failed_render <= 5:
+                            print(f"  WARN {score_id} p{page_idx}: "
+                                  f"extract failed ({e!r})", flush=True)
+                        continue
                     _, _, vw_mm, vh_mm = _svg_viewbox(svg_path)
                     with Image.open(png_path) as im:
                         pw, ph = im.size
-                    # Pixel-per-mm ratio derived from actual sizes
-                    # (not just DPI), since LilyPond may pad or crop.
                     scale = pw / vw_mm if vw_mm else PX_PER_MM
                     bboxes_px = _scale_bboxes(layout, scale)
 
-                    out_png = images_dir / f"{score_id}_p{page_idx}.png"
+                    # File-safe stem (openscore score_ids may have spaces / punctuation)
+                    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", score_id)[:80]
+                    out_png = images_dir / f"{safe}_p{page_idx}.png"
                     Image.open(png_path).save(out_png)
 
                     rec = {
                         "score_id": score_id,
+                        "source": tag,
                         "page": page_idx,
                         "n_pages": n_pages,
-                        "n_measures": n_measures,  # true count, from MusicXML
+                        "n_measures": n_measures,
                         "image": f"images/{out_png.name}",
                         "width": pw,
                         "height": ph,
@@ -273,24 +309,34 @@ def build(output_dir: Path, limit: int | None, split: str) -> int:
                     f_out.write(json.dumps(rec) + "\n")
                     pages_written += 1
             if (i + 1) % 10 == 0:
-                print(f"  [{i+1}/{len(ds)}] pages_so_far={pages_written}",
+                print(f"  [{i+1}] pages={pages_written} failed={failed_render}",
                       flush=True)
 
-    print(f"Wrote {pages_written} pages -> {labels_path}", flush=True)
+    print(f"Wrote {pages_written} pages ({failed_render} failed) -> "
+          f"{labels_path}", flush=True)
     return pages_written
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--output", required=True, type=Path,
-                   help="output dir (will be created)")
+    p.add_argument("--output", required=True, type=Path)
     p.add_argument("--split", default="train",
                    choices=["train", "dev", "test"])
     p.add_argument("--limit", type=int, default=None,
                    help="cap source rows for quick iteration")
+    p.add_argument("--repo", default="zzsi/synthetic-scores")
+    p.add_argument("--config", default="level7a")
+    p.add_argument("--streaming", action="store_true",
+                   help="use HF streaming (required for openscore "
+                        "pages_transcribed, which is large)")
+    p.add_argument("--source-tag", default=None,
+                   help="defaults to --config; written into each "
+                        "record as `source`")
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    build(args.output, args.limit, args.split)
+    build(args.output, args.limit, args.split,
+          repo=args.repo, config=args.config, streaming=args.streaming,
+          source_tag=args.source_tag)
 
 
 if __name__ == "__main__":

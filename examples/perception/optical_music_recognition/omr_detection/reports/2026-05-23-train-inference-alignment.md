@@ -219,3 +219,54 @@ key changes, fixed layouts). The natural follow-ups:
    whole-page-trained. A retrained per-cell transcriber would let
    detection actually contribute to transcription quality, not just
    key correction.
+
+## Detector multi-source experiment: helped the CNN, hurt the detector
+
+Tested whether training the YOLO detector on a L7a+L9+openscore mix
+(mirroring what we did for the CNN) would further improve openscore
+quality. It didn't.
+
+Per-source key-prediction accuracy on 30 dev pages from each source:
+
+| detector trained on | CNN trained on | L7a | L9 | openscore |
+|---|---|---|---|---|
+| L7a only | L7a only | 100% | 93% | 46% |
+| **L7a only** | **L7a + L9 + openscore** | 100% | 100% | **63%** ← best |
+| L7a + L9 + openscore | L7a only | 100% | 93% | 33% |
+| L7a + L9 + openscore | L7a + L9 + openscore | 100% | 100% | 57% |
+
+What happened to the detector when we added openscore + L9 training data:
+
+```
+class             L7a-only detector   multi-source detector
+system            mAP50 0.995         mAP50 0.977
+staff             mAP50 0.995         mAP50 0.884
+barline_single    mAP50 0.995         mAP50 0.608  (R drops 1.00 -> 0.50)
+key_signature     mAP50 0.995         mAP50 0.863
+```
+
+The barline-recall collapse is the loud signal. We trained on 915
+pages total but only 113 from openscore (after dedup -- the streaming
+HF dataset returned multiple rows per multi-page score). Openscore has
+many more barlines per page than L7a (real piano music), at a
+different scale; the detector's barline class definition (8 px wide GT
+post-widen) was sized for L7a's barline pixels and is wrong for
+openscore's. Result: degraded everywhere instead of generalised.
+
+**Decision**: keep the L7a-only detector + multi-source CNN.
+
+What it suggests for the future:
+- The CNN benefits from seeing multiple engraving styles (classifier
+  task is style-sensitive).
+- The detector is robust to style at L7a's training scale; adding
+  *under-sized* multi-source data without source-aware bbox-widening
+  (or per-source min-box-px) regresses it.
+- If we want to push the detector further on openscore, we need
+  (a) more openscore pages -- ideally dedup-aware, ~500+ unique pages,
+  (b) per-source barline minimum width to match the destination
+  engraving's barline thickness, and
+  (c) probably a longer training schedule.
+
+End-to-end best on openscore right now: **63% key accuracy** with the
+L7a-only YOLO detector + the multi-source 15-class CNN. Up from 0%
+with the L7a-only CNN at the start of this thread.
