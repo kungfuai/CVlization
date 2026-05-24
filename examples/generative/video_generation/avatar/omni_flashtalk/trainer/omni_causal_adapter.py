@@ -159,6 +159,77 @@ class OmniAudioCausalWanModel(CausalWanModel):
         x = self.unpatchify(x, grid_sizes)
         return torch.stack(x)
 
+    def _forward_inference(self, x, t, context, seq_len, audio_emb=None,
+                           kv_cache: dict = None, crossattn_cache: dict = None,
+                           current_start: int = 0, cache_start: int = 0,
+                           clip_fea=None, y=None):
+        """KV-cached forward for streaming inference. Same as the base
+        CausalWanModel._forward_inference, plus per-block audio injection
+        (mirroring our _forward_train override).
+
+        Used by streaming inference v3+ where each call processes one
+        num_frame_per_block chunk and the KV cache accumulates clean-context
+        state from prior chunks.
+        """
+        if self.model_type == 'i2v':
+            assert clip_fea is not None and y is not None
+        device = self.patch_embedding.weight.device
+        if self.freqs.device != device:
+            self.freqs = self.freqs.to(device)
+
+        if y is not None:
+            x = [torch.cat([u, v], dim=0) for u, v in zip(x, y)]
+
+        x = [self.patch_embedding(u.unsqueeze(0)) for u in x]
+        grid_sizes = torch.stack(
+            [torch.tensor(u.shape[2:], dtype=torch.long) for u in x]
+        )
+        x = [u.flatten(2).transpose(1, 2) for u in x]
+        seq_lens = torch.tensor([u.size(1) for u in x], dtype=torch.long)
+        assert seq_lens.max() <= seq_len
+        x = torch.cat(x)
+
+        e = self.time_embedding(
+            sinusoidal_embedding_1d(self.freq_dim, t.flatten()).type_as(x))
+        e0 = self.time_projection(e).unflatten(1, (6, self.dim)).unflatten(dim=0, sizes=t.shape)
+
+        context_lens = None
+        context = self.text_embedding(
+            torch.stack([
+                torch.cat([u, u.new_zeros(self.text_len - u.size(0), u.size(1))])
+                for u in context
+            ])
+        )
+
+        if clip_fea is not None:
+            context_clip = self.img_emb(clip_fea)
+            context = torch.cat([context_clip, context], dim=1)
+
+        audio_layers = None
+        if audio_emb is not None:
+            audio_layers = self._prepare_audio(audio_emb)
+
+        kwargs = dict(
+            e=e0, seq_lens=seq_lens, grid_sizes=grid_sizes,
+            freqs=self.freqs, context=context, context_lens=context_lens,
+            block_mask=self.block_mask,
+        )
+
+        for layer_i, block in enumerate(self.blocks):
+            if audio_layers is not None:
+                x = self._inject_audio_at_layer(x, audio_layers, layer_i, grid_sizes[0])
+            kwargs.update({
+                "kv_cache": kv_cache[layer_i],
+                "crossattn_cache": crossattn_cache[layer_i],
+                "current_start": current_start,
+                "cache_start": cache_start,
+            })
+            x = block(x, **kwargs)
+
+        x = self.head(x, e.unflatten(dim=0, sizes=t.shape).unsqueeze(2))
+        x = self.unpatchify(x, grid_sizes)
+        return torch.stack(x)
+
 
 def load_omni_into_causal_adapter(model, wan_base_safetensors, omni_lora_pt,
                                    lora_rank=128, lora_alpha=128):
