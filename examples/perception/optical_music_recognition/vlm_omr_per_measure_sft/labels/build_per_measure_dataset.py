@@ -137,12 +137,17 @@ def _build_per_measure_mxc2(mxc2_full: str, measure_num: int) -> str | None:
     if not pieces_by_part:
         return None
 
-    # Pull the header (P1 ... P_n + ---) from the full mxc2
+    # Pull the part-declaration block (P1 X / P2 X / ... / ---) from the
+    # full mxc2 but drop any `header *` lines -- those carry work-title,
+    # composer, etc. which are not recoverable from a single-measure crop
+    # and would force the model to hallucinate them at inference.
     header_lines = []
     for line in mxc2_full.splitlines():
         if line.startswith("---"):
             header_lines.append("---")
             break
+        if line.startswith("header "):
+            continue
         header_lines.append(line)
     body = []
     # iter_measures yields p_idx as 1-indexed (1, 2, 3 ...) so no +1 here
