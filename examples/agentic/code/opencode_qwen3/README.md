@@ -37,11 +37,23 @@ cvl run opencode-qwen3 run
 cvl run vllm stop
 ```
 
-> Without `VLLM_AGENT_DEFAULTS=1`, vLLM returns `400 "auto tool choice
-> requires --enable-auto-tool-choice and --tool-call-parser to be set"`
-> on opencode's first request. For non-Qwen3 served models, override the
-> parsers: e.g. `VLLM_TOOL_PARSER=llama3_json VLLM_REASONING_PARSER=
-> VLLM_AGENT_DEFAULTS=1 ...` (empty `VLLM_REASONING_PARSER` skips that flag).
+> **What `VLLM_AGENT_DEFAULTS=1` does** (per the sibling `vllm` preset's
+> `serve.sh`): adds `--enable-auto-tool-choice` + `--tool-call-parser
+> qwen3_xml` + `--reasoning-parser qwen3` +
+> `--default-chat-template-kwargs '{"enable_thinking":false}'`, and
+> raises `--max-model-len` floor to 65 536. Without it, opencode hits
+> `400 "auto tool choice requires --enable-auto-tool-choice..."` on
+> its first request. For non-Qwen3 served models, override:
+> `VLLM_TOOL_PARSER=llama3_json VLLM_REASONING_PARSER= VLLM_AGENT_DEFAULTS=1 ...`
+> (empty `VLLM_REASONING_PARSER` skips that flag).
+
+> **`qwen3_xml` vs `hermes`** — the parser choice is load-bearing.
+> With `hermes`, opencode and vLLM silently disagree on tool-call
+> wire-format: the model emits XML-style calls, vLLM returns them as
+> plain text, opencode never sees a tool call, and the loop hangs
+> indefinitely (we measured 23 min on a fizzbuzz task). With
+> `qwen3_xml` the same task completes in ~22 s. Community consensus
+> via vllm-project/vllm#29192 and Qwen3-Coder HF discussions.
 
 The opencode container mounts your **current working directory** as
 `/workspace` and uses `--network host` so it can reach the vLLM server
@@ -99,6 +111,36 @@ OPENCODE_BASE_URL=https://my-vllm.internal/v1 \
 
 Same env-var contract; the agent doesn't care whether the endpoint is
 local or remote, as long as it speaks `/v1/chat/completions`.
+
+## Verified end-to-end
+
+On RTX PRO 6000 Blackwell (TP=2, BF16, CUDA graphs), `Qwen/Qwen3.6-27B`
+through this preset:
+
+```bash
+mkdir /tmp/fizz && cd /tmp/fizz
+cvl run opencode-qwen3 run -- run --dangerously-skip-permissions \
+  "Write fizzbuzz.py with fizzbuzz(n) returning FizzBuzz/Fizz/Buzz/str(n);
+   then test_fizzbuzz.py with pytest cases for 3, 5, 15, 7. Don't run pytest."
+```
+
+Result: **22 s** wall, two correct files written via the Write tool, all
+four pytest cases pass independently when you `pytest test_fizzbuzz.py`.
+vLLM decode throughput during the run: 35–45 tok/s.
+
+For follow-on agent turns (Bash, Edit, Read tools), opencode's standard
+TUI flow works the same way against the same `cvl run vllm serve` server
+— start the TUI in your project dir, drive it like Claude Code or Aider.
+
+## Future upgrade path: Qwen3-Coder
+
+[`Qwen/Qwen3-Coder-30B-A3B-Instruct`](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct)
+is **non-thinking by default** and explicitly lists opencode as a
+supported agent. Switching the served model would let you drop
+`--reasoning-parser` and `--default-chat-template-kwargs` entirely
+(set `VLLM_REASONING_PARSER=` empty when starting the server). One
+~60 GB download away; we'll wire this into the preset as a
+`MODEL_ID` example once verified.
 
 ## Notes
 

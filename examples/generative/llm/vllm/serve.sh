@@ -23,11 +23,23 @@ docker build -t "${IMAGE}" "${SCRIPT_DIR}"
 # either to empty string to drop the flag entirely).
 if [ "${VLLM_AGENT_DEFAULTS:-0}" = "1" ]; then
   : "${VLLM_MAX_MODEL_LEN:=65536}"
-  : "${VLLM_TOOL_PARSER:=hermes}"
+  : "${VLLM_TOOL_PARSER:=qwen3_xml}"
   : "${VLLM_REASONING_PARSER:=qwen3}"
-  AGENT_FLAGS=(--enable-auto-tool-choice --enforce-eager)
+  AGENT_FLAGS=(--enable-auto-tool-choice)
   [ -n "${VLLM_TOOL_PARSER}" ] && AGENT_FLAGS+=(--tool-call-parser "${VLLM_TOOL_PARSER}")
   [ -n "${VLLM_REASONING_PARSER}" ] && AGENT_FLAGS+=(--reasoning-parser "${VLLM_REASONING_PARSER}")
+  # For Qwen3-family models, also default thinking OFF for agentic clients.
+  # Agentic loops virtually never want chain-of-thought spam between tool
+  # calls -- it doubles latency and produces empty `content` until the
+  # thinker terminates. Static-JSON clients (opencode et al.) can't pass
+  # chat_template_kwargs per-request, so we set the server default.
+  # Override: set VLLM_QWEN3_DISABLE_THINKING=0 to keep thinking on.
+  if [ "${VLLM_REASONING_PARSER}" = "qwen3" ] && [ "${VLLM_QWEN3_DISABLE_THINKING:-1}" = "1" ]; then
+    # serve.py inside the container parses VLLM_EXTRA_ARGS via shlex.split,
+    # which strips bare double-quotes from JSON. Wrap the JSON value in
+    # literal single-quotes so shlex preserves the inner ".
+    AGENT_FLAGS+=(--default-chat-template-kwargs "'{\"enable_thinking\":false}'")
+  fi
   VLLM_EXTRA_ARGS="${AGENT_FLAGS[*]} ${VLLM_EXTRA_ARGS:-}"
   echo "Agent-mode defaults: ${AGENT_FLAGS[*]}   max_model_len=${VLLM_MAX_MODEL_LEN}"
 fi
