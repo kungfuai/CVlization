@@ -1,0 +1,10 @@
+data:
+  repo: zzsi/synthetic-scores
+  config: level7a
+model:
+  backbone: yolov8s
+training:
+  epochs: 50
+  batch_size: 8
+  lr: 0.001
+  image_size: 1920
