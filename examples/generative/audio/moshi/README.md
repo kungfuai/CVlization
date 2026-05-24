@@ -27,20 +27,31 @@ cvl run moshi predict          # uses the bundled CVL sample, writes moshi_respo
 cvl run moshi predict -- --audio my_question.wav --output reply.wav
 ```
 
-### Live dialogue (full-duplex server)
+### Live dialogue (full-duplex, browser, one command)
 
 ```bash
 cvl run moshi serve            # listens on 0.0.0.0:8998
 ```
 
-Connect from another shell or browser:
+Then open **`http://localhost:8998`** in any modern browser and click the
+mic button. That's it — no tunnel, no separate client install, no TLS
+setup. On startup the server pulls a small prebuilt web UI (from the
+`kyutai/moshi-artifacts` HF repo) and serves it at `/`; the WebSocket
+endpoint Moshi expects (`/api/chat`) is on the same port, and browsers
+treat `localhost` as a "secure context" so `getUserMedia` (mic access)
+works without HTTPS.
+
+Use this for any real-time demo. If you need a publicly-reachable URL
+(e.g. someone else talking to your server from another machine), pass
+`--gradio-tunnel` to the underlying `moshi.server` via
+`LLAMA_EXTRA_ARGS="--gradio-tunnel"` and the server will print a
+`https://*.gradio.live` URL on startup.
+
+Alternatives if you don't want the browser UI:
 
 ```bash
-# upstream terminal client (mic + speaker):
-pip install moshi && python -m moshi.client --host <server-host> --port 8998
-# or use the upstream JS client in the kyutai-labs/moshi repo (clients/web/),
-# which needs a TLS endpoint (the upstream docker-compose ships a Cloudflare
-# tunnel sidecar for that).
+# Upstream terminal client (mic + speaker via sounddevice on the host):
+pip install moshi && python -m moshi.client --host localhost --port 8998
 ```
 
 ## What to expect
