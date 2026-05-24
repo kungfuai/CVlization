@@ -118,6 +118,74 @@ class Measure:
     bbox: Box      # (x, y, w, h) spanning all staves at this measure
 
 
+def group_staves_into_systems(staves: list[Box],
+                                gap_threshold_frac: float | None = None,
+                                ) -> list[Box]:
+    """Group detected staves into systems by y-position clustering.
+
+    Sort staves by y; compute all consecutive between-staff gaps.
+    The within-system gaps form a tight cluster of small values; the
+    between-system gaps are noticeably larger. We find the natural
+    break by sorting the gaps and splitting at the largest *ratio*
+    between consecutive sorted gaps -- this is a 1D k-means-like
+    adaptive split that needs no per-source threshold.
+
+    Falls back to `gap_threshold_frac * avg_staff_height` if the
+    adaptive split is ambiguous (e.g., only one staff, or all gaps
+    similar). Default fallback ratio = 1.5.
+
+    Pure geometry; no detected `system` class needed. Use when the
+    YOLO `system` class is unreliable.
+
+    Returns a list of (x, y, w, h) system bboxes in reading order
+    (top-to-bottom).
+    """
+    if not staves:
+        return []
+    sorted_staves = sorted(staves, key=lambda b: b[1])
+    n = len(sorted_staves)
+    if n == 1:
+        s = sorted_staves[0]
+        return [s]
+    avg_h = sum(b[3] for b in sorted_staves) / n
+    # consecutive gaps
+    gaps: list[tuple[float, int]] = []  # (gap, index_of_split_after)
+    for i in range(n - 1):
+        prev = sorted_staves[i]
+        cur = sorted_staves[i + 1]
+        g = cur[1] - (prev[1] + prev[3])
+        gaps.append((g, i))
+
+    # Combined strategy: only split when both (a) the gap is meaningful
+    # in absolute terms (> avg_staff_height) AND (b) there's a clear
+    # bimodal break in the gap distribution.
+    # We choose the threshold = max(0.6 * avg_h, median(gaps)) which is
+    # robust to both L7a's tight piano layout and openscore's looser
+    # voice+piano-with-lyrics layout.
+    sorted_gaps = sorted(g for g, _ in gaps)
+    median_gap = sorted_gaps[len(sorted_gaps) // 2]
+    # Cluster gaps: anything above (median_gap + avg_h) is "between-system"
+    frac = gap_threshold_frac if gap_threshold_frac is not None else 1.0
+    floor = frac * max(avg_h, 1.0)
+    split_at = max(floor, median_gap + 0.5 * max(avg_h, 1.0))
+
+    groups: list[list[Box]] = [[sorted_staves[0]]]
+    for i, (g, _) in enumerate(gaps):
+        if g > split_at:
+            groups.append([sorted_staves[i + 1]])
+        else:
+            groups[-1].append(sorted_staves[i + 1])
+
+    systems: list[Box] = []
+    for g in groups:
+        x = min(b[0] for b in g)
+        y = min(b[1] for b in g)
+        right = max(b[0] + b[2] for b in g)
+        bottom = max(b[1] + b[3] for b in g)
+        systems.append((x, y, right - x, bottom - y))
+    return systems
+
+
 def derive_keysig_areas(systems: list[Box], staves: list[Box],
                         barlines: list[Box],
                         x_tol_frac: float = 0.012) -> list[Box]:
