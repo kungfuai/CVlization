@@ -1,0 +1,37 @@
+name: agentic-opencode
+capability: agentic/code
+modalities:
+  - language
+  - code
+stability: experimental
+resources:
+  gpu: 0  # opencode itself runs on CPU; the model runs in the sibling vllm preset
+  vram_gb: 0
+  disk_gb: 1
+image: opencode
+presets:
+  build:
+    script: build.sh
+    description: Build the opencode TUI image (node:22-slim + opencode-ai + @ai-sdk/openai-compatible)
+  run:
+    script: run.sh
+    description: Launch opencode TUI pointed at the local vLLM server (default http://localhost:8000/v1). Pass through to opencode CLI via `--` args, e.g. `... -- run "implement X"` for headless one-shot.
+tags:
+  - opencode
+  - agentic-coding
+  - tui
+  - qwen3
+  - vllm
+  - openai-compatible
+tasks:
+  - agentic_coding
+  - code_generation
+frameworks:
+  - nodejs
+  - ai-sdk
+description: sst/opencode TUI coding agent configured to talk to a locally-served Qwen3.x model via vLLM's OpenAI-compatible endpoint. Pair this with `VLLM_DETACH=1 cvl run vllm serve` (using MODEL_ID=Qwen/Qwen3.6-27B or any sibling Qwen3.x) to get a self-hosted Claude-Code-like loop.
+
+verification:
+  last_verified: "2026-05-24"
+  last_verification_note: "Full agentic loop verified end-to-end on RTX PRO 6000 Blackwell (SM120, 98 GB VRAM, TP=2, BF16, CUDA graphs). Image: opencode ~1.83 GB (node:22-slim + opencode-ai 1.15.10 + @ai-sdk/openai-compatible, tini-managed). Model server: sibling vllm preset started detached with `VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 MODEL_ID=Qwen/Qwen3.6-27B cvl run vllm serve`. Coding-task smoke (write fizzbuzz.py + test_fizzbuzz.py with 4 pytest cases): completed in 22 s wall, both files written via opencode's Write tool, all 4 cases pass independently when invoking pytest. vLLM decode throughput during the run: 35-45 tok/s. The agentic loop requires four vllm flags VLLM_AGENT_DEFAULTS=1 sets: (1) --enable-auto-tool-choice; (2) --tool-call-parser qwen3_xml -- the parser choice is critical (with `hermes`, opencode + vLLM silently disagree on tool-call wire format and the loop hangs indefinitely, measured 23 min on the same fizzbuzz task; switching to `qwen3_xml` per vllm-project/vllm#29192 dropped wall to 22 s); (3) --reasoning-parser qwen3 (routes Qwen3 thinking into the `reasoning` field instead of `content`); (4) --default-chat-template-kwargs '{\"enable_thinking\":false}' (disables Qwen3 thinking for agent loops where chain-of-thought between tool calls is mostly wasted latency). Plus the max-model-len floor of 65536 since opencode hard-codes max_tokens=32000. Future upgrade: Qwen/Qwen3-Coder-30B-A3B-Instruct is non-thinking by default and explicitly lists opencode as a supported agent -- one ~60 GB download away; documented in README. CVL stop preset (`cvl run vllm stop`) cleanly removes the detached container."
+  status: VERIFIED
