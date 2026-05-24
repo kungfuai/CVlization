@@ -1,0 +1,21 @@
+# Qwen3-Omni-30B-A3B was merged into transformers mainline -- pin to a
+# recent release that contains Qwen3OmniMoeForConditionalGeneration.
+torch>=2.7.0,<2.9
+torchvision>=0.22.0,<0.24
+torchaudio>=2.7.0,<2.9
+transformers>=5.0.0,<6
+huggingface-hub>=1.0.0
+accelerate>=1.7.0
+# No 4-bit quant backend is shipped: as of 2026-05, no community quant of
+# Qwen3-Omni-30B-A3B-Instruct works through HF transformers + the
+# qwen-omni-utils generate path. See README "4-bit status" for the
+# investigation log.
+# Upstream-recommended preprocessing helper. Pulls audio deps transitively.
+qwen-omni-utils>=0.0.5
+soundfile>=0.13.0
+librosa>=0.11.0
+av>=14.0.0
+audioread>=3.0.0
+pillow>=11.0.0
+safetensors>=0.5.0
+numpy>=2.0.0,<2.4

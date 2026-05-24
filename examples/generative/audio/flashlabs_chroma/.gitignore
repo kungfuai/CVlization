@@ -1,0 +1,6 @@
+outputs/
+*.wav
+*.flac
+*.mp3
+chroma_*.wav
+!example.yaml
