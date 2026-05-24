@@ -1,0 +1,37 @@
+name: agentic-opencode-qwen3
+capability: agentic/code
+modalities:
+  - language
+  - code
+stability: experimental
+resources:
+  gpu: 0  # opencode itself runs on CPU; the model runs in the sibling vllm preset
+  vram_gb: 0
+  disk_gb: 1
+image: opencode-qwen3
+presets:
+  build:
+    script: build.sh
+    description: Build the opencode TUI image (node:22-slim + opencode-ai + @ai-sdk/openai-compatible)
+  run:
+    script: run.sh
+    description: Launch opencode TUI pointed at the local vLLM server (default http://localhost:8000/v1). Pass through to opencode CLI via `--` args, e.g. `... -- run "implement X"` for headless one-shot.
+tags:
+  - opencode
+  - agentic-coding
+  - tui
+  - qwen3
+  - vllm
+  - openai-compatible
+tasks:
+  - agentic_coding
+  - code_generation
+frameworks:
+  - nodejs
+  - ai-sdk
+description: sst/opencode TUI coding agent configured to talk to a locally-served Qwen3.x model via vLLM's OpenAI-compatible endpoint. Pair this with `VLLM_DETACH=1 cvl run vllm serve` (using MODEL_ID=Qwen/Qwen3.6-27B or any sibling Qwen3.x) to get a self-hosted Claude-Code-like loop.
+
+verification:
+  last_verified: "2026-05-24"
+  last_verification_note: "End-to-end smoke verified on RTX PRO 6000 Blackwell (SM120, 98 GB VRAM). Image: opencode-qwen3 ~1.83 GB (node:22-slim + opencode-ai 1.15.10 + @ai-sdk/openai-compatible, tini-managed). Model server: sibling vllm preset started detached with `VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 MODEL_ID=Qwen/Qwen3.6-27B cvl run vllm serve` on CUDA_VISIBLE_DEVICES=1. Confirmed: cvl info discovery; opencode container reaches vllm via --network host; opencode `run` headless mode returns the model's reply (smoke prompt: \"Reply with just the word: pong\" -> reply: \"pong\"). The three vllm flags VLLM_AGENT_DEFAULTS=1 sets (--enable-auto-tool-choice, --tool-call-parser hermes, --reasoning-parser qwen3) are all required: without --enable-auto-tool-choice + parser, vllm 400s on opencode's tool_choice=auto; without --reasoning-parser, content bleeds into Qwen3's chain-of-thought; opencode hard-codes max_tokens=32000 so max-model-len must be >=65536. CVL stop preset (`cvl run vllm stop`) cleanly removes the detached container."
+  status: VERIFIED

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "vllm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "vLLM (local)",
+      "options": {
+        "baseURL": "{env:OPENCODE_BASE_URL}",
+        "apiKey": "{env:VLLM_API_KEY}"
+      },
+      "models": {
+        "Qwen/Qwen3.6-27B": {"name": "Qwen3.6-27B (vLLM)"},
+        "Qwen/Qwen3.6-35B-A3B": {"name": "Qwen3.6-35B-A3B (vLLM)"},
+        "Qwen/Qwen3.5-9B": {"name": "Qwen3.5-9B (vLLM)"},
+        "Qwen/Qwen3-4B-Instruct": {"name": "Qwen3-4B-Instruct (vLLM)"}
+      }
+    }
+  },
+  "model": "vllm/Qwen/Qwen3.6-27B"
+}
