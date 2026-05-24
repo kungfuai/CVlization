@@ -18,10 +18,13 @@ through vLLM's OpenAI-compatible endpoint. Fully self-hosted coding loop
 
 ```bash
 # 1. Start the model server, detached, with the agentic-client flag set.
-# VLLM_AGENT_DEFAULTS=1 adds --enable-auto-tool-choice (opencode sends
-# tool_choice: "auto") + --tool-call-parser hermes (Qwen3 format) +
-# --reasoning-parser qwen3 (so Qwen3 thinking lands in `reasoning`, not
-# `content`) + raises max-model-len to 65 536 (opencode hard-codes
+# VLLM_AGENT_DEFAULTS=1 adds the four flags opencode needs:
+#   --enable-auto-tool-choice (opencode sends tool_choice: "auto"),
+#   --tool-call-parser qwen3_xml (correct wire format for Qwen3 tool calls),
+#   --reasoning-parser qwen3 + --default-chat-template-kwargs
+#     '{"enable_thinking":false}' (force Qwen3 thinking off -- agent loops
+#     don't want chain-of-thought between tool calls),
+# and raises max-model-len floor to 65 536 (opencode hard-codes
 # max_tokens=32 000, the 8 192 default rejects it).
 MODEL_ID=Qwen/Qwen3.6-27B VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 \
   cvl run vllm serve
@@ -31,7 +34,7 @@ until curl -fsS http://localhost:8000/v1/models >/dev/null; do sleep 2; done
 
 # 2. Launch opencode in your project dir.
 cd /path/to/your/code
-cvl run opencode-qwen3 run
+cvl run opencode run
 
 # When done, stop the server:
 cvl run vllm stop
@@ -63,7 +66,7 @@ on `http://localhost:8000/v1`.
 
 ```bash
 cd /path/to/your/code
-cvl run opencode-qwen3 run -- run "Add a test for the Foo class"
+cvl run opencode run -- run "Add a test for the Foo class"
 ```
 
 Anything after `--` is passed straight to the `opencode` CLI inside the
@@ -106,7 +109,7 @@ matches the served name (or pass `-- run -m vllm/<full-id> "..."`).
 ```bash
 OPENCODE_BASE_URL=https://my-vllm.internal/v1 \
   VLLM_API_KEY=sk-real-key \
-  cvl run opencode-qwen3 run
+  cvl run opencode run
 ```
 
 Same env-var contract; the agent doesn't care whether the endpoint is
@@ -119,7 +122,7 @@ through this preset:
 
 ```bash
 mkdir /tmp/fizz && cd /tmp/fizz
-cvl run opencode-qwen3 run -- run --dangerously-skip-permissions \
+cvl run opencode run -- run --dangerously-skip-permissions \
   "Write fizzbuzz.py with fizzbuzz(n) returning FizzBuzz/Fizz/Buzz/str(n);
    then test_fizzbuzz.py with pytest cases for 3, 5, 15, 7. Don't run pytest."
 ```

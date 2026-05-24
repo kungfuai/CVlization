@@ -6,7 +6,7 @@ IMAGE="${VLLM_IMAGE:-cvl-vllm}"
 MODEL_ID="${MODEL_ID:-allenai/Olmo-3-7B-Instruct}"
 HOST_ADDR="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
-# Stable name lets sibling presets (e.g. agentic/code/opencode_qwen3) find
+# Stable name lets sibling presets (e.g. agentic/code/opencode) find
 # the detached server and lets `stop.sh` clean it up.
 CONTAINER_NAME="${VLLM_CONTAINER_NAME:-cvl-vllm-server}"
 

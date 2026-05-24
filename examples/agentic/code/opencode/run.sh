@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${CVL_WORK_DIR:-${WORK_DIR:-$(pwd)}}"
-IMG="${CVL_IMAGE:-opencode-qwen3}"
+IMG="${CVL_IMAGE:-opencode}"
 
 # Where opencode should send chat completions. Defaults to the local
 # detached vLLM server started by `VLLM_DETACH=1 cvl run vllm serve`.
