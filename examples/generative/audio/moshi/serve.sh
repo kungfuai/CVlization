@@ -3,12 +3,11 @@
 # the upstream JS client (https://github.com/kyutai-labs/moshi/tree/main/client)
 # or the bundled terminal client (`python -m moshi.client`).
 #
-# The server listens on host port ${PORT:-8998}. To talk to it from the
-# browser-based client you typically need a TLS endpoint -- the upstream
-# repo's docker-compose ships a Cloudflare tunnel sidecar for that.
+# The server listens on host port ${PORT:-8998} and auto-downloads its
+# prebuilt web UI from kyutai/moshi-artifacts on startup, so opening
+# http://localhost:${PORT} in a browser is the complete local demo.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMG="${CVL_IMAGE:-moshi}"
 HF_REPO="${MOSHI_HF_REPO:-kyutai/moshiko-pytorch-bf16}"
 PORT="${PORT:-8998}"
