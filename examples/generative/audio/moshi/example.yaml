@@ -1,0 +1,47 @@
+name: moshi
+capability: generative/audio
+modalities:
+  - audio
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 12
+image: moshi
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image (PyTorch CUDA + moshi==0.2.13 + audio libs)
+  predict:
+    script: predict.sh
+    description: Batch spoken dialogue -- one input wav (user turn) becomes one output wav (Moshi response)
+    path_args:
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+  serve:
+    script: serve.sh
+    description: Launch Moshi's WebSocket server on port 8998 for live full-duplex dialogue with the upstream JS / terminal client
+tags:
+  - moshi
+  - kyutai
+  - speech-to-speech
+  - voice-to-voice
+  - spoken-dialogue
+  - full-duplex
+  - real-time
+  - streaming
+tasks:
+  - spoken_dialogue
+  - speech_to_speech
+frameworks:
+  - pytorch
+description: Real-time full-duplex spoken dialogue with Kyutai Moshi (Moshiko / Moshika voices; ~200 ms practical end-to-end latency in the live server path).
+
+verification:
+  last_verified: "2026-05-23"
+  last_verification_note: "Full verify-inference-example skill checklist passed on RTX PRO 6000 Blackwell (98GB VRAM, SM120). Docker build OK on pytorch:2.9.1-cuda12.8-cudnn9-runtime base + moshi==0.2.13 + audio/build libs (build-essential is required so torch._inductor / triton can JIT on first run; runtime base alone lacks gcc). Batch predict verified via BOTH ./test.sh and `cvl run moshi predict` (from /tmp cwd) on the shared CVL sample (zzsi/cvl::livetalk/example.wav): Moshiko produced a 5-second 24kHz mono PCM16 wav (~242KB) with a conversational reply (\" Hey, what's going on? What do you mean, what's your\") at ~90 ms/step (63 steps in 6s) -- well inside the real-time budget. Wall time ~10s for a warm run. Peak GPU memory during inference: 18.3 GB (Moshiko bf16; ~14 GB weights + ~4 GB activations/KV). Host persistence confirmed (output landed at /tmp/cvl_stt_test/moshi_reply.wav, not just in the container). Model cache reuse confirmed: 0 'downloading' messages on warm runs (the Moshiko bf16 ~6 GB weights download once on first run). `cvl info moshi` returns correct metadata; `cvl run moshi build` is a 0.9 s no-op when the image is present. moshi-inference writes <stem>-N.wav per batch entry; predict.py forces --batch-size 1 and renames the single -0.wav to the user-requested filename. Serve path (`./serve.sh` -> WebSocket server on :8998) scaffolded but not exercised in this verification; for live full-duplex you need the upstream JS / terminal client."
+  status: VERIFIED
