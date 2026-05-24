@@ -132,15 +132,19 @@ For follow-on agent turns (Bash, Edit, Read tools), opencode's standard
 TUI flow works the same way against the same `cvl run vllm serve` server
 — start the TUI in your project dir, drive it like Claude Code or Aider.
 
-## Future upgrade path: Qwen3-Coder
+## Alternate model: Qwen3-Coder
 
 [`Qwen/Qwen3-Coder-30B-A3B-Instruct`](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct)
-is **non-thinking by default** and explicitly lists opencode as a
-supported agent. Switching the served model would let you drop
-`--reasoning-parser` and `--default-chat-template-kwargs` entirely
-(set `VLLM_REASONING_PARSER=` empty when starting the server). One
-~60 GB download away; we'll wire this into the preset as a
-`MODEL_ID` example once verified.
+is an **older** Qwen3-base coder-tuned model (mid-2025) that ships
+**non-thinking by default** and explicitly lists opencode as a
+supported agent. With our `--default-chat-template-kwargs
+'{"enable_thinking":false}'` flag forcing thinking off on Qwen3.6, it
+no longer holds a behavioral edge for this preset — Qwen3.6's newer
+training is the better default for most coding work. Use Qwen3-Coder
+only if you specifically want its native 262 k context (vs Qwen3.6's
+shorter default) or want to drop the reasoning-parser machinery
+entirely (set `VLLM_REASONING_PARSER=` empty + omit the
+`enable_thinking` kwarg).
 
 ## Notes
 
