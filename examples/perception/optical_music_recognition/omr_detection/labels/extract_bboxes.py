@@ -144,14 +144,29 @@ def _finalize_staff(lines: list[tuple[float, float, float]]) -> dict:
 
 
 def _group_systems(staves: list[dict]) -> list[dict]:
-    """Group staves into systems by vertical proximity."""
+    """Group staves into systems by vertical proximity.
+
+    The threshold is adaptive: within-system gaps (piano grand-staff, quartet
+    staves) tend to cluster tightly around one value; between-system gaps are
+    visibly larger. We split where the gap exceeds 1.5x the smaller cluster's
+    median. Falls back to SYSTEM_GAP if there are <3 staves.
+    """
     if not staves:
         return []
+    if len(staves) >= 3:
+        gaps = [staves[i+1]["y_top"] - staves[i]["y_bottom"]
+                for i in range(len(staves) - 1)]
+        sorted_gaps = sorted(gaps)
+        # Median of the smaller half = the within-system spacing.
+        within_med = sorted_gaps[len(sorted_gaps) // 4]
+        split_at = max(within_med * 1.5, 1.0)
+    else:
+        split_at = SYSTEM_GAP
     systems: list[list[dict]] = []
     cur: list[dict] = [staves[0]]
     for s in staves[1:]:
         gap = s["y_top"] - cur[-1]["y_bottom"]
-        if gap < SYSTEM_GAP:
+        if gap < split_at:
             cur.append(s)
         else:
             systems.append(cur)
@@ -175,8 +190,33 @@ def _collect_barlines(
     v_rects: list[tuple[float, float, float, float]],
     systems: list[dict],
 ) -> list[dict]:
-    """Match thin-tall rects to systems they vertically overlap."""
-    barlines: list[dict] = []
+    """Identify barlines vs stems.
+
+    Width alone doesn't separate them: in some scores (e.g. Ravel quartets)
+    stems and single barlines are both ~0.15 mm wide. The reliable signal is
+    that a barline's y-range covers a whole staff (top staff line through
+    bottom staff line), whereas a stem extends out from a notehead and
+    doesn't reach both extremes.
+    """
+    # Tolerance for staff-line snap: real barlines slightly overshoot the
+    # outermost staff lines; stems within the staff fall short.
+    STAFF_SNAP_TOL = 0.3  # mm
+    # x-quantization: rects at the same musical x are sometimes emitted twice
+    # (e.g. LilyPond doubles the end-of-line bar when a cautionary measure
+    # number is shown after the line break). 1 mm absorbs that jitter while
+    # still being well below typical measure widths (5-10 mm).
+    X_BIN = 1.0  # mm
+
+    staves_flat: list[tuple[int, int, dict]] = []
+    sys_n_staves: dict[int, int] = {}
+    for sysd in systems:
+        sys_n_staves[sysd["idx"]] = len(sysd["staves"])
+        for st_i, st in enumerate(sysd["staves"]):
+            staves_flat.append((sysd["idx"], st_i, st))
+
+    # Pass 1: keep rects that pass width + spans-staff checks. Tag each with
+    # the staff it covers so we can do cross-staff confirmation in pass 2.
+    candidates: list[tuple[int, int, float, float, float, float, bool]] = []
     for x, y, w, h in v_rects:
         if h < BARLINE_H_MIN:
             continue
@@ -184,23 +224,73 @@ def _collect_barlines(
         is_heavy = w >= BARLINE_HEAVY_MIN and w < 1.0
         if not (is_single or is_heavy):
             continue
-        # Snap to a system
         bar_top, bar_bot = y, y + h
-        owner = None
-        for sysd in systems:
-            sx, sy, sw, sh = sysd["bbox"]
-            sys_top, sys_bot = sy, sy + sh
-            # require >= 70% vertical overlap with the system
-            ov = max(0.0, min(bar_bot, sys_bot) - max(bar_top, sys_top))
-            if ov / max(h, 1e-6) >= 0.5 and sx - 1 <= x <= sx + sw + 1:
-                owner = sysd["idx"]
+        for sys_idx, st_i, st in staves_flat:
+            spans = (bar_top <= st["y_top"] + STAFF_SNAP_TOL
+                     and bar_bot >= st["y_bottom"] - STAFF_SNAP_TOL)
+            in_x = st["x_left"] - 1 <= x <= st["x_right"] + 1
+            if spans and in_x:
+                candidates.append((sys_idx, st_i, x, y, w, h, is_heavy))
                 break
-        if owner is None:
+
+    # Pass 2: per (system, staff), cluster bars whose x are within X_BIN.
+    # Each cluster collapses to one bar (the leftmost = canonical bar; the
+    # cautionary echo, when present, is dropped). Clustering by distance
+    # avoids the round() boundary problem that grid-binning has.
+    from collections import defaultdict
+    by_staff: dict[tuple[int, int], list[tuple]] = defaultdict(list)
+    for cand in candidates:
+        sys_idx, st_i, *_ = cand
+        by_staff[(sys_idx, st_i)].append(cand)
+
+    # Per-staff: walk sorted bars; flag pairs within X_BIN as a thin double
+    # bar (||). A single isolated bar keeps its width-based kind. We extend
+    # the candidate tuple with a `kind` field for downstream class output.
+    tagged: list[tuple] = []  # (sys, st_i, x, y, w, h, is_heavy, kind)
+    for cands in by_staff.values():
+        cands.sort(key=lambda c: c[2])
+        i = 0
+        while i < len(cands):
+            c = cands[i]
+            nxt = cands[i + 1] if i + 1 < len(cands) else None
+            if nxt and nxt[2] - c[2] < X_BIN:
+                tagged.append((*c, "double"))
+                tagged.append((*nxt, "double"))
+                i += 2
+            else:
+                kind = "heavy" if c[6] else "single"
+                tagged.append((*c, kind))
+                i += 1
+
+    # Pass 3: cross-staff confirmation. For multi-staff systems, a real
+    # barline appears at similar x in >=2 staves; an isolated stem appears
+    # at only one. We bucket by 1 mm x-bin for this check, with two passes
+    # (offset by 0.5 mm) to avoid the boundary problem.
+    def buckets(cands, offset):
+        out: dict[tuple[int, int], list[tuple]] = defaultdict(list)
+        for c in cands:
+            sys_idx, _, x, *_ = c
+            out[(sys_idx, int((x + offset) / X_BIN))].append(c)
+        return out
+
+    confirmed: set = set()  # set of id(cand)
+    for offset in (0.0, X_BIN / 2):
+        for (sys_idx, _), cands in buckets(tagged, offset).items():
+            staves_hit = {c[1] for c in cands}
+            if sys_n_staves[sys_idx] == 1 or len(staves_hit) >= 2:
+                for c in cands:
+                    confirmed.add(id(c))
+
+    barlines: list[dict] = []
+    for c in tagged:
+        if id(c) not in confirmed:
             continue
+        _, _, x, y, w, h, is_heavy, kind = c
         barlines.append({
-            "system": owner,
+            "system": c[0],
             "bbox": (x, y, w, h),
             "heavy": is_heavy,
+            "kind": kind,
         })
     return barlines
 
