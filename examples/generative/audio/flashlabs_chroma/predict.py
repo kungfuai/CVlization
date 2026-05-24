@@ -46,7 +46,10 @@ except ImportError:
 
 
 HF_DATA_REPO = "zzsi/cvl"
-HF_SAMPLE_FILE = "livetalk/example.wav"
+# Dedicated dialogue prompt for this example — a 1.5s "Hi, who are you?" wav
+# elicits a coherent intro reply, which showcases voice cloning + dialogue
+# behaviour better than the longer monologue used by the STT presets.
+HF_SAMPLE_FILE = "flashlabs_chroma/hi_who_are_you.wav"
 EXAMPLE_NAME = "flashlabs_chroma"
 DEFAULT_MODEL_ID = "FlashLabs/Chroma-4B"
 

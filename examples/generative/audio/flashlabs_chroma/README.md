@@ -87,14 +87,20 @@ HF_TOKEN=hf_... CHROMA_QUANT=4bit cvl run flashlabs-chroma predict
 
 ## Sample
 
-**Input** — bundled CVL audio clip (~6 s, auto-downloaded):
+**Input** — dedicated dialogue prompt (~1.5 s, auto-downloaded):
 
-[`livetalk/example.wav`](https://huggingface.co/datasets/zzsi/cvl/resolve/main/livetalk/example.wav)
-
-Used as both the user query and the voice-clone reference (self-clone).
+[`flashlabs_chroma/hi_who_are_you.wav`](https://huggingface.co/datasets/zzsi/cvl/resolve/main/flashlabs_chroma/hi_who_are_you.wav) — a short "Hi, who are you?" clip
+synthesized with Piper. Used as both the user query and the voice-clone
+reference (self-clone).
 
 **Output** — `chroma_response.wav` (Chroma's spoken reply in the cloned
-voice). Audio doesn't embed in GitHub markdown; play it in any audio player.
+voice; ~5–10 s on the default sample). Audio doesn't embed in GitHub
+markdown; play it in any audio player.
+
+> **Getting a text transcript of the reply**: Chroma's `model.generate()`
+> returns audio-codec tokens only — the text track is internal. If you
+> want captions for the response, route `chroma_response.wav` through
+> the sibling `faster-whisper` or `parakeet-tdt` STT preset.
 
 ## Notes
 
