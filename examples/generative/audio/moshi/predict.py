@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import sys
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -84,6 +85,66 @@ def resolve_audio_arg(audio: Optional[str]) -> str:
     return resolve_input_path(audio)
 
 
+def maybe_pad_with_silence(audio_path: str, target_seconds: float) -> str:
+    """Pad `audio_path` at the end with silence so total length >= target_seconds.
+
+    Moshi's reply duration tracks input duration — once the user-turn audio ends,
+    Moshi stops generating. Padding the input with silence gives Moshi a window
+    to keep talking, so the reply doesn't get cut off mid-sentence.
+
+    Returns the path actually used for inference (a sibling `.padded.wav` if
+    padding was applied, otherwise the original path unchanged).
+    """
+    if target_seconds <= 0:
+        return audio_path
+    import soundfile as sf
+    import numpy as np
+    info = sf.info(audio_path)
+    current_seconds = info.frames / float(info.samplerate)
+    if current_seconds >= target_seconds:
+        return audio_path
+    data, sr = sf.read(audio_path, always_2d=False)
+    needed = int(round((target_seconds - current_seconds) * sr))
+    if data.ndim == 1:
+        silence = np.zeros(needed, dtype=data.dtype)
+    else:
+        silence = np.zeros((needed, data.shape[1]), dtype=data.dtype)
+    padded = np.concatenate([data, silence], axis=0)
+    out_path = str(Path(audio_path).with_suffix(".padded.wav"))
+    sf.write(out_path, padded, sr)
+    print(f"Padded input {current_seconds:.1f}s -> {target_seconds:.1f}s with silence -> {out_path}")
+    return out_path
+
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
+
+def extract_moshi_text(combined: str) -> str:
+    """Strip Moshi's text reply out of moshi-inference's stdout/stderr.
+
+    moshi-inference streams text tokens (via printer.print_token) interleaved
+    with two log streams (`Info:` and ANSI-coloured `[Info]`). The reply text
+    sits between the "loading input file" log line and the "[Info] writing"
+    line just before the wav is dumped. Strip ANSI codes first so the regex
+    doesn't have to deal with them.
+    """
+    no_ansi = _ANSI_RE.sub("", combined)
+    match = re.search(
+        r"loading input file.*?\n(?P<text>.*?)(?:\[Info\]\s*writing|Info: processed)",
+        no_ansi,
+        re.DOTALL,
+    )
+    if not match:
+        return ""
+    raw = match.group("text")
+    # Drop any "[Info]/Info:/Warning" log lines that interleave with the tokens.
+    cleaned_lines = [
+        line for line in raw.splitlines()
+        if "Info:" not in line and "[Info]" not in line and "Warning" not in line
+    ]
+    return "\n".join(cleaned_lines).strip()
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Batch spoken dialogue with Kyutai Moshi (user wav in -> Moshi wav out).",
@@ -102,6 +163,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch-size", type=int, default=int(_env("MOSHI_BATCH_SIZE", "1")),
                    help="moshi-inference writes one wav per batch entry (suffixed -N.wav). "
                         "Default 1 yields a single response wav.")
+    p.add_argument("--pad-input-to", type=float, default=float(_env("MOSHI_PAD_INPUT_TO", "15.0")),
+                   help="Pad input audio at the end with silence to reach at least this many "
+                        "seconds before inference. Moshi's reply duration tracks input duration, "
+                        "so a short user turn truncates the response. 0 disables.")
     return p.parse_args()
 
 
@@ -111,6 +176,7 @@ def main() -> int:
     input_path = resolve_audio_arg(args.audio)
     if not Path(input_path).exists():
         raise FileNotFoundError(f"Input audio not found: {input_path}")
+    input_path = maybe_pad_with_silence(input_path, args.pad_input_to)
 
     output_path = resolve_output_path(args.output)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -129,10 +195,24 @@ def main() -> int:
     print("Launching moshi-inference:")
     print(" ", " ".join(shlex.quote(a) for a in cmd))
 
-    proc = subprocess.run(cmd, check=False)
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    # Forward upstream's stdout/stderr verbatim so users still see progress logs.
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
     if proc.returncode != 0:
         sys.stderr.write(f"\nmoshi-inference exited {proc.returncode}\n")
         return proc.returncode
+
+    # Print Moshi's text reply on its own, distinct from the noisy logs above.
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    reply_text = extract_moshi_text(combined)
+    if reply_text:
+        print("\n" + "=" * 60)
+        print("Moshi reply (text):")
+        print(reply_text)
+        print("=" * 60)
 
     # moshi-inference writes <stem>-N.wav (one per batch entry). For batch_size=1
     # the single output is <stem>-0.wav — rename it to the user-requested path.

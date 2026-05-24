@@ -57,9 +57,15 @@ pip install moshi && python -m moshi.client --host <server-host> --port 8998
   scripting; treat it as the "live demo" mode.
 - **Output**: predict writes a wav file (defaults to `moshi_response.wav` in
   your cwd via `cvl run`). serve streams audio over WebSocket.
-- **Runtime**: batch wall ~30 s on RTX PRO 6000 (cold container + cached
-  weights + ~6 s of generated audio); the live server path is real-time
-  full-duplex.
+- **Runtime**: batch wall ~10–15 s on RTX PRO 6000 (cold container + cached
+  weights). Default `--pad-input-to 15` gives Moshi a 15-second window to
+  respond; set lower for faster turns, 0 to disable padding (response length
+  then matches input length, which can truncate the reply mid-sentence).
+- **Reply text**: predict.py prints Moshi's text-side output at the end
+  ("=== Moshi reply (text): …") so you can read the transcript without
+  scrolling past inference logs.
+- **Live full-duplex**: real-time bidirectional via the WebSocket server
+  (see "Live dialogue" below). Not exercised by the batch `predict` preset.
 
 ## Sample
 
