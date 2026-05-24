@@ -53,9 +53,13 @@ HF_DATA_REPO = "zzsi/cvl"
 HF_SAMPLE_FILE = "flashlabs_chroma/hi_who_are_you.wav"
 EXAMPLE_NAME = "qwen3_omni"
 
-# Default checkpoint per quantization mode.
+# Only the full bf16 checkpoint is wired in today. No community 4-bit
+# quant of Qwen3-Omni-30B-A3B-Instruct works through HF transformers
+# + the qwen-omni-utils generate path as of 2026-05 (cpatonn AWQ ->
+# garbled tokens; lainlives bnb -> Linear4bit classes but uncompressed
+# weights; thomasip GPTQ -> gptqmodel deps don't co-install with our
+# torch). See README's "4-bit status" section.
 MODEL_ID_BF16 = "Qwen/Qwen3-Omni-30B-A3B-Instruct"
-MODEL_ID_AWQ4 = "cpatonn/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit"
 
 SPEAKERS = ("Ethan", "Chelsie", "Aiden")
 SAMPLE_RATE = 24000
@@ -97,23 +101,29 @@ def resolve_audio_arg(audio: Optional[str]) -> str:
 
 
 def default_model_for_quant(quant: str) -> str:
-    return MODEL_ID_AWQ4 if quant == "4bit" else MODEL_ID_BF16
+    # Only bf16 is supported; keep the function for future quant support.
+    return MODEL_ID_BF16
 
 
 def load_model(model_id: str, quant: str, attn_impl: str):
     import torch
     from transformers import Qwen3OmniMoeForConditionalGeneration, Qwen3OmniMoeProcessor
 
-    kwargs = {"device_map": "auto"}
-    # FA2 requires bf16/fp16; "auto" lets transformers pick from config.json
-    # (bf16 for the full model; the AWQ-4bit ckpt also reports bf16 for
-    # non-quantized layers). Override to bf16 explicitly to avoid surprises.
-    kwargs["dtype"] = "auto" if quant == "4bit" else torch.bfloat16
+    kwargs = {"device_map": "auto", "dtype": torch.bfloat16}
     if attn_impl != "auto":
         kwargs["attn_implementation"] = attn_impl
+    del quant  # unused until a working 4-bit path lands
 
     model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(model_id, **kwargs)
-    processor = Qwen3OmniMoeProcessor.from_pretrained(model_id)
+    # Some community quants (e.g. lainlives bnb-4bit) ship only the model
+    # safetensors and omit preprocessor_config.json, so fall back to the
+    # upstream base id for the processor when needed.
+    try:
+        processor = Qwen3OmniMoeProcessor.from_pretrained(model_id)
+    except (OSError, EnvironmentError):
+        print(f"  (processor not found at {model_id}, "
+              f"falling back to {MODEL_ID_BF16})")
+        processor = Qwen3OmniMoeProcessor.from_pretrained(MODEL_ID_BF16)
     return model, processor
 
 
@@ -237,15 +247,12 @@ def parse_args() -> argparse.Namespace:
                    help="Output wav path (24 kHz mono).")
 
     default_quant = _env("QWEN3_OMNI_QUANT", "bf16")
-    p.add_argument("--quant", default=default_quant, choices=["bf16", "4bit"],
-                   help="'bf16' (default) = full model (~80 GB at 15 s ctx); "
-                        "'4bit' = compressed-tensors AWQ-4bit (cpatonn) — "
-                        "currently produces garbled output under transformers "
-                        "5.9 + compressed-tensors 0.11/0.12 (tracked as a "
-                        "known issue; see README).")
+    p.add_argument("--quant", default=default_quant, choices=["bf16"],
+                   help="Only 'bf16' is supported today (~70 GiB VRAM at "
+                        "15 s ctx). No community 4-bit quant works through "
+                        "HF transformers -- see README's '4-bit status'.")
     p.add_argument("--model", default=_env("QWEN3_OMNI_MODEL_ID", ""),
-                   help="Override model id. Default depends on --quant: "
-                        f"{MODEL_ID_AWQ4} (4bit) or {MODEL_ID_BF16} (bf16).")
+                   help=f"Override model id. Default: {MODEL_ID_BF16}.")
     p.add_argument("--speaker", default=_env("QWEN3_OMNI_SPEAKER", "Ethan"),
                    choices=list(SPEAKERS),
                    help="Talker voice. Three baked-in choices.")

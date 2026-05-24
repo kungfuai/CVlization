@@ -11,7 +11,7 @@ Turn-based multimodal dialogue (audio / image / video / text in,
 | Best for | Multimodal (image/video/audio) chat with spoken replies |
 | Default model | `Qwen/Qwen3-Omni-30B-A3B-Instruct` (bf16, ~60 GB on disk) |
 | Min VRAM | ~79 GB bf16 at 15 s ctx; ~108 GB bf16 at 60 s ctx (single A100/H100-80 is borderline; 2× 80 GB or H200 for longer) |
-| 4-bit option | `cpatonn/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit` is wired in (`--quant 4bit`) but **currently produces garbled output** under transformers 5.9 + compressed-tensors 0.11/0.12 — see [AWQ-4bit known issue](#awq-4bit-known-issue) |
+| 4-bit option | **None working today** — see [4-bit status](#4-bit-status) for the investigation log |
 | Languages | 19 input speech langs; 10 output speech langs (English among them) |
 | Mode | Turn-based (file in / text + file out); NOT real-time streaming |
 | Output | 24 kHz mono PCM float wav + plain-text reply |
@@ -24,7 +24,7 @@ Turn-based multimodal dialogue (audio / image / video / text in,
 | Modalities out | audio + text | audio (text track internal) | **audio + text** |
 | Voice cloning | ❌ fixed | ✅ reference audio | ❌ fixed (3 voices) |
 | Streaming | ✅ full-duplex | ❌ turn-based | ❌ turn-based |
-| Min VRAM | ~18 GB | ~4 GB (4-bit) | ~80 GB (bf16; 4-bit broken) |
+| Min VRAM | ~18 GB | ~4 GB (4-bit) | ~70 GiB (bf16 only; no working 4-bit) |
 | License | CC-BY | Apache 2.0 | Apache 2.0 |
 | Gated | no | auto-gated | **no** |
 | Inference API | custom WebSocket | plain HF | HF + `qwen-omni-utils` |
@@ -88,22 +88,24 @@ Single A100/H100-80 GB is borderline at the shortest context; for longer
 clips you need 2× 80 GB or one H200 141 GB. Disable the Talker stage
 (below) to save ~10 GB.
 
-## AWQ-4bit known issue
+## 4-bit status
 
-The community quant
-[`cpatonn/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit`](https://huggingface.co/cpatonn/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit)
-(compressed-tensors pack-quantized int4) is wired into the preset via
-`--quant 4bit` / `QWEN3_OMNI_QUANT=4bit`. With our current pinned stack
-(transformers 5.9, compressed-tensors 0.11/0.12) the checkpoint loads
-without crashing but emits **garbled tokens** — the runtime
-dequantization math doesn't agree with how the ckpt was packed
-(transformers 4.57.0.dev0 + compressed-tensors 0.11.0).
+**No community 4-bit quant of Qwen3-Omni-30B-A3B-Instruct works through
+the HF transformers + `qwen-omni-utils` generate path today (2026-05).**
+For 24-GB-class cards, use the sibling `flashlabs-chroma` preset
+instead. Investigation log so a future re-check has a starting point:
 
-For 24-GB-class cards today, use the sibling `flashlabs-chroma` preset
-instead. We'll re-enable Qwen3-Omni 4-bit when the upstream
-compressed-tensors / transformers integration stabilises for this
-checkpoint, or when an alternative quant (e.g. a clean AWQ or GPTQ
-re-pack) is published.
+| Checkpoint | Format | Result |
+|---|---|---|
+| [`cpatonn/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit`](https://huggingface.co/cpatonn/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit) | compressed-tensors pack-quantized int4 (packed against `transformers==4.57.0.dev0` + `compressed-tensors==0.11.0`) | Loads under `compressed-tensors==0.11/0.12` but emits **garbled tokens** (`'巢 NJ邛箧‒邛邛邛...'`). Under `compressed-tensors==0.15.0.1` the Linear class swap fails entirely (`AttributeError: 'Linear' object has no attribute 'weight'`). Author's own recommended path is **vLLM v0.11.1**, not HF transformers — see [discussions](https://huggingface.co/cpatonn/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit/discussions/1) #1, #3, #4. |
+| [`lainlives/Qwen3-Omni-30B-A3B-Instruct-bnb-4bit`](https://huggingface.co/lainlives/Qwen3-Omni-30B-A3B-Instruct-bnb-4bit) | bitsandbytes nf4 (per `config.json`) | Layers load as `bitsandbytes.nn.Linear4bit` and produce clean text, but the weight tensors are **uncompressed** (63 GB on disk vs ~20 GB expected for real 4-bit; runtime VRAM ~67 GiB — same as bf16). Effectively a bf16 model wrapped in 4-bit class machinery, no VRAM savings. |
+| [`thomasip/Qwen3-Omni-30B-A3B-Instruct-GPTQ-4bit`](https://huggingface.co/thomasip/Qwen3-Omni-30B-A3B-Instruct-GPTQ-4bit) | Real GPTQ-4bit (26 GB on disk, packed by `gptqmodel:5.7.0`) | `gptqmodel` install conflicts with our torch (needs `pcre`, unavailable on PyPI). `auto-gptq` is incompatible with `transformers >= 5.x` (`no_init_weights` removed). Would need a separate image with an older `transformers` to try. |
+| [`Intel/Qwen3-Omni-30B-A3B-Instruct-int4-AutoRound`](https://huggingface.co/Intel/Qwen3-Omni-30B-A3B-Instruct-int4-AutoRound) | AutoRound int4 (26 GB on disk) | Not attempted — needs `auto-round`; per the model card, "needs `vllm-omni` branch", suggesting stock transformers isn't supported. |
+
+We'll re-enable a 4-bit path when (a) the upstream compressed-tensors /
+transformers integration stabilises for the cpatonn AWQ ckpt, or (b) a
+GPTQ/AWQ ckpt is published with a transformers-friendly loader that
+doesn't drag `pcre`-style native deps.
 
 ## Text-only mode (save ~10 GB VRAM)
 
