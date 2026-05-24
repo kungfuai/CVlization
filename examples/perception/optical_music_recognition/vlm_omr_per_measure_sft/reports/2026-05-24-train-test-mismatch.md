@@ -65,3 +65,48 @@ violated it here.
 
 (1) is the right structural fix. (3) is the cleanest but requires
 substantial new data.
+
+## Addendum: the real per-page bottleneck is system detection, not barlines
+
+User pushed back on my "barline recall ~50% so measures don't derive"
+story. Actual numbers from L7a_04000 at varying confidence thresholds:
+
+```
+L7a_04000 (expected 3 systems, ~17 measures):
+  conf=0.50  system=1   staff=9   barline=45   measures=5
+  conf=0.25  system=1   staff=9   barline=45   measures=5
+  conf=0.10  system=4   staff=9   barline=45   measures=32
+  conf=0.05  system=6   staff=9   barline=46   measures=51
+  conf=0.01  system=9   staff=9   barline=51   measures=72
+```
+
+Barline recall on this page is 45/50 = 90% (not 50%). Staff count is
+9/9 = perfect. **The bottleneck on this page is system detection**:
+at conf=0.25 only the most confident system is found, so
+`derive_measures` only assigns barlines to that one system. Lower
+confidence over-detects (multiple boxes per real system).
+
+So there's **no good system-class threshold for L7a HF originals**.
+The detector's aggregate system R=1.0 on val was on rendered val
+images, not HF originals at conf=0.25.
+
+The aggregate barline R=0.50 also holds -- per-class mAP across all
+sources averaged 50% recall. On L7a specifically barlines are fine
+(90%); it's openscore + L9 that drag the aggregate down.
+
+### Implications for the fix
+
+The right next move is no longer just "rebuild data on detector crops".
+We need a measure crop that's robust to detector failures. Options:
+
+1. **Drop the `system` class entirely; group staves into systems
+   geometrically** (cluster by y). Pure geometry, no train/test gap.
+2. **Detect measure boxes directly** as a YOLO class (not derive from
+   system x barlines). Reduces the brittle multi-class dependency to
+   a single one.
+3. **Per-class conf thresholds**: keep keysig at conf=0.25 (where
+   it's already strong), drop system to conf=0.10 with explicit NMS
+   to dedup overlapping system predictions.
+
+(1) is the simplest. Staves cluster into systems trivially: sort staves
+by y, split at any gap > N staff-spaces. No model needed.
