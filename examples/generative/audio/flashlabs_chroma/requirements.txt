@@ -1,0 +1,19 @@
+# Chroma-4B is a custom multimodal causal LM (Qwen2.5-Omni + Llama3 + Mimi).
+# Upstream pins transformers to 5.0.0rc0; we honour that pin to start. Newer
+# transformers releases may work via trust_remote_code but haven't been
+# validated against this preset.
+torch>=2.7.0,<2.9
+torchvision>=0.22.0,<0.24
+torchaudio>=2.7.0,<2.9
+transformers==5.0.0rc0
+huggingface-hub>=1.3.0
+accelerate>=1.7.0
+bitsandbytes>=0.45.0
+# Audio I/O for file-in/file-out mode (no pyaudio in container)
+soundfile>=0.13.0
+librosa>=0.11.0
+av>=14.0.0
+audioread>=3.0.0
+pillow>=11.0.0
+safetensors>=0.5.0
+numpy>=2.2.0,<2.4

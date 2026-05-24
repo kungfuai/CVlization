@@ -1,0 +1,53 @@
+name: flashlabs-chroma
+capability: generative/audio
+modalities:
+  - audio
+  - text
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 8
+  disk_gb: 14
+image: flashlabs-chroma
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image (PyTorch CUDA + transformers 5.0.0rc0 + bitsandbytes + audio libs)
+  predict:
+    script: predict.sh
+    description: Turn-based spoken dialogue with optional voice cloning (user audio in -> Chroma audio out)
+    path_args:
+      - flag: "--audio"
+        type: file
+      - flag: "--prompt-audio"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Self-clone smoke run on the bundled CVL sample
+tags:
+  - chroma
+  - flashlabs
+  - spoken-dialogue
+  - speech-to-speech
+  - voice-cloning
+  - multimodal
+  - qwen2.5-omni
+  - llama3
+  - mimi
+tasks:
+  - spoken_dialogue
+  - speech_to_speech
+  - voice_cloning
+frameworks:
+  - pytorch
+  - transformers
+description: Turn-based spoken dialogue with voice cloning via FlashLabs Chroma-4B (Qwen2.5-Omni-3B reasoner + Llama3 backbone + Llama3 decoder + Mimi codec). Runs in ~8GB VRAM at bf16, ~4GB at 4-bit (bitsandbytes). Apache-2.0; HF model is auto-gated.
+
+verification:
+  last_verified: "0000-00-00"
+  last_verification_note: "Scaffolded on RTX PRO 6000 Blackwell. Docker build OK (image ~14 GB; pytorch 2.7.1+cuda12.8 runtime + transformers 5.0.0rc0 + bitsandbytes). predict.sh forwards HF_TOKEN into the container correctly (verified via bash -x trace). End-to-end smoke run is BLOCKED on HF gate acceptance: FlashLabs/Chroma-4B is auto-gated and the test account hadn't accepted the gate at the model URL yet, so huggingface_hub returns 403 ('not in the authorized list') even though the token is valid. To finish verification: accept the gate once at https://huggingface.co/FlashLabs/Chroma-4B, then re-run `cvl run flashlabs-chroma predict`. CVL CLI discovery (`cvl info flashlabs-chroma`) works; shellcheck clean on the shell wrappers; voice-clone defaults to self-clone (no celebrity prompts shipped)."
+  status: UNVERIFIED
