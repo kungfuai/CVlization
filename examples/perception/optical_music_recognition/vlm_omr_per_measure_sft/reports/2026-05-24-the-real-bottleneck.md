@@ -73,3 +73,53 @@ predictions before trusting a metric on a new task setup.
 The correct evaluation harness for per-measure should always apply
 respell with the detector-predicted key before computing pitch
 similarity. We have all the pieces; just wire them.
+
+## Addendum: verification (responding to a fair pushback)
+
+Two things were called out:
+
+(1) The respell test used GT key, which is oracle. Real inference must
+    use the *predicted* key.
+(2) Earlier claims of "100% L7a / 97% L9 / 90% openscore" keysig
+    detection accuracy needed evidence.
+
+### Detector keysig accuracy: verified on 30 dev pages per source
+
+For each page, take majority vote of detected `key_*` sub-class labels.
+A prediction is "correct" if it equals the first `<fifths>` in the
+page's musicxml or appears anywhere in the page's `<fifths>` set
+(handles multi-key pages).
+
+| source | accuracy | off-by-one |
+|---|---|---|
+| L7a       | **30/30 = 100.0%** | 0 |
+| L9        | **29/30 =  96.7%** | 1 |
+| openscore | **27/30 =  90.0%** | 2 |
+
+Errors are exclusively off-by-one between adjacent key signatures.
+Annotated examples saved at `/tmp/verify_key/`. Two were shown to user:
+
+- l7a_correct_0_L7a_04000: 3 detected keysig boxes, all voted +2 ✓
+- openscore_correct_2_lc5079512: 6 detected boxes, all voted -4 ✓
+- l9_wrong_0_L9_03137 (Strauss "Die Nacht"): GT=-2, votes [-1,-2],
+  majority picked -1 due to tie-breaking insertion order
+- openscore_wrong_1_lc6686980 (Brahms Op.121 No.3): GT=+1, votes [2,2]
+
+### Per-measure pipeline with predicted (not GT) key
+
+Same 12 dev cells per source, but respell uses the detector's
+majority-vote key:
+
+| source | raw pitch | resp (GT key) | resp (PRED key) |
+|---|---|---|---|
+| L7a       | 62.8% | 100.0% | 100.0% |
+| L9        | 26.0% |  36.2% |  36.2% |
+| openscore | 16.5% |  23.5% |  23.5% |
+
+On this 12-sample slice the detector key matched GT for every page
+(100/100/100), so PRED-respell == GT-respell. On the larger 30-page
+verification we'd expect L9 and openscore to drop a small amount
+from the 3-10% detector error rate.
+
+The headline 100% L7a / 36% L9 / 24% openscore therefore reflects
+realistic, not oracle, end-to-end performance.
