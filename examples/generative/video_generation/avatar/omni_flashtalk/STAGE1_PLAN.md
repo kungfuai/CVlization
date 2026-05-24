@@ -120,3 +120,65 @@ Next: debug the training (lr sweep, longer run, real text context, check
 audio-module weight movement). This is open-ended ML debugging — the "S6
 dominates" risk in the effort estimate. Recommend a deliberate diagnostic
 pass rather than blind longer runs.
+
+---
+
+## Resolution (after deep investigation)
+
+After an extended diagnostic pass (multiple precision configs, lora vs full
+finetune, v-loss vs x0-loss, continuous vs discrete timesteps) the actual
+root cause turned out to be the **second** candidate above (zero text
+context), and the first candidate was a red herring. The "1000-step shows
+no learning" symptom is real but uninformative once text is wired correctly.
+
+### What the recipe actually was missing
+The OmniAvatar student DiT was pretrained with three conditioning streams:
+text (T5-encoded prompt), audio (wav2vec features), and ref image (i2v
+anchor). Our trainer passed **zero text context**, which puts the student's
+cross-attention into a completely off-distribution regime. The student's
+forward in that regime produces garbage outputs and the gradient signal is
+correspondingly broken.
+
+Hard evidence of this, captured 2026-05-24:
+| Conditioning | initial loss (sigma=0.938) | visual quality of student pred_x0 |
+| --- | --- | --- |
+| zero text       | 0.2541 | blurry generic face, no scene context |
+| real T5 context | **0.0574** (4.4x lower) | coherent talking face, matches teacher composition |
+
+The "gradient explosion" / "Adam-moment-instability" we kept seeing was a
+symptom of the model being driven in a region where its forward is
+ill-conditioned, NOT a flaw in the training recipe.
+
+### What also turned out to be true
+- The OmniAvatar pretrained student is already *very* close to the SoulX
+  teacher's outputs when conditioned correctly (pre-train initial loss
+  0.0574, post-200-steps loss 0.0574; pixel PSNR ~24.7 dB pre vs ~24.7 dB
+  post). Stage-1 essentially has no work left to do.
+- The real gap between pretrained student and teacher is in **audio-driven
+  lip motion**, not static image quality. Visual side-by-side at 2026-05-24
+  shows identical compositions but different mouth animations.
+- Therefore Stage-1 ODE-regression has limited value here. The interesting
+  signal lives in Stage-2 (DMD) and/or runtime parallelism.
+
+## Status (updated)
+- [x] S1-S6 as originally specified
+- [x] S7 — capture_trajectories.py: re-run SoulX teacher with
+      `sample_steps=4` matching Hallo-Live's `denoising_step_list`, snapshot
+      the latent at each of 4 timesteps + final clean x0 -> trajectories/<id>.pt
+      (100/100, ~73 min on one A100 with cpu_offload).
+- [x] S8 — precompute_text.py: T5-encode each item's `full_prompt`,
+      append `text_context` to latents/<id>.pt (100/100, ~3 min).
+- [x] S9 — train_stage1_ode.py: Hallo-Live ODE-fusion recipe (discrete
+      timesteps + teacher-trajectory noisy_input + x0-loss + real text). Adds
+      pixel-space PSNR eval via Wan VAE decode. Confirmed numerically and
+      visually that the student matches teacher composition out-of-the-box.
+
+## Recommendation
+- Skip further Stage-1 tuning; the warm-start is already done by OmniAvatar
+  pretraining itself.
+- Real-time path = streaming pipeline parallelism (LiveAvatar-style: one
+  GPU per denoising step, throughput ~Sx with KV cache + causal mask),
+  composable later with DMD distillation. CausalWanModel + KV-cache infra
+  is already in place.
+- Quality gap to close (lip-sync) is the Stage-2 DMD target, not Stage-1.
+
