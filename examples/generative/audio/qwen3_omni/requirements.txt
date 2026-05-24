@@ -1,0 +1,25 @@
+# Qwen3-Omni-30B-A3B was merged into transformers mainline -- pin to a
+# recent release that contains Qwen3OmniMoeForConditionalGeneration.
+# The cpatonn AWQ-4bit checkpoint was packed with transformers==4.57.0.dev0
+# and uses the compressed-tensors pack-quantized int4 format (NOT autoawq).
+torch>=2.7.0,<2.9
+torchvision>=0.22.0,<0.24
+torchaudio>=2.7.0,<2.9
+transformers>=5.0.0,<6
+huggingface-hub>=1.0.0
+accelerate>=1.7.0
+# compressed-tensors backend for the AWQ-4bit default checkpoint.
+# Pin to 0.11.0 — the version the cpatonn AWQ-4bit weights were packed with
+# (config.json reports version 0.11.0). compressed-tensors 0.15.x fails to
+# swap the Linear class at load time on this checkpoint, leaving plain
+# torch.nn.Linear layers with weight_packed but no .weight.
+compressed-tensors==0.12.0
+# Upstream-recommended preprocessing helper. Pulls audio deps transitively.
+qwen-omni-utils>=0.0.5
+soundfile>=0.13.0
+librosa>=0.11.0
+av>=14.0.0
+audioread>=3.0.0
+pillow>=11.0.0
+safetensors>=0.5.0
+numpy>=2.0.0,<2.4
