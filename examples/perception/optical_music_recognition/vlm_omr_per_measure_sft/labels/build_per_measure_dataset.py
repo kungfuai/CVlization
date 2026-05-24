@@ -157,7 +157,8 @@ def _build_per_measure_mxc2(mxc2_full: str, measure_num: int) -> str | None:
     return "\n".join(header_lines + body) + "\n"
 
 
-def _process_split(src_dir: Path, split: str, out_dir: Path) -> tuple[int, int]:
+def _process_split(src_dir: Path, split: str, out_dir: Path,
+                    pad_vertical_frac: float = 0.0) -> tuple[int, int]:
     """Returns (records_written, rows_skipped)."""
     from PIL import Image
     src_jsonl = src_dir / f"labels_{split}.jsonl"
@@ -223,7 +224,9 @@ def _process_split(src_dir: Path, split: str, out_dir: Path) -> tuple[int, int]:
                     if w <= 0 or h <= 0:
                         continue  # degenerate bbox from cell derivation
                     pad_x = max(4, int(0.01 * page_img.width))
-                    pad_y = max(4, int(0.01 * page_img.height))
+                    pad_y_frac = pad_vertical_frac if pad_vertical_frac else 0
+                    pad_y = max(4, int(0.01 * page_img.height +
+                                        pad_y_frac * h))
                     left = max(0, int(x - pad_x))
                     top = max(0, int(y - pad_y))
                     right = min(page_img.width, int(x + w + pad_x))
@@ -268,10 +271,15 @@ def main():
                    help="A make_dataset output dir or a mixed dir with "
                         "labels_train.jsonl + labels_dev.jsonl + images/")
     p.add_argument("--output", required=True, type=Path)
+    p.add_argument("--pad-vertical-frac", type=float, default=0.0,
+                   help="extra vertical padding around each measure crop "
+                        "as a fraction of measure height "
+                        "(e.g. 0.5 = 50%% more above + below)")
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     for split in ("train", "dev"):
-        _process_split(args.src_dir, split, args.output)
+        _process_split(args.src_dir, split, args.output,
+                        pad_vertical_frac=args.pad_vertical_frac)
 
 
 if __name__ == "__main__":
