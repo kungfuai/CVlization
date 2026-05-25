@@ -1,38 +1,46 @@
-"""Build a local detection dataset (JSONL + PNGs) from L7a synthetic scores.
+"""Build a local detection dataset (JSONL + PNGs) for OMR detection training.
 
 Pipeline per source row:
-  1. Load (image, musicxml, score_id) from HF zzsi/synthetic-scores level7a.
-  2. Write the MXL temporarily to disk.
-  3. Re-render via Docker -> per-page SVG and per-page PNG (same .ly, same DPI).
-  4. Run extract_bboxes on each SVG.
-  5. Convert bboxes from SVG user units (~mm) to pixels using the DPI used
-     for PNG rendering. LilyPond default rendering at -dresolution=150
-     gives 150/25.4 ~= 5.91 px per mm.
-  6. Save the PNG to <output>/images/<score_id>_p<page>.png and append a
-     JSONL line with paths + bboxes (in pixel coords).
+  1. Load (image, musicxml, score_id) from a HF zzsi/* dataset.
+  2. Render the MXL via Docker LilyPond to SVG (vector, DPI-independent).
+  3. Rasterize the SVG to PNG via cairosvg at the target DPI — this
+     guarantees the PNG's geometry matches the SVG's, so SVG-derived bboxes
+     land exactly on the rendered ink (no SVG-vs-PNG layout drift).
+  4. Run extract_bboxes on each SVG; bboxes come in mm and are scaled by
+     PX_PER_MM to pixel coords.
+  5. Use MusicXML's score-part / staves-per-part count as a hint to
+     extract_bboxes' system-grouping (more reliable than geometric gap
+     heuristics on multi-part scores like SATB+piano).
+  6. Use keysig_extractor (MusicXML <fifths> declarations + SVG measure-
+     label positions) for full keysig coverage including mid-piece changes
+     and line-start restatements.
 
 Output layout:
     <output>/
         images/<score_id>_p<page>.png
-        labels.jsonl
+        labels_<split>.jsonl
 
 JSONL schema (one line per page):
     {
-        "score_id": "synthetic_l7a_00042",
-        "page":     1,
-        "n_pages":  1,
-        "image":    "images/synthetic_l7a_00042_p1.png",
-        "width":    int,       # PNG width  (px)
-        "height":   int,       # PNG height (px)
+        "score_id":  "synthetic_l7a_00042",
+        "page":      1,
+        "n_pages":   1,
+        "image":     "images/synthetic_l7a_00042_p1.png",
+        "width":     int,       # PNG width  (px)
+        "height":    int,       # PNG height (px)
         "bboxes": {
             "systems":  [[x, y, w, h], ...],
             "staves":   [[sys_i, staff_i, x, y, w, h], ...],
-            "barlines": [[sys_i, x, y, w, h, heavy], ...],
-            "bar_numbers": [int, ...],   # measure numbers on this page
+            "barlines": [[sys_i, x, y, w, h, heavy, kind_id], ...],
+                        # kind_id: 0=single 1=heavy 2=double
+            "key_sigs": [[sys_i, x, y, w, h, fifths, kind_id], ...],
+                        # kind_id: 0=change 1=line_start
+            "measures": [[sys_i, m_idx, x, y, w, h], ...],
+            "bar_numbers": [int, ...],
         }
     }
 
-Coordinates are in **pixels** matching the saved PNG.
+All coordinates are in pixels matching the saved PNG.
 
 Usage:
     python make_dataset.py --output /tmp/detection_l7a --limit 50
@@ -54,10 +62,34 @@ sys.path.insert(0, str(_THIS.parent))  # for extract_bboxes
 
 from pipeline import LILYPOND_DIR  # noqa: E402
 from extract_bboxes import extract_layout, _NS  # noqa: E402
+from keysig_extractor import extract_keysigs  # noqa: E402
 import xml.etree.ElementTree as ET  # noqa: E402
+import zipfile  # noqa: E402
 
 DPI = 150
 PX_PER_MM = DPI / 25.4  # ~= 5.9055
+
+BARLINE_KIND_ID = {"single": 0, "heavy": 1, "double": 2}
+KEYSIG_KIND_ID = {"change": 0, "line_start": 1}
+
+
+def _staves_per_system(mxl_text: str) -> int | None:
+    """Sum of <staves> across all parts in the first measure (or 1 per part).
+
+    Returns None on parse error; caller falls back to geometric grouping.
+    """
+    try:
+        root = ET.fromstring(mxl_text)
+    except ET.ParseError:
+        return None
+    total = 0
+    for part in root.findall(".//part"):
+        m1 = part.find("measure")
+        if m1 is None:
+            continue
+        s_el = m1.find(".//staves")
+        total += int(s_el.text) if s_el is not None and s_el.text else 1
+    return total or None
 
 
 def _count_measures(mxl_text: str) -> int:
@@ -102,51 +134,41 @@ from pathlib import Path
 sys.path.insert(0, '/workspace')
 from predict import musicxml_to_ly, patch_ly
 
-MATCH_HF_RENDER = __MATCH_HF_RENDER__
-
 mxl = Path('/data/score.musicxml')
 out = Path('/out')
 with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
     ly = musicxml_to_ly(mxl, tmp)
     patch_ly(ly)
-    if not MATCH_HF_RENDER:
-        text = ly.read_text()
-        bar_ctx = ('\n  \\context {\n'
-                   '    \\Score\n'
-                   '    \\override BarNumber.break-visibility = ##(#t #t #t)\n'
-                   '    barNumberVisibility = #all-bar-numbers-visible\n'
-                   '  }')
-        if r'\layout' in text:
-            text = re.sub(r'\\layout\s*\{', lambda m: m.group(0) + bar_ctx,
-                          text, count=1)
-        else:
-            text += '\n\\layout {\n' + bar_ctx + '\n}\n'
-        ly.write_text(text)
+    # Inject all-bar-numbers-visible so extract_bar_nums_from_svg can
+    # anchor mid-piece keysig / measure labels by their visible number.
+    text = ly.read_text()
+    bar_ctx = ('\n  \\context {\n'
+               '    \\Score\n'
+               '    \\override BarNumber.break-visibility = ##(#t #t #t)\n'
+               '    barNumberVisibility = #all-bar-numbers-visible\n'
+               '  }')
+    if r'\layout' in text:
+        text = re.sub(r'\\layout\s*\{', lambda m: m.group(0) + bar_ctx,
+                      text, count=1)
+    else:
+        text += '\n\\layout {\n' + bar_ctx + '\n}\n'
+    ly.write_text(text)
 
-    # SVG render -- vector, DPI-independent
+    # SVG only -- we rasterize to PNG via cairosvg back on the host so the
+    # PNG geometry exactly matches the SVG that bboxes were extracted from.
     subprocess.run(['lilypond', '--svg', str(ly)], cwd=str(tmp),
                    capture_output=True, check=True)
-    # PNG render -- match HF DPI when requested
-    png_cmd = ['lilypond', '--png']
-    if MATCH_HF_RENDER:
-        png_cmd.append('-dresolution=150')
-    png_cmd.append(str(ly))
-    subprocess.run(png_cmd, cwd=str(tmp), capture_output=True, check=True)
-
-    for f in sorted(tmp.glob('*.svg')) + sorted(tmp.glob('*.png')):
+    for f in sorted(tmp.glob('*.svg')):
         shutil.copy(f, out / f.name)
 """
 
 
-def _render_one(mxl_text: str, work_dir: Path,
-                match_hf: bool = True) -> tuple[list[Path], list[Path]]:
-    """Render an MXL text to per-page SVG + PNG via Docker.
+def _render_one(mxl_text: str, work_dir: Path) -> list[Path]:
+    """Render an MXL text to per-page SVG via Docker LilyPond.
 
-    Returns (svg_files, png_files) sorted by page index.
-    `match_hf=True` skips the bar-number injection and renders PNG at
-    150 DPI so the output matches the HF synthetic-scores PNGs that
-    safckylj was trained on.
+    Returns SVG paths sorted by page index. PNG rasterization happens
+    on the host via cairosvg.
     """
     data_dir = work_dir / "data"
     out_dir = work_dir / "out"
@@ -154,8 +176,7 @@ def _render_one(mxl_text: str, work_dir: Path,
     out_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "score.musicxml").write_text(mxl_text)
     script = work_dir / "_render.py"
-    script.write_text(_RENDER_PY.replace("__MATCH_HF_RENDER__",
-                                          "True" if match_hf else "False"))
+    script.write_text(_RENDER_PY)
 
     cmd = [
         "docker", "run", "--rm",
@@ -169,7 +190,6 @@ def _render_one(mxl_text: str, work_dir: Path,
     subprocess.run(cmd, capture_output=True, check=False)
 
     def _page_idx(p: Path) -> int:
-        # LilyPond names: score-1.svg, score-2.svg, or 'score.png' (single page)
         stem = p.stem
         if stem == "score":
             return 1
@@ -180,9 +200,21 @@ def _render_one(mxl_text: str, work_dir: Path,
                 return 0
         return 0
 
-    svgs = sorted(out_dir.glob("*.svg"), key=_page_idx)
-    pngs = sorted(out_dir.glob("*.png"), key=_page_idx)
-    return svgs, pngs
+    return sorted(out_dir.glob("*.svg"), key=_page_idx)
+
+
+def _rasterize_svg(svg_path: Path, png_path: Path, dpi: int = DPI) -> tuple[int, int]:
+    """Rasterize SVG to PNG at target DPI. Returns (width_px, height_px)."""
+    import cairosvg  # local import
+    root = ET.parse(svg_path).getroot()
+    vb = root.attrib.get("viewBox", "0 0 0 0").split()
+    vw_mm = float(vb[2])
+    out_w = int(round(vw_mm * (dpi / 25.4)))
+    cairosvg.svg2png(url=str(svg_path), write_to=str(png_path),
+                     output_width=out_w, background_color="white")
+    from PIL import Image
+    with Image.open(png_path) as im:
+        return im.size  # (w, h)
 
 
 def _svg_viewbox(svg_path: Path) -> tuple[float, float, float, float]:
@@ -192,30 +224,64 @@ def _svg_viewbox(svg_path: Path) -> tuple[float, float, float, float]:
     return tuple(float(v) for v in vb)  # (min_x, min_y, w, h)
 
 
-def _scale_bboxes(layout: dict, scale: float) -> dict:
-    """Convert all SVG-space bboxes to pixel space."""
+def _scale_bboxes(layout: dict, scale: float,
+                  key_sigs: list[dict] | None = None) -> dict:
+    """Convert all SVG-space bboxes to pixel space, with kind tags as ints."""
     def s(box):
         return [round(b * scale, 2) for b in box]
+
     systems = [s(item["bbox"]) for item in layout["systems"]]
     staves = [
         [item["system"], item["idx"], *s(item["bbox"])]
         for item in layout["staves"]
     ]
     barlines = [
-        [item["system"], *s(item["bbox"]), int(item["heavy"])]
+        [item["system"], *s(item["bbox"]), int(item["heavy"]),
+         BARLINE_KIND_ID.get(item.get("kind", "single"), 0)]
         for item in layout["barlines"]
     ]
-    key_sigs = [
-        [item["system"], *s(item["bbox"])]
-        for item in layout.get("key_sigs", [])
+    key_sigs_out = [
+        [k["system"], *s(k["bbox"]), int(k.get("fifths", 0)),
+         KEYSIG_KIND_ID.get(k.get("kind", "line_start"), 1)]
+        for k in (key_sigs or [])
     ]
+    measures = _derive_measures_px(layout, scale)
     return {
         "systems": systems,
         "staves": staves,
         "barlines": barlines,
-        "key_sigs": key_sigs,
+        "key_sigs": key_sigs_out,
+        "measures": measures,
         "bar_numbers": layout["bar_numbers"],
     }
+
+
+def _derive_measures_px(layout: dict, scale: float) -> list[list]:
+    """One bbox per (system, measure_index), spanning all staves of system.
+
+    Built from barline x-positions per system: between consecutive barlines
+    is one measure, plus the area from system left edge to the first bar.
+    Returns [[sys_i, m_idx, x, y, w, h], ...] in pixel coords.
+    """
+    def s(v):
+        return round(v * scale, 2)
+
+    out: list[list] = []
+    by_sys: dict[int, list[float]] = {}
+    for b in layout["barlines"]:
+        by_sys.setdefault(b["system"], []).append(b["bbox"][0])
+    for sysd in layout["systems"]:
+        sys_i = sysd["idx"]
+        sx, sy, sw, sh = sysd["bbox"]
+        xs = sorted(set(by_sys.get(sys_i, [])))
+        if not xs:
+            continue
+        boundaries = [sx] + xs
+        for m_idx, (x0, x1) in enumerate(zip(boundaries, boundaries[1:] + [sx + sw])):
+            if x1 - x0 < 1.0:  # skip degenerate (e.g. doubled bars)
+                continue
+            out.append([sys_i, m_idx, s(x0), s(sy), s(x1 - x0), s(sh)])
+    return out
 
 
 def build(output_dir: Path, limit: int | None, split: str,
@@ -277,40 +343,51 @@ def build(output_dir: Path, limit: int | None, split: str,
             fifths_seq = _all_fifths(mxl)
             key_first = fifths_seq[0] if fifths_seq else None
             key_set = sorted(set(fifths_seq)) if fifths_seq else []
+            staves_per_sys = _staves_per_system(mxl)
             with tempfile.TemporaryDirectory() as tmp:
                 tmp = Path(tmp)
                 try:
-                    svgs, pngs = _render_one(mxl, tmp)
+                    svgs = _render_one(mxl, tmp)
                 except Exception as e:
                     failed_render += 1
                     if failed_render <= 5:
                         print(f"  WARN {score_id}: render failed ({e!r})",
                               flush=True)
                     continue
-                if not svgs or not pngs:
+                if not svgs:
                     failed_render += 1
                     continue
+                # Need the MXL on disk for keysig_extractor.parse_mxl_*
+                mxl_path = tmp / "score.musicxml"
+                mxl_path.write_text(mxl)
                 n_pages = len(svgs)
                 for page_idx, svg_path in enumerate(svgs, start=1):
-                    png_path = pngs[page_idx - 1] if page_idx - 1 < len(pngs) else pngs[0]
-
                     try:
-                        layout = extract_layout(svg_path)
+                        layout = extract_layout(
+                            svg_path, staves_per_system=staves_per_sys)
                     except Exception as e:
                         if failed_render <= 5:
                             print(f"  WARN {score_id} p{page_idx}: "
                                   f"extract failed ({e!r})", flush=True)
                         continue
-                    _, _, vw_mm, vh_mm = _svg_viewbox(svg_path)
-                    with Image.open(png_path) as im:
-                        pw, ph = im.size
-                    scale = pw / vw_mm if vw_mm else PX_PER_MM
-                    bboxes_px = _scale_bboxes(layout, scale)
 
-                    # File-safe stem (openscore score_ids may have spaces / punctuation)
                     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", score_id)[:80]
                     out_png = images_dir / f"{safe}_p{page_idx}.png"
-                    Image.open(png_path).save(out_png)
+                    try:
+                        pw, ph = _rasterize_svg(svg_path, out_png)
+                    except Exception as e:
+                        if failed_render <= 5:
+                            print(f"  WARN {score_id} p{page_idx}: "
+                                  f"rasterize failed ({e!r})", flush=True)
+                        continue
+                    _, _, vw_mm, vh_mm = _svg_viewbox(svg_path)
+                    scale = pw / vw_mm if vw_mm else PX_PER_MM
+
+                    try:
+                        key_sigs = extract_keysigs(svg_path, mxl_path, layout)
+                    except Exception:
+                        key_sigs = []
+                    bboxes_px = _scale_bboxes(layout, scale, key_sigs=key_sigs)
 
                     rec = {
                         "score_id": score_id,

@@ -20,14 +20,18 @@ NS = "{http://www.w3.org/2000/svg}"
 
 def parse_mxl_key_changes(mxl_path: Path) -> dict[int, int]:
     """Returns {measure_num: fifths} for measures where the key changes
-    (including measure 1's initial key)."""
-    with zipfile.ZipFile(mxl_path) as z:
-        for n in z.namelist():
-            if n.endswith(".xml") and not n.startswith("META-INF"):
-                text = z.read(n).decode("utf-8", errors="ignore")
-                break
-        else:
-            return {}
+    (including measure 1's initial key). Accepts either a zipped .mxl or
+    plain .musicxml/.xml file."""
+    if zipfile.is_zipfile(mxl_path):
+        with zipfile.ZipFile(mxl_path) as z:
+            for n in z.namelist():
+                if n.endswith(".xml") and not n.startswith("META-INF"):
+                    text = z.read(n).decode("utf-8", errors="ignore")
+                    break
+            else:
+                return {}
+    else:
+        text = Path(mxl_path).read_text(encoding="utf-8", errors="ignore")
     root = ET.fromstring(text)
     out: dict[int, int] = {}
     last = None
