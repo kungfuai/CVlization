@@ -204,15 +204,39 @@ def main():
     if is_last and args.decode_on_last_rank:
         vae = load_wan_vae(args.wan_vae, device)
         print(f"[v7 rank {rank}] decoding {len(completed_chunks)} chunks...", flush=True)
+        # Decode every chunk to its full pixel-frame sequence, save all frames
+        # as numbered PNGs, then ffmpeg-mux them into a single mp4.
+        frames_dir = os.path.join(args.out_dir, "frames")
+        os.makedirs(frames_dir, exist_ok=True)
+        global_idx = 0
+        completed_chunks.sort(key=lambda x: x[0])  # ensure chunk order
         for chunk_idx, clean_cpu in completed_chunks:
             clean = clean_cpu.to(device, dtype=torch.bfloat16)
-            pix = decode_latent(vae, clean.squeeze(0), device)
+            pix = decode_latent(vae, clean.squeeze(0), device)  # [3, F_pix, H, W]
             F_pix = pix.shape[1]
-            for fl, f_idx in [("first", 0), ("mid", F_pix // 2), ("last", F_pix - 1)]:
+            for f_idx in range(F_pix):
                 img = ((pix[:, f_idx] + 1) / 2 * 255).clamp(0, 255).byte().cpu().numpy().transpose(1, 2, 0)
                 Image.fromarray(img).save(
-                    os.path.join(args.out_dir, f"chunk{chunk_idx:02d}_{fl}.png"))
-        print(f"[v7 rank {rank}] saved PNGs to {args.out_dir}", flush=True)
+                    os.path.join(frames_dir, f"frame{global_idx:05d}.png"))
+                global_idx += 1
+        print(f"[v7 rank {rank}] saved {global_idx} frames to {frames_dir}", flush=True)
+
+        # ffmpeg-mux the frames into mp4
+        import subprocess
+        mp4_path = os.path.join(args.out_dir, "video.mp4")
+        cmd = [
+            "ffmpeg", "-y", "-framerate", "25",
+            "-i", os.path.join(frames_dir, "frame%05d.png"),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20",
+            mp4_path,
+        ]
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+            print(f"[v7 rank {rank}] wrote {mp4_path} ({global_idx} frames @ 25 fps)",
+                  flush=True)
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"[v7 rank {rank}] ffmpeg failed: {e}; frames saved at {frames_dir}",
+                  flush=True)
 
     dist.destroy_process_group()
 
