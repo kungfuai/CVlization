@@ -138,6 +138,55 @@ cvl run vllm stop    # tear down the model server when you're done
   exits, the detached vllm server is still up. Run `cvl run vllm stop`
   or you'll leak a multi-GiB container.
 
+## Native install (no Docker)
+
+This preset's real load-bearing piece is the **sibling `vllm` preset
+with `VLLM_AGENT_DEFAULTS=1`** — that's what figures out the right
+tool-call parser, reasoning parser, and chat-template flags. The
+Dockerised `agentic-pi` wrapper on top adds sandboxing + bundled
+language servers, but you don't *need* it. If you'd rather run the
+official `omp` binary on your host, the cvl-served Qwen3.6 endpoint
+is a drop-in for any OpenAI-compatible provider pi already supports.
+
+```bash
+# 1. Install pi natively (~1 min; pulls a prebuilt binary, no Rust compile)
+bun install -g @oh-my-pi/pi-coding-agent
+# (or: curl -fsSL https://omp.sh/install | sh)
+
+# 2. Drop our models.yml template into pi's config dir
+mkdir -p ~/.omp/agent
+cp examples/agentic/code/pi/models.yml ~/.omp/agent/models.yml
+export VLLM_API_KEY=sk-local      # any non-empty string; vllm ignores it
+
+# 3. Start the cvl-managed vllm sidecar (same command either path uses)
+MODEL_ID=Qwen/Qwen3.6-27B VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 \
+  cvl run vllm serve
+until curl -fsS http://localhost:8000/v1/models >/dev/null; do sleep 2; done
+
+# 4. Use pi directly on the host
+cd ~/my_code
+omp -p "Add type hints to src/utils.py"
+
+# Same teardown:
+cvl run vllm stop
+```
+
+### When to pick which path
+
+| | Native `omp` install | This Dockerised `agentic-pi` |
+|---|---|---|
+| First-run setup | ~1 min (npm pulls binary) | **~10 min** (Rust + Bun + Python wheel + native addon) |
+| Disk | ~50 MB | **~2.93 GB** image |
+| File ownership of writes | Yours | **Root** |
+| Bind mounts / `--network host` | N/A | One per session |
+| Bundled language servers | Whatever's on your host `$PATH` | pylsp + typescript-language-server pre-installed |
+| Sessions persist across runs | Yes (`~/.omp/`) | No (container is `--rm`) |
+| Reproducibility | npm semver (`@15.2.4`) | Pinned to upstream commit `3b072a10` |
+| Best for | Daily local use on your own workstation | Sandboxed runs, CI, shared servers |
+
+Both paths use the **same `vllm` preset** and the **same `models.yml`
+schema** — switching between them costs nothing.
+
 ## How the wiring works
 
 - **Build path** — pi has no prebuilt Docker image. `build.sh` clones
