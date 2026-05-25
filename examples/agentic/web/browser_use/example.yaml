@@ -1,0 +1,46 @@
+name: agentic-browser-use
+capability: agentic/web
+modalities:
+  - language
+  - vision
+  - code
+stability: experimental
+resources:
+  gpu: 0  # browser-use itself runs on CPU; the VLM runs in the sibling vllm preset
+  vram_gb: 0
+  disk_gb: 2  # python:3.12-slim + browser-use + playwright chromium
+image: browser-use
+presets:
+  build:
+    script: build.sh
+    description: Build the browser-use image (python:3.12-slim + browser-use==0.12.8 + Playwright Chromium with system deps, headless-friendly).
+  run:
+    script: run.sh
+    description: |
+      Run the headless browser-use agent against the local vLLM endpoint. Pass through to agent.py via `--` args, e.g. `... -- "Go to https://example.com and tell me the H1"`. Defaults to a httpbin.org/forms/post fill-and-submit smoke when no task is given. Requires the vLLM server to already be running (with `VLLM_AGENT_DEFAULTS=1` and a VLM model like `Qwen/Qwen3.5-9B`).
+tags:
+  - browser-use
+  - playwright
+  - chromium
+  - agentic-web
+  - browser-automation
+  - vlm
+  - qwen3
+  - vllm
+  - openai-compatible
+tasks:
+  - browser_automation
+  - form_filling
+  - web_navigation
+  - data_extraction
+frameworks:
+  - python
+  - playwright
+  - browser-use
+
+description: browser-use (`browser-use-ai`) headless browser-automation agent pointed at a locally-served VLM via vLLM's OpenAI-compatible endpoint. Drives Chromium (Playwright) to fill forms, click, navigate, and extract data using screenshots-per-step + structured action calls. Sibling to the `agentic-opencode` / `agentic-pi` coding presets, but operates on the live web instead of the local filesystem. **VLM required** (text-only LLMs confuse browser-use's action schema -- upstream verifies only with qwen-vl-max, claude, gpt-5); the verified default `Qwen/Qwen3.5-9B` is at the low end of what works.
+
+verification:
+  last_verified: "2026-05-25"
+  last_verification_note: "End-to-end smoke verified on RTX PRO 6000 Blackwell (SM120, 98 GB VRAM, TP=2, BF16, CUDA graphs). browser-use image: ~2.18 GB (python:3.12-slim + browser-use==0.12.8 + Playwright + Chromium with system deps). Model server: sibling vllm preset started detached with `VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 MODEL_ID=Qwen/Qwen3.5-9B cvl run vllm serve` -- Qwen3.5-9B is the smallest VLM in our vllm-verified list; the four agent flags (--enable-auto-tool-choice + --tool-call-parser qwen3_xml + --reasoning-parser qwen3 + --default-chat-template-kwargs '{\"enable_thinking\":false}') all reuse unchanged from the agentic-opencode/agentic-pi work. Smoke: default task asks the agent to navigate to example.com and report the H1 text. Result: 35 s wall, agent's final report = 'Example Domain' (the actual page H1; not in the prompt -- requires real browser navigation + extraction). Agent.py uses ChatOpenAI(add_schema_to_system_prompt=True, remove_min_items_from_schema=True, remove_defaults_from_schema=True) to loosen JSON-schema strictness for smaller open VLMs. Open caveats: (a) browser-use's own qwen.py example warns 'so far we only had success with qwen-vl-max; smaller models confuse the action schema' -- our default Qwen3.5-9B is at the low end of what works (trivial tasks reliable; multi-step navigation and JS-heavy SPAs unreliable). For full capability story, swap in qwen-vl-max / claude-sonnet / gpt-5 via OPENCODE_BASE_URL override. (b) Form-fill smokes (httpbin.org/forms/post) were not verified -- agent.py's default task is the simpler H1-extraction smoke to keep the deterministic verification path tight. (c) browser-use sends anonymous posthog telemetry by default; set BROWSER_USE_ANALYTICS=false to opt out. (d) Image runs as root inside the container; downloads / screenshots land as root-owned on the host."
+  status: VERIFIED

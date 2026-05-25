@@ -1,0 +1,6 @@
+outputs/
+*.log
+*.png
+*.jpg
+*.webm
+.cache/
