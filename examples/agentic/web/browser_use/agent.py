@@ -136,11 +136,16 @@ async def run(task: str, *, model: str, base_url: str, api_key: str,
     # vllm-side notes (see sibling vllm preset README): a small VLM may
     # not produce perfectly-structured tool-use output. These flags loosen
     # the JSON schema enforcement so non-OpenAI providers don't trip.
+    # temperature defaults to 0.0 to avoid the degenerate-decoding loops
+    # we've observed on Qwen3.5-9B for long-form structured output tasks
+    # (e.g. writing a research brief; the model gets trapped in repetition).
+    # Override per-run via BROWSER_USE_TEMPERATURE if a task needs sampling
+    # creativity.
     llm = ChatOpenAI(
         model=model,
         api_key=api_key,
         base_url=base_url,
-        temperature=0.2,
+        temperature=float(_env("BROWSER_USE_TEMPERATURE", "0.0")),
         add_schema_to_system_prompt=True,
         remove_min_items_from_schema=True,
         remove_defaults_from_schema=True,
