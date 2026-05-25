@@ -135,19 +135,20 @@ site plus every `from .lib import add_numbers` and every call site;
 the agent applies the edit and reports back. Verified end-to-end:
 **26 s wall** on a 3-file project, 5 sites renamed in one tool call.
 
-## Verifying — `verify_tasks` preset
+## Evaluating — `evaluate` preset
 
-A repeatable verification runner is wired in. It iterates over every
+A repeatable evaluation runner is wired in. It iterates over every
 task in [`../_tasks/`](../_tasks/) (currently `fizzbuzz/` and
 `lsp_rename/`), runs pi against each, and reports per-task PASS / FAIL
-with wall time.
+with wall time. Naming matches the sibling
+`autogen_pair_programmer`'s `evaluate` preset.
 
 ```bash
 # vllm must already be running:
 MODEL_ID=Qwen/Qwen3.6-27B VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 \
   cvl run vllm serve
 
-cvl run agentic-pi verify_tasks
+cvl run agentic-pi evaluate
 # ...
 # === summary ===
 #   [fizzbuzz]   PASS  wall=32s
@@ -157,9 +158,9 @@ cvl run agentic-pi verify_tasks
 
 The corpus in `examples/agentic/code/_tasks/` is shared across every
 coding agent preset under `examples/agentic/code/` — A/B comparing
-agents on identical inputs is just running each preset's
-`verify_tasks`. See `../_tasks/README.md` for the task contract and
-how to add a new task.
+agents on identical inputs is just running each preset's `evaluate`.
+See `../_tasks/README.md` for the task contract and how to add a new
+task.
 
 ## Choosing a model
 
