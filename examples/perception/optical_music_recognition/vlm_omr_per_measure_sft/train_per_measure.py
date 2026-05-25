@@ -27,6 +27,75 @@ INSTRUCTION = ("Transcribe this single measure of sheet music to MXC2 "
                "every part's content for it.")
 
 
+_PART_DECL_RE = re.compile(r"^(P\d+)\s+(.+)$")
+_M_HEADER_RE = re.compile(
+    r"^M\s+(\d+)"
+    r"(?:\s+key=(-?\d+))?"
+    r"(?:\s+time=(\S+))?"
+    r"(?:\s+clef=(\S+))?"
+    r"(?:\s+clef2=(\S+))?"
+    r"(?:\s+staves=(\d+))?"
+)
+
+
+def _context_from_mxc2(mxc2: str) -> str:
+    """Extract the active key/time/clef per part from this measure's MXC2.
+
+    At training time this is grounded truth from the GT itself; at
+    inference it comes from the upstream detector (keysig + structure).
+    The prompt format is one line per part:
+        P1 Voice: key=-4 time=4/4 clef=G2
+        P2 Piano: key=-4 time=4/4 clef=G2,F4
+    Order matches the MXC2's part declarations.
+    """
+    parts: dict[str, str] = {}    # P1 -> 'Voice'
+    headers: dict[str, str] = {}  # P1 -> 'key=-4 time=4/4 clef=G2,F4'
+    current_part = None
+    for line in mxc2.splitlines():
+        line = line.rstrip()
+        if line == "---":
+            continue
+        m = _PART_DECL_RE.match(line)
+        if m and m.group(1) not in parts:
+            parts[m.group(1)] = m.group(2)
+            continue
+        if line.startswith(("P1", "P2", "P3", "P4", "P5")) and "\t" not in line and "=" not in line:
+            # Part-switch line inside the measure body: "P1"
+            tok = line.split()[0]
+            current_part = tok
+            continue
+        if line.startswith("M ") and current_part:
+            mh = _M_HEADER_RE.match(line)
+            if mh:
+                key = mh.group(2)
+                time_s = mh.group(3)
+                clef = mh.group(4)
+                clef2 = mh.group(5)
+                bits = []
+                if key is not None: bits.append(f"key={key}")
+                if time_s:          bits.append(f"time={time_s}")
+                if clef:
+                    if clef2:
+                        bits.append(f"clef={clef},{clef2}")
+                    else:
+                        bits.append(f"clef={clef}")
+                headers.setdefault(current_part, " ".join(bits))
+    if not headers:
+        return ""
+    lines = []
+    for p_id in sorted(headers):
+        name = parts.get(p_id, "")
+        lines.append(f"{p_id} {name}: {headers[p_id]}".strip())
+    return "Active header per part:\n" + "\n".join(lines)
+
+
+def _make_prompt(mxc2: str) -> str:
+    ctx = _context_from_mxc2(mxc2)
+    if ctx:
+        return INSTRUCTION + "\n\n" + ctx
+    return INSTRUCTION
+
+
 def _load_jsonl(path: Path) -> list[dict]:
     """Load and filter samples. Drops cells with extreme aspect ratios
     (unsloth's vision util refuses aspect > 200; >20 is musically
@@ -55,10 +124,11 @@ def _open_pil(rec: dict, root: Path):
 
 def _convert_to_conversation(rec: dict, root: Path) -> dict:
     img = _open_pil(rec, root)
+    prompt = _make_prompt(rec["mxc2"])
     return {
         "messages": [
             {"role": "user", "content": [
-                {"type": "text",  "text": INSTRUCTION},
+                {"type": "text",  "text": prompt},
                 {"type": "image", "image": img},
             ]},
             {"role": "assistant", "content": [
@@ -75,6 +145,13 @@ def main():
     p.add_argument("--vlm-ckpt",
                    default="/vlm_sft/outputs/safckylj/final_model",
                    help="base VLM checkpoint to SFT off")
+    p.add_argument("--fresh", action="store_true",
+                   help="Start from base Qwen3-VL-8B with fresh LoRA "
+                        "adapters (instead of continuing safckylj's).")
+    p.add_argument("--lora-r", type=int, default=16,
+                   help="LoRA rank when --fresh.")
+    p.add_argument("--lora-alpha", type=int, default=16,
+                   help="LoRA alpha when --fresh.")
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--epochs", type=float, default=1.0)
     p.add_argument("--batch-size", type=int, default=4)
@@ -93,15 +170,31 @@ def main():
     from unsloth.trainer import UnslothVisionDataCollator  # type: ignore
     from trl import SFTTrainer, SFTConfig  # type: ignore
 
-    print(f"Loading base VLM from {args.vlm_ckpt} ...", flush=True)
-    model, processor = FastVisionModel.from_pretrained(
-        args.vlm_ckpt, load_in_4bit=True)
-    # safckylj's `final_model` is unmerged -- it carries adapter_model.safetensors
-    # on top of the unsloth qwen3-vl-8b base. The adapters are already
-    # attached after from_pretrained, so we *don't* re-call get_peft_model
-    # (that errors with "You already added LoRA adapters to your model!").
-    # We just continue training the existing adapters.
-    print("Reusing existing LoRA adapters from checkpoint", flush=True)
+    base = ("unsloth/Qwen3-VL-8B-Instruct-unsloth-bnb-4bit"
+            if args.fresh else args.vlm_ckpt)
+    print(f"Loading base VLM from {base} ...", flush=True)
+    model, processor = FastVisionModel.from_pretrained(base, load_in_4bit=True)
+    if args.fresh:
+        # Fresh LoRA adapters on the unmodified base.
+        model = FastVisionModel.get_peft_model(
+            model,
+            finetune_vision_layers=True,
+            finetune_language_layers=True,
+            finetune_attention_modules=True,
+            finetune_mlp_modules=True,
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=0,
+            bias="none",
+            random_state=args.seed,
+            use_rslora=False,
+            loftq_config=None,
+        )
+        print(f"Attached fresh LoRA r={args.lora_r} alpha={args.lora_alpha}", flush=True)
+    else:
+        # safckylj's `final_model` already carries adapters; skip
+        # get_peft_model and continue training those.
+        print("Reusing existing LoRA adapters from checkpoint", flush=True)
 
     print(f"Loading per-measure JSONL from {args.data} ...", flush=True)
     train_recs = _load_jsonl(args.data / "labels_train.jsonl")
