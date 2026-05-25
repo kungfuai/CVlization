@@ -155,47 +155,116 @@ For Anthropic Claude, swap `agent.py`'s `ChatOpenAI` for browser-use's
   rendering happens in software headlessly). All the GPU work is on
   the vllm side.
 
-## Verified end-to-end smoke
+## Verified end-to-end — 11-task corpus
 
-The default task (no args) is a **multi-step Wikipedia lookup** that
-exercises navigate + search + click + extract on a real site:
+The preset ships an `evaluate` runner that drives browser-use against
+a shared task corpus at [`../\_tasks/`](../_tasks/). 11 tasks across
+three capability tiers. See [`../\_tasks/README.md`](../_tasks/README.md)
+for per-task details + the architecture findings; this section is the
+TL;DR.
 
+```bash
+# Easy + medium tiers, on Qwen3.5-9B:
+MODEL_ID=Qwen/Qwen3.5-9B VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 \
+  VLLM_QWEN3_DISABLE_THINKING=0 cvl run vllm serve
+
+cvl run agentic-browser-use evaluate
+# === summary ===
+#   [arxiv_paper_title]            PASS  →  "Attention Is All You Need"  (PDF reading via read_file tool)
+#   [compare_pypi_github_versions] PASS  →  "match: 9.0.3"                 (5+ hop multi-source comparison)
+#   [github_open_issue_count]      PASS  →  65                              (API-grounded counting)
+#   [github_star_comparison]       PASS  →  "torvalds/linux"               (multi-page vision compare)
+#   [hn_top_story_clickthrough]    PASS  →  external URL                   (cross-domain navigation)
+#   [httpbin_form_fill]            PASS  →  "https://httpbin.org/post"     (form fill + JSON read)
+#   [llm_history_research_brief]   FAIL  →  requires Qwen3.6-27B + env.sh  (see tier 3 below)
+#   [pypi_requests_version]        PASS  →  "2.34.2"                       (search + extract semver)
+#   [python_docs_function_lookup]  PASS  →  "os.getcwd"                    (API doc lookup)
+#   [wikipedia_linux_year]         PASS  →  "1991"                          (single-page extract)
+#   [wikipedia_python_infobox]     PASS  →  JSON object                    (structured extraction)
+#   10/11 passed
 ```
-Open https://en.wikipedia.org. Use the search box at the top of
-the page to search for 'Linux'. Click the first result. From the
-article, find and report the year that Linux was first released.
-Reply with only the four-digit year on a single line.
+
+### Three tiers, by setup required
+
+The task corpus splits into three tiers — but the tier boundary turned
+out to be **about agent-loop setup, not raw model size**:
+
+| Tier | Tasks | What unblocks them |
+|---|---|---|
+| **Easy** (8) | wiki facts, form fill, version lookup, multi-page compare, counting, JSON extraction, click-through, API lookup | Qwen3.5-9B, thinking OFF |
+| **Medium** (2) | `compare_pypi_github_versions`, `arxiv_paper_title` | **Thinking mode ON** (`VLLM_QWEN3_DISABLE_THINKING=0`) gives the model a scratchpad for multi-hop reasoning + nuanced tool-routing |
+| **Hard** (1) | `llm_history_research_brief` (deep research with long synthesis) | **Pydantic `output_model_schema`** — see "Structured-output mode" below |
+
+### Structured-output mode (the hard tier's unlock)
+
+browser-use's default `DoneAction.text` field's *schema description*
+tells the LLM: *"ONLY report data you directly observed... Do NOT use
+training knowledge to fill gaps."* Every model size we tested
+(Qwen3.5-9B, Qwen3.6-27B) reads that and refuses to write synthesis
+paragraphs after structured extraction — synthesis feels like
+"filling gaps with training knowledge." Three model sizes × every
+temperature × every thinking setting all hit the same wall.
+
+**The fix is browser-use's `output_model_schema` constructor
+parameter.** Pass a Pydantic model with required fields; browser-use
+swaps `DoneAction` for `StructuredOutputAction(data=YourModel)`;
+Pydantic validation forces every required field to be filled —
+including a `common_themes: str = Field(min_length=50)` synthesis
+field. The model can't truncate.
+
+`agent.py` registers Pydantic schemas under the `_OUTPUT_MODELS` dict
+and exposes a `BROWSER_USE_OUTPUT_MODEL` env var to opt in. The
+bundled `ResearchBrief` schema (used by `llm_history_research_brief`)
+is the reference implementation; add more in the same dict.
+
+Per-task opt-in: each task may ship an optional `env.sh` (sourced by
+`evaluate.sh` before running just that task) that exports the model
+selection. The `llm_history_research_brief` task ships:
+
+```bash
+# _tasks/llm_history_research_brief/env.sh
+export BROWSER_USE_OUTPUT_MODEL=research_brief
+export BROWSER_USE_MAX_STEPS=40
 ```
 
-**Verified result** (RTX PRO 6000, Qwen3.5-9B, ~38 s wall):
+Verified end-to-end on Qwen3.6-27B + thinking ON: 197 s wall produces
+a `ResearchBrief` JSON with title, intro, a 3-row comparison table,
+and a 722-character synthesis paragraph covering shared transformer
+architecture, the encoder/decoder split, 500× parameter scaling, and
+the pre-training paradigm shift — a real research brief.
+
+### Single-task quickstart (default `run` preset)
+
+For a smaller demo without the corpus, the bare `run` preset uses a
+default task: multi-step Wikipedia lookup for the year Linux was
+first released. Verified on RTX PRO 6000 / Qwen3.5-9B / ~38 s wall:
 
 - Final result: `1991`
-- 4 agent steps: `navigate → input "Linux" → click first result → done(1991)`
-- 3 saved screenshots (1920×1080) showing each navigation step
-- `agent_history.json` (full structured trace)
-- `report.md` (markdown summary with task, actions, embedded screenshots)
+- 4 agent steps: `navigate → input "Linux" → click → done(1991)`
+- Saved artifacts: `agent_history.json` + `step_NN.png` × 3 + `report.md`
 
-All artifacts land in `./browser_use_outputs/` on the host (configurable
-via `BROWSER_USE_OUTPUTS=<path>`). The answer "1991" is **not in the
-prompt** — verifying it requires real navigation + visual reasoning +
-extraction, so a passing smoke is meaningful.
+All artifacts land in `./browser_use_outputs/` on the host
+(configurable via `BROWSER_USE_OUTPUTS=<path>`). The answer "1991" is
+not in the prompt — passing this smoke means real navigation +
+extraction, not prompt regurgitation.
 
-### Other tasks worth trying (uses agent.py as-is)
+### Other one-off tasks worth trying
 
 ```bash
 cvl run agentic-browser-use run -- \
   "Go to https://github.com/browser-use/browser-use and report the current star count."
 
 cvl run agentic-browser-use run -- \
-  "Compare the star counts of github.com/browser-use/browser-use and \
-   github.com/microsoft/playwright; report which has more."
+  "Compare the star counts of github.com/torvalds/linux and \
+   github.com/microsoft/typescript; report which has more."
 
 cvl run agentic-browser-use run -- \
   "Go to https://news.ycombinator.com; list the titles of the top 3 stories."
 ```
 
-Multi-step tasks beyond ~5-6 hops degrade quickly on Qwen3.5-9B — see
-the VLM caveat at the top of this README and the upgrade path below.
+Multi-step tasks beyond ~5-6 hops degrade on Qwen3.5-9B without
+thinking. See the tier table above for the unlocks (thinking ON,
+output_model_schema).
 
 ## Notes
 
