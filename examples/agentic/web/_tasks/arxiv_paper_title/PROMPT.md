@@ -1,0 +1,1 @@
+Open https://arxiv.org/pdf/1706.03762. This is a PDF of an academic paper rendered inline in the browser. Find the title of the paper, which appears at the top of the first page in large text (and again in the page's tab title). Reply with only the paper title on a single line, no commentary, no quotes, no author list, no formatting. Use the exact title as written on the paper.

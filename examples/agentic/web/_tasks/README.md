@@ -38,49 +38,62 @@ filesystem starting state. The "input" is just the URL inside
 | `hn_top_story_clickthrough/` | **Cross-domain research chain**: open Hacker News → identify the #1 ranked story → click its title link → report the destination URL (often a different domain). | Reports a well-formed URL with a real host, and not the HN homepage |
 | `github_open_issue_count/` | **Counting + API-grounded ground truth**: open `browser-use/browser-use/issues`, read the "Open" tab's count, report as an integer. | Number within 1.5× of the GitHub search API's `is:issue is:open` count |
 | `compare_pypi_github_versions/` | **Multi-source cross-verification (5+ hop, hard)**: navigate to pypi.org/project/pytest, note the version; navigate to GitHub releases, note the tag; compare and report `match:` or `mismatch:` with semvers. | Verdict line with at least one plausible semver (N.M.P, N≥7). **Requires Qwen3 thinking mode ON to pass on small VLMs** — see "Thinking mode" note below. |
+| `arxiv_paper_title/` | **PDF reading via the agent's read_file tool**: navigate to `arxiv.org/pdf/1706.03762`, recognize the page is a PDF viewer (browser-use auto-downloads PDFs), call the `read_file` action on the downloaded path, extract the paper title. | Final result contains `Attention Is All You Need`. **Requires Qwen3 thinking mode ON on small VLMs** — without thinking, the agent can't follow the system reminder about routing to `read_file` instead of `extract`. |
+| `python_docs_function_lookup/` | **Practical API lookup**: open the official Python `os` module docs, find the function that returns the current working directory, report its name. | Final result contains `getcwd` (or `os.getcwd`). |
 
 All eight tasks' "answers" are derived from page content the agent
 must actually navigate to and read — none of the expected values
 appear in the prompts, so a passing smoke is meaningful.
 
-## Thinking mode and the hard task
+## Thinking mode and the hard tasks
 
-`compare_pypi_github_versions` is the empirical edge of Qwen3.5-9B's
-capability — it requires holding two facts (semvers from two sites)
-in working memory across 5+ navigation hops, then comparing them in
-a structured output. With **thinking off** (the default for agent
-loops because chain-of-thought between tool calls is mostly wasted
-latency), Qwen3.5-9B truncates the final answer mid-output — we've
-seen things like `match: pytest-9` where the semver never lands.
+Two tasks in this corpus are at the empirical edge of Qwen3.5-9B's
+capability and only pass with **thinking mode ON**:
 
-Flipping thinking back on:
+- `compare_pypi_github_versions` — holds two semvers in working memory
+  across 5+ navigation hops, then emits a structured comparison.
+  Without thinking, the model truncates mid-output (e.g. `match: pytest-9`
+  instead of `match: 9.0.3`).
+- `arxiv_paper_title` — the agent must recognize a PDF page, ignore
+  the browser-use system reminder *not* to use `extract` on it, and
+  instead route to the `read_file` action with the downloaded PDF
+  path. Without thinking, the model emits three consecutive
+  "format error" actions and gives up.
+
+Both pass cleanly with thinking on. Flipping it back on at server
+start:
 
 ```bash
-# When starting vllm, override the agent-mode default to keep thinking ON:
 MODEL_ID=Qwen/Qwen3.5-9B VLLM_DETACH=1 \
   VLLM_AGENT_DEFAULTS=1 VLLM_QWEN3_DISABLE_THINKING=0 \
   cvl run vllm serve
 ```
 
-...lets the model scratchpad the comparison and produces a clean
-`match: 9.0.3` (verified end-to-end against the actual current pytest
-release on both sites).
+**The pattern**: thinking-on works for any task that requires the
+model to follow a nuanced multi-step recipe between observation and
+action. Thinking-off (the default for `VLLM_AGENT_DEFAULTS=1`) is
+fine for direct extract-and-report tasks; faster too.
 
 **Tradeoff**: thinking adds ~10-30% wall-time per turn because the
-model burns thousands of `reasoning` tokens before producing
-`content`. For the other 7 tasks in this corpus, thinking-off is
-faster and equally reliable. For multi-hop comparison / synthesis
-tasks (this one, and the kind of task a future
-`compare_npm_github_versions` or `synthesise_three_pages` would be),
-thinking-on is worth the cost. Decide per-workload.
+model burns thousands of `reasoning` tokens before producing the
+`content` browser-use actually consumes. For the 8 "easy" tasks in
+this corpus, thinking-off is faster and equally reliable. For the 2
+"hard" tasks (compare_*, arxiv_*), thinking-on is the unlock.
 
-Latest verified `evaluate` runs on Qwen/Qwen3.5-9B (the smallest VLM
-in our `vllm`-verified list):
+Verified `evaluate` results on Qwen/Qwen3.5-9B (the smallest VLM in
+our `vllm`-verified list):
 
 | `VLLM_QWEN3_DISABLE_THINKING` | Result |
 |---|---|
-| `1` (default for agent mode) | 7/8 pass in ~250 s; `compare_pypi_github_versions` fails (truncated output) |
-| `0` (thinking ON) | `compare_pypi_github_versions` passes — agent produced `match: 9.0.3` on a 94 s wall; other 7 tasks not re-verified with thinking on but expected to keep passing |
+| `1` (default for agent mode) | 8/10 pass; `compare_pypi_github_versions` and `arxiv_paper_title` fail honestly (small-model instruction-following ceiling) |
+| `0` (thinking ON) | All hard tasks verified to pass individually: `compare_pypi_github_versions` → `match: 9.0.3` (94 s), `arxiv_paper_title` → `Attention Is All You Need` (64 s). The other 8 should keep passing (thinking-on doesn't break behaviour, just slows it). |
+
+**Why thinking unblocks these specifically**: the failure mode in
+both cases was instruction-following, not vision or extraction. The
+model in both cases had all the information it needed (saw both
+pages, or saw the PDF download notification) but couldn't reason
+through the right action format / structured output. Thinking gives
+it a scratchpad to plan the action before emitting it.
 
 ## Adding a task
 
