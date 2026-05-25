@@ -73,6 +73,126 @@ Anything after `--` is passed straight to the `opencode` CLI inside the
 container. So `run "..."`, `-m vllm/Qwen/Qwen3-4B-Instruct ...`,
 `--format json`, etc. all work.
 
+## Using opencode on your own code
+
+The container bind-mounts your **current working directory** to
+`/workspace` and `--workdir`s into it. So everything opencode reads /
+writes / edits / runs happens against the real files on your host
+filesystem.
+
+### What opencode can do on your code
+
+| Operation | Works? | Notes |
+|---|---|---|
+| **Read files** | ✅ | Recursive; follows symlinks within the mount |
+| **Write new files** (`Write` tool) | ✅ | Verified end-to-end with the fizzbuzz smoke (PR #228) |
+| **Edit existing files** (`Edit` tool) | ✅ | Diff / str-replace style edits |
+| **Run Bash in your repo** | ✅ | `git status`, `pytest`, `npm test` — they hit your real repo |
+| **Grep / search** | ✅ | Built-in tool |
+| **Multi-turn TUI** | ✅ | Interactive Claude-Code-like experience |
+| **Headless one-shot** | ✅ | `... run -- run "prompt"` for scripted use |
+| **LSP / debugger** | ❌ | Out of scope for opencode — see the sibling [`agentic-pi`](../pi/) preset if you need IDE-grade refactors / debugger attach |
+
+### Recipe — opencode on a real codebase
+
+```bash
+# One-time, ~30 s first build
+cvl run agentic-opencode build
+
+cd ~/my_real_codebase
+git status      # make sure you have a clean tree -- opencode edits in place
+
+# Terminal 1: model server (with the four agent flags VLLM_AGENT_DEFAULTS sets)
+MODEL_ID=Qwen/Qwen3.6-27B VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 \
+  cvl run vllm serve
+until curl -fsS http://localhost:8000/v1/models >/dev/null; do sleep 2; done
+
+# Terminal 2: opencode against your repo
+cvl run agentic-opencode run                                     # interactive TUI
+# or headless, one prompt at a time:
+cvl run agentic-opencode run -- run "Read main.py; tell me what it does"
+cvl run agentic-opencode run -- run "Add type hints to src/utils.py"
+
+git diff        # inspect what opencode changed before keeping
+cvl run vllm stop    # tear down the model server when you're done
+```
+
+### Gotchas that will bite first-time users
+
+- **Files written by opencode are owned by `root`.** Container runs as
+  root, so new files / edits land on your host as root-owned. Either
+  run `sudo chown -R $USER:$USER .` after the session, or modify
+  `run.sh` to add `--user $(id -u):$(id -g)`.
+- **opencode edits in place; there is no undo.** A `git stash` or
+  `git commit -am 'pre-opencode'` before the session is cheap
+  insurance; `git diff` after every prompt to see what changed.
+- **Sessions are wiped on container exit.** opencode stores sessions
+  at `~/.local/share/opencode/` inside the container; `--rm` clobbers
+  them. Multi-turn context across separate `cvl run` invocations does
+  not persist. Mount a host dir there if you need it.
+- **The TUI needs a real terminal.** Works in tmux, iTerm, standard
+  terminal emulators. Doesn't work over `ssh -T` or from a
+  non-interactive script — use the headless `-- run "prompt"` path
+  instead.
+- **Cwd silently matters.** `cvl run agentic-opencode run` from `/tmp`
+  makes opencode happily operate on `/tmp`. No "this doesn't look
+  like a project" check today.
+- **The vllm sidecar doesn't auto-stop.** After your `agentic-opencode
+  run` exits, the detached vllm server is still up. Run
+  `cvl run vllm stop` or you'll leak a multi-GiB container.
+
+## Native install (no Docker)
+
+This preset's real load-bearing piece is the **sibling `vllm` preset
+with `VLLM_AGENT_DEFAULTS=1`** — that's what configures the right
+tool-call parser, reasoning parser, and chat-template flags on the
+model server. The Dockerised `agentic-opencode` wrapper on top adds
+sandboxing + a pinned opencode version, but you don't *need* it. The
+official `opencode` binary on your host works against the cvl-served
+Qwen3.6 endpoint the same way.
+
+```bash
+# 1. Install opencode natively (~30 s; pulls a prebuilt binary)
+npm i -g opencode-ai@1.15.10
+# (or: curl -fsSL https://opencode.ai/install | sh)
+
+# 2. Drop our opencode.json template into opencode's config dir
+mkdir -p ~/.config/opencode
+cp examples/agentic/code/opencode/opencode.json ~/.config/opencode/opencode.json
+export VLLM_API_KEY=sk-local      # any non-empty string; vllm ignores it
+export OPENCODE_BASE_URL=http://localhost:8000/v1
+
+# 3. Start the cvl-managed vllm sidecar (same command either path uses)
+MODEL_ID=Qwen/Qwen3.6-27B VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 \
+  cvl run vllm serve
+until curl -fsS http://localhost:8000/v1/models >/dev/null; do sleep 2; done
+
+# 4. Use opencode directly on the host
+cd ~/my_code
+opencode run "Add type hints to src/utils.py"
+
+# Teardown:
+cvl run vllm stop
+```
+
+### When to pick which path
+
+| | Native `opencode` install | This Dockerised `agentic-opencode` |
+|---|---|---|
+| First-run setup | ~30 s (npm pulls binary) | ~30 s (same — opencode npm-installs inside the image too) |
+| Disk | ~few hundred MB (npm globals) | ~1.83 GB image |
+| File ownership of writes | Yours | Root |
+| Bind mounts / `--network host` | N/A | One per session |
+| Sessions persist across runs | Yes (`~/.local/share/opencode/`) | No (container is `--rm`) |
+| Reproducibility | npm semver (`opencode-ai@1.15.10`) | Same pin, baked into the image |
+| Best for | Daily local use on your own workstation | Sandboxed runs, CI, shared servers |
+
+Both paths use the **same `vllm` preset** and the **same
+`opencode.json` schema** — switching between them costs nothing. See
+the sibling [`agentic-pi`](../pi/) preset for the same comparison
+applied to a heavier-feature-surface agent (LSP / DAP / persistent
+kernels) if your task demands it.
+
 ## Choosing a model
 
 Edit `opencode.json` (or override via the `-m` flag) to pick any model
