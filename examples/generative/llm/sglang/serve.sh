@@ -11,7 +11,21 @@ echo "Building ${IMAGE} (torch 2.9.1, sglang) ..."
 docker build -t "${IMAGE}" "${SCRIPT_DIR}"
 
 echo "Starting SGLang (${MODEL_ID}) on ${HOST_ADDR}:${PORT}"
-docker run --rm --gpus all --ipc=host --shm-size 16g \
+
+DOCKER_RUN_FLAGS=(--rm --gpus all --ipc=host --shm-size 16g)
+# Forward CUDA_VISIBLE_DEVICES into the container only if it's set on the
+# host. Guard against the empty-string footgun: some CUDA versions
+# interpret CUDA_VISIBLE_DEVICES="" as 'no GPUs visible' rather than 'no
+# restriction', which would silently break the server. With this guard,
+# the default (unset) behaviour is unchanged from before; setting
+# CUDA_VISIBLE_DEVICES=1 on the host (e.g. in a systemd unit) restricts
+# SGLang to GPU index 1, leaving the other GPU free for other workloads.
+# Mirrors the same passthrough already in the sibling vllm preset.
+if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
+  DOCKER_RUN_FLAGS+=(-e "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}")
+fi
+
+docker run "${DOCKER_RUN_FLAGS[@]}" \
   -p "${PORT}:${PORT}" \
   -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
   -e MODEL_ID="${MODEL_ID}" \
