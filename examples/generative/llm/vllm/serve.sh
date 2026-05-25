@@ -45,6 +45,16 @@ if [ "${VLLM_AGENT_DEFAULTS:-0}" = "1" ]; then
 fi
 
 DOCKER_RUN_FLAGS=(--gpus all --ipc=host --shm-size 16g)
+# Forward CUDA_VISIBLE_DEVICES into the container only if it's set on the
+# host. We intentionally do NOT pass an empty value -- some CUDA versions
+# interpret CUDA_VISIBLE_DEVICES="" as "no GPUs visible" rather than "no
+# restriction", which would silently break the server. With this guard,
+# the default (unset) behaviour is unchanged from before; setting
+# CUDA_VISIBLE_DEVICES=1 on the host (e.g. in a systemd unit) restricts
+# vLLM to GPU index 1, leaving the other GPU free for other workloads.
+if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
+  DOCKER_RUN_FLAGS+=(-e "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}")
+fi
 if [ "${VLLM_DETACH:-0}" = "1" ]; then
   # Detached: a stable name + restart-on-failure, no --rm so the user can
   # `docker logs ${CONTAINER_NAME}` after exit. Use the sibling `stop`
