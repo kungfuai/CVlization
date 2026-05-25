@@ -157,21 +157,45 @@ For Anthropic Claude, swap `agent.py`'s `ChatOpenAI` for browser-use's
 
 ## Verified end-to-end smoke
 
-The default task (no args) targets a public, stable endpoint:
+The default task (no args) is a **multi-step Wikipedia lookup** that
+exercises navigate + search + click + extract on a real site:
 
 ```
-Go to https://httpbin.org/forms/post. Fill the form with:
-Customer name = 'Alice Example', Telephone = '5551234567',
-Email = 'alice@example.com', size = Medium, topping = Bacon.
-Submit the form by clicking the Submit order button. After it
-returns, read the JSON response and report back the values of
-the custname, custtel, and custemail fields.
+Open https://en.wikipedia.org. Use the search box at the top of
+the page to search for 'Linux'. Click the first result. From the
+article, find and report the year that Linux was first released.
+Reply with only the four-digit year on a single line.
 ```
 
-httpbin.org/forms/post is a public test endpoint that echoes the
-submitted form values back as JSON. The smoke passes if the agent's
-final report contains the three expected values
-(`Alice Example`, `5551234567`, `alice@example.com`).
+**Verified result** (RTX PRO 6000, Qwen3.5-9B, ~38 s wall):
+
+- Final result: `1991`
+- 4 agent steps: `navigate → input "Linux" → click first result → done(1991)`
+- 3 saved screenshots (1920×1080) showing each navigation step
+- `agent_history.json` (full structured trace)
+- `report.md` (markdown summary with task, actions, embedded screenshots)
+
+All artifacts land in `./browser_use_outputs/` on the host (configurable
+via `BROWSER_USE_OUTPUTS=<path>`). The answer "1991" is **not in the
+prompt** — verifying it requires real navigation + visual reasoning +
+extraction, so a passing smoke is meaningful.
+
+### Other tasks worth trying (uses agent.py as-is)
+
+```bash
+cvl run agentic-browser-use run -- \
+  "Go to https://github.com/browser-use/browser-use and report the current star count."
+
+cvl run agentic-browser-use run -- \
+  "Compare the star counts of github.com/browser-use/browser-use and \
+   github.com/microsoft/playwright; report which has more."
+
+cvl run agentic-browser-use run -- \
+  "Go to https://news.ycombinator.com; list the titles of the top 3 stories."
+```
+
+Multi-step tasks beyond ~5-6 hops degrade quickly on Qwen3.5-9B — see
+the VLM caveat at the top of this README and the upgrade path below.
 
 ## Notes
 

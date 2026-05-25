@@ -7,27 +7,36 @@ from `cvl run vllm serve`). Browser is headless Chromium; the IN_DOCKER
 env (set in the Dockerfile) makes browser-use auto-disable sandboxing
 inside the container.
 
-Default task targets httpbin.org/forms/post -- public, stable, deterministic
-form that echoes the submitted values in the response so the smoke check
-can grep for them.
+Default task is a multi-step Wikipedia lookup that exercises navigate
++ search + click + extract. After every run the agent's history JSON,
+per-step screenshots, and a markdown report all land in
+$BROWSER_USE_OUTPUT_DIR (default /work/outputs, which run.sh mounts to
+./outputs on the host) so the user has tangible artifacts to inspect.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
+import json
 import os
 import sys
+import time
+from pathlib import Path
 
 
 DEFAULT_BASE_URL = "http://localhost:8000/v1"
 DEFAULT_API_KEY = "sk-local"
 DEFAULT_MODEL = "Qwen/Qwen3.5-9B"
 DEFAULT_TASK = (
-    "Go to https://example.com and report the exact text content of "
-    "the page's H1 heading. Reply with only the H1 text on a single "
-    "line. Do not include any commentary, quotes, or formatting."
+    "Open https://en.wikipedia.org. Use the search box at the top of "
+    "the page to search for 'Linux'. Click the first result. From the "
+    "article, find and report the year that Linux was first released. "
+    "Reply with only the four-digit year on a single line, no "
+    "commentary or formatting."
 )
+DEFAULT_OUTPUT_DIR = "/work/outputs"
 
 
 def _env(name: str, default: str) -> str:
@@ -35,8 +44,84 @@ def _env(name: str, default: str) -> str:
     return v if v else default
 
 
+def _save_artifacts(history, output_dir: Path, task: str, model: str,
+                    base_url: str, wall_s: float, final_result: str) -> None:
+    """Save agent_history.json + step_N.png + report.md to output_dir."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Full history JSON via browser-use's own serializer.
+    history_path = output_dir / "agent_history.json"
+    try:
+        history.save_to_file(str(history_path))
+    except Exception as exc:
+        print(f"warn: could not save history: {exc}", file=sys.stderr)
+
+    # Per-step screenshots. browser-use returns base64 strings.
+    saved_screenshots: list[Path] = []
+    try:
+        shots = history.screenshots(return_none_if_not_screenshot=True)
+    except Exception as exc:
+        print(f"warn: could not enumerate screenshots: {exc}", file=sys.stderr)
+        shots = []
+    for i, shot_b64 in enumerate(shots, start=1):
+        if not shot_b64:
+            continue
+        out = output_dir / f"step_{i:02d}.png"
+        try:
+            out.write_bytes(base64.b64decode(shot_b64))
+            saved_screenshots.append(out)
+        except Exception as exc:
+            print(f"warn: could not save step_{i:02d}.png: {exc}",
+                  file=sys.stderr)
+
+    # Agent actions summary (one entry per step).
+    actions: list[dict] = []
+    try:
+        actions = history.model_actions()
+    except Exception:
+        pass
+
+    # Markdown report.
+    report = output_dir / "report.md"
+    lines = []
+    lines.append(f"# browser-use run report")
+    lines.append("")
+    lines.append(f"- **Task**: {task}")
+    lines.append(f"- **Model**: `{model}` via `{base_url}`")
+    lines.append(f"- **Wall**: {wall_s:.1f}s")
+    lines.append(f"- **Steps**: {len(actions)}")
+    lines.append(f"- **Screenshots**: {len(saved_screenshots)} saved")
+    lines.append("")
+    lines.append("## Final result")
+    lines.append("")
+    lines.append("```")
+    lines.append(final_result or "(empty)")
+    lines.append("```")
+    lines.append("")
+    lines.append("## Actions per step")
+    lines.append("")
+    for i, action in enumerate(actions, start=1):
+        # action is a dict {action_name: action_params}; collapse for brevity.
+        compact = json.dumps(action, default=str)[:200]
+        lines.append(f"{i}. `{compact}`")
+    lines.append("")
+    lines.append("## Screenshots")
+    lines.append("")
+    for shot in saved_screenshots:
+        lines.append(f"### {shot.name}")
+        lines.append("")
+        lines.append(f"![{shot.name}]({shot.name})")
+        lines.append("")
+    report.write_text("\n".join(lines))
+
+    print(f"artifacts: {output_dir}/  "
+          f"({len(saved_screenshots)} screenshots + agent_history.json + report.md)",
+          file=sys.stderr)
+
+
 async def run(task: str, *, model: str, base_url: str, api_key: str,
-              max_steps: int, headless: bool) -> int:
+              max_steps: int, headless: bool,
+              output_dir: Path) -> int:
     # Import here so --help is fast and import errors surface clearly.
     from browser_use import Agent, Browser, ChatOpenAI
     from browser_use.browser.profile import BrowserProfile
@@ -44,6 +129,7 @@ async def run(task: str, *, model: str, base_url: str, api_key: str,
     print(f"endpoint:   {base_url}", file=sys.stderr)
     print(f"model:      {model}", file=sys.stderr)
     print(f"headless:   {headless}", file=sys.stderr)
+    print(f"output_dir: {output_dir}", file=sys.stderr)
     print(f"task:       {task[:200]}{'...' if len(task) > 200 else ''}",
           file=sys.stderr)
 
@@ -77,16 +163,17 @@ async def run(task: str, *, model: str, base_url: str, api_key: str,
         max_failures=3,
     )
 
+    started = time.monotonic()
     history = await agent.run(max_steps=max_steps)
-    # history is an AgentHistoryList -- final result text is in the last
-    # step's evaluation / model output, helper exposes final_result().
+    wall_s = time.monotonic() - started
+
+    # Extract final result.
     final = ""
     try:
         final = history.final_result() or ""
     except Exception:
         pass
     if not final:
-        # Fallback: dump the last step text representation.
         try:
             final = str(history.history[-1])
         except Exception:
@@ -99,6 +186,15 @@ async def run(task: str, *, model: str, base_url: str, api_key: str,
     print(border)
     print(final)
     print(border)
+
+    # Save artifacts (best-effort; never fails the run).
+    try:
+        _save_artifacts(history, output_dir, task=task, model=model,
+                        base_url=base_url, wall_s=wall_s,
+                        final_result=final)
+    except Exception as exc:
+        print(f"warn: artifact save failed: {exc}", file=sys.stderr)
+
     return 0
 
 
@@ -109,7 +205,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("task", nargs="?", default=DEFAULT_TASK,
                    help="Natural-language task for the agent. Defaults to a "
-                        "httpbin.org/forms/post fill-and-submit smoke.")
+                        "multi-step Wikipedia lookup (Linux release year).")
     p.add_argument("--model", default=_env("BROWSER_USE_MODEL", DEFAULT_MODEL),
                    help="Served model id (must match vllm's --served-model-name).")
     p.add_argument("--base-url", default=_env("OPENCODE_BASE_URL", DEFAULT_BASE_URL),
@@ -119,6 +215,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-steps", type=int,
                    default=int(_env("BROWSER_USE_MAX_STEPS", "20")),
                    help="Cap on agent reasoning steps.")
+    p.add_argument("--output-dir",
+                   default=_env("BROWSER_USE_OUTPUT_DIR", DEFAULT_OUTPUT_DIR),
+                   help="Where to save agent_history.json + step_N.png + report.md.")
     p.add_argument("--no-headless", action="store_true",
                    help="Run with a visible browser window (requires X/Wayland; "
                         "doesn't work in the default Docker setup).")
@@ -135,6 +234,7 @@ def main() -> int:
             api_key=args.api_key,
             max_steps=args.max_steps,
             headless=not args.no_headless,
+            output_dir=Path(args.output_dir),
         ))
     except KeyboardInterrupt:
         return 130

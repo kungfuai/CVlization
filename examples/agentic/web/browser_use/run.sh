@@ -21,12 +21,20 @@ DOCKER_ARGS+=(--network host)
 # Browser containers like ample /dev/shm so Chromium doesn't crash.
 DOCKER_ARGS+=(--shm-size=1g)
 
+# Per-run outputs/ on the host; agent.py writes screenshots + history
+# + report.md here. Created if missing so first runs Just Work.
+OUTPUTS_DIR="${BROWSER_USE_OUTPUTS:-${WORK_DIR}/browser_use_outputs}"
+mkdir -p "${OUTPUTS_DIR}"
+
 docker "${DOCKER_ARGS[@]}" \
   ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
   --workdir /workspace \
   --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
+  --mount "type=bind,src=${OUTPUTS_DIR},dst=/work/outputs" \
   --env "OPENCODE_BASE_URL=${OPENCODE_BASE_URL}" \
   --env "VLLM_API_KEY=${VLLM_API_KEY}" \
   --env "BROWSER_USE_MODEL=${BROWSER_USE_MODEL}" \
   --env "BROWSER_USE_MAX_STEPS=${BROWSER_USE_MAX_STEPS}" \
   "${IMG}" "$@"
+
+echo "artifacts at: ${OUTPUTS_DIR}/" >&2
