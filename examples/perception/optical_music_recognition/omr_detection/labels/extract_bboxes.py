@@ -143,35 +143,70 @@ def _finalize_staff(lines: list[tuple[float, float, float]]) -> dict:
     }
 
 
-def _group_systems(staves: list[dict]) -> list[dict]:
+def _bimodal_gap_threshold(gaps: list[float],
+                           min_jump: float = 2.0) -> float | None:
+    """Find a threshold separating 'within-system' from 'between-system'
+    staff gaps. Returns None if the distribution is unimodal (no clear
+    break) and the caller should fall back to a fixed threshold.
+
+    Strategy: sort gaps, find the largest jump between consecutive values.
+    Only use it if that jump is significantly larger than the typical
+    inter-gap step — otherwise the distribution is one cluster.
+    """
+    if len(gaps) < 2:
+        return None
+    s = sorted(gaps)
+    jumps = [(s[i] - s[i-1], i) for i in range(1, len(s))]
+    biggest_jump, idx = max(jumps)
+    if biggest_jump < min_jump:
+        return None
+    typical = sum(j for j, _ in jumps) / len(jumps)
+    if biggest_jump < 3 * typical:
+        return None  # not enough contrast to call it bimodal
+    return (s[idx] + s[idx-1]) / 2
+
+
+def _group_systems(staves: list[dict],
+                   staves_per_system: int | None = None) -> list[dict]:
     """Group staves into systems by vertical proximity.
 
-    The threshold is adaptive: within-system gaps (piano grand-staff, quartet
-    staves) tend to cluster tightly around one value; between-system gaps are
-    visibly larger. We split where the gap exceeds 1.5x the smaller cluster's
-    median. Falls back to SYSTEM_GAP if there are <3 staves.
+    If `staves_per_system` is provided (typically from MusicXML's
+    score-part / staves-per-part count), groups are formed by chunking —
+    the most reliable method. Otherwise falls back to bimodal gap analysis,
+    which works for typical solo/piano/quartet layouts but can mis-split
+    scores where within-system gap exceeds between-system gap (e.g. SATB
+    with piano, where the piano brace adds inter-staff space).
     """
     if not staves:
         return []
-    if len(staves) >= 3:
+    if staves_per_system and staves_per_system > 0:
+        groups = [staves[i:i + staves_per_system]
+                  for i in range(0, len(staves), staves_per_system)]
+        # Drop trailing partial group if it's smaller than expected
+        # (probably misdetected stave fragments below the music).
+        groups = [g for g in groups if len(g) == staves_per_system]
+        split_at = None  # not used; we already have groups
+    elif len(staves) >= 3:
         gaps = [staves[i+1]["y_top"] - staves[i]["y_bottom"]
                 for i in range(len(staves) - 1)]
-        sorted_gaps = sorted(gaps)
-        # Median of the smaller half = the within-system spacing.
-        within_med = sorted_gaps[len(sorted_gaps) // 4]
-        split_at = max(within_med * 1.5, 1.0)
+        bimodal = _bimodal_gap_threshold(gaps)
+        split_at = bimodal if bimodal is not None else SYSTEM_GAP
     else:
         split_at = SYSTEM_GAP
-    systems: list[list[dict]] = []
-    cur: list[dict] = [staves[0]]
-    for s in staves[1:]:
-        gap = s["y_top"] - cur[-1]["y_bottom"]
-        if gap < split_at:
-            cur.append(s)
-        else:
-            systems.append(cur)
-            cur = [s]
-    systems.append(cur)
+
+    if staves_per_system and staves_per_system > 0:
+        systems = groups
+    else:
+        systems: list[list[dict]] = []
+        cur: list[dict] = [staves[0]]
+        for s in staves[1:]:
+            gap = s["y_top"] - cur[-1]["y_bottom"]
+            if gap < split_at:
+                cur.append(s)
+            else:
+                systems.append(cur)
+                cur = [s]
+        systems.append(cur)
     out: list[dict] = []
     for sys_idx, group in enumerate(systems):
         x_left = min(s["x_left"] for s in group)
@@ -295,10 +330,11 @@ def _collect_barlines(
     return barlines
 
 
-def extract_layout(svg_path: Path) -> dict:
+def extract_layout(svg_path: Path,
+                   staves_per_system: int | None = None) -> dict:
     h_lines, v_rects = _collect_primitives(svg_path)
     staves = _group_staves(h_lines)
-    systems = _group_systems(staves)
+    systems = _group_systems(staves, staves_per_system=staves_per_system)
     barlines = _collect_barlines(v_rects, systems)
     bar_numbers = extract_bar_nums_from_svg(svg_path)
 
