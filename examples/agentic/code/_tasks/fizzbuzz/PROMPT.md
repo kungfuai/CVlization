@@ -1,0 +1,1 @@
+Write a Python file named fizzbuzz.py with a function fizzbuzz(n) returning 'FizzBuzz' if n is divisible by 15, 'Fizz' if divisible by 3, 'Buzz' if divisible by 5, else str(n). Then create test_fizzbuzz.py with pytest cases for 3, 5, 15, and 7. Don't run pytest yourself.
