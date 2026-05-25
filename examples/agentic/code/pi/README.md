@@ -111,6 +111,30 @@ You don't invoke LSP ops by slash command; you ask the agent in plain
 English ("rename `foo` to `bar` in `src/lib.ts`") and the `lsp` tool
 is one of the things it chooses to call.
 
+> **Project root marker required.** pi's Python LSP entries
+> (`pyright`, `basedpyright`, `pylsp`) all expect a `pyproject.toml`,
+> `setup.py`, `requirements.txt`, or `Pipfile` in the project root
+> before the language server will start. A bare `src/*.py` tree won't
+> trigger LSP; the agent will correctly report it can't find a
+> configured Python server (and may burn several minutes thinking about
+> why before giving up). Add a minimal `pyproject.toml` (just
+> `[project]` + `name` + `version`) and rename / references /
+> diagnostics light up.
+
+### LSP rename — verified example
+
+With `pyproject.toml` present, ask:
+
+> "Use the lsp tool to rename `add_numbers` in `src/lib.py` to
+> `sum_values`. Propagate to all callers (apply=true). Don't use
+> Write or Edit."
+
+pi calls `lsp(action="rename", file=..., symbol=..., new_name=...,
+apply=true)`, pylsp returns a workspace edit covering the definition
+site plus every `from .lib import add_numbers` and every call site;
+the agent applies the edit and reports back. Verified end-to-end:
+**31 s wall** on a 3-file project, 5 sites renamed in one tool call.
+
 ## Choosing a model
 
 `models.yml` lists four Qwen3 sizes. Pi's `--model` flag is fuzzy:
