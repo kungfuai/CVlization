@@ -31,6 +31,7 @@ for task_dir in "${TASKS_DIR}"/*/; do
   # affect ONLY this task (e.g. BROWSER_USE_OUTPUT_MODEL=research_brief
   # for the llm_history_research_brief task), without leaking into
   # later tasks.
+  # shellcheck disable=SC1090
   if (
     [ -f "${env_file}" ] && . "${env_file}"
     BROWSER_USE_OUTPUTS="${out}" \
