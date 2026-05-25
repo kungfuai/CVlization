@@ -40,7 +40,9 @@ from pipeline import extract_bar_nums_from_svg  # noqa: E402
 _NS = "{http://www.w3.org/2000/svg}"
 
 # Geometric thresholds (SVG user units, ~mm).
-MIN_STAFF_LEN = 50.0      # staff lines on L7a pages are 99-108 mm
+MIN_STAFF_LEN = 25.0      # the final partial system of a page can end early
+                          # (e.g. 41 mm wide when music finishes mid-line);
+                          # 25 still rejects random short horizontal noise
 LINES_PER_STAFF = 5
 STAFF_LINE_GAP = 1.2      # spacing between adjacent staff lines is ~1.0
 INTER_STAFF_GAP = 7.0     # max gap between two staves in the same system
@@ -182,9 +184,10 @@ def _group_systems(staves: list[dict],
     if staves_per_system and staves_per_system > 0:
         groups = [staves[i:i + staves_per_system]
                   for i in range(0, len(staves), staves_per_system)]
-        # Drop trailing partial group if it's smaller than expected
-        # (probably misdetected stave fragments below the music).
-        groups = [g for g in groups if len(g) == staves_per_system]
+        # Keep partial trailing group too — some pieces have a last
+        # system with fewer staves (e.g. voice continues after the piano
+        # cuts out). Only drop if the partial group has zero staves.
+        groups = [g for g in groups if len(g) > 0]
         split_at = None  # not used; we already have groups
     elif len(staves) >= 3:
         gaps = [staves[i+1]["y_top"] - staves[i]["y_bottom"]
@@ -207,12 +210,24 @@ def _group_systems(staves: list[dict],
                 systems.append(cur)
                 cur = [s]
         systems.append(cur)
+    # y_top/y_bottom from staff lines cover the 5 ruled lines only.
+    # Notes extending above the top line or below the bottom line need a
+    # margin. Empirically 1.5 staff-spaces (about 1.5 mm at LilyPond's
+    # standard 1 mm staff-space) covers ledger notes and stems.
+    Y_MARGIN_STAFF_SPACES = 1.5
     out: list[dict] = []
     for sys_idx, group in enumerate(systems):
         x_left = min(s["x_left"] for s in group)
         x_right = max(s["x_right"] for s in group)
         y_top = min(s["y_top"] for s in group)
         y_bottom = max(s["y_bottom"] for s in group)
+        # Estimate one staff-space from the median per-staff height / 4.
+        per_staff_h = [s["y_bottom"] - s["y_top"] for s in group]
+        staff_space = (sorted(per_staff_h)[len(per_staff_h) // 2] / 4
+                       if per_staff_h else 1.0)
+        margin = Y_MARGIN_STAFF_SPACES * staff_space
+        y_top -= margin
+        y_bottom += margin
         out.append({
             "idx": sys_idx,
             "bbox": (x_left, y_top, x_right - x_left, y_bottom - y_top),
