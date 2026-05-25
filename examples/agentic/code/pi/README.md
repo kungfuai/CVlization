@@ -68,6 +68,76 @@ The opencode equivalent of `run "prompt"` is `-p "prompt"` (or
 the `omp` CLI. So `--model vllm/Qwen/Qwen3-4B-Instruct`, `--tools …`,
 etc. all work.
 
+## Using pi on your own code
+
+The container bind-mounts your **current working directory** to
+`/work` and `--workdir`s into it. So everything pi reads / writes /
+edits / runs happens against the real files on your host filesystem.
+
+### What pi can do on your code
+
+| Operation | Works? | Notes |
+|---|---|---|
+| **Read files** (`tool.read`) | ✅ | Recursive; follows symlinks within the mount |
+| **Write new files** | ✅ | Verified by the `fizzbuzz` task |
+| **Edit existing files** | ✅ | `strReplace` + diff-style edits |
+| **Run Bash in your repo** | ✅ | `git status`, `pytest`, `npm test` — they hit your real repo |
+| **Grep / search** | ✅ | Bundled Rust-native ripgrep-style tool |
+| **LSP rename / refs / diagnostics** | ✅ * | Needs a project root marker (`pyproject.toml` / `setup.py` / `requirements.txt` / `Pipfile` for Python) — see LSP section above |
+| **Run pytest / build / lint** | ✅ | As a Bash invocation |
+| **Web search + fetch** | ✅ | pi's `web_search` chains 14 providers |
+| **Persistent Python / Bun cells** | ✅ | Data analysis on files in your repo |
+
+### Recipe — pi on a real codebase
+
+```bash
+# One-time, ~10 min first build (Rust + Bun + Python wheel + native addon)
+cvl run agentic-pi build
+
+cd ~/my_real_codebase
+git status      # make sure you have a clean tree -- pi edits in place
+
+# Terminal 1: model server (with the four agent flags VLLM_AGENT_DEFAULTS sets)
+MODEL_ID=Qwen/Qwen3.6-27B VLLM_DETACH=1 VLLM_AGENT_DEFAULTS=1 \
+  cvl run vllm serve
+until curl -fsS http://localhost:8000/v1/models >/dev/null; do sleep 2; done
+
+# Terminal 2: pi against your repo
+cvl run agentic-pi run                                # interactive TUI
+# or headless, one prompt at a time:
+cvl run agentic-pi run -- -p "Read main.py and tell me what it does"
+cvl run agentic-pi run -- -p "Add type hints to all functions in src/utils.py"
+cvl run agentic-pi run -- -p "Rename function bar to baz across the repo via lsp"
+
+git diff        # inspect what pi changed before keeping
+cvl run vllm stop    # tear down the model server when you're done
+```
+
+### Gotchas that will bite first-time users
+
+- **Files written by pi are owned by `root`.** Inside the container pi
+  runs as root, so new files / edits land on your host as root-owned.
+  Either run `sudo chown -R $USER:$USER .` after the session, or set
+  `--user $(id -u):$(id -g)` on `docker run` in `run.sh` (we don't by
+  default — root keeps the bundled language servers' caches simple).
+- **pi edits in place; there is no undo.** A `git stash` or
+  `git commit -am 'pre-pi'` before the session is cheap insurance.
+  Use `git diff` after every prompt to see what changed.
+- **Sessions are wiped on container exit.** pi's session DB lives at
+  `/root/.omp/` inside the container; `--rm` clobbers it. Multi-turn
+  context across separate `cvl run agentic-pi run` invocations does
+  not persist. Mount a host dir to `/root/.omp/` if you need it.
+- **The TUI needs a real terminal.** Works in tmux, iTerm, standard
+  terminal emulators. Doesn't work over `ssh -T` or from a
+  non-interactive script — use the headless `-- -p "prompt"` path
+  instead.
+- **Cwd silently matters.** `cvl run agentic-pi run` from `/tmp` makes
+  pi happily operate on `/tmp`. No "this doesn't look like a project"
+  check today.
+- **The vllm sidecar doesn't auto-stop.** After your `agentic-pi run`
+  exits, the detached vllm server is still up. Run `cvl run vllm stop`
+  or you'll leak a multi-GiB container.
+
 ## How the wiring works
 
 - **Build path** — pi has no prebuilt Docker image. `build.sh` clones
