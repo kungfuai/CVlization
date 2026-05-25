@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Per-task env overrides sourced by evaluate.sh before running this task.
 # This task uses browser-use's StructuredOutputAction path (instead of the
 # default free-text DoneAction). agent.py registers a `ResearchBrief`
