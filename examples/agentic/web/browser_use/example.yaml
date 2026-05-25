@@ -20,7 +20,7 @@ presets:
       Run the headless browser-use agent against the local vLLM endpoint. Pass through to agent.py via `--` args, e.g. `... -- "Go to https://example.com and tell me the H1"`. Defaults to a multi-step Wikipedia lookup (search 'Linux' -> click result -> extract year) when no task is given. Requires the vLLM server to already be running (with `VLLM_AGENT_DEFAULTS=1` and a VLM model like `Qwen/Qwen3.5-9B`). Saves per-step screenshots + agent_history.json + report.md to ./browser_use_outputs/ on the host.
   evaluate:
     script: evaluate.sh
-    description: Run browser_use against every task in ../_tasks/ (wikipedia_linux_year, httpbin_form_fill, pypi_requests_version, github_star_comparison) and report PASS/FAIL + wall time per task. Mirrors the sibling agentic-pi `evaluate` preset. The vLLM server (with `VLLM_AGENT_DEFAULTS=1` and a VLM model) must already be running. Latest verified run on Qwen3.5-9B: 4/4 in 133s.
+    description: Run browser_use against every task in ../_tasks/ (8 tasks covering single-page extraction, multi-step navigation, form interaction, JSON output, cross-domain click-through, counting, and multi-source comparison) and report PASS/FAIL + wall time per task. Mirrors the sibling agentic-pi `evaluate` preset. The vLLM server (with `VLLM_AGENT_DEFAULTS=1` and a VLM model) must already be running. Latest verified run on Qwen3.5-9B: 7/8 in ~250s (the failure is compare_pypi_github_versions, a 5+ hop task past the small-VLM ceiling).
 tags:
   - browser-use
   - playwright
