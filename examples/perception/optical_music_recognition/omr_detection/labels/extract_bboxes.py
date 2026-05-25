@@ -364,7 +364,8 @@ def extract_layout(svg_path: Path,
     key_sigs = [{"system": i, "bbox": b} for i, b in enumerate(key_sig_boxes)]
 
     return {
-        "systems": [{"idx": s["idx"], "bbox": s["bbox"]} for s in systems],
+        "systems": [{"idx": s["idx"], "bbox": s["bbox"],
+                     "staves": s["staves"]} for s in systems],
         "staves": staves_out,
         "barlines": barlines,
         "key_sigs": key_sigs,
