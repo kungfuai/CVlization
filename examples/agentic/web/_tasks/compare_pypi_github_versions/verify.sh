@@ -23,9 +23,12 @@ if [ -z "$verdict" ]; then
   exit 1
 fi
 
-# At least one pytest-shaped version (8.X or 8.X.Y) somewhere in verdict.
-if ! echo "$verdict" | grep -qE '\b8\.[0-9]+(\.[0-9]+)?\b'; then
-  echo "FAIL: verdict line missing a pytest-shaped version (expected 8.X.Y)"
+# At least one semver-shaped version somewhere in verdict. Don't hardcode
+# the major version -- pytest is at 9.x as of 2026-05 and will keep
+# moving. Just assert N.M or N.M.P with N >= 7 (pytest 7.x was the
+# baseline for years).
+if ! echo "$verdict" | grep -qE '\b[7-9][0-9]*\.[0-9]+(\.[0-9]+)?\b'; then
+  echo "FAIL: verdict line missing a plausible pytest-shaped version (expected N.M.P with N>=7)"
   echo "  verdict: $verdict"
   exit 1
 fi
