@@ -115,7 +115,9 @@ def _record_to_yolo_lines(rec: dict, multitask: bool = False) -> list[str]:
     for _sys, _idx, x, y, w, h in rec["bboxes"]["staves"]:
         cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
         out.append(f"1 {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
-    for _sys, x, y, w, h, heavy in rec["bboxes"]["barlines"]:
+    # Barline tuple is either 6 fields (old schema) or 7 (new with kind_id).
+    for item in rec["bboxes"]["barlines"]:
+        _sys, x, y, w, h, heavy = item[:6]
         cls = 3 if heavy else 2
         if w < min_bar_w:
             x = x + w / 2 - min_bar_w / 2
@@ -123,16 +125,20 @@ def _record_to_yolo_lines(rec: dict, multitask: bool = False) -> list[str]:
         cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
         out.append(f"{cls} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
 
-    # Key signatures: one class in standard mode, 15 sub-classes in multitask.
-    if multitask:
-        key = rec.get("key_first")
-        cls_keysig = _keysig_class_for_fifths(key) if key is not None else None
-        if cls_keysig is not None:
-            for _sys, x, y, w, h in rec["bboxes"].get("key_sigs", []):
-                cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
-                out.append(f"{cls_keysig} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
-    else:
-        for _sys, x, y, w, h in rec["bboxes"].get("key_sigs", []):
+    # Key signatures.
+    #   Old schema: [sys, x, y, w, h]  (5 fields, fifths from rec['key_first'])
+    #   New schema: [sys, x, y, w, h, fifths, kind_id]  (7 fields, per-item)
+    for item in rec["bboxes"].get("key_sigs", []):
+        _sys, x, y, w, h = item[:5]
+        fifths = item[5] if len(item) >= 6 else rec.get("key_first")
+        if multitask:
+            cls_keysig = (_keysig_class_for_fifths(fifths)
+                          if fifths is not None else None)
+            if cls_keysig is None:
+                continue
+            cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
+            out.append(f"{cls_keysig} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
+        else:
             cx, cy, nw, nh = _xywh_to_yolo(x, y, w, h, img_w, img_h)
             out.append(f"4 {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
     return out
