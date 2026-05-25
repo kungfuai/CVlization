@@ -242,16 +242,23 @@ def parse_path_metadata(score_path: Path, corpus_root: Path,
 # Batch-render mode  (runs INSIDE the cvlization/lilypond Docker container)
 # ---------------------------------------------------------------------------
 
+PNG_WIDTH = 1280   # all PNGs are rasterized from SVG at this width
+
+
 def batch_render(raw_dir: Path, render_dir: Path, score_glob: str,
                  exclude: list[str] | None = None,
                  hide_empty_staves: bool = False) -> None:
     """
-    Render every score file found under raw_dir → render_dir/<score_id>/*.png.
-    This function is called when --batch-render is active (inside Docker).
+    Render every score file under raw_dir to SVG via LilyPond, then
+    rasterize each SVG page to PNG via cairosvg at fixed PNG_WIDTH.
+    The PNG that downstream training sees and the SVG that bbox extraction
+    reads come from the same render -> bboxes land on the actual ink.
     """
     # predict.run() lives in /workspace/predict.py inside the container
     sys.path.insert(0, "/workspace")
     from predict import run as lilypond_run   # noqa: PLC0415
+    import cairosvg                            # noqa: PLC0415
+    from PIL import Image as PILImage          # noqa: PLC0415
 
     exclude = exclude or []
     all_files = sorted(raw_dir.glob(score_glob))
@@ -262,24 +269,50 @@ def batch_render(raw_dir: Path, render_dir: Path, score_glob: str,
           f"{' [hide-empty-staves]' if hide_empty_staves else ''}", flush=True)
     ok = err = skipped = 0
 
+    def _rasterize_dir(out_dir: Path) -> int:
+        """Rasterize every score-N.svg in out_dir to score-pageN.png at PNG_WIDTH.
+        Returns number of pages rasterized."""
+        n = 0
+        for svg in sorted(out_dir.glob("score-*.svg")):
+            # score-N.svg -> score-pageN.png
+            try:
+                idx = int(svg.stem.split("-")[-1])
+            except ValueError:
+                continue
+            png = out_dir / f"score-page{idx}.png"
+            try:
+                cairosvg.svg2png(url=str(svg), write_to=str(png),
+                                 output_width=PNG_WIDTH,
+                                 background_color="white")
+                n += 1
+            except Exception as e:
+                print(f"    rasterize fail {svg.name}: {e}", flush=True)
+        return n
+
     for sf in tqdm(score_files, desc="  rendering"):
         rel = sf.relative_to(raw_dir)
         out_dir = render_dir / rel.parent / rel.stem
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Skip if already rendered
+        # Skip if already rendered (PNGs present).
         if list(out_dir.glob("*.png")):
             skipped += 1
             continue
 
         try:
-            pages = lilypond_run(sf, "png", out_dir,
-                                 hide_empty_staves=hide_empty_staves)
-            if pages:
-                ok += 1
-            else:
-                print(f"    WARN no pages: {rel}", flush=True)
+            # Step 1: SVG render via LilyPond (vector, DPI-independent).
+            svg_pages = lilypond_run(sf, "svg", out_dir,
+                                     hide_empty_staves=hide_empty_staves)
+            if not svg_pages:
+                print(f"    WARN no svg: {rel}", flush=True)
                 err += 1
+                continue
+            # Step 2: rasterize each SVG page to PNG at PNG_WIDTH.
+            n_png = _rasterize_dir(out_dir)
+            if n_png == 0:
+                err += 1
+            else:
+                ok += 1
         except Exception as e:
             print(f"    ERR {rel}: {e}", flush=True)
             err += 1

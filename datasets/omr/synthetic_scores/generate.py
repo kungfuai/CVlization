@@ -1962,8 +1962,16 @@ GENERATORS = {
 }
 
 
+# Common rasterization params. Rendering pipeline:
+#   lilypond --svg  (vector, DPI-independent)
+#     -> cairosvg.svg2png(output_width=PNG_WIDTH, background_color='white')
+# Same SVG that bbox extraction reads is the source of the PNG, so GT is
+# image-consistent by construction. 1280 matches typical detector imgsz.
+PNG_WIDTH = 1280
+
+
 def render_with_lilypond(musicxml_path: str, output_png: str) -> bool:
-    """Render MusicXML to PNG using the cvlization/lilypond Docker image."""
+    """Render MusicXML to PNG (via SVG + cairosvg) using cvlization/lilypond."""
     musicxml_path = os.path.abspath(musicxml_path)
     output_png = os.path.abspath(output_png)
     output_dir = os.path.dirname(output_png)
@@ -2003,7 +2011,7 @@ def render_with_lilypond(musicxml_path: str, output_png: str) -> bool:
         with open(override_path, "w") as f:
             f.write(ly_overrides)
 
-        # Run LilyPond via Docker: convert MusicXML → .ly, inject overrides, render
+        # Render SVG only via Docker; rasterize to PNG on host with cairosvg.
         cmd = [
             "docker", "run", "--rm",
             "-v", f"{tmpdir}:/data",
@@ -2013,7 +2021,7 @@ def render_with_lilypond(musicxml_path: str, output_png: str) -> bool:
             "sed -i 's/instrumentName = .*/instrumentName = ##f/' score.ly && "
             "sed -i 's/shortInstrumentName = .*/shortInstrumentName = ##f/' score.ly && "
             "cat overrides.ly >> score.ly && "
-            "lilypond --png -dresolution=150 score.ly 2>/dev/null"
+            "lilypond --svg score.ly 2>/dev/null"
         ]
 
         try:
@@ -2025,30 +2033,36 @@ def render_with_lilypond(musicxml_path: str, output_png: str) -> bool:
             print(f"  LilyPond timeout")
             return False
 
-        # Find output PNG (LilyPond names it score.png or score-page1.png)
-        for candidate in ["score.png", "score-page1.png"]:
-            src = os.path.join(tmpdir, candidate)
-            if os.path.exists(src):
-                os.makedirs(output_dir, exist_ok=True)
-                # Crop whitespace: trim bottom, keep some margin
-                try:
-                    from PIL import Image as PILImage, ImageOps
-                    img = PILImage.open(src)
-                    # Find bounding box of non-white content
-                    gray = img.convert("L")
-                    bbox = ImageOps.invert(gray).getbbox()
-                    if bbox:
-                        # Add margin around content
-                        margin = 40
-                        crop_box = (0, 0, img.width, min(img.height, bbox[3] + margin))
-                        img = img.crop(crop_box)
-                    img.save(output_png)
-                except ImportError:
-                    subprocess.run(["cp", src, output_png])
-                return True
+        # Find first SVG page (LilyPond emits score.svg or score-1.svg)
+        svg_src = None
+        for candidate in ["score.svg", "score-1.svg"]:
+            p = os.path.join(tmpdir, candidate)
+            if os.path.exists(p):
+                svg_src = p
+                break
+        if svg_src is None:
+            print(f"  No SVG output found in {tmpdir}")
+            return False
 
-        print(f"  No PNG output found in {tmpdir}")
-        return False
+        try:
+            import cairosvg
+            from PIL import Image as PILImage, ImageOps
+        except ImportError as e:
+            print(f"  Missing host dep: {e}")
+            return False
+
+        os.makedirs(output_dir, exist_ok=True)
+        cairosvg.svg2png(url=svg_src, write_to=output_png,
+                         output_width=PNG_WIDTH, background_color="white")
+        # Trim whitespace below the last system, keep a small margin.
+        img = PILImage.open(output_png)
+        gray = img.convert("L")
+        bbox = ImageOps.invert(gray).getbbox()
+        if bbox:
+            margin = 40
+            img = img.crop((0, 0, img.width, min(img.height, bbox[3] + margin)))
+            img.save(output_png)
+        return True
 
 
 def batch_render(out_dir, filenames):
@@ -2077,7 +2091,8 @@ def batch_render(out_dir, filenames):
 """
     (out_dir / "_overrides.ly").write_text(ly_overrides)
 
-    # Build a bash script that converts + renders all files
+    # Build a bash script that converts MXL -> LY -> SVG (no PNG).
+    # Rasterization to PNG happens on the host via cairosvg.
     lines = ["#!/bin/bash", "cd /data"]
     for name in filenames:
         lines.append(
@@ -2086,7 +2101,7 @@ def batch_render(out_dir, filenames):
             f"sed -i 's/shortInstrumentName = .*/shortInstrumentName = ##f/' {name}.ly && "
             r"sed -i 's/\\context { \\Score/\\context { \\Score \\override BarNumber.break-visibility = ##(#f #f #f)/' " + f"{name}.ly && "
             f"cat _overrides.ly >> {name}.ly && "
-            f"lilypond --png -dresolution=150 {name}.ly 2>/dev/null && "
+            f"lilypond --svg {name}.ly 2>/dev/null && "
             f"echo OK:{name} || echo FAIL:{name}"
         )
     script = "\n".join(lines)
@@ -2103,34 +2118,45 @@ def batch_render(out_dir, filenames):
     result = subprocess.run(cmd, capture_output=True, timeout=3600)
     output = result.stdout.decode()
 
-    # Crop rendered PNGs
-    rendered = 0
+    # Rasterize SVGs -> PNGs in parallel on the host.
     try:
+        import cairosvg
         from PIL import Image as PILImage, ImageOps
-        has_pil = True
-    except ImportError:
-        has_pil = False
+    except ImportError as e:
+        print(f"  Missing host dep: {e}")
+        return 0
 
-    for name in filenames:
-        # LilyPond outputs name.png or name-page1.png
-        for candidate in [out_dir / f"{name}.png", out_dir / f"{name}-page1.png"]:
-            if candidate.exists():
-                if has_pil:
-                    img = PILImage.open(candidate)
-                    gray = img.convert("L")
-                    bbox = ImageOps.invert(gray).getbbox()
-                    if bbox:
-                        margin = 40
-                        img = img.crop((0, 0, img.width, min(img.height, bbox[3] + margin)))
-                    img.save(out_dir / f"{name}.png")
-                    # Remove -page1 variant if different
-                    if candidate.name != f"{name}.png" and candidate.exists():
-                        candidate.unlink()
-                rendered += 1
-                break
+    from concurrent.futures import ThreadPoolExecutor
 
-    # Cleanup temp files
+    def _raster(name):
+        for candidate in [out_dir / f"{name}.svg", out_dir / f"{name}-1.svg"]:
+            if not candidate.exists():
+                continue
+            png = out_dir / f"{name}.png"
+            try:
+                cairosvg.svg2png(url=str(candidate), write_to=str(png),
+                                 output_width=PNG_WIDTH,
+                                 background_color="white")
+                img = PILImage.open(png)
+                gray = img.convert("L")
+                bbox = ImageOps.invert(gray).getbbox()
+                if bbox:
+                    margin = 40
+                    img = img.crop((0, 0, img.width,
+                                    min(img.height, bbox[3] + margin)))
+                    img.save(png)
+                return 1
+            except Exception:
+                return 0
+        return 0
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        rendered = sum(ex.map(_raster, filenames))
+
+    # Cleanup temp files (.ly, .svg, scripts)
     for f in out_dir.glob("*.ly"):
+        f.unlink()
+    for f in out_dir.glob("*.svg"):
         f.unlink()
     (out_dir / "_overrides.ly").unlink(missing_ok=True)
     (out_dir / "_render.sh").unlink(missing_ok=True)
