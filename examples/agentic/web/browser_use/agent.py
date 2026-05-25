@@ -44,6 +44,60 @@ def _env(name: str, default: str) -> str:
     return v if v else default
 
 
+# ---------------------------------------------------------------------------
+# Optional structured-output Pydantic models. Selected at runtime via
+# --output-model / $BROWSER_USE_OUTPUT_MODEL. When set, browser-use replaces
+# its default DoneAction with a StructuredOutputAction(data=ModelInstance),
+# and Pydantic schema validation forces the model to fill every required
+# field -- bypassing the DoneAction.text "ONLY report observed data, don't
+# fill gaps with training knowledge" guidance that otherwise blocks tasks
+# requiring a synthesis paragraph after structured extraction.
+# ---------------------------------------------------------------------------
+
+def _research_brief_model():
+    """Build the ResearchBrief Pydantic model lazily.
+
+    We define it inside a function so the agent.py import is fast and
+    pydantic is only required when this output mode is actually used.
+    """
+    from pydantic import BaseModel, Field
+
+    class TableRow(BaseModel):
+        model: str = Field(description="Model name (e.g. 'Transformer', 'BERT', 'GPT-3').")
+        year: str = Field(description="Year (or year + month) the model was introduced.")
+        org: str = Field(description="Organization that introduced it.")
+        parameters: str = Field(description="Parameter count, or 'N/A' if not applicable.")
+
+    class ResearchBrief(BaseModel):
+        title: str = Field(description="Brief title heading.")
+        introduction: str = Field(
+            description=(
+                "1-2 sentence opening paragraph that frames the topic. "
+                "Synthesis based on observed facts."
+            )
+        )
+        table_rows: list[TableRow] = Field(
+            min_length=2,
+            description="One row per source visited, in visit order.",
+        )
+        common_themes: str = Field(
+            min_length=50,
+            description=(
+                "REQUIRED synthesis paragraph (>=50 chars) explaining patterns "
+                "shared across the table_rows. This is NOT 'filling gaps with "
+                "training knowledge' -- it's REQUIRED conclusion drawing from "
+                "the facts you observed in this session."
+            ),
+        )
+
+    return ResearchBrief
+
+
+_OUTPUT_MODELS = {
+    "research_brief": _research_brief_model,
+}
+
+
 def _save_artifacts(history, output_dir: Path, task: str, model: str,
                     base_url: str, wall_s: float, final_result: str) -> None:
     """Save agent_history.json + step_N.png + report.md to output_dir."""
@@ -121,15 +175,28 @@ def _save_artifacts(history, output_dir: Path, task: str, model: str,
 
 async def run(task: str, *, model: str, base_url: str, api_key: str,
               max_steps: int, headless: bool,
-              output_dir: Path) -> int:
+              output_dir: Path, output_model_name: str = "") -> int:
     # Import here so --help is fast and import errors surface clearly.
     from browser_use import Agent, Browser, ChatOpenAI
     from browser_use.browser.profile import BrowserProfile
+
+    output_model = None
+    if output_model_name:
+        builder = _OUTPUT_MODELS.get(output_model_name)
+        if builder is None:
+            available = ", ".join(sorted(_OUTPUT_MODELS)) or "(none)"
+            print(f"ERROR: unknown output_model '{output_model_name}'. "
+                  f"Available: {available}", file=sys.stderr)
+            return 2
+        output_model = builder()
 
     print(f"endpoint:   {base_url}", file=sys.stderr)
     print(f"model:      {model}", file=sys.stderr)
     print(f"headless:   {headless}", file=sys.stderr)
     print(f"output_dir: {output_dir}", file=sys.stderr)
+    if output_model is not None:
+        print(f"output_model: {output_model_name} "
+              f"(Pydantic-enforced structured output)", file=sys.stderr)
     print(f"task:       {task[:200]}{'...' if len(task) > 200 else ''}",
           file=sys.stderr)
 
@@ -159,7 +226,7 @@ async def run(task: str, *, model: str, base_url: str, api_key: str,
     )
     browser = Browser(browser_profile=profile)
 
-    agent = Agent(
+    agent_kwargs = dict(
         task=task,
         llm=llm,
         browser=browser,
@@ -167,6 +234,13 @@ async def run(task: str, *, model: str, base_url: str, api_key: str,
         max_actions_per_step=1,
         max_failures=3,
     )
+    if output_model is not None:
+        # NB: browser-use's Agent constructor calls this kwarg
+        # `output_model_schema`, not `output_model`. The base class accepts
+        # **kwargs, so wrong names get silently absorbed and ignored.
+        agent_kwargs["output_model_schema"] = output_model
+
+    agent = Agent(**agent_kwargs)
 
     started = time.monotonic()
     history = await agent.run(max_steps=max_steps)
@@ -223,6 +297,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output-dir",
                    default=_env("BROWSER_USE_OUTPUT_DIR", DEFAULT_OUTPUT_DIR),
                    help="Where to save agent_history.json + step_N.png + report.md.")
+    p.add_argument("--output-model",
+                   default=_env("BROWSER_USE_OUTPUT_MODEL", ""),
+                   choices=[""] + sorted(_OUTPUT_MODELS),
+                   help="If set, wraps the agent's done() in a "
+                        "StructuredOutputAction with this Pydantic schema. "
+                        "Use 'research_brief' for the multi-source synthesis "
+                        "task. Empty (default) uses browser-use's free-text "
+                        "DoneAction.")
     p.add_argument("--no-headless", action="store_true",
                    help="Run with a visible browser window (requires X/Wayland; "
                         "doesn't work in the default Docker setup).")
@@ -240,6 +322,7 @@ def main() -> int:
             max_steps=args.max_steps,
             headless=not args.no_headless,
             output_dir=Path(args.output_dir),
+            output_model_name=args.output_model,
         ))
     except KeyboardInterrupt:
         return 130

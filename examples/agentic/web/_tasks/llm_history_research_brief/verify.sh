@@ -7,80 +7,76 @@ OUT="${1:?usage: verify.sh <output-artifacts-dir>}"
 shot_count=$(find "$OUT" -maxdepth 1 -name 'step_*.png' | wc -l)
 [ "$shot_count" -ge 1 ] || { echo "FAIL: no step_*.png screenshots"; exit 1; }
 
-# Pull the agent's final result from the report. It's wrapped in ``` fences,
-# strip them so we can grep the markdown structure beneath.
+# Pull the agent's final result from the report. With BROWSER_USE_OUTPUT_MODEL
+# the final result is a JSON object matching the ResearchBrief schema.
 final=$(awk '/^## Final result/{flag=1; next} /^## /{flag=0} flag' "$OUT/report.md" \
         | sed -e 's/^```$//' -e 's/^```.*$//')
 
-# --- Structure checks --------------------------------------------------------
+# Parse + validate via Python.
+python3 <<PY
+import json, re, sys
 
-# Length: the brief should be substantive but not a wall of text.
-chars=$(echo -n "$final" | wc -c)
-if [ "$chars" -lt 400 ]; then
-  echo "FAIL: brief is only $chars chars; expected >=400 for a real research brief"
-  exit 1
-fi
-if [ "$chars" -gt 5000 ]; then
-  echo "FAIL: brief is $chars chars; expected <=5000 (looks like the agent dumped extra)"
-  exit 1
-fi
+final = """$final"""
 
-# Required H1 heading (the prompt asks for it verbatim, but accept minor
-# variation in dashes / spaces / case).
-if ! echo "$final" | grep -qiE '^#[[:space:]]+the foundations of modern llms'; then
-  echo "FAIL: missing required H1 'The Foundations of Modern LLMs ...'"
-  exit 1
-fi
+# Strip leading/trailing whitespace; find first balanced { ... } object.
+m = re.search(r'\{.*\}', final, re.DOTALL)
+if not m:
+    print("FAIL: no JSON object in final result")
+    print("--- got: ---")
+    print(final[:800])
+    sys.exit(1)
 
-# Markdown table: header pipes + delimiter row
-if ! echo "$final" | grep -q '| Model'; then
-  echo "FAIL: missing markdown table header containing 'Model'"
-  exit 1
-fi
-if ! echo "$final" | grep -qE '\|[[:space:]]*-{2,}'; then
-  echo "FAIL: missing markdown table delimiter row (| --- |)"
-  exit 1
-fi
+raw = m.group(0)
+try:
+    d = json.loads(raw)
+except Exception as e:
+    print(f"FAIL: JSON didn't parse: {e}")
+    print(f"--- raw: ---\n{raw[:800]}")
+    sys.exit(1)
 
-# Common themes subheading.
-if ! echo "$final" | grep -qiE '^##[[:space:]]+common themes'; then
-  echo "FAIL: missing '## Common themes' subheading"
-  exit 1
-fi
+# Required fields.
+missing = [k for k in ("title", "introduction", "table_rows", "common_themes") if k not in d]
+if missing:
+    print(f"FAIL: missing top-level fields: {missing}")
+    sys.exit(1)
 
-# --- Content checks: known facts the agent must have actually extracted ----
+# table_rows: list of >=3 dicts with model/year/org/parameters.
+rows = d["table_rows"]
+if not isinstance(rows, list) or len(rows) < 3:
+    print(f"FAIL: table_rows expected >=3 rows, got {len(rows) if isinstance(rows, list) else type(rows).__name__}")
+    sys.exit(1)
+row_keys = {"model", "year", "org", "parameters"}
+for i, r in enumerate(rows[:3]):
+    if not isinstance(r, dict):
+        print(f"FAIL: table_rows[{i}] not a dict")
+        sys.exit(1)
+    missing_r = row_keys - set(r.keys())
+    if missing_r:
+        print(f"FAIL: table_rows[{i}] missing keys: {missing_r}")
+        sys.exit(1)
 
-# Transformer was introduced in 2017 by Google. BERT in 2018 also by Google.
-# GPT-3 in 2020 by OpenAI. The brief should mention each.
-required=(
-  "Transformer"
-  "BERT"
-  "GPT-3"
-  "2017"          # Transformer year
-  "2018"          # BERT year
-  "2020"          # GPT-3 year
-  "Google"        # Transformer + BERT org
-  "OpenAI"        # GPT-3 org
-)
-missing=()
-for term in "${required[@]}"; do
-  if ! echo "$final" | grep -qi "$term"; then
-    missing+=("$term")
-  fi
-done
-if [ "${#missing[@]}" -gt 0 ]; then
-  echo "FAIL: brief is missing required facts: ${missing[*]}"
-  echo "--- got: ---"
-  echo "$final"
-  exit 1
-fi
+# common_themes: required, non-empty, >=50 chars.
+themes = d["common_themes"]
+if not isinstance(themes, str) or len(themes.strip()) < 50:
+    print(f"FAIL: common_themes too short ({len(str(themes))} chars; need >=50)")
+    print(f"  themes: {themes!r}")
+    sys.exit(1)
 
-# GPT-3's parameter count (175B / 175 billion) is one of its most-cited
-# facts; the brief should mention it (the agent's "parameters" column should
-# have this for GPT-3).
-if ! echo "$final" | grep -qiE '175[[:space:]]*(b|billion)'; then
-  echo "FAIL: brief doesn't mention GPT-3's '175B' / '175 billion' parameter count"
-  exit 1
-fi
+# Required facts: 2017 Transformer, 2018 BERT, 2020 GPT-3, Google, OpenAI,
+# and GPT-3's 175B parameter count must appear somewhere in the JSON (we
+# stringify the whole brief and grep).
+blob = json.dumps(d).lower()
+required_facts = ["transformer", "bert", "gpt-3", "2017", "2018", "2020",
+                  "google", "openai"]
+missing_f = [f for f in required_facts if f not in blob]
+if missing_f:
+    print(f"FAIL: brief missing required facts: {missing_f}")
+    sys.exit(1)
+# GPT-3 175B parameter count
+if not re.search(r'175\s*(b|billion)', blob):
+    print(f"FAIL: missing GPT-3 175B / 175 billion parameter count")
+    sys.exit(1)
 
-echo "ok: $shot_count screenshots + $chars-char brief contains all required structure + facts"
+print(f"ok: ResearchBrief parsed; "
+      f"{len(rows)} table rows; common_themes={len(themes)} chars; all key facts present")
+PY

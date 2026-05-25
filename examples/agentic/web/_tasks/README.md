@@ -40,23 +40,36 @@ filesystem starting state. The "input" is just the URL inside
 | `compare_pypi_github_versions/` | **Multi-source cross-verification (5+ hop, hard)**: navigate to pypi.org/project/pytest, note the version; navigate to GitHub releases, note the tag; compare and report `match:` or `mismatch:` with semvers. | Verdict line with at least one plausible semver (N.M.P, N≥7). **Requires Qwen3 thinking mode ON to pass on small VLMs** — see "Thinking mode" note below. |
 | `arxiv_paper_title/` | **PDF reading via the agent's read_file tool**: navigate to `arxiv.org/pdf/1706.03762`, recognize the page is a PDF viewer (browser-use auto-downloads PDFs), call the `read_file` action on the downloaded path, extract the paper title. | Final result contains `Attention Is All You Need`. **Requires Qwen3 thinking mode ON on small VLMs** — without thinking, the agent can't follow the system reminder about routing to `read_file` instead of `extract`. |
 | `python_docs_function_lookup/` | **Practical API lookup**: open the official Python `os` module docs, find the function that returns the current working directory, report its name. | Final result contains `getcwd` (or `os.getcwd`). |
-| `llm_history_research_brief/` | **Deep research with long structured output (hardest)**: visit three Wikipedia articles (Transformer / BERT / GPT-3), extract year + org + parameter count for each, then synthesize a markdown report with a title, intro, comparison table, AND a "Common themes" synthesis paragraph. | Markdown structure (H1 + table + `## Common themes`), required facts (`2017` / `2018` / `2020` / `Google` / `OpenAI` / `175B`), length 400-5000 chars. **Requires a bigger VLM to pass** — Qwen3.5-9B reliably visits all three sources and emits the table but consistently treats the table as the endpoint and never writes the synthesis paragraph, regardless of thinking mode or temperature (tested both). See "Three tiers" below. |
+| `llm_history_research_brief/` | **Deep research with long structured output (hardest)**: visit three Wikipedia articles (Transformer / BERT / GPT-3), extract year + org + parameter count for each, then produce a structured ResearchBrief with title, introduction, comparison table, AND a synthesis paragraph. | JSON object matching the `ResearchBrief` Pydantic schema, with `table_rows` (≥3 rows) + `common_themes` (≥50 chars) + required facts (`2017` / `2018` / `2020` / `Google` / `OpenAI` / `175B`). **Uses browser-use's `output_model_schema` (StructuredOutputAction) instead of free-text DoneAction** — Pydantic validation forces every field, including the synthesis paragraph that the default DoneAction's "only report observed data" guidance otherwise blocks. Wired up via the task's own `env.sh` (`BROWSER_USE_OUTPUT_MODEL=research_brief`). Verified to pass on Qwen3.6-27B with thinking ON (197 s wall, 722-char synthesis). |
 
 All eight tasks' "answers" are derived from page content the agent
 must actually navigate to and read — none of the expected values
 appear in the prompts, so a passing smoke is meaningful.
 
-## Three tiers, by model size required
+## Three tiers, by capability + setup
 
-After empirical testing on Qwen3.5-9B (our default VLM, the smallest
-verified in the sibling `vllm` preset), the corpus naturally splits
-into three tiers:
+After empirical testing on Qwen3.5-9B (the default VLM, smallest in
+our `vllm`-verified list) and Qwen3.6-27B (the larger VLM in the same
+list), the corpus splits into three tiers — but the tier boundaries
+turned out to be **about agent-loop setup, not model size**:
 
-| Tier | Tasks | Model required | Pass condition |
+| Tier | Tasks | Setup required | Why |
 |---|---|---|---|
-| **Easy** (8) | wiki_linux_year, httpbin_form_fill, pypi_requests_version, github_star_comparison, wiki_python_infobox, hn_top_story_clickthrough, github_open_issue_count, python_docs_function_lookup | Qwen3.5-9B, thinking OFF | direct extract-and-report; structured output is short |
-| **Medium** (2) | compare_pypi_github_versions, arxiv_paper_title | Qwen3.5-9B, **thinking ON** | model needs scratchpad to follow nuanced multi-step recipe (5+ hop comparison; PDF read_file routing) |
-| **Hard** (1) | llm_history_research_brief | **bigger VLM** (Claude Sonnet / GPT-5 / qwen-vl-max via `OPENCODE_BASE_URL` override) | long structured synthesis after multi-source extraction; Qwen3.5-9B reliably produces the structured *table* portion but truncates before the synthesis paragraph |
+| **Easy** (8) | wiki_linux_year, httpbin_form_fill, pypi_requests_version, github_star_comparison, wiki_python_infobox, hn_top_story_clickthrough, github_open_issue_count, python_docs_function_lookup | Qwen3.5-9B, thinking OFF | Direct extract-and-report; structured output is short |
+| **Medium** (2) | compare_pypi_github_versions, arxiv_paper_title | Qwen3.5-9B, **thinking ON** (`VLLM_QWEN3_DISABLE_THINKING=0`) | Model needs scratchpad to follow nuanced multi-step recipe (5+ hop comparison; PDF read_file routing) |
+| **Hard** (1) | llm_history_research_brief | Qwen3.6-27B + thinking ON + **`output_model_schema=ResearchBrief`** (set via the task's `env.sh`) | Pydantic-enforced structured output for the synthesis paragraph. Required because browser-use's default DoneAction.text description tells the model "only report observed data — don't fill gaps with training knowledge", which the model interprets as a ban on synthesis paragraphs. StructuredOutputAction with a required `common_themes: str` field bypasses this. |
+
+**The lesson the hard task taught us**: when a task needs the agent
+to produce synthesis/conclusion content after structured extraction,
+the issue is rarely model capability — it's the DoneAction schema's
+guidance. browser-use exposes a `output_model_schema` constructor
+parameter on `Agent(...)` that swaps DoneAction for a
+StructuredOutputAction whose `data` field is a user-supplied Pydantic
+model. Every required field in that Pydantic model becomes a forced
+field in the output — including synthesis fields. `agent.py` here
+ships one such model (`ResearchBrief`); add more via the
+`_OUTPUT_MODELS` dict and opt tasks into them via their own
+`env.sh`.
 
 ## Thinking mode and the medium-tier tasks
 

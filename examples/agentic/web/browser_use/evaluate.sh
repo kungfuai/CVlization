@@ -17,6 +17,7 @@ for task_dir in "${TASKS_DIR}"/*/; do
   name=$(basename "${task_dir%/}")
   prompt_file="${task_dir}PROMPT.md"
   verify_script="${task_dir}verify.sh"
+  env_file="${task_dir}env.sh"
   [ -f "${prompt_file}" ] || continue
   [ -f "${verify_script}" ] || continue
 
@@ -26,11 +27,15 @@ for task_dir in "${TASKS_DIR}"/*/; do
 
   echo "[${name}] running browser_use ..."
   start=$(date +%s)
-  # BROWSER_USE_OUTPUTS overrides run.sh's default per-cwd outputs path,
-  # so artifacts land in our per-task scratch dir alongside the agent log.
-  if BROWSER_USE_OUTPUTS="${out}" \
-       bash "${SCRIPT_DIR}/run.sh" -- "${prompt}" \
-       >"${out}/agent.log" 2>&1; then
+  # Per-task optional env.sh -- sourced in a subshell so its exports
+  # affect ONLY this task (e.g. BROWSER_USE_OUTPUT_MODEL=research_brief
+  # for the llm_history_research_brief task), without leaking into
+  # later tasks.
+  if (
+    [ -f "${env_file}" ] && . "${env_file}"
+    BROWSER_USE_OUTPUTS="${out}" \
+      bash "${SCRIPT_DIR}/run.sh" -- "${prompt}"
+  ) >"${out}/agent.log" 2>&1; then
     agent_exit=0
   else
     agent_exit=$?
