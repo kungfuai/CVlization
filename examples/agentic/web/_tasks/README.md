@@ -30,7 +30,14 @@ filesystem starting state. The "input" is just the URL inside
 
 | Task | What it tests | Expected result |
 |---|---|---|
-| `wikipedia_linux_year/` | Multi-step navigation (search box → click → extract). The answer is a stable historical fact and is **not in the prompt**, so a passing smoke proves real navigation + visual reasoning, not prompt regurgitation. | Final result contains `1991` |
+| `wikipedia_linux_year/` | Multi-step navigation: open Wikipedia → use search box → click result → extract a stable historical fact. | Final result contains `1991` |
+| `httpbin_form_fill/` | **Form interaction**: open httpbin form → fill 3 text fields → submit → read the JSON response and extract a field that wasn't in the prompt. | Final result is `https://httpbin.org/post` (the response's `url` field — different from the `/forms/post` URL the agent started on) |
+| `pypi_requests_version/` | **Search + click + structured extraction**: navigate to pypi.org → search for 'requests' → click the package → extract the latest semver. | Final result matches `2.X.Y` with minor ≥ 28 |
+| `github_star_comparison/` | **Multi-page comparison**: visit two GitHub repo pages, read each star count via vision, decide which is larger. | Final result contains `linux` (torvalds/linux vs microsoft/typescript — durable 2.15× gap as of 2026-05) |
+
+All four tasks' "answers" are derived from page content the agent must
+actually navigate to and read — none of the expected values appear in
+the prompts, so a passing smoke is meaningful.
 
 ## Adding a task
 
