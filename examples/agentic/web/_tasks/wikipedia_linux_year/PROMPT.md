@@ -1,0 +1,1 @@
+Open https://en.wikipedia.org. Use the search box at the top of the page to search for 'Linux'. Click the first result. From the article, find and report the year that Linux was first released. Reply with only the four-digit year on a single line, no commentary or formatting.
