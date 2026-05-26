@@ -118,18 +118,26 @@ def detect_layout_and_key(det, image_path: str, imgsz: int = 1280,
 
 
 def transcribe_measure(model, processor, page_pil, measure, pad_px=4,
+                       pad_vertical_frac: float = 0.3,
                        active_header: str | None = None):
     """Crop the measure region and run the per-measure VLM.
+
+    `pad_vertical_frac` must match the value used at training time
+    (build_per_measure_dataset.py default 0.3 for v4); otherwise the
+    inference crop omits the lyrics / dynamics that live below the staff
+    and the model produces note hallucinations.
 
     `active_header` is the per-part key/time/clef context the v4 model
     was trained to read (see train_per_measure._make_prompt). When None,
     falls back to the bare instruction (matches pre-v4 behavior)."""
     import torch
     x, y, w, h = measure.bbox
-    left = max(0, int(x - pad_px))
-    top = max(0, int(y - pad_px))
-    right = min(page_pil.width, int(x + w + pad_px))
-    bottom = min(page_pil.height, int(y + h + pad_px))
+    pad_x = max(pad_px, int(0.01 * page_pil.width))
+    pad_y = max(pad_px, int(0.01 * page_pil.height + pad_vertical_frac * h))
+    left = max(0, int(x - pad_x))
+    top = max(0, int(y - pad_y))
+    right = min(page_pil.width, int(x + w + pad_x))
+    bottom = min(page_pil.height, int(y + h + pad_y))
     crop = page_pil.crop((left, top, right, bottom)).convert("RGB")
     prompt = INSTRUCTION + ("\n\n" + active_header if active_header else "")
     msgs = [{"role": "user", "content": [
