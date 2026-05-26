@@ -49,23 +49,34 @@ _KEYSIG_BASE = 4
 
 def _default_parts_for_n_staves(n_staves: int) -> list[tuple[str, str]]:
     """Heuristic (part_name, clef_spec) for systems whose part structure
-    is unknown at inference. Covers the common openscore / synthetic
-    lieder layouts: 1 staff = solo voice; 2 = voice + piano; 3 = voice +
-    grand-staff piano; 4 = voice+voice+grand-staff piano.
+    is unknown at inference. Matches the openscore lieder MXC2 schema
+    where the piano is ONE part with `staves=2` (clef + clef2), not two
+    separate parts. The training data follows that convention so the
+    prompt must too.
+
+    Layout assumptions:
+      1 staff   = solo voice
+      2 staves  = voice + 1-staff piano (rare)
+      3 staves  = voice + grand-staff piano (1 part, staves=2)
+      4 staves  = 2 voices + grand-staff piano (2+1 parts)
+      5+        = voice + grand-staff piano + extra solo staves
     """
     if n_staves <= 1:
         return [("Voice", "G2")]
     if n_staves == 2:
-        return [("Voice", "G2"), ("Piano", "G2,F4")]
+        return [("Voice Ob", "G2"), ("Piano Pno", "G2")]
     if n_staves == 3:
-        return [("Voice", "G2"), ("Piano RH", "G2"), ("Piano LH", "F4")]
+        # Piano takes 2 staves via clef=G2,F4 — one part (model infers
+        # staves=2 from the clef-pair). Names match the openscore Ob/Pno
+        # convention the v4 training data used.
+        return [("Voice Ob", "G2"), ("Piano Pno", "G2,F4")]
     if n_staves == 4:
-        return [("Voice 1", "G2"), ("Voice 2", "G2"),
-                ("Piano RH", "G2"), ("Piano LH", "F4")]
-    # 5+: voice + piano + extras (default everything else to treble)
-    out = [("Voice", "G2"), ("Piano RH", "G2"), ("Piano LH", "F4")]
+        return [("Voice 1 Ob", "G2"), ("Voice 2 Ob", "G2"),
+                ("Piano Pno", "G2,F4")]
+    # 5+: voice + piano + extra solo staves
+    out = [("Voice Ob", "G2"), ("Piano Pno", "G2,F4")]
     for i in range(n_staves - 3):
-        out.append((f"Other {i+1}", "G2"))
+        out.append((f"Other Ob{i+1}", "G2"))
     return out
 
 
@@ -250,18 +261,38 @@ def stitch_measures(per_measure_outputs: list[tuple],
     return "\n".join(out) + "\n"
 
 
-def run(image_path: str, det_ckpt: str, vlm_ckpt: str,
-        imgsz: int = 1280, conf: float = 0.25,
-        bar_start: int = 1, verbose: bool = False) -> str:
-    """End-to-end per-measure inference. Returns final MXC2."""
+def load_models(det_ckpt: str, vlm_ckpt: str):
+    """Heavy one-time load. Reuse the (det, vlm, processor) across pages."""
     from ultralytics import YOLO
     from unsloth import FastVisionModel
-    from PIL import Image
-
     det = YOLO(det_ckpt)
     vlm, processor = FastVisionModel.from_pretrained(vlm_ckpt,
                                                        load_in_4bit=True)
     FastVisionModel.for_inference(vlm)
+    return det, vlm, processor
+
+
+_TIME_RE = re.compile(r"\btime=(\d+/\d+)\b")
+_CLEF_RE = re.compile(r"\bclef=([^\s]+)\b")
+
+
+def _extract_time_from_measure(txt: str) -> str | None:
+    """Pull the first time=N/D the VLM emitted from a per-measure MXC2."""
+    m = _TIME_RE.search(txt)
+    return m.group(1) if m else None
+
+
+def run(image_path: str, det_ckpt: str = None, vlm_ckpt: str = None,
+        imgsz: int = 1280, conf: float = 0.25,
+        bar_start: int = 1, verbose: bool = False,
+        det=None, vlm=None, processor=None) -> str:
+    """End-to-end per-measure inference. Returns final MXC2.
+
+    Pass (det, vlm, processor) for repeated calls to avoid reloading.
+    """
+    from PIL import Image
+    if det is None or vlm is None or processor is None:
+        det, vlm, processor = load_models(det_ckpt, vlm_ckpt)
 
     systems, staves, barlines, key, votes = detect_layout_and_key(
         det, image_path, imgsz=imgsz, conf=conf)
@@ -284,9 +315,15 @@ def run(image_path: str, det_ckpt: str, vlm_ckpt: str,
         staves_per_sys[s[0]] = staves_per_sys.get(s[0], 0) + 1
     for sys_i, n_st in staves_per_sys.items():
         header_by_sys[sys_i] = _build_active_header(key, n_st)
+    # Two-pass: transcribe the first measure with default-time header, parse
+    # the time= the VLM emitted, then use that for the remaining measures
+    # (time signature rarely changes within a page).
+    inferred_time: str | None = None
     for i, m in enumerate(measures):
         abs_m = bar_start + i
-        header = header_by_sys.get(m.system, _build_active_header(key, 3))
+        n_st = staves_per_sys.get(m.system, 3)
+        time_for_header = inferred_time or "4/4"
+        header = _build_active_header(key, n_st, time_str=time_for_header)
         try:
             txt = transcribe_measure(vlm, processor, page_pil, m,
                                      active_header=header)
@@ -295,6 +332,11 @@ def run(image_path: str, det_ckpt: str, vlm_ckpt: str,
                 print(f"  m={abs_m} transcribe err: {e}", flush=True)
             continue
         per_measure.append((abs_m, txt))
+        if inferred_time is None:
+            inferred_time = _extract_time_from_measure(txt)
+            if verbose and inferred_time:
+                print(f"  inferred time signature from m1: {inferred_time}",
+                      flush=True)
         if verbose and (i + 1) % 5 == 0:
             print(f"  [{i+1}/{len(measures)}] {time.time()-t0:.1f}s",
                   flush=True)
