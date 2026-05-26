@@ -47,6 +47,43 @@ INSTRUCTION = ("Transcribe this single measure of sheet music to MXC2 "
 _KEYSIG_BASE = 4
 
 
+def _default_parts_for_n_staves(n_staves: int) -> list[tuple[str, str]]:
+    """Heuristic (part_name, clef_spec) for systems whose part structure
+    is unknown at inference. Covers the common openscore / synthetic
+    lieder layouts: 1 staff = solo voice; 2 = voice + piano; 3 = voice +
+    grand-staff piano; 4 = voice+voice+grand-staff piano.
+    """
+    if n_staves <= 1:
+        return [("Voice", "G2")]
+    if n_staves == 2:
+        return [("Voice", "G2"), ("Piano", "G2,F4")]
+    if n_staves == 3:
+        return [("Voice", "G2"), ("Piano RH", "G2"), ("Piano LH", "F4")]
+    if n_staves == 4:
+        return [("Voice 1", "G2"), ("Voice 2", "G2"),
+                ("Piano RH", "G2"), ("Piano LH", "F4")]
+    # 5+: voice + piano + extras (default everything else to treble)
+    out = [("Voice", "G2"), ("Piano RH", "G2"), ("Piano LH", "F4")]
+    for i in range(n_staves - 3):
+        out.append((f"Other {i+1}", "G2"))
+    return out
+
+
+def _build_active_header(key_fifths: int | None, n_staves: int,
+                         time_str: str = "4/4") -> str:
+    """Match training-time prompt format. Without per-page time/clef
+    detection we use defaults: 4/4 time and the most common clef layout
+    for the staff count."""
+    if key_fifths is None:
+        key_fifths = 0
+    parts = _default_parts_for_n_staves(n_staves)
+    lines = ["Active header per part:"]
+    for i, (name, clef) in enumerate(parts, 1):
+        lines.append(f"P{i} {name}: key={key_fifths} time={time_str} "
+                     f"clef={clef}")
+    return "\n".join(lines)
+
+
 def _fifths_from_cls(cls: int) -> int | None:
     if cls < _KEYSIG_BASE:
         return None
@@ -80,8 +117,13 @@ def detect_layout_and_key(det, image_path: str, imgsz: int = 1280,
     return systems, staves, barlines, key, keysig_votes
 
 
-def transcribe_measure(model, processor, page_pil, measure, pad_px=4):
-    """Crop the measure region and run the per-measure VLM."""
+def transcribe_measure(model, processor, page_pil, measure, pad_px=4,
+                       active_header: str | None = None):
+    """Crop the measure region and run the per-measure VLM.
+
+    `active_header` is the per-part key/time/clef context the v4 model
+    was trained to read (see train_per_measure._make_prompt). When None,
+    falls back to the bare instruction (matches pre-v4 behavior)."""
     import torch
     x, y, w, h = measure.bbox
     left = max(0, int(x - pad_px))
@@ -89,8 +131,9 @@ def transcribe_measure(model, processor, page_pil, measure, pad_px=4):
     right = min(page_pil.width, int(x + w + pad_px))
     bottom = min(page_pil.height, int(y + h + pad_px))
     crop = page_pil.crop((left, top, right, bottom)).convert("RGB")
+    prompt = INSTRUCTION + ("\n\n" + active_header if active_header else "")
     msgs = [{"role": "user", "content": [
-        {"type": "text", "text": INSTRUCTION},
+        {"type": "text", "text": prompt},
         {"type": "image"}]}]
     txt = processor.apply_chat_template(msgs, add_generation_prompt=True)
     inp = processor(crop, txt, add_special_tokens=False,
@@ -224,10 +267,21 @@ def run(image_path: str, det_ckpt: str, vlm_ckpt: str,
     page_pil = Image.open(image_path).convert("RGB")
     per_measure: list[tuple] = []
     t0 = time.time()
+    # Build active header per system based on its staff count.
+    # All measures within a system share the same header layout.
+    header_by_sys: dict[int, str] = {}
+    staves_per_sys: dict[int, int] = {}
+    for s in staves:
+        # staves are (sys_i, idx, x, y, w, h)
+        staves_per_sys[s[0]] = staves_per_sys.get(s[0], 0) + 1
+    for sys_i, n_st in staves_per_sys.items():
+        header_by_sys[sys_i] = _build_active_header(key, n_st)
     for i, m in enumerate(measures):
         abs_m = bar_start + i
+        header = header_by_sys.get(m.system, _build_active_header(key, 3))
         try:
-            txt = transcribe_measure(vlm, processor, page_pil, m)
+            txt = transcribe_measure(vlm, processor, page_pil, m,
+                                     active_header=header)
         except Exception as e:
             if verbose:
                 print(f"  m={abs_m} transcribe err: {e}", flush=True)
