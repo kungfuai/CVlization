@@ -24,7 +24,9 @@ hardware that's half the size they targeted.
 * **Training smoke verified**: 50-iter smoke completed on 4 A100-40GB.
   All mechanics work end-to-end; memory ~33.8 GB peak per GPU; no NaN.
   Saved checkpoints at step 25 + 50 (~11 GB each).
-* **Full 600-iter training**: not yet run. Estimated ~15 h compute.
+* **Full 600-iter training**: DONE. Ran in ~15 h on 4× A100-40GB (1.5
+  min/iter steady state). 6 checkpoints saved (~14 GB each, 85 GB total).
+  Per-GPU memory steady at 22.6 GB.
 
 ## Hardware adaptations from the published recipe
 
@@ -115,6 +117,28 @@ step 50) saved as `logs/smoke/checkpoint_model_NNNNNN/model.pt`.
   README) to render a video and compare to baseline.
 * GPU memory should stay under 40 GB throughout. If you see OOM, halve
   the spatial dimensions further or use 7-8 GPUs.
+
+## Inference gotcha: FSDP-prefixed EMA keys
+
+Their saved checkpoint has `generator_ema` keys with the FSDP wrapper
+prefix (`model._fsdp_wrapped_module.patch_embedding.weight` etc.), while
+the inference pipeline expects plain keys (`model.patch_embedding.weight`).
+Their `rename_param` helper is defined in the trainer but not applied at
+save time for the EMA. The `generator` (non-EMA) keys ARE clean. So either:
+
+* Load the non-EMA generator (omit `--use_ema`): works directly.
+* Or rewrite the checkpoint stripping the FSDP prefix:
+
+  ```python
+  src = torch.load("checkpoint_model_000600/model.pt", map_location="cpu")
+  src["generator_ema"] = {
+      k.replace("_fsdp_wrapped_module.", ""): v
+      for k, v in src["generator_ema"].items()
+  }
+  torch.save(src, "checkpoint_model_000600/model_inference.pt")
+  ```
+
+Then `inference.py --checkpoint_path .../model_inference.pt --use_ema` works.
 
 ## Files in this directory
 
