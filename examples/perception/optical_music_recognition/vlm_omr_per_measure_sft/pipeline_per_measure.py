@@ -274,12 +274,61 @@ def load_models(det_ckpt: str, vlm_ckpt: str):
 
 _TIME_RE = re.compile(r"\btime=(\d+/\d+)\b")
 _CLEF_RE = re.compile(r"\bclef=([^\s]+)\b")
+_KEY_RE = re.compile(r"\bkey=(-?\d+)\b")
 
 
 def _extract_time_from_measure(txt: str) -> str | None:
     """Pull the first time=N/D the VLM emitted from a per-measure MXC2."""
     m = _TIME_RE.search(txt)
     return m.group(1) if m else None
+
+
+def _extract_header_per_part(txt: str) -> dict[str, dict]:
+    """Parse the per-part {key,time,clef} the VLM emitted in M-line
+    attributes of a measure's MXC2. Returns {part_id: {...}}.
+    """
+    parts: dict[str, dict] = {}
+    cur_part: str | None = None
+    for ln in txt.splitlines():
+        s = ln.strip()
+        if s.startswith("P") and len(s) <= 3 and "=" not in s:
+            cur_part = s; continue
+        if not s.startswith("M ") or cur_part is None:
+            continue
+        attrs: dict = {}
+        mk = _KEY_RE.search(s)
+        if mk: attrs["key"] = int(mk.group(1))
+        mt = _TIME_RE.search(s)
+        if mt: attrs["time"] = mt.group(1)
+        mc = _CLEF_RE.search(s)
+        if mc: attrs["clef"] = mc.group(1)
+        # also clef2
+        mc2 = re.search(r"\bclef2=(\S+)", s)
+        if mc2: attrs["clef2"] = mc2.group(1)
+        parts.setdefault(cur_part, attrs)
+    return parts
+
+
+def _build_active_header_from_parsed(parsed: dict[str, dict],
+                                     n_parts: int) -> str:
+    """Use the parsed (per-part) header from m1 to build the prompt
+    for subsequent measures. Falls back to bare instruction if parse
+    produced nothing usable."""
+    if not parsed:
+        return ""
+    lines = ["Active header per part:"]
+    for p_id in sorted(parsed):
+        a = parsed[p_id]
+        bits = []
+        if "key" in a: bits.append(f"key={a['key']}")
+        if "time" in a: bits.append(f"time={a['time']}")
+        if "clef" in a:
+            c = a["clef"]
+            if "clef2" in a: c += f",{a['clef2']}"
+            bits.append(f"clef={c}")
+        if bits:
+            lines.append(f"{p_id}: {' '.join(bits)}")
+    return "\n".join(lines) if len(lines) > 1 else ""
 
 
 def run(image_path: str, det_ckpt: str = None, vlm_ckpt: str = None,
@@ -315,15 +364,22 @@ def run(image_path: str, det_ckpt: str = None, vlm_ckpt: str = None,
         staves_per_sys[s[0]] = staves_per_sys.get(s[0], 0) + 1
     for sys_i, n_st in staves_per_sys.items():
         header_by_sys[sys_i] = _build_active_header(key, n_st)
-    # Two-pass: transcribe the first measure with default-time header, parse
-    # the time= the VLM emitted, then use that for the remaining measures
-    # (time signature rarely changes within a page).
-    inferred_time: str | None = None
+    # Two-pass: m1 gets a part-names-only prompt (no key/time/clef). Model
+    # is expected (under v5+ two-mode training) to read those from the
+    # image, since first-of-page measures DO show clef+keysig+timesig
+    # visually. We then parse them from m1's output and use for m2..N.
+    parsed_m1_headers: dict[str, dict] = {}
+    propagated_header = ""
     for i, m in enumerate(measures):
         abs_m = bar_start + i
         n_st = staves_per_sys.get(m.system, 3)
-        time_for_header = inferred_time or "4/4"
-        header = _build_active_header(key, n_st, time_str=time_for_header)
+        if i == 0:
+            # Part-names-only prompt (matches v5 first-of-page training).
+            parts_list = _default_parts_for_n_staves(n_st)
+            header = "Parts:\n" + "\n".join(
+                f"P{j+1} {name}" for j, (name, _) in enumerate(parts_list))
+        else:
+            header = propagated_header
         try:
             txt = transcribe_measure(vlm, processor, page_pil, m,
                                      active_header=header)
@@ -332,11 +388,12 @@ def run(image_path: str, det_ckpt: str = None, vlm_ckpt: str = None,
                 print(f"  m={abs_m} transcribe err: {e}", flush=True)
             continue
         per_measure.append((abs_m, txt))
-        if inferred_time is None:
-            inferred_time = _extract_time_from_measure(txt)
-            if verbose and inferred_time:
-                print(f"  inferred time signature from m1: {inferred_time}",
-                      flush=True)
+        if i == 0:
+            parsed_m1_headers = _extract_header_per_part(txt)
+            propagated_header = _build_active_header_from_parsed(
+                parsed_m1_headers, n_parts=len(parsed_m1_headers))
+            if verbose:
+                print(f"  parsed from m1: {parsed_m1_headers}", flush=True)
         if verbose and (i + 1) % 5 == 0:
             print(f"  [{i+1}/{len(measures)}] {time.time()-t0:.1f}s",
                   flush=True)

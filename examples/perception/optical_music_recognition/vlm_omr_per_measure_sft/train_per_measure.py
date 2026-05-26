@@ -38,15 +38,18 @@ _M_HEADER_RE = re.compile(
 )
 
 
-def _context_from_mxc2(mxc2: str) -> str:
-    """Extract the active key/time/clef per part from this measure's MXC2.
+def _context_from_mxc2(mxc2: str, attrs: bool = True) -> str:
+    """Extract per-part header info from this measure's MXC2.
 
-    At training time this is grounded truth from the GT itself; at
-    inference it comes from the upstream detector (keysig + structure).
-    The prompt format is one line per part:
+    Two modes:
+      attrs=True  (legacy v4):  full header per part
         P1 Voice: key=-4 time=4/4 clef=G2
-        P2 Piano: key=-4 time=4/4 clef=G2,F4
-    Order matches the MXC2's part declarations.
+      attrs=False (v5+):        part declarations only
+        P1 Voice
+        P2 Piano
+    The attrs=False mode forces the model to infer key/time/clef from
+    the image, which removes the inference-time problem of supplying
+    correct defaults for those attributes.
     """
     parts: dict[str, str] = {}    # P1 -> 'Voice'
     headers: dict[str, str] = {}  # P1 -> 'key=-4 time=4/4 clef=G2,F4'
@@ -80,17 +83,23 @@ def _context_from_mxc2(mxc2: str) -> str:
                     else:
                         bits.append(f"clef={clef}")
                 headers.setdefault(current_part, " ".join(bits))
-    if not headers:
+    if not headers and not parts:
         return ""
     lines = []
-    for p_id in sorted(headers):
+    if attrs:
+        for p_id in sorted(headers):
+            name = parts.get(p_id, "")
+            lines.append(f"{p_id} {name}: {headers[p_id]}".strip())
+        return "Active header per part:\n" + "\n".join(lines)
+    # attrs=False: names-only
+    for p_id in sorted(parts or headers):
         name = parts.get(p_id, "")
-        lines.append(f"{p_id} {name}: {headers[p_id]}".strip())
-    return "Active header per part:\n" + "\n".join(lines)
+        lines.append(f"{p_id} {name}".strip())
+    return "Parts:\n" + "\n".join(lines)
 
 
-def _make_prompt(mxc2: str) -> str:
-    ctx = _context_from_mxc2(mxc2)
+def _make_prompt(mxc2: str, attrs: bool = True) -> str:
+    ctx = _context_from_mxc2(mxc2, attrs=attrs)
     if ctx:
         return INSTRUCTION + "\n\n" + ctx
     return INSTRUCTION
@@ -122,9 +131,10 @@ def _open_pil(rec: dict, root: Path):
     return Image.open(root / rec["image"]).convert("RGB")
 
 
-def _convert_to_conversation(rec: dict, root: Path) -> dict:
+def _convert_to_conversation(rec: dict, root: Path,
+                              attrs_in_prompt: bool = True) -> dict:
     img = _open_pil(rec, root)
-    prompt = _make_prompt(rec["mxc2"])
+    prompt = _make_prompt(rec["mxc2"], attrs=attrs_in_prompt)
     return {
         "messages": [
             {"role": "user", "content": [
@@ -152,6 +162,20 @@ def main():
                    help="LoRA rank when --fresh.")
     p.add_argument("--lora-alpha", type=int, default=16,
                    help="LoRA alpha when --fresh.")
+    p.add_argument("--no-attr-header", action="store_true",
+                   help="Drop key/time/clef from the prompt context for "
+                        "EVERY measure. Strictest mode — model infers them "
+                        "from image always.")
+    p.add_argument("--two-mode", action="store_true",
+                   help="Drop attr header only for first-of-page measures "
+                        "(where the page visually shows clef/key/time). "
+                        "Subsequent measures still get full header context "
+                        "in the prompt. Matches two-pass inference. "
+                        "Recommended for v5.")
+    p.add_argument("--first-oversample", type=int, default=1,
+                   help="Replicate first-of-page records this many times "
+                        "in train (default 1 = no oversample). 3-5 gives "
+                        "the no-header task more practice.")
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--epochs", type=float, default=1.0)
     p.add_argument("--batch-size", type=int, default=4)
@@ -211,8 +235,55 @@ def main():
 
     print("Converting to conversation format ...", flush=True)
     t0 = time.time()
-    train_data = [_convert_to_conversation(r, args.data) for r in train_recs]
-    val_data = [_convert_to_conversation(r, args.data) for r in dev_recs]
+    def _is_first_of_page_map(records: list[dict]) -> dict[int, bool]:
+        # records keyed by id() -> True iff lowest 'measure' for its
+        # (source, score_id, page) group.
+        first_m: dict[tuple, int] = {}
+        for r in records:
+            key = (r.get("source"), r.get("score_id"), r.get("page"))
+            m = r.get("measure")
+            if m is None:
+                continue
+            if key not in first_m or m < first_m[key]:
+                first_m[key] = m
+        out: dict[int, bool] = {}
+        for r in records:
+            key = (r.get("source"), r.get("score_id"), r.get("page"))
+            out[id(r)] = (r.get("measure") == first_m.get(key))
+        return out
+
+    def _attrs_for(rec, is_first):
+        if args.no_attr_header:
+            return False
+        if args.two_mode and is_first:
+            return False
+        return True
+
+    train_first = _is_first_of_page_map(train_recs)
+    dev_first = _is_first_of_page_map(dev_recs)
+
+    if args.two_mode and args.first_oversample > 1:
+        oversampled = []
+        for r in train_recs:
+            oversampled.append(r)
+            if train_first[id(r)]:
+                for _ in range(args.first_oversample - 1):
+                    oversampled.append(r)
+                    train_first[id(r)] = True  # same record, same id
+        n_first = sum(1 for r in train_recs if train_first[id(r)])
+        print(f"  oversampled first-of-page: {n_first} -> "
+              f"{n_first * args.first_oversample} (total train={len(oversampled)})",
+              flush=True)
+        train_recs = oversampled
+
+    print(f"  no_attr_header={args.no_attr_header}  two_mode={args.two_mode}  "
+          f"first_oversample={args.first_oversample}", flush=True)
+    train_data = [_convert_to_conversation(r, args.data,
+                                            _attrs_for(r, train_first[id(r)]))
+                  for r in train_recs]
+    val_data = [_convert_to_conversation(r, args.data,
+                                          _attrs_for(r, dev_first[id(r)]))
+                for r in dev_recs]
     print(f"  done in {time.time()-t0:.1f}s", flush=True)
 
     FastVisionModel.for_training(model)
