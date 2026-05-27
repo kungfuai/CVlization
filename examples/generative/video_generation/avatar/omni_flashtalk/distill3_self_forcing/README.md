@@ -118,6 +118,37 @@ step 50) saved as `logs/smoke/checkpoint_model_NNNNNN/model.pt`.
 * GPU memory should stay under 40 GB throughout. If you see OOM, halve
   the spatial dimensions further or use 7-8 GPUs.
 
+## Continuation + gradient accumulation result (negative)
+
+Attempted to resume from step 600 with `gradient_accumulation_steps: 16`
+(effective batch 64, matching their published config) to test if closing
+the batch-size gap fixes the flickering observed in our 600-iter result.
+
+Result: **OOM on 4xA100-40GB at ~37GB used per GPU**, after ~2h of training.
+
+Patches we made for this attempt (all in `trainer/distillation.py`):
+
+* Load `critic`, `generator_ema` (stripping `_fsdp_wrapped_module.` prefix),
+  and `step` from the checkpoint if present
+* Add `gradient_accumulation_steps` config: wrap each `fwdbwd_one_step` in
+  a `for _ in range(grad_accum)` loop (the optimizer.step happens once
+  after accumulation)
+* Save `step` in the checkpoint dict so future resumes are clean
+
+What this proves about hardware sizing:
+
+| Effective batch | Hardware needed | Wall clock for 100 iters |
+| --- | --- | --- |
+| 4 (our smoke + full run) | 4xA100-40GB ok | 15 h (600 iters) |
+| 16 (grad_accum=4)  | 4xA100-40GB likely ok | ~10 h |
+| 32 (grad_accum=8)  | 4xA100-40GB borderline | ~20 h |
+| **64 (grad_accum=16, published)** | **4xA100-40GB OOMs**; needs 7+ A100s or 80GB GPUs | ~40 h |
+
+Documented as a useful negative result. The 16x larger effective batch
+that distinguishes published self_forcing_dmd.pt from our 600-iter
+checkpoint is the same factor that prevents naive single-node 4x40GB
+training from matching it.
+
 ## Inference gotcha: FSDP-prefixed EMA keys
 
 Their saved checkpoint has `generator_ema` keys with the FSDP wrapper
