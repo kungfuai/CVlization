@@ -1,0 +1,126 @@
+name: doc_extraction_sft
+capability: perception/doc_ai
+modalities:
+  - text
+datasets:
+  - local-jsonl
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 40
+image: doc_extraction_sft
+runtime_profiles:
+  default:
+    image: doc_extraction_sft
+    description: Baseline Transformers/TRL image
+  base:
+    image: doc_extraction_sft
+    description: Alias for default
+  transformers:
+    image: doc_extraction_sft
+    description: Alias for default
+  modern:
+    image: doc_extraction_sft_modern
+    description: Newer Transformers image with prebuilt FlashAttention
+  transformers-modern:
+    image: doc_extraction_sft_modern
+    description: Alias for modern
+  qwen35:
+    image: doc_extraction_sft_qwen35
+    description: Qwen3.5 Transformers image with prebuilt FlashAttention
+  transformers-qwen35:
+    image: doc_extraction_sft_qwen35
+    description: Alias for qwen35
+  unsloth-qwen35:
+    image: doc_extraction_sft_unsloth_qwen35
+    description: Unsloth Qwen3.5 image with prebuilt FlashAttention
+  unsloth-latest:
+    image: doc_extraction_sft_unsloth_latest
+    description: General Unsloth image for Llama, Qwen, and Ministral-like models
+  unsloth:
+    image: doc_extraction_sft_unsloth_latest
+    description: Alias for unsloth-latest
+  nemotron:
+    image: doc_extraction_sft_unsloth_nemotron
+    description: Unsloth Nemotron image with Mamba dependencies
+  unsloth-nemotron:
+    image: doc_extraction_sft_unsloth_nemotron
+    description: Alias for nemotron
+  gemma4:
+    image: doc_extraction_sft_gemma4
+    description: Gemma 4 Transformers image
+  unsloth-gemma4:
+    image: doc_extraction_sft_unsloth_gemma4
+    description: Unsloth Gemma 4 image
+presets:
+  build:
+    script: build.sh
+    description: Build a runtime image; pass --runtime-profile PROFILE for model-family stacks
+  build-modern:
+    script: build_modern.sh
+    description: Build the modern Transformers image with prebuilt FlashAttention
+  build-qwen35:
+    script: build_qwen35.sh
+    description: Build the Qwen3.5 Transformers image with prebuilt FlashAttention
+  build-unsloth-qwen35:
+    script: build_unsloth_qwen35.sh
+    description: Build the Unsloth Qwen3.5 image with prebuilt FlashAttention
+  build-unsloth-latest:
+    script: build_unsloth_latest.sh
+    description: Build the latest Unsloth image with prebuilt FlashAttention
+  build-unsloth-nemotron:
+    script: build_unsloth_nemotron.sh
+    description: Build the Unsloth Nemotron image with prebuilt Mamba/FlashAttention wheels
+  build-gemma4:
+    script: build_gemma4.sh
+    description: Build the Gemma 4 Transformers image with prebuilt FlashAttention
+  build-unsloth-gemma4:
+    script: build_unsloth_gemma4.sh
+    description: Build the Unsloth Gemma 4 image
+  train:
+    script: train.sh
+    description: >-
+      Fine-tune an LLM for post-OCR document extraction. Run
+      `cvl run --no-docker doc_extraction_sft train --help` for the config
+      skeleton; pass data with `--data-files /path/to/train.jsonl` or set
+      `dataset.data_files` in YAML.
+  train-unsloth:
+    script: train_unsloth.sh
+    description: Fine-tune with the Unsloth trainer path using a YAML config.
+  eval:
+    script: eval.sh
+    description: >-
+      Generate and score held-out predictions for a base/full checkpoint or
+      LoRA adapter. Primary metrics exclude checkbox fields by default because
+      text OCR often does not reliably encode checkbox state.
+  eval-unsloth:
+    script: eval_unsloth.sh
+    description: >-
+      Generate and score held-out predictions for an Unsloth LoRA adapter.
+      Primary metrics exclude checkbox fields by default.
+  validate:
+    script: validate.sh
+    description: Validate a local JSONL SFT dataset against the row contract
+  test:
+    script: test.sh
+    description: Smoke test with the committed JSONL fixture
+tags:
+  - doc-ai
+  - structured-extraction
+  - text-to-structure
+  - document-extraction
+  - sft
+  - trl
+  - lora
+  - qlora
+  - pytorch
+tasks:
+  - information_extraction
+  - document_understanding
+frameworks:
+  - pytorch
+  - transformers
+  - trl
+  - peft
+description: Fine-tune an instruction LLM for post-OCR document extraction into structured outputs.

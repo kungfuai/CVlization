@@ -1,0 +1,21 @@
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-devel
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+COPY requirements.modern.txt .
+RUN /root/.local/bin/uv pip install --system -r requirements.modern.txt
+
+# Prebuilt flash-attn wheel for Python 3.11 + PyTorch 2.9 + CUDA 12.8.
+# Keep this as an explicit wheel URL so Docker builds do not compile flash-attn.
+RUN pip install --no-cache-dir \
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.0/flash_attn-2.8.3%2Bcu128torch2.9-cp311-cp311-linux_x86_64.whl"
+
+WORKDIR /workspace
+
+CMD ["python3", "train.py"]

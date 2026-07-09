@@ -121,6 +121,7 @@ def check_docker_image_exists(image_name: str) -> bool:
 def get_docker_image_name(
     example_path: str,
     example_data: Optional[Dict] = None,
+    env_overrides: Optional[Dict[str, str]] = None,
 ) -> Optional[str]:
     """Extract Docker image name from example directory.
 
@@ -134,11 +135,83 @@ def get_docker_image_name(
     Returns:
         Image name, or None if cannot determine
     """
+    env_image = (env_overrides or {}).get("CVL_IMAGE") or os.environ.get("CVL_IMAGE")
+    if env_image:
+        return env_image
     if example_data:
         image_name = example_data.get("image")
         if image_name:
             return image_name
     return Path(example_path).name
+
+
+def _extract_runtime_profile(extra_args: List[str], *, strip: bool) -> Tuple[Optional[str], List[str]]:
+    """Extract --runtime-profile from extra args.
+
+    Args:
+        extra_args: Raw args passed after the preset name.
+        strip: Whether to remove the runtime-profile args from the script args.
+
+    Returns:
+        Tuple of (profile, args_for_script).
+    """
+    if not extra_args:
+        return None, []
+
+    profile = None
+    script_args = []
+    i = 0
+    while i < len(extra_args):
+        arg = extra_args[i]
+        if arg == "--runtime-profile":
+            if (i + 1) >= len(extra_args):
+                raise ValueError("Missing value for --runtime-profile")
+            profile = extra_args[i + 1]
+            if not strip:
+                script_args.extend([arg, extra_args[i + 1]])
+            i += 2
+            continue
+        if arg.startswith("--runtime-profile="):
+            profile = arg.split("=", 1)[1]
+            if not strip:
+                script_args.append(arg)
+            i += 1
+            continue
+
+        script_args.append(arg)
+        i += 1
+
+    return profile, script_args
+
+
+def _runtime_profile_env(example: Dict, profile: Optional[str]) -> Dict[str, str]:
+    """Return environment overrides for an example runtime profile."""
+    if not profile:
+        return {}
+
+    profiles = example.get("runtime_profiles", {})
+    if not isinstance(profiles, dict) or profile not in profiles:
+        available = ", ".join(profiles.keys()) if isinstance(profiles, dict) else ""
+        message = f"Unknown runtime profile '{profile}'"
+        if available:
+            message += f". Available: {available}"
+        raise ValueError(message)
+
+    profile_data = profiles[profile]
+    if isinstance(profile_data, str):
+        image = profile_data
+    elif isinstance(profile_data, dict):
+        image = profile_data.get("image")
+    else:
+        image = None
+
+    if not image:
+        raise ValueError(f"Runtime profile '{profile}' does not define an image")
+
+    env = {"CVL_RUNTIME_PROFILE": profile}
+    if not os.environ.get("CVL_IMAGE"):
+        env["CVL_IMAGE"] = image
+    return env
 
 
 def get_example_path(examples: List[Dict], example_identifier: str) -> Optional[str]:
@@ -493,13 +566,15 @@ def run_script(
         # Run script from its directory using basename since cwd is set
         script_name = os.path.basename(script_path)
 
-        # Generate deterministic container name for easy debugging
-        # Format: {example}-{timestamp}
-        # Use only last 6 digits of timestamp to keep name short
+        # Generate a readable container name for debugging. Include the preset
+        # and current process id so concurrent runs of the same example do not
+        # collide when they start in the same second.
         timestamp_short = str(int(start_time))[-6:]
-        # Extract just the example name from job_name (e.g., "moondream2" from "moondream2 predict")
-        example_short = job_name.split()[0] if job_name else "job"
-        container_name = f"{example_short}-{timestamp_short}"
+        job_parts = job_name.split()
+        example_short = job_parts[0] if job_parts else "job"
+        preset_short = job_parts[1] if len(job_parts) > 1 else "run"
+        pid_short = str(os.getpid())[-5:]
+        container_name = f"{example_short}-{preset_short}-{timestamp_short}-{pid_short}"
 
         # Use env to set PYTHONUNBUFFERED for all Python scripts
         env = os.environ.copy()
@@ -881,6 +956,21 @@ def run_example(
     # Docker can be skipped via: (1) --no-docker CLI flag, or (2) docker: false in preset
     requires_docker = preset_info.get("docker", True) and not no_docker
 
+    has_runtime_profiles = isinstance(example.get("runtime_profiles"), dict) and bool(example.get("runtime_profiles"))
+    if has_runtime_profiles:
+        try:
+            runtime_profile, script_extra_args = _extract_runtime_profile(
+                extra_args,
+                strip=preset_name != "build",
+            )
+            runtime_env = _runtime_profile_env(example, runtime_profile)
+        except ValueError as e:
+            return (1, str(e))
+        extra_args = script_extra_args
+    else:
+        runtime_profile = None
+        runtime_env = {}
+
     # Check if Docker is running (skip if preset doesn't require it or --no-docker)
     if requires_docker:
         docker_running, docker_error = check_docker_running()
@@ -900,6 +990,7 @@ def run_example(
     # Display mode controls
     live_disabled = no_live or simple_display
     quiet_env = _simple_display_env(simple_display)
+    run_env = {**quiet_env, **runtime_env}
 
     # Handle downloads if this is a build preset and downloads are specified
     if preset_name == "build":
@@ -978,7 +1069,7 @@ def run_example(
             extra_args,
             no_live=live_disabled,
             job_name=f"{example_name} {preset_name}",
-            env_overrides={**path_args_env, **quiet_env},
+            env_overrides={**path_args_env, **run_env},
         )
 
         return (exit_code, error_msg)
@@ -990,16 +1081,22 @@ def run_example(
     if script_path is None:
         return (1, f"Script not found: {script_name} in {example_path}")
 
-    # Check if Docker image exists (except for build preset or when Docker not required)
-    if preset_name != "build" and requires_docker:
-        image_name = get_docker_image_name(example_path, example)
+    # Check if Docker image exists (except for build-like presets or when Docker not required).
+    # Examples may expose multiple image build presets such as build-modern or
+    # build-gemma4; those should not require the default image to already exist.
+    is_build_preset = preset_name == "build" or preset_name.startswith("build-")
+    if not is_build_preset and requires_docker:
+        image_name = get_docker_image_name(example_path, example, runtime_env)
         if image_name and not check_docker_image_exists(image_name):
             # Check if build preset exists
             build_preset = get_preset_info(example, "build")
 
             print(f"✗ Docker image '{image_name}' not found\n")
             print(f"Build it first:")
-            print(f"  cvl run {example_identifier} build")
+            if runtime_profile:
+                print(f"  cvl run {example_identifier} build -- --runtime-profile {runtime_profile}")
+            else:
+                print(f"  cvl run {example_identifier} build")
             print(f"  or")
             print(f"  bash {example_path}/{script_name.replace(preset_name, 'build') if preset_name in script_name else 'build.sh'}\n")
 
@@ -1007,11 +1104,14 @@ def run_example(
             if build_preset:
                 if _prompt_user_yes_no("Build it now?"):
                     print()  # Blank line before build output
+                    build_args = []
+                    if runtime_profile:
+                        build_args = ["--runtime-profile", runtime_profile]
                     exit_code, error_msg = run_example(
                         examples,
                         example_identifier,
                         "build",
-                        [],
+                        build_args,
                         work_dir=work_dir,
                         no_live=live_disabled,
                         simple_display=simple_display,
@@ -1027,7 +1127,7 @@ def run_example(
     # Show what we're running
     example_name = example.get("name", Path(example_path).name)
     example_full_path = example.get("_path", "").removeprefix("examples/")
-    image_name = get_docker_image_name(example_path, example)
+    image_name = get_docker_image_name(example_path, example, runtime_env)
 
     # CVL startup header with delimiter
     print("=" * 80)
@@ -1043,6 +1143,8 @@ def run_example(
 
     if requires_docker:
         print(f"Docker:  {image_name}")
+        if runtime_profile:
+            print(f"Runtime profile: {runtime_profile}")
     else:
         print(f"Mode:    no-docker (using local Python)")
     print(f"Script:  {script_name}")
@@ -1072,7 +1174,7 @@ def run_example(
         image_name=image_name,
         work_dir=work_dir,
         path_args_env=path_args_env,
-        env_overrides=quiet_env,
+        env_overrides=run_env,
         no_docker=no_docker,
     )
 

@@ -1,0 +1,14 @@
+FROM unsloth/unsloth:latest
+
+USER root
+
+# The current Unsloth image ships Transformers 4.57.x, which cannot load
+# Gemma 4 (`model_type=gemma4`). Keep this separate from the base Unsloth
+# path because Unsloth Zoo officially pins an older Transformers range.
+RUN python3 -m pip install --no-cache-dir --upgrade \
+    transformers==5.8.1 \
+    tokenizers==0.22.2 \
+    protobuf==6.33.1 \
+    sentencepiece==0.2.1
+
+WORKDIR /workspace

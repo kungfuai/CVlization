@@ -1,0 +1,60 @@
+dataset:
+  path: "json"
+  data_files: "$DOC_EXTRACTION_SFT_TRAIN_JSONL"
+  split: "train"
+  target_sources:
+    - "ground_truth"
+  split_strategy: "document_id"
+  keep_only_clean_teacher_traces: true
+  ground_truth_target_format: "value_only"
+  transform_ground_truth_schema: true
+  pretty_json: false
+  max_samples: 16
+
+model:
+  name: "openai/gpt-oss-20b"
+  quantization: "mxfp4"
+  mxfp4_dequantize: true
+  attn_implementation: "eager"
+  torch_dtype: "bfloat16"
+  use_cache: false
+  device_map: "balanced"
+  max_memory_per_gpu: "12GiB"
+  prepare_model_for_kbit_training: false
+  max_seq_length: 4096
+  max_target_length: 2048
+
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.0
+  target_modules: "all-linear"
+  target_parameters:
+    - "model.layers.7.mlp.experts.gate_up_proj"
+    - "model.layers.7.mlp.experts.down_proj"
+    - "model.layers.15.mlp.experts.gate_up_proj"
+    - "model.layers.15.mlp.experts.down_proj"
+    - "model.layers.23.mlp.experts.gate_up_proj"
+    - "model.layers.23.mlp.experts.down_proj"
+
+training:
+  loss: "assistant_only"
+  output_dir: "./outputs/gpt-oss-20b-4k-smoke"
+  max_steps: 2
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 2
+  learning_rate: 1.0e-4
+  warmup_steps: 1
+  lr_scheduler_type: "cosine"
+  optim: "adamw_torch"
+  weight_decay: 0.01
+  logging_steps: 1
+  save_steps: 2
+  save_total_limit: 1
+  gradient_checkpointing: false
+  use_suffix_logits: true
+  do_eval: false
+  eval_split_ratio: 0.1
+  eval_steps: 2
+  seed: 3407

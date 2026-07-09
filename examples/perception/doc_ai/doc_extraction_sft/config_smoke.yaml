@@ -1,0 +1,52 @@
+dataset:
+  path: "json"
+  data_files: "fixtures/smoke.jsonl"
+  split: "train"
+  target_sources:
+    - "ground_truth"
+  target_column: "target_json"
+  split_strategy: "document_id"
+  keep_only_clean_teacher_traces: true
+  ground_truth_target_format: "value_only"
+  transform_ground_truth_schema: false
+  max_samples: 16
+  pretty_json: false
+
+model:
+  name: "Qwen/Qwen2.5-7B-Instruct"
+  load_in_4bit: true
+  max_seq_length: 4096
+  max_target_length: 2048
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  loss: "assistant_only"
+  output_dir: "./outputs/smoke-test"
+  max_steps: 2
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 2
+  learning_rate: 2.0e-4
+  warmup_steps: 0
+  lr_scheduler_type: "linear"
+  optim: "adamw_8bit"
+  weight_decay: 0.01
+  logging_steps: 1
+  save_steps: 2
+  save_total_limit: 1
+  do_eval: false
+  eval_split_ratio: 0.1
+  eval_steps: 2
+  seed: 3407

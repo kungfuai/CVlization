@@ -1,0 +1,55 @@
+FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade \
+    "unsloth[base] @ git+https://github.com/unslothai/unsloth.git" \
+    "unsloth_zoo[base] @ git+https://github.com/unslothai/unsloth-zoo.git"
+
+RUN pip install --no-cache-dir --upgrade --no-deps \
+    transformers==4.56.2 \
+    "tokenizers>=0.22.0,<=0.23.0" \
+    trl==0.22.2 \
+    unsloth \
+    unsloth_zoo \
+    torchao==0.16.0 \
+    bitsandbytes
+
+RUN pip install --no-cache-dir \
+    datasets==3.6.0 \
+    pyyaml==6.0.2 \
+    jsonschema==4.23.0 \
+    rapidfuzz==3.14.3 \
+    protobuf==6.33.1 \
+    sentencepiece==0.2.1
+
+# Nemotron 3 Nano uses a hybrid Mamba/attention architecture. Use prebuilt
+# wheels matched to Python 3.11 + Torch 2.7 + CUDA 12 to avoid local CUDA builds.
+RUN pip install --no-cache-dir \
+    "https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1%2Bcu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl" \
+    "https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.0/causal_conv1d-1.6.0%2Bcu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl" \
+    "https://github.com/state-spaces/mamba/releases/download/v2.2.5/mamba_ssm-2.2.5%2Bcu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl"
+
+RUN python3 - <<'PY'
+import torch
+import transformers
+import trl
+import importlib.metadata
+import flash_attn
+import causal_conv1d
+assert torch.__version__.startswith("2.7."), torch.__version__
+print("torch", torch.__version__)
+print("transformers", transformers.__version__)
+print("trl", trl.__version__)
+print("flash_attn", flash_attn.__version__)
+print("causal_conv1d", causal_conv1d.__version__)
+print("mamba_ssm", importlib.metadata.version("mamba-ssm"))
+PY
+
+WORKDIR /workspace
+ENV PYTHONUNBUFFERED=1
+CMD ["python3", "train_unsloth.py"]

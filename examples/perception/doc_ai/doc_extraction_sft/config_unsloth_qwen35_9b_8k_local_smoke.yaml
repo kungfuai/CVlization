@@ -1,0 +1,61 @@
+# Experimental Unsloth Qwen3.5 smoke config for local document extraction SFT JSONL.
+#
+# Usage:
+#   ./build_unsloth_qwen35.sh
+#   CVL_IMAGE=doc_extraction_sft_unsloth_qwen35 CVL_GPUS=0 \
+#     ./run_unsloth_container.sh python3 train_unsloth.py \
+#       --config config_unsloth_qwen35_9b_8k_local_smoke.yaml \
+#       --data-files /path/to/train.jsonl
+dataset:
+  path: "json"
+  data_files: "$DOC_EXTRACTION_SFT_TRAIN_JSONL"
+  split: "train"
+  target_sources:
+    - "ground_truth"
+    - "form_identification"
+  split_strategy: "document_id"
+  keep_only_clean_teacher_traces: false
+  ground_truth_target_format: "value_only"
+  transform_ground_truth_schema: false
+  pretty_json: false
+  max_samples: 16
+
+model:
+  name: "unsloth/Qwen3.5-9B"
+  load_in_4bit: true
+  max_seq_length: 8192
+  max_target_length: 8192
+
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.0
+  use_gradient_checkpointing: "unsloth"
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  output_dir: "./outputs/unsloth-qwen35-9b-document-extraction-sft-8k-local-smoke"
+  max_steps: 2
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 5.0e-5
+  warmup_steps: 1
+  lr_scheduler_type: "cosine"
+  optim: "adamw_8bit"
+  weight_decay: 0.001
+  max_grad_norm: 0.1
+  logging_steps: 1
+  save_steps: 2
+  save_total_limit: 1
+  do_eval: false
+  eval_split_ratio: 0.1
+  eval_steps: 2
+  seed: 3407

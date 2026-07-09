@@ -1,0 +1,5 @@
+FROM doc_extraction_sft_modern
+
+# Required by Transformers' MXFP4 path for gpt-oss. Install without dependency
+# upgrades so the base image keeps its Transformers-compatible huggingface-hub.
+RUN pip install --no-cache-dir kernels==0.12.3

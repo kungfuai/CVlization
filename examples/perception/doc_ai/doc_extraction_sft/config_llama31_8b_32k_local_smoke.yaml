@@ -1,0 +1,60 @@
+# Local JSONL smoke config for document extraction SFT datasets generated outside CVL.
+#
+# Usage:
+#   CVL_IMAGE=doc_extraction_sft_modern CVL_GPUS=0 \
+#     ./train.sh --config config_llama31_8b_32k_local_smoke.yaml \
+#       --data-files /path/to/train.jsonl
+dataset:
+  path: "json"
+  data_files: "$DOC_EXTRACTION_SFT_TRAIN_JSONL"
+  split: "train"
+  target_sources:
+    - "ground_truth"
+    - "form_identification"
+  split_strategy: "document_id"
+  keep_only_clean_teacher_traces: false
+  ground_truth_target_format: "value_only"
+  transform_ground_truth_schema: false
+  pretty_json: false
+  max_samples: 96
+
+model:
+  name: "meta-llama/Llama-3.1-8B-Instruct"
+  load_in_4bit: true
+  attn_implementation: "sdpa"
+  max_seq_length: 32768
+  max_target_length: 8192
+  prepare_model_for_kbit_training: true
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.0
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  loss: "assistant_only"
+  output_dir: "./outputs/llama31-8b-document-extraction-sft-32k-local-smoke"
+  max_steps: 20
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-4
+  warmup_steps: 2
+  lr_scheduler_type: "linear"
+  optim: "adamw_8bit"
+  weight_decay: 0.0
+  logging_steps: 1
+  save_steps: 20
+  save_total_limit: 1
+  do_eval: false
+  seed: 3407
+  gradient_checkpointing: true
+  use_suffix_logits: false
