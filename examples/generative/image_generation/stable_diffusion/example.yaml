@@ -13,7 +13,12 @@ presets:
     description: Build the Docker image
   predict:
     script: predict.sh
-    description: Run predict
+    description: Run predict (accepts --prompt / --prompt-file / --output / --seed / --height / --width / --steps / --guidance-scale)
+    path_args:
+      - flag: --prompt-file
+        type: file
+      - flag: --output
+        type: file
 tags: [stable-diffusion, text-to-image, diffusers, pytorch]
 tasks: [text_to_image]
 frameworks: [pytorch, diffusers]

@@ -1,0 +1,9 @@
+# torch is provided by the base image.
+transformers==4.48.3
+trl==0.16.0
+datasets==3.6.0
+peft==0.15.2
+accelerate==1.7.0
+bitsandbytes==0.46.0
+pyyaml==6.0.2
+rapidfuzz>=3.0.0

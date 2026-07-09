@@ -15,7 +15,12 @@ presets:
     description: Build the Docker image
   predict:
     script: predict.sh
-    description: Run predict
+    description: Run predict (accepts --prompt / --prompt-file / --output / --seed / --height / --width / --steps)
+    path_args:
+      - flag: --prompt-file
+        type: file
+      - flag: --output
+        type: file
 tags:
 - flux
 - text-to-image

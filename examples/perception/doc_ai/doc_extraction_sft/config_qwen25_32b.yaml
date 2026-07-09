@@ -1,0 +1,57 @@
+dataset:
+  path: "json"
+  data_files: "$DOC_EXTRACTION_SFT_TRAIN_JSONL"
+  split: "train"
+  target_sources:
+    - "ground_truth"
+  split_strategy: "document_id"
+  keep_only_clean_teacher_traces: true
+  ground_truth_target_format: "value_only"
+  transform_ground_truth_schema: true
+  pretty_json: false
+
+model:
+  name: "Qwen/Qwen2.5-32B-Instruct"
+  load_in_4bit: true
+  attn_implementation: "flash_attention_2"
+  max_seq_length: 49152
+  max_target_length: 8192
+
+lora:
+  r: 64
+  alpha: 128
+  dropout: 0.05
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  loss: "assistant_only"
+  output_dir: "./outputs/qwen25-32b-document-extraction-sft"
+  max_steps: 300
+  num_epochs: 1
+
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+
+  learning_rate: 1.0e-4
+  warmup_steps: 20
+  lr_scheduler_type: "cosine"
+
+  optim: "adamw_8bit"
+  weight_decay: 0.01
+
+  logging_steps: 1
+  save_steps: 50
+  save_total_limit: 3
+
+  do_eval: true
+  eval_split_ratio: 0.1
+  eval_steps: 50
+
+  seed: 3407

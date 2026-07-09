@@ -1,0 +1,32 @@
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Unsloth from git for current Qwen3.5 model support, then force a
+# Transformers source build because released 4.57.x does not know model_type=qwen3_5.
+RUN pip install --no-cache-dir --upgrade \
+    "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" \
+    "unsloth_zoo @ git+https://github.com/unslothai/unsloth-zoo.git" \
+    && pip install --no-cache-dir --upgrade \
+    "transformers @ git+https://github.com/huggingface/transformers.git"
+
+RUN pip install --no-cache-dir \
+    datasets==3.6.0 \
+    pyyaml==6.0.2 \
+    jsonschema==4.23.0 \
+    rapidfuzz==3.14.3 \
+    protobuf==6.33.1 \
+    sentencepiece==0.2.1
+
+# Prebuilt flash-attn wheel for Python 3.11 + PyTorch 2.9 + CUDA 12.8.
+# Keep this as an explicit wheel URL so Docker builds do not compile flash-attn.
+RUN pip install --no-cache-dir \
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.0/flash_attn-2.8.3%2Bcu128torch2.9-cp311-cp311-linux_x86_64.whl"
+
+WORKDIR /workspace
+ENV PYTHONUNBUFFERED=1
+CMD ["python3", "train_unsloth.py"]

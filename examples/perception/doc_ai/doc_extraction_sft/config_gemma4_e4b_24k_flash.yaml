@@ -1,0 +1,46 @@
+dataset:
+  path: "json"
+  data_files: "$DOC_EXTRACTION_SFT_TRAIN_JSONL"
+  split: "train"
+  target_sources:
+    - "ground_truth"
+  split_strategy: "document_id"
+  keep_only_clean_teacher_traces: true
+  ground_truth_target_format: "value_only"
+  transform_ground_truth_schema: true
+  pretty_json: false
+
+model:
+  name: "google/gemma-4-E4B-it"
+  auto_model_class: "image_text_to_text"
+  load_in_4bit: true
+  attn_implementation: "flash_attention_2"
+  tokenizer_extra_special_tokens: {}
+  max_seq_length: 24576
+  max_target_length: 8192
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: ".*language_model\\.layers\\.\\d+\\.(self_attn\\.(q_proj|k_proj|v_proj|o_proj)|mlp\\.(gate_proj|up_proj|down_proj))$"
+
+training:
+  loss: "assistant_only"
+  output_dir: "./outputs/gemma4-e4b-document-extraction-sft-24k-flash"
+  max_steps: 100
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 1.0e-4
+  warmup_steps: 10
+  lr_scheduler_type: "cosine"
+  optim: "adamw_8bit"
+  weight_decay: 0.01
+  logging_steps: 1
+  save_steps: 50
+  save_total_limit: 3
+  do_eval: true
+  eval_split_ratio: 0.1
+  eval_steps: 50
+  seed: 3407
