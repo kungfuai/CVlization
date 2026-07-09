@@ -9,6 +9,11 @@ DATA_DIR="${CVL_DATA_DIR:-/data}"
 
 mkdir -p "$SCRIPT_DIR/outputs" "$CACHE_DIR"
 
+DATA_MOUNT=()
+if [ -d "$DATA_DIR" ]; then
+    DATA_MOUNT=(--mount "type=bind,src=${DATA_DIR},dst=${DATA_DIR}")
+fi
+
 if [ "${CVL_NO_DOCKER:-}" = "1" ]; then
     export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
     python3 validate_dataset.py "$@"
@@ -21,7 +26,7 @@ docker run --rm \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${CACHE_DIR},dst=/root/.cache/huggingface" \
-    $(if [ -d "$DATA_DIR" ]; then printf '%s\n' --mount "type=bind,src=${DATA_DIR},dst=${DATA_DIR}"; fi) \
+    "${DATA_MOUNT[@]}" \
     --env "PYTHONPATH=/cvlization_repo" \
     --env "PYTHONUNBUFFERED=1" \
     ${DOC_EXTRACTION_SFT_TRAIN_JSONL:+--env DOC_EXTRACTION_SFT_TRAIN_JSONL="$DOC_EXTRACTION_SFT_TRAIN_JSONL"} \

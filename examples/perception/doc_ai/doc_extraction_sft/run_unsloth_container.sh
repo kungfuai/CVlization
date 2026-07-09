@@ -19,6 +19,11 @@ fi
 
 mkdir -p "$SCRIPT_DIR/outputs" "$CACHE_DIR"
 
+DATA_MOUNT=()
+if [ -d "$DATA_DIR" ]; then
+    DATA_MOUNT=(--mount "type=bind,src=${DATA_DIR},dst=${DATA_DIR}")
+fi
+
 docker run --rm --gpus "$DOCKER_GPUS" --shm-size 16G \
     --entrypoint /bin/bash \
     --user root \
@@ -26,7 +31,7 @@ docker run --rm --gpus "$DOCKER_GPUS" --shm-size 16G \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace" \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${CACHE_DIR},dst=/root/.cache/huggingface" \
-    $(if [ -d "$DATA_DIR" ]; then printf '%s\n' --mount "type=bind,src=${DATA_DIR},dst=${DATA_DIR}"; fi) \
+    "${DATA_MOUNT[@]}" \
     --env "PYTHONPATH=/workspace:/cvlization_repo" \
     --env "PYTHONUNBUFFERED=1" \
     ${DOC_EXTRACTION_SFT_TRAIN_JSONL:+--env DOC_EXTRACTION_SFT_TRAIN_JSONL="$DOC_EXTRACTION_SFT_TRAIN_JSONL"} \
