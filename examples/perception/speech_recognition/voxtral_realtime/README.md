@@ -20,7 +20,7 @@ ASR examples, but no streaming transcription service. Voxtral fills this gap wit
 | Item | Detail |
 |------|--------|
 | First-run model download | ~8 GB (cached in `~/.cache/huggingface`) |
-| Docker image size | ~18 GB (PyTorch + CUDA + vLLM) |
+| Docker image size | ~40 GB (PyTorch 2.11 + CUDA 13 + vLLM 0.25) |
 | Server startup time | 60–180s (model loading) |
 | Transcription latency | <500ms per utterance at default settings |
 | Output location | `./voxtral_realtime_transcript.json` in your working directory |
@@ -47,6 +47,17 @@ A 16 kHz mono WAV clip: _"It's an amazing gift and a unique privilege and I love
     "transcription_sec": 1.15
   }
 }
+```
+
+**French input** — 5-second TTS clip
+([example_fr.wav](https://huggingface.co/datasets/zzsi/cvl/blob/main/voxtral_realtime/example_fr.wav)):
+_"Bonjour, comment allez-vous aujourd'hui? C'est une belle journée pour la science."_
+
+**French output**
+([sample_output_fr.json](https://huggingface.co/datasets/zzsi/cvl/blob/main/voxtral_realtime/sample_output_fr.json)):
+
+```
+Bonjour, comment allez-vous aujourd'hui? C'est une belle journée pour la science.
 ```
 
 Tested on RTX PRO 6000 Blackwell (98 GB VRAM). Second run completes in ~1.6s.
@@ -160,7 +171,11 @@ incremental transcription events as they are generated.
 
 - **Minimum**: 16 GB VRAM (e.g., NVIDIA T4, RTX 4080)
 - **Recommended**: 24+ GB VRAM (e.g., RTX 4090, A10, L4)
-- The model is ~4B parameters in BF16, requiring ~8 GB for weights plus KV cache
+- Model weights: ~8 GB (4B params in BF16)
+- vLLM pre-allocates remaining VRAM for KV cache (configurable via
+  `VLLM_GPU_MEMORY_UTILIZATION`). On a 98 GB GPU with max_model_len=45000 the
+  server may report ~92 GB allocated; on a 16 GB GPU it will fill ~14 GB,
+  leaving headroom for the OS
 
 ## References
 

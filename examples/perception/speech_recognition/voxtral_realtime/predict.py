@@ -57,21 +57,40 @@ def configure_logging(verbose: bool) -> None:
     LOGGER.setLevel(level)
 
 
+def _writable_cache_root() -> Path:
+    """Return a writable cache directory for sample data."""
+    hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+    preferred = hf_home / "cvl_data" / EXAMPLE_NAME
+    try:
+        preferred.mkdir(parents=True, exist_ok=True)
+        return preferred
+    except PermissionError:
+        fallback = Path("/tmp") / "cvl_data" / EXAMPLE_NAME
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
 def ensure_sample_audio(cache_root: Optional[Path] = None) -> Path:
     """Download the canonical CVL sample audio from HuggingFace."""
     if cache_root is None:
-        hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
-        cache_root = hf_home / "cvl_data" / EXAMPLE_NAME
+        cache_root = _writable_cache_root()
     sample_path = cache_root / "example_en.wav"
     if sample_path.exists():
         return sample_path
-    cache_root.mkdir(parents=True, exist_ok=True)
+
     from huggingface_hub import hf_hub_download
 
     print(f"Downloading sample audio from {HF_DATA_REPO}/{HF_SAMPLE_FILE}...")
-    downloaded = hf_hub_download(
-        repo_id=HF_DATA_REPO, filename=HF_SAMPLE_FILE, repo_type="dataset",
-    )
+    try:
+        downloaded = hf_hub_download(
+            repo_id=HF_DATA_REPO, filename=HF_SAMPLE_FILE, repo_type="dataset",
+        )
+    except PermissionError:
+        # HF default cache not writable; download to /tmp
+        downloaded = hf_hub_download(
+            repo_id=HF_DATA_REPO, filename=HF_SAMPLE_FILE, repo_type="dataset",
+            cache_dir="/tmp/hf_cache",
+        )
     shutil.copy2(downloaded, sample_path)
     return sample_path
 
