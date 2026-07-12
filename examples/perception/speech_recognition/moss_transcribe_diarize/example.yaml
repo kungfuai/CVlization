@@ -1,0 +1,52 @@
+name: moss-transcribe-diarize
+capability: perception/speech_recognition
+modalities:
+  - audio
+  - text
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 4
+  disk_gb: 5
+image: moss-transcribe-diarize
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Transcribe and diarize speech with MOSS-Transcribe-Diarize
+    path_args:
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run a GPU smoke test on the default multi-speaker sample
+tags:
+  - asr
+  - speech-recognition
+  - transcription
+  - speech-to-text
+  - speaker-diarization
+  - diarization
+  - timestamps
+  - multi-speaker
+  - moss
+tasks:
+  - automatic_speech_recognition
+  - speech_to_text
+  - speaker_diarization
+frameworks:
+  - transformers
+  - pytorch
+description: >-
+  MOSS-Transcribe-Diarize 0.9B: joint long-form transcription, timestamps,
+  speaker diarization, and acoustic-event annotation in a single ungated model.
+  No separate pyannote or gated models required.
+verification:
+  last_verified: "2026-07-12"
+  last_verification_note: "Verified build, GPU inference with multi-speaker sample (2 speakers correctly diarized, 5 segments), JSON output with timestamps, host filesystem persistence, and model caching on RTX PRO 6000 Blackwell (98GB VRAM). Peak VRAM: ~2.5GB. First run downloads ~2GB model."
