@@ -75,12 +75,44 @@ DENSE_REPO = "robbyant/lingbot-video-dense-1.3b"
 MOE_REPO = "robbyant/lingbot-video-moe-30b-a3b"
 
 
+def get_default_negative_prompt(mode: str = "t2v") -> str:
+    """Load the default negative prompt from the lingbot_video package."""
+    import json
+    import importlib.resources
+
+    try:
+        if mode == "t2i":
+            fname = "default_negative_prompt_image.json"
+        else:
+            fname = "default_negative_prompt.json"
+        ref = importlib.resources.files("lingbot_video").joinpath(fname)
+        data = json.loads(ref.read_text(encoding="utf-8"))
+        # Extract the universal_negative text
+        if isinstance(data, dict) and "universal_negative" in data:
+            neg = data["universal_negative"]
+            if isinstance(neg, dict):
+                parts = []
+                for section in neg.values():
+                    if isinstance(section, list):
+                        parts.extend(section)
+                    elif isinstance(section, str):
+                        parts.append(section)
+                return ", ".join(parts)
+            return str(neg)
+        return json.dumps(data)
+    except Exception:
+        return ""
+
+
 def load_pipeline(model_id: str, dtype: torch.dtype, device: str, mode: str = "t2v"):
     """Load the LingBot-Video pipeline from HuggingFace.
 
     Downloads the model snapshot, then loads the pipeline using the
     lingbot_video package classes directly (the model_index.json references
     lingbot_video.* modules that must be installed as a Python package).
+
+    The VAE is cast to fp32 (upstream default) while the transformer and text
+    encoder remain in bf16 for memory efficiency.
     """
     from huggingface_hub import snapshot_download
     from lingbot_video.transformer_lingbot_video import LingBotVideoTransformer3DModel
@@ -111,6 +143,7 @@ def load_pipeline(model_id: str, dtype: torch.dtype, device: str, mode: str = "t
         pipeline_cls = LingBotVideoPipeline
 
     # Load full pipeline from local snapshot
+    # Use bf16 for transformer/text_encoder, but VAE will be cast to fp32 after
     print("Loading pipeline...", flush=True)
     pipe = pipeline_cls.from_pretrained(
         model_dir,
@@ -119,6 +152,10 @@ def load_pipeline(model_id: str, dtype: torch.dtype, device: str, mode: str = "t
         trust_remote_code=True,
     )
     pipe = pipe.to(device)
+
+    # Cast VAE to fp32 (upstream default for quality)
+    if hasattr(pipe, "vae") and pipe.vae is not None:
+        pipe.vae = pipe.vae.to(dtype=torch.float32)
 
     print("Pipeline loaded successfully.", flush=True)
     return pipe
@@ -133,6 +170,7 @@ def generate_video(
     num_frames: int,
     num_inference_steps: int,
     guidance_scale: float,
+    shift: float,
     seed: int,
     image_path: str = None,
 ):
@@ -147,6 +185,7 @@ def generate_video(
         num_frames=num_frames,
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
+        shift=shift,
         generator=generator,
         output_type="np",
     )
@@ -159,7 +198,7 @@ def generate_video(
 
     print(
         f"Generating: {width}x{height}, {num_frames} frames, "
-        f"{num_inference_steps} steps, guidance={guidance_scale}",
+        f"{num_inference_steps} steps, guidance={guidance_scale}, shift={shift}",
         flush=True,
     )
 
@@ -290,6 +329,12 @@ def main():
         help="Classifier-free guidance scale",
     )
     parser.add_argument(
+        "--shift",
+        type=float,
+        default=3.0,
+        help="Flow matching timestep shift (upstream default 3.0)",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -347,16 +392,22 @@ def main():
 
     pipe = load_pipeline(model_id, dtype=dtype, device=device, mode=pipeline_mode)
 
+    # Use default negative prompt from package if none specified
+    negative_prompt = args.negative_prompt
+    if not negative_prompt:
+        negative_prompt = get_default_negative_prompt(args.mode)
+
     # Generate
     result = generate_video(
         pipe=pipe,
         prompt=args.prompt,
-        negative_prompt=args.negative_prompt,
+        negative_prompt=negative_prompt,
         height=args.height,
         width=args.width,
         num_frames=num_frames,
         num_inference_steps=args.steps,
         guidance_scale=args.guidance_scale,
+        shift=args.shift,
         seed=args.seed,
         image_path=image_path,
     )

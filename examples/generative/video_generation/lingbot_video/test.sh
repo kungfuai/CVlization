@@ -14,7 +14,7 @@ echo "Using dense-1.3b model with minimal frames for fast testing"
     --height 480 \
     --width 832 \
     --steps 20 \
-    --prompt "A robotic arm picks up a red cube from a table" \
+    --prompt "A young woman with long brown hair standing in a bright modern apartment living room. She is wearing an oversized cream-colored knit cardigan over a white tank top paired with high-waisted beige trousers. The background features a beige sofa and large windows with soft natural light. The camera is stationary at eye level with a medium shot." \
     --output test_output.mp4
 
 echo ""

@@ -9,8 +9,8 @@ datasets: []
 stability: experimental
 resources:
   gpu_count: 1
-  vram_gb: 10  # Dense 1.3B in bf16; MoE 30B needs ~24GB+
-  disk_gb: 10  # Dense 1.3B weights ~5GB
+  vram_gb: 80  # MoE 30B peak at 81 frames 832x480; Dense 1.3B ~8GB
+  disk_gb: 130  # MoE weights ~121GB; Dense ~5GB
 presets:
   build:
     script: build.sh
@@ -47,11 +47,16 @@ tags:
 description: >
   LingBot-Video is the first large-scale open-source MoE video foundation model,
   designed for embodied intelligence. It offers two variants: a dense 1.3B model
-  (~8GB VRAM) and a MoE 30B-A3B model (~3B active parameters, ~24GB+ VRAM).
+  (~8GB VRAM) and a MoE 30B-A3B model (~3B active parameters, ~80GB peak VRAM).
   Trained on 70,000+ hours of embodied and web video data with physical-rationality
   and task-completion reward alignment. Supports text-to-video, text-to-image,
-  and text+image-to-video generation.
+  and text+image-to-video generation. Requires detailed multi-sentence prompts.
 
 verification:
   last_verified: "2026-07-12"
-  last_verification_note: "Verified build, inference (dense-1.3b T2V), model caching, host persistence, and cvl CLI on RTX PRO 6000 Blackwell (98GB VRAM). 832x480, 21 frames, 10 steps: ~6s inference. Dense 1.3B weights: ~5GB download, cached in HF hub. Output: MP4 video."
+  last_verification_note: >
+    Verified on RTX PRO 6000 Blackwell (98GB VRAM). Tested: T2V dense (81f, 40 steps,
+    ~2m24s), T2V MoE (81f, 40 steps, ~6m27s, ~80GB peak VRAM), T2I MoE (good quality),
+    TI2V dense (41f, works correctly). T2I dense: poor quality. Short prompts produce
+    abstract output; detailed prompts required. MoE weights ~121GB download. Demo
+    artifacts at https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_video.
