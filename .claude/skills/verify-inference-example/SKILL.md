@@ -24,6 +24,32 @@ Systematically verify that a CVlization inference example is complete, properly 
 
 ## Verification Checklist
 
+### Verification outcome and mode inventory
+
+Before running commands, inventory every **primary inference mode** promised by
+the task, `README.md`, `example.yaml`, shell presets, or wrapper CLI. A primary
+mode is one users are told this example supports, including important model
+variants when that variant is central to why the example exists. Do not infer
+extra modes solely from the upstream model card.
+
+Track evidence in a table and include it in the PR body or task report:
+
+| Mode | Canonical input | Exact command | Result | Artifact | Inspected |
+|------|-----------------|---------------|--------|----------|-----------|
+| `<mode>` | `zzsi/cvl/<example>/...` or text | `...` | PASS/FAIL/SKIPPED | path/URL | what was checked |
+
+Use these outcomes consistently:
+
+- **VERIFIED**: every advertised primary mode and every applicable critical
+  check in this skill passed. Outputs were inspected, not merely created.
+- **PARTIAL**: any advertised primary mode or critical check failed or was
+  skipped, even with a concrete blocker. Partial work may still be useful and
+  may still open a draft PR, but it is not complete or verified.
+- **UNVERIFIED**: inference was not run successfully.
+
+Do not leave an untested mode advertised as verified. Either test it, narrow
+the example's documented/metadata surface, or mark the result PARTIAL.
+
 ### 1. Structure Verification
 
 Check that the example directory contains all required files:
@@ -104,6 +130,8 @@ def ensure_sample_data(cache_root=None):
   the container this maps to the mounted HF cache)
 - Second run skips download (check for "already cached" or no download messages)
 - No sample data files are staged in git (`git status` shows no data files)
+- Each binary sample has known provenance and redistribution permission. Do
+  not upload arbitrary web images, voices, videos, or personal data.
 
 **Uploading new sample data:**
 ```python
@@ -160,6 +188,11 @@ cvl run <example-name> predict
 - Output files created in `outputs/` or similar directory
 - Results look reasonable (open output files to inspect)
 
+Repeat this section for every row in the primary-mode inventory. One successful
+default smoke test does not verify other advertised modes such as image
+conditioning, editing, streaming, voice cloning, alternate model variants, or
+multimodal understanding.
+
 ### 4. Output Verification
 
 Check that inference produces valid outputs:
@@ -181,6 +214,18 @@ python -m json.tool outputs/output.json  # For JSON outputs
 - Output format is correct (markdown, JSON, etc.)
 - Output contains expected content structure
 - Output is non-empty and valid
+- Output meaning matches the input and requested behavior. File existence,
+  dimensions, duration, or byte size alone is not sufficient.
+
+For visual, audio, and video outputs, inspect the media itself:
+
+- Images: open them and check that they are nonblank, correctly framed, and
+  visibly follow the prompt/input/edit.
+- Video: play or render representative frames; check encoding, motion,
+  temporal coherence, framing, and prompt/input adherence.
+- Audio: listen to representative output; check intelligibility, duration,
+  clipping/silence, and the requested speaker/style/content behavior.
+- Text/JSON: read the result and assess semantic correctness against the input.
 
 ### 4a. Host Filesystem Persistence (CRITICAL)
 
@@ -292,9 +337,13 @@ grep -i "downloading" second_run.log
 ```
 
 **What to verify:**
-- Models download to `~/.cache/huggingface/` (or framework-specific cache)
+- Model weights remain outside the Docker image and download to a persistent
+  mounted host cache: `~/.cache/cvlization` and/or the standard shared
+  framework cache such as `~/.cache/huggingface/`
 - Second run reuses cached models without re-downloading
+- Second run also reuses canonical sample data without re-downloading
 - Check predict.py doesn't set custom cache directories that break caching
+- Record measured model/cache size and keep README estimates consistent with it
 
 ### 6. Runtime Checks
 
@@ -370,6 +419,18 @@ The README should showcase concrete evidence that the example works, so a reader
    - For image/video outputs: embed with a HuggingFace URL (upload a sample output image to `zzsi/cvl`)
    - Include any key metrics (e.g., CER, accuracy) if available
 
+Only upload **curated demo artifacts** that passed the semantic/perceptual
+inspection above and are useful to a reader. Do not upload every run, failed or
+low-quality outputs, large debug dumps, or artifacts without redistribution
+permission. Use a stable per-example prefix and descriptive names, for example:
+
+```text
+<example-name>/sample_input.jpg
+<example-name>/text_to_image_output.png
+<example-name>/image_edit_output.png
+<example-name>/vqa_result.json
+```
+
 **HuggingFace URL pattern** for raw file access (renders as `<img>` in GitHub Markdown):
 ```
 https://huggingface.co/datasets/zzsi/cvl/resolve/main/<path-in-repo>
@@ -417,9 +478,15 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 **Format:**
 ```yaml
 verification:
+  status: VERIFIED
   last_verified: 2025-10-25
   last_verification_note: "Verified build, inference, model caching, and outputs on [GPU_MODEL] ([VRAM]GB VRAM)"
 ```
+
+Use `status: PARTIAL` when any advertised primary mode or critical check is
+failed/skipped, and name those gaps in `last_verification_note`. Use
+`status: UNVERIFIED` when no inference mode completed successfully. Never use
+`VERIFIED` merely because one smoke command succeeded.
 
 **What to include in the note:**
 - What was verified: build, inference, outputs
@@ -533,17 +600,18 @@ cvl run granite-docling predict
 
 An inference example passes verification when:
 
-1. ✅ **Structure**: All required files present, example.yaml valid
-1b. ✅ **Sample Data**: Hosted on `zzsi/cvl` HuggingFace dataset repo, lazy-downloaded at runtime, not committed to git
-2. ✅ **Build**: Docker image builds without errors (both `./build.sh` and `cvl run <name> build`)
-3. ✅ **Inference**: Runs successfully on sample inputs (both `./predict.sh` and `cvl run <name> predict`)
-4. ✅ **Outputs**: Valid output files generated in expected format
-5. ✅ **Host Persistence**: Outputs saved to HOST filesystem (user's cwd) when using `cvl run`, not just container
-6. ✅ **Input Resolution**: Input files from user's cwd are correctly found via `resolve_input_path()`
-7. ✅ **Model Caching**: Models cached to `~/.cache/` (typically `~/.cache/huggingface/`), avoiding repeated downloads
-8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and predict presets work
-9. ✅ **Documentation**: README explains how to use the example **and** clearly describes what to expect from `cvl run <name> predict` (first-run cost, what it does, output location/format, runtime estimate); has a `## Sample` section with inline example input (image embedded via HuggingFace URL if applicable) and example output excerpt
-10. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
+1. ✅ **Mode coverage**: Every advertised primary mode has exact PASS evidence
+2. ✅ **Structure**: All required files present, example.yaml valid
+3. ✅ **Sample Data**: Redistributable canonical inputs are hosted under the example prefix in `zzsi/cvl`, lazy-downloaded, and not committed to git
+4. ✅ **Build**: Docker image builds without errors (both `./build.sh` and `cvl run <name> build`)
+5. ✅ **Inference**: Every primary mode runs successfully on its canonical input
+6. ✅ **Outputs**: Outputs are valid and semantically/perceptually inspected
+7. ✅ **Host Persistence**: Outputs save to the host cwd through `cvl run`
+8. ✅ **Input Resolution**: Custom inputs resolve correctly through `resolve_input_path()`
+9. ✅ **Caching**: Models/data remain outside the image and a second run proves shared-cache reuse
+10. ✅ **CVL CLI**: `cvl info <name>` and build/predict presets work
+11. ✅ **Documentation**: README states first-run cost, behavior, output location/format, runtime, canonical inputs, and curated representative outputs
+12. ✅ **Verification Metadata**: `verification.status` matches the rules above and the note names exact coverage and limitations
 
 ## Related Files
 
