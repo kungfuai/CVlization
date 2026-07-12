@@ -1,0 +1,15 @@
+# Outputs
+outputs/*.wav
+outputs/*.mp3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cache
+.cache/
+*.cache
+
+# Sample data (downloaded at runtime)
+sample_data/

@@ -1,0 +1,57 @@
+name: omnivoice
+capability: generative/audio
+modalities:
+  - text
+  - audio
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 4
+  disk_gb: 10
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate speech from text (voice cloning or voice design)
+    path_args:
+      - flag: "--input"
+        type: file
+      - flag: "--output"
+        type: file
+      - flag: "--ref-audio"
+        type: file
+  test:
+    script: test.sh
+    description: Run smoke tests for voice cloning and voice design modes
+tags:
+  - tts
+  - text-to-speech
+  - speech-synthesis
+  - voice-cloning
+  - voice-design
+  - multilingual
+  - zero-shot
+  - diffusion
+  - k2-fsa
+tasks:
+  - text_to_speech
+  - voice_cloning
+frameworks:
+  - pytorch
+  - transformers
+description: >
+  Massively multilingual zero-shot TTS (646 languages) with voice cloning and
+  voice design using k2-fsa OmniVoice 0.6B. Code is Apache-2.0; pretrained
+  weights are CC-BY-NC due to training-data constraints.
+verification:
+  status: VERIFIED
+  last_verified: "2026-07-12"
+  last_verification_note: >
+    Verified build, voice design, voice cloning (with canonical ref from zzsi/cvl),
+    model caching (3.1 GB OmniVoice + 1.6 GB Whisper ASR), sample data cache reuse,
+    and host-persisted outputs on RTX PRO 6000 Blackwell (98 GB VRAM). Peak ~2.7 GB
+    VRAM (float16). 24 kHz output, non-silent, intelligible.
