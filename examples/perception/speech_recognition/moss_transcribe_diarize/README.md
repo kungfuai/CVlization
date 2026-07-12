@@ -8,8 +8,10 @@ ungated 0.9B-parameter model. No separate pyannote or gated models required.
 **Input** -- multi-speaker audio (auto-downloaded, ~600 KB):
 
 Two speakers reading excerpts from LibriSpeech (concatenated, 19.6 s total).
+Hosted at [`zzsi/cvl/moss_transcribe_diarize/multi_speaker_sample.wav`](https://huggingface.co/datasets/zzsi/cvl/resolve/main/moss_transcribe_diarize/multi_speaker_sample.wav).
 
-**Output** -- timestamped speaker-aware transcript:
+**Output** -- timestamped speaker-aware transcript
+([sample](https://huggingface.co/datasets/zzsi/cvl/resolve/main/moss_transcribe_diarize/sample_transcript.json)):
 
 ```json
 {

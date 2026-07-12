@@ -48,5 +48,6 @@ description: >-
   speaker diarization, and acoustic-event annotation in a single ungated model.
   No separate pyannote or gated models required.
 verification:
+  status: VERIFIED
   last_verified: "2026-07-12"
-  last_verification_note: "Verified build, GPU inference with multi-speaker sample (2 speakers correctly diarized, 5 segments), JSON output with timestamps, host filesystem persistence, and model caching on RTX PRO 6000 Blackwell (98GB VRAM). Peak VRAM: ~2.5GB. First run downloads ~2GB model."
+  last_verification_note: "Verified build (build.sh + cvl run build), GPU inference via cvl run predict from external dir, host persistence, cache reuse (second run 0 downloads), semantic output inspection (2 speakers, 5 segments, accurate timestamps and text), and cvl info metadata on RTX PRO 6000 Blackwell (98GB VRAM). Peak VRAM: ~2.5GB. First run downloads ~2GB model."
