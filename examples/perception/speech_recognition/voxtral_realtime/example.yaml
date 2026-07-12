@@ -1,0 +1,62 @@
+name: voxtral_realtime
+capability: perception/speech_recognition
+modalities:
+  - audio
+  - text
+datasets:
+  - custom
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 16
+  disk_gb: 12
+image: cvl-voxtral-realtime
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image (PyTorch 2.11.0 + vLLM 0.25 + audio deps)
+  serve:
+    script: serve.sh
+    description: Start the vLLM realtime server in detached mode (requires GPU with 16+ GB VRAM)
+  predict:
+    script: predict.sh
+    description: Stream audio to the running server and receive incremental transcription
+    path_args:
+      - flag: "--audio"
+        type: file
+      - flag: "--output"
+        type: file
+  stop:
+    script: stop.sh
+    description: Stop the detached vLLM server container
+  test:
+    script: test.sh
+    description: Full cycle smoke test (build → serve → predict → stop)
+tags:
+  - asr
+  - speech-recognition
+  - transcription
+  - speech-to-text
+  - streaming
+  - realtime
+  - websocket
+  - multilingual
+  - voxtral
+  - mistral
+  - vllm
+tasks:
+  - automatic_speech_recognition
+  - speech_to_text
+  - realtime_transcription
+frameworks:
+  - vllm
+  - pytorch
+description: >
+  Multilingual realtime streaming speech transcription with Mistral Voxtral
+  Mini 4B via vLLM's /v1/realtime WebSocket endpoint. Supports 13 languages
+  with configurable latency (80ms–2400ms). Sub-500ms delay targeting.
+
+verification:
+  last_verified: "2026-07-12"
+  last_verification_note: "Docker build OK (pytorch:2.11.0-cuda13.0 + vLLM 0.25.0; image ~42GB). Server startup 165s on RTX PRO 6000 Blackwell (98GB VRAM). WebSocket streaming PASS: 5s English sample yields correct transcript with incremental deltas (first call 7.94s, second 1.65s). Server cleanup via stop.sh confirmed. Multilingual modes untested (no non-English canonical samples)."
+  status: PARTIAL

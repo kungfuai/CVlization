@@ -1,0 +1,14 @@
+outputs/
+artifacts/
+sample_data/
+__pycache__/
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+*.json
+*.srt
+*.vtt
+!example.yaml
+!requirements.txt
