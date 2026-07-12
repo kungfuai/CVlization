@@ -12,6 +12,34 @@ generation. Lance (ByteDance Research, 2025) trains a single LLM backbone
 interleaved token-sequence problems. This example lets you exercise all
 three capabilities from one Docker container.
 
+## What to Expect
+
+- **First run**: Downloads ~39 GB of model weights (cached afterward in
+  `~/.cache/huggingface/`). A ~1 MB sample image is also downloaded for
+  default VQA/edit demos.
+- **Task**: Default mode is text-to-image (768x768 PNG). VQA and image
+  editing use a canonical sample image when `--input-image` is omitted.
+- **Output location**: Saved to your current working directory (e.g.,
+  `000000.png`, `metrics.json`).
+- **Runtime**: ~18s model loading + ~7s inference at 30 steps on an
+  RTX PRO 6000 Blackwell. Use `--num-steps 5` for fast validation (~2.5s
+  inference).
+
+## Sample
+
+**Text-to-image** — prompt: *"A golden retriever sitting in a sunlit meadow
+with wildflowers"*
+
+![t2i output](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lance/t2i_output.png)
+
+**Image editing** — instruction: *"Add a red collar to the dog"* (input:
+same image above)
+
+![edit output](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lance/edit_output.png)
+
+**Image understanding** — question: *"Describe this image in detail. What
+animal is shown and what is the setting?"* — answer: **Dog**
+
 ## What
 
 | Task | Flag | Description |
@@ -22,26 +50,7 @@ three capabilities from one Docker container.
 
 Model weights are downloaded automatically from
 [bytedance-research/Lance](https://huggingface.co/bytedance-research/Lance)
-on first run (~25 GB for image-only weights).
-
-## What to Expect
-
-- **First run**: Downloads ~25 GB of model weights (cached afterward in
-  `~/.cache/huggingface/`).
-- **Task**: Generates a 768x768 PNG image from a text prompt (default t2i mode).
-- **Output location**: Saved to your current working directory (e.g., `000000.png`,
-  `metrics.json`).
-- **Runtime**: ~18s model loading + ~15s inference at 30 steps on an RTX PRO 6000.
-  Use `--num-steps 5` for fast validation (~3s inference).
-
-## Sample
-
-**Input** (text prompt):
-```
-A cat
-```
-
-**Output** — 768x768 PNG image (`000000.png`), generated in ~2.4s with `--num-steps 5`.
+on first run (~39 GB, cached afterward).
 
 ## Quick Start
 
@@ -52,15 +61,14 @@ A cat
 # Text-to-image (default)
 ./predict.sh --task t2i --prompt "A cat wearing a top hat, oil painting style"
 
-# Image understanding
-./predict.sh --task x2t_image \
-  --input-image /path/to/photo.jpg \
-  --prompt "What objects are in this image?"
+# Image understanding (uses canonical sample image by default)
+./predict.sh --task x2t_image --prompt "What objects are in this image?"
 
-# Image editing
-./predict.sh --task image_edit \
-  --input-image /path/to/photo.jpg \
-  --edit-instruction "Add a rainbow in the sky"
+# Image editing (uses canonical sample image by default)
+./predict.sh --task image_edit --edit-instruction "Add sunglasses"
+
+# With a custom input image
+./predict.sh --task x2t_image --input-image photo.jpg --prompt "Describe this scene"
 ```
 
 ## Options
@@ -69,8 +77,8 @@ A cat
 |------|---------|-------------|
 | `--task` | `t2i` | Task: `t2i`, `x2t_image`, `image_edit` |
 | `--prompt` | *(sunset scene)* | Text prompt or VQA question |
-| `--input-image` | — | Path to input image (required for x2t_image, image_edit) |
-| `--edit-instruction` | — | Edit instruction (required for image_edit) |
+| `--input-image` | *(canonical sample)* | Input image (auto-downloaded for VQA/edit) |
+| `--edit-instruction` | *"Add a red collar to the dog"* | Edit instruction |
 | `--output-dir` | `./artifacts` | Where outputs are saved |
 | `--model-id` | `bytedance-research/Lance` | HuggingFace model repo |
 | `--resolution` | `768` | Image resolution (pixels) |
@@ -87,7 +95,7 @@ A cat
 ## Hardware Requirements
 
 - **GPU**: NVIDIA GPU with >= 40 GB VRAM (A100, A6000, etc.)
-- **Disk**: ~30 GB for model weights + Docker image
+- **Disk**: ~39 GB for model weights + Docker image
 - **Note**: The 3B model may fit on 24 GB GPUs for image-only tasks at
   lower resolution, but this is not officially supported by upstream.
 

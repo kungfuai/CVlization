@@ -31,6 +31,35 @@ DEFAULT_NUM_STEPS = 30
 DEFAULT_CFG_SCALE = 4.0
 DEFAULT_TIMESTEP_SHIFT = 3.5
 
+# HuggingFace dataset for canonical sample data
+HF_DATA_REPO = "zzsi/cvl"
+HF_DATA_PREFIX = "lance"
+
+
+def ensure_sample_image() -> str:
+    """Download canonical sample image from HuggingFace if not cached."""
+    from huggingface_hub import hf_hub_download
+
+    cache_root = Path(os.environ.get(
+        "HF_HOME", Path.home() / ".cache" / "huggingface"
+    )) / "cvl_data" / "lance"
+
+    local_path = cache_root / "sample_input.png"
+    if local_path.exists():
+        print(f"[lance] Sample image already cached: {local_path}", flush=True)
+        return str(local_path)
+
+    print("[lance] Downloading canonical sample image ...", flush=True)
+    downloaded = hf_hub_download(
+        repo_id=HF_DATA_REPO,
+        filename=f"{HF_DATA_PREFIX}/sample_input.png",
+        repo_type="dataset",
+    )
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(downloaded, local_path)
+    print(f"[lance] Sample image cached at: {local_path}", flush=True)
+    return str(local_path)
+
 
 def download_model(model_id: str, cache_dir: str | None = None) -> Path:
     """Download Lance model from HuggingFace and return the snapshot path."""
@@ -101,7 +130,7 @@ def write_image_edit_examples(
             "interleave_array": [
                 instruction,
                 image_path,
-                "",  # output placeholder
+                image_path,  # VAE needs a valid image for latent shape
             ],
             "element_dtype_array": ["text", "image", "image"],
             "istarget_in_interleave": [0, 0, 1],
@@ -249,13 +278,13 @@ Examples:
         "--input-image",
         type=str,
         default=None,
-        help="Input image path (required for x2t_image and image_edit)",
+        help="Input image path (default: canonical sample from zzsi/cvl)",
     )
     parser.add_argument(
         "--edit-instruction",
         type=str,
         default=None,
-        help="Edit instruction (for image_edit task)",
+        help="Edit instruction (default: 'Add a red collar to the dog')",
     )
     parser.add_argument(
         "--output-dir",
@@ -295,13 +324,13 @@ Examples:
     )
     args = parser.parse_args()
 
-    # Validate task-specific args
-    if args.task in ("x2t_image",) and not args.input_image:
-        parser.error(f"--input-image is required for task '{args.task}'")
-    if args.task == "image_edit" and not args.input_image:
-        parser.error("--input-image is required for image_edit")
+    # Default --edit-instruction when not provided
     if args.task == "image_edit" and not args.edit_instruction:
-        parser.error("--edit-instruction is required for image_edit")
+        args.edit_instruction = "Add a red collar to the dog"
+
+    # Use canonical sample image when --input-image not provided
+    if args.task in ("x2t_image", "image_edit") and not args.input_image:
+        args.input_image = ensure_sample_image()
 
     # Resolve input image via cvlization paths if available
     input_image = args.input_image

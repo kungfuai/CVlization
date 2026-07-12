@@ -5,7 +5,7 @@ stability: experimental
 resources:
   gpu: 1
   vram_gb: 40
-  disk_gb: 30
+  disk_gb: 40
 image: cvl-lance
 description: >
   Lance — unified multimodal model (3B params) by ByteDance Research.
@@ -42,5 +42,5 @@ frameworks:
 
 verification:
   last_verified: 2026-07-12
-  last_verification_note: "Verified build (prebuilt flash-attn wheel), t2i inference (5 steps, 2.4s) on RTX PRO 6000 Blackwell (98GB VRAM). Model weights ~25GB cached in HF cache."
+  last_verification_note: "All three modes verified (t2i, x2t_image, image_edit) on RTX PRO 6000 Blackwell (98GB). Model cache 39GB. Sample data lazy-downloaded from zzsi/cvl. Host persistence via cvl run confirmed."
   status: VERIFIED
