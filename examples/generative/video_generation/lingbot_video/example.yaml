@@ -53,6 +53,7 @@ description: >
   and text+image-to-video generation. Requires detailed multi-sentence prompts.
 
 verification:
+  status: PARTIAL
   last_verified: "2026-07-12"
   last_verification_note: >
     Verified on RTX PRO 6000 Blackwell (98GB VRAM). Tested: T2V dense (81f, 40 steps,
