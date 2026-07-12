@@ -1,0 +1,57 @@
+name: lingbot_video
+image: cvlization/lingbot_video:latest
+capability: generative/video_generation
+modalities:
+  - vision
+  - text
+  - video
+datasets: []
+stability: experimental
+resources:
+  gpu_count: 1
+  vram_gb: 10  # Dense 1.3B in bf16; MoE 30B needs ~24GB+
+  disk_gb: 10  # Dense 1.3B weights ~5GB
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  predict:
+    script: predict.sh
+    description: Generate video from text prompt (or text+image)
+    path_args:
+      - flag: "--image"
+        type: file
+      - flag: "--output"
+        type: file
+  test:
+    script: test.sh
+    description: Run smoke test with minimal settings
+tasks:
+  - text_to_video
+  - text_to_image
+  - image_to_video
+frameworks:
+  - pytorch
+  - diffusers
+  - transformers
+tags:
+  - video-generation
+  - moe
+  - mixture-of-experts
+  - embodied-intelligence
+  - world-model
+  - lingbot
+  - robbyant
+  - diffusion
+  - dit
+description: >
+  LingBot-Video is the first large-scale open-source MoE video foundation model,
+  designed for embodied intelligence. It offers two variants: a dense 1.3B model
+  (~8GB VRAM) and a MoE 30B-A3B model (~3B active parameters, ~24GB+ VRAM).
+  Trained on 70,000+ hours of embodied and web video data with physical-rationality
+  and task-completion reward alignment. Supports text-to-video, text-to-image,
+  and text+image-to-video generation.
+
+verification:
+  last_verified: "2026-07-12"
+  last_verification_note: "Verified build, inference (dense-1.3b T2V), model caching, host persistence, and cvl CLI on RTX PRO 6000 Blackwell (98GB VRAM). 832x480, 21 frames, 10 steps: ~6s inference. Dense 1.3B weights: ~5GB download, cached in HF hub. Output: MP4 video."

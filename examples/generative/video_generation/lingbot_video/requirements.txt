@@ -1,0 +1,19 @@
+# LingBot-Video dependencies
+# Torch is provided by the base Docker image
+
+# Diffusers pipeline (trust_remote_code loads pipeline from model repo)
+diffusers>=0.34.0
+transformers>=4.49.0
+accelerate>=1.2.0
+
+# Model loading
+safetensors>=0.4.5
+huggingface_hub>=0.27.0
+
+# Video output
+imageio>=2.35.0
+imageio-ffmpeg>=0.5.1
+
+# Image processing
+pillow>=10.4.0
+numpy>=1.26
