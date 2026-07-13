@@ -57,6 +57,6 @@ description: >
   with configurable latency (80ms–2400ms). Sub-500ms delay targeting.
 
 verification:
-  last_verified: "2026-07-12"
-  last_verification_note: "Docker build OK (pytorch:2.11.0-cuda13.0 + vLLM 0.25.0; image ~40GB). Server startup 100-165s on RTX PRO 6000 Blackwell (98GB VRAM; model ~8GB, vLLM pre-allocates ~92GB for KV cache with max_model_len=45000). WebSocket streaming PASS for English (5s sample, correct transcript, first call 7.94s / second 1.65s) and French (5s TTS sample, exact transcript 'Bonjour, comment allez-vous...' in 1.66s). Host output persistence confirmed from /tmp/cvl_voxtral_test/. Cache reuse confirmed (0 downloads on 2nd run). Deterministic cleanup via stop.sh confirmed. 11 of 13 languages not exercised with canonical samples."
+  last_verified: "2026-07-13"
+  last_verification_note: "Docker build OK (pytorch:2.11.0-cuda13.0 + vLLM 0.25.0; image ~40GB). Server startup 95-165s on RTX PRO 6000 Blackwell (98GB VRAM; model ~8GB, vLLM pre-allocates ~92GB for KV cache with max_model_len=45000). WebSocket streaming PASS for English and French. CVL CLI verified from /tmp/cvl_cli_test/: `cvl run voxtral_realtime serve` (OK), `cvl run voxtral_realtime predict` (OK, output persists at host cwd), `cvl run voxtral_realtime stop` (OK, container removed). `cvl info voxtral_realtime` shows correct metadata and all 5 presets. Cache reuse confirmed. 11 of 13 languages not exercised."
   status: PARTIAL

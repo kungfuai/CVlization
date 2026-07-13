@@ -87,6 +87,22 @@ Or run the full automated cycle:
 bash test.sh
 ```
 
+### Using the CVL CLI
+
+From any directory (requires `pip install cvlization`):
+
+```bash
+cvl run voxtral_realtime build
+cvl run voxtral_realtime serve
+# Wait for model to load (~100s)
+until curl -fsS http://localhost:8000/v1/models >/dev/null 2>&1; do sleep 5; done
+cvl run voxtral_realtime predict
+cvl run voxtral_realtime stop
+```
+
+`cvl run voxtral_realtime predict` mounts your current directory and saves
+output to `./voxtral_realtime_transcript.json`.
+
 ## Options
 
 ### Server (`serve.sh`)
