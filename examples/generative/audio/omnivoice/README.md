@@ -67,6 +67,23 @@ Output (5.8 s, 24 kHz):
 ./test.sh
 ```
 
+### Using the CVL CLI
+
+From any directory (outside the example folder):
+
+```bash
+# Show example metadata
+cvl info omnivoice
+
+# Voice design via cvl run
+cvl run omnivoice predict -- --text "Hello world!" --instruct "female, british accent" --output designed.wav
+
+# Voice cloning (canonical reference audio)
+cvl run omnivoice predict -- --text "Hello world!" --output cloned.wav
+```
+
+Outputs are written to the current working directory.
+
 ## Usage
 
 ### Voice Design (no reference audio)

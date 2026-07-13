@@ -48,10 +48,14 @@ description: >
   voice design using k2-fsa OmniVoice 0.6B. Code is Apache-2.0; pretrained
   weights are CC-BY-NC due to training-data constraints.
 verification:
-  status: VERIFIED
-  last_verified: "2026-07-12"
+  status: PARTIAL
+  last_verified: "2026-07-13"
   last_verification_note: >
-    Verified build, voice design, voice cloning (with canonical ref from zzsi/cvl),
-    model caching (3.1 GB OmniVoice + 1.6 GB Whisper ASR), sample data cache reuse,
-    and host-persisted outputs on RTX PRO 6000 Blackwell (98 GB VRAM). Peak ~2.7 GB
-    VRAM (float16). 24 kHz output, non-silent, intelligible.
+    Build, voice design, voice cloning, cvl info, cvl run (both modes from
+    external cwd), model caching (3.1 GB + 1.6 GB Whisper), cache reuse, and
+    host persistence all pass on RTX PRO 6000 Blackwell. Peak ~2.7 GB VRAM
+    (float16). ASR (Whisper large-v3-turbo) confirms intelligibility: WER 7.1%
+    (voice design) and 0.0% (voice clone). ECAPA-TDNN speaker similarity 0.83
+    between reference and clone. PARTIAL because subjective voice-character,
+    accent fidelity, and perceptual quality assessment is deferred to human
+    listening review.
