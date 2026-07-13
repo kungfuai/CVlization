@@ -1,0 +1,15 @@
+{
+  "user_id": "demo-user",
+  "preferences": {
+    "theme": "light",
+    "tone": "executive",
+    "max_bullets_per_slide": 4,
+    "preferred_layouts": ["title-bullets"],
+    "avoid_topics": ["licensing"]
+  },
+  "brief": {
+    "topic": "Adopting Retrieval-Augmented Generation",
+    "audience": "enterprise architects",
+    "sections": ["Motivation", "Architecture", "Evaluation", "Rollout"]
+  }
+}
