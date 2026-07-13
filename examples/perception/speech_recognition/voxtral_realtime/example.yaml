@@ -54,7 +54,7 @@ frameworks:
 description: >
   Multilingual realtime streaming speech transcription with Mistral Voxtral
   Mini 4B via vLLM's /v1/realtime WebSocket endpoint. Supports 13 languages
-  with configurable latency (80ms–2400ms). Measured first-delta ~530–690ms.
+  with configurable latency (80ms–2400ms). Measured first visible text ~1.0s.
 
 verification:
   last_verified: "2026-07-13"
@@ -62,10 +62,11 @@ verification:
     Docker build OK (pytorch:2.11.0-cuda13.0 + vLLM 0.25.0; image ~40GB).
     Server startup 100s on RTX PRO 6000 Blackwell (98GB VRAM; model ~8GB,
     vLLM pre-allocates ~92GB for KV cache with max_model_len=45000).
-    Realtime-paced streaming PASS: first-delta 530-692ms with concurrent
-    sender/receiver, timestamped delta events. Fast-mode PASS: 2.42s for 5s
-    audio. English and French transcripts correct. Containerized client via
-    predict.sh PASS. test.sh uses predict.sh (no host python3 dependency).
-    CVL CLI verified from /tmp/cvl_cli_test/. Cache reuse confirmed. 16GB
-    VRAM minimum is upstream claim (tested on 98GB only). 11/13 langs untested.
+    Realtime-paced streaming PASS: first event (empty protocol delta) 0.692s,
+    first visible text 1.055s, with concurrent sender/receiver and per-delta
+    wall_clock_sec + audio_sent_sec. Fast-mode PASS: 2.42s for 5s audio.
+    English and French transcripts correct. Containerized client via predict.sh
+    PASS. test.sh uses predict.sh (no host python3 dependency). CVL CLI verified
+    from /tmp/cvl_cli_test/. Cache reuse confirmed. 16GB VRAM minimum is
+    upstream claim (tested on 98GB only). 11/13 langs untested.
   status: PARTIAL

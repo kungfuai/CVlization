@@ -11,7 +11,7 @@ ASR examples, but no streaming transcription service. Voxtral fills this gap wit
 
 - **Realtime WebSocket streaming** — audio is transcribed as it arrives, not after upload
 - **13 languages** — Arabic, German, English, Spanish, French, Hindi, Italian, Dutch, Portuguese, Chinese, Japanese, Korean, Russian
-- **Configurable latency** — 80ms to 2400ms upstream transcription delay (default: 480ms; measured first-delta ~530–690ms)
+- **Configurable latency** — 80ms to 2400ms upstream transcription delay (default: 480ms; measured first visible text ~1.0s)
 - **Production-grade serving** — vLLM backend with OpenAI-compatible realtime API
 - **Apache 2.0 license** — free for research and commercial use
 
@@ -56,15 +56,20 @@ A 16 kHz mono WAV clip: _"It's an amazing gift and a unique privilege and I love
 {
   "mode": "realtime",
   "text": " It's amazing gift and a unique privilege. And I love going",
-  "first_delta_latency_sec": 0.692,
+  "first_event_latency_sec": 0.692,
+  "first_text_latency_sec": 1.055,
   "audio_duration_sec": 5.0,
   "timing": {
     "total_sec": 5.35,
     "audio_paced_sec": 5.0,
-    "first_delta_sec": 0.692
+    "first_event_sec": 0.692,
+    "first_text_sec": 1.055
   }
 }
 ```
+
+`first_event_latency_sec` is the time to the first protocol delta (may be empty).
+`first_text_latency_sec` is the time to the first non-empty text — the user-visible metric.
 
 **French input** — 5-second TTS clip
 ([example_fr.wav](https://huggingface.co/datasets/zzsi/cvl/blob/main/voxtral_realtime/example_fr.wav)):
@@ -163,8 +168,9 @@ configurable via `--max-model-len`, which only sets the maximum context length
 One output text token corresponds to 80ms of input audio. The delay parameter
 determines how far ahead the model buffers audio before emitting tokens.
 
-Use `--mode realtime` in predict.py to measure actual first-delta latency with
-audio paced at playback speed.
+Use `--mode realtime` in predict.py to measure actual latency with audio paced
+at playback speed. The output reports both `first_event_sec` (first protocol
+delta, possibly empty) and `first_text_sec` (first non-empty text token).
 
 ## Supported Languages
 

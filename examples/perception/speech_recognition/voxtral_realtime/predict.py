@@ -230,8 +230,9 @@ async def stream_transcribe_realtime(
 
     Sends chunks paced to match real audio duration and concurrently receives
     transcription events. Records:
-      - first_delta_latency_sec: time from first audio chunk sent to first delta received
-      - delta_events: list of {delta, elapsed_audio_sec, wall_clock_sec} for each token
+      - first_event_latency_sec: time to first protocol delta (may be empty)
+      - first_text_latency_sec: time to first non-empty text delta (user-visible)
+      - delta_events: list of {delta, wall_clock_sec, audio_sent_sec} per event
     """
     import base64
 
@@ -242,7 +243,9 @@ async def stream_transcribe_realtime(
     final_text = ""
     usage = {}
     session_id = "unknown"
-    first_delta_time: Optional[float] = None
+    first_event_time: Optional[float] = None
+    first_text_time: Optional[float] = None
+    audio_sent_sec_shared: List[float] = [0.0]  # mutable shared state for sender progress
     send_done = asyncio.Event()
 
     print(f"Connecting to {uri} ...")
@@ -289,6 +292,7 @@ async def stream_transcribe_realtime(
                     })
                 )
                 chunks_sent += 1
+                audio_sent_sec_shared[0] = chunks_sent * chunk_duration_sec
                 # Pace: wait until the wall clock matches the audio time sent so far
                 target_elapsed = chunks_sent * chunk_duration_sec
                 actual_elapsed = time.time() - t_send_start
@@ -305,7 +309,7 @@ async def stream_transcribe_realtime(
 
         async def receiver():
             """Receive transcription events concurrently."""
-            nonlocal final_text, usage, first_delta_time
+            nonlocal final_text, usage, first_event_time, first_text_time
             print("Transcription: ", end="", flush=True)
             while True:
                 response = json.loads(await ws.recv())
@@ -314,11 +318,14 @@ async def stream_transcribe_realtime(
 
                 if msg_type == "transcription.delta":
                     delta = response.get("delta", "")
-                    if first_delta_time is None:
-                        first_delta_time = wall_sec
+                    if first_event_time is None:
+                        first_event_time = wall_sec
+                    if first_text_time is None and delta:
+                        first_text_time = wall_sec
                     delta_events.append({
                         "delta": delta,
                         "wall_clock_sec": round(wall_sec, 3),
+                        "audio_sent_sec": round(audio_sent_sec_shared[0], 3),
                     })
                     print(delta, end="", flush=True)
                 elif msg_type == "transcription.done":
@@ -339,10 +346,12 @@ async def stream_transcribe_realtime(
 
     t_end = time.time()
     total_sec = t_end - t_start
-    first_delta_latency = first_delta_time if first_delta_time is not None else total_sec
+    first_event_latency = first_event_time if first_event_time is not None else total_sec
+    first_text_latency = first_text_time if first_text_time is not None else total_sec
 
     print(f"\n\nTotal time: {total_sec:.2f}s")
-    print(f"First delta latency: {first_delta_latency:.3f}s")
+    print(f"First event latency: {first_event_latency:.3f}s (protocol delta, may be empty)")
+    print(f"First text latency:  {first_text_latency:.3f}s (first non-empty text)")
     print(f"Audio duration: {duration_sec:.1f}s")
 
     return {
@@ -350,7 +359,8 @@ async def stream_transcribe_realtime(
         "text": final_text,
         "deltas": [e["delta"] for e in delta_events],
         "delta_events": delta_events,
-        "first_delta_latency_sec": round(first_delta_latency, 3),
+        "first_event_latency_sec": round(first_event_latency, 3),
+        "first_text_latency_sec": round(first_text_latency, 3),
         "model": model,
         "audio": audio_path,
         "audio_duration_sec": round(duration_sec, 2),
@@ -359,7 +369,8 @@ async def stream_transcribe_realtime(
         "timing": {
             "total_sec": round(total_sec, 2),
             "audio_paced_sec": round(duration_sec, 2),
-            "first_delta_sec": round(first_delta_latency, 3),
+            "first_event_sec": round(first_event_latency, 3),
+            "first_text_sec": round(first_text_latency, 3),
         },
         "usage": usage,
     }
