@@ -54,8 +54,10 @@ verification:
     Build, voice design, voice cloning, cvl info, cvl run (both modes from
     external cwd), model caching (3.1 GB + 1.6 GB Whisper), cache reuse, and
     host persistence all pass on RTX PRO 6000 Blackwell. Peak ~2.7 GB VRAM
-    (float16). ASR (Whisper large-v3-turbo) confirms intelligibility: WER 7.1%
-    (voice design) and 0.0% (voice clone). ECAPA-TDNN speaker similarity 0.83
-    between reference and clone. PARTIAL because subjective voice-character,
-    accent fidelity, and perceptual quality assessment is deferred to human
-    listening review.
+    (float16). ASR confirms intelligibility: English WER 7.1%/0.0%, Chinese
+    CER 0.0% (Whisper large-v3-turbo). ECAPA-TDNN speaker similarity 0.83.
+    Multilingual coverage: English and Chinese locally verified; 644 other
+    languages are upstream-claimed (not locally tested). PARTIAL because
+    subjective voice-character, accent fidelity, and perceptual quality
+    assessment is deferred to human listening review. Reproducible metrics
+    at zzsi/cvl omnivoice/verification_metrics.json.

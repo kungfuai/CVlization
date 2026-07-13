@@ -8,7 +8,7 @@ design using k2-fsa OmniVoice 0.6B.
 - **Model**: [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice)
 - **Parameters**: 0.6B (Qwen3-0.6B-Base backbone)
 - **Sample rate**: 24 kHz
-- **Languages**: 646 (English, Chinese, Japanese, Spanish, French, German, and many more)
+- **Languages**: 646 per upstream (locally verified: English, Chinese; remaining 644 are upstream-claimed)
 - **Architecture**: Non-autoregressive diffusion language model
 - **Code license**: Apache-2.0
 - **Weight license**: CC-BY-NC (due to training-data constraints — not for commercial use)
@@ -30,6 +30,16 @@ Output (5.1 s, 24 kHz):
 
 Output (5.8 s, 24 kHz):
 [voice_clone_output.wav](https://huggingface.co/datasets/zzsi/cvl/resolve/main/omnivoice/voice_clone_output.wav)
+
+**Chinese (Mandarin)** — `--instruct "female, moderate pitch"`:
+
+> *"你好，欢迎使用语音合成技术。今天天气非常好。"*
+
+Output (4.3 s, 24 kHz):
+[voice_design_zh.wav](https://huggingface.co/datasets/zzsi/cvl/resolve/main/omnivoice/voice_design_zh.wav)
+
+Verification metrics and artifact hashes:
+[verification_metrics.json](https://huggingface.co/datasets/zzsi/cvl/resolve/main/omnivoice/verification_metrics.json)
 
 ## What to Expect
 
