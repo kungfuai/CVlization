@@ -57,7 +57,10 @@ verification:
   last_verified: "2026-07-12"
   last_verification_note: >
     Verified on RTX PRO 6000 Blackwell (98GB VRAM). Tested: T2V dense (81f, 40 steps,
-    ~2m24s), T2V MoE (81f, 40 steps, ~6m27s, ~80GB peak VRAM), T2I MoE (good quality),
-    TI2V dense (41f, works correctly). T2I dense: poor quality. Short prompts produce
-    abstract output; detailed prompts required. MoE weights ~121GB download. Demo
-    artifacts at https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_video.
+    ~2m24s, recognizable but with structural artifacts), T2V MoE (81f, 40 steps,
+    ~6m27s, ~80GB peak VRAM, some noise/overexposure in frames), T2I MoE (clear image),
+    TI2V dense (41f, conditioning preserved initially, degrades toward end). T2I dense:
+    poor quality. Short prompts produce abstract output; detailed prompts required.
+    MoE weights ~121GB download. cvl run from external cwd confirmed with host
+    persistence. Demo artifacts at
+    https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_video.

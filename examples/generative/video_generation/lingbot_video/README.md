@@ -18,7 +18,9 @@ Two model variants are available:
 
 ## Sample Output
 
-**MoE 30B-A3B, T2V** (21 frames, 832x480, 40 steps) -- frame 10:
+**MoE 30B-A3B, T2V** (21 frames, 832x480, 40 steps) -- frame 10.
+Quality note: MoE T2V output may show noise/overexposure in some frames; individual frames
+vary in clarity. Best results require detailed, multi-sentence prompts.
 
 ![T2V MoE sample frame](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2v_moe_21f_frame10.png)
 
@@ -26,7 +28,8 @@ Two model variants are available:
 
 ![T2I MoE sample](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2i_moe.png)
 
-**Dense 1.3B, T2V** (81 frames, 832x480, 40 steps) -- frame 40:
+**Dense 1.3B, T2V** (81 frames, 832x480, 40 steps) -- frame 40.
+Quality note: Dense variant output is recognizable but may contain structural artifacts.
 
 ![T2V Dense sample frame](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2v_dense_81f_frame40.png)
 
@@ -107,10 +110,13 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20
 ## Limitations
 
 - **Detailed prompts required**: The model was trained on structured captions; short prompts produce poor results. Use multiple sentences describing scene, subject, camera, and lighting.
+- **MoE T2V quality**: MoE T2V output can exhibit noise, overexposure, or corrupted frames, especially at the start of sequences. Quality varies by prompt and seed.
+- **TI2V temporal degradation**: Text+image-to-video preserves the conditioning frame initially but may degrade with visible artifacts toward the end of longer sequences.
+- **Dense variant artifacts**: Dense 1.3B output is recognizable but typically has structural/glitch artifacts compared to MoE.
+- **T2I quality varies**: T2I mode works best with MoE; dense 1.3B produces poor quality single images.
 - **MoE VRAM**: The MoE 30B-A3B variant requires ~80 GB VRAM for 81-frame generation at 832x480. Use fewer frames (`--num-frames 21`) to reduce memory.
 - **MoE download size**: The MoE model is ~121 GB (includes transformer + refiner shards). Ensure sufficient disk space.
 - **No prompt rewriter**: The upstream prompt rewriter (Qwen3-VL-27B) is not included; plain text prompts are used directly.
-- **T2I quality varies**: T2I mode works best with MoE; dense 1.3B produces lower quality single images.
 
 ## Links
 

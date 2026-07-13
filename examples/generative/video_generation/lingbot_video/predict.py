@@ -248,7 +248,7 @@ def main():
         choices=["dense-1.3b", "moe-30b-a3b"],
         default="dense-1.3b",
         help="Model variant: dense-1.3b (single GPU, ~8GB VRAM) or "
-             "moe-30b-a3b (needs ~24GB+ VRAM, ~3B active params)",
+             "moe-30b-a3b (~80GB VRAM at 81 frames 832x480, ~3B active params)",
     )
 
     # Input/output

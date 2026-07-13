@@ -1,6 +1,6 @@
 # LingBot-Video: MoE Video Foundation Model
 # Dense 1.3B: ~8GB VRAM (bf16)
-# MoE 30B-A3B: ~24GB+ VRAM (~3B active params)
+# MoE 30B-A3B: ~80GB VRAM at 81 frames 832x480 (~3B active params)
 
 FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
 
