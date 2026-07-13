@@ -5,6 +5,11 @@ Connects to a running vLLM server's /v1/realtime WebSocket endpoint, streams
 audio in chunks, and captures incremental transcription events. Supports 13
 languages: Arabic, German, English, Spanish, French, Hindi, Italian, Dutch,
 Portuguese, Chinese, Japanese, Korean, Russian.
+
+Two streaming modes:
+  --mode fast    Send audio as fast as possible (file-mode; default for batch).
+  --mode realtime  Pace audio at true playback rate with concurrent receive.
+                   Records first-delta latency and per-delta timestamps.
 """
 
 from __future__ import annotations
@@ -112,7 +117,7 @@ def load_audio_pcm16(audio_path: str, target_sr: int = 16000) -> bytes:
     return pcm16.tobytes()
 
 
-async def stream_transcribe(
+async def stream_transcribe_fast(
     audio_path: str,
     host: str,
     port: int,
@@ -120,9 +125,9 @@ async def stream_transcribe(
     chunk_size: int = CHUNK_SIZE,
     verbose: bool = False,
 ) -> Dict[str, Any]:
-    """Connect to the vLLM realtime WebSocket and stream audio for transcription.
+    """Fast file-mode: send all audio as quickly as possible, then receive.
 
-    Returns a dict with transcript text, incremental deltas, timing, and usage.
+    Best for throughput when latency measurement is not needed.
     """
     import base64
 
@@ -170,7 +175,7 @@ async def stream_transcribe(
         # 5. Signal end of audio
         await ws.send(json.dumps({"type": "input_audio_buffer.commit", "final": True}))
         t_stream_end = time.time()
-        print(f"Audio streamed in {t_stream_end - t_stream_start:.2f}s. Waiting for transcription...\n")
+        print(f"Audio streamed in {t_stream_end - t_stream_start:.2f}s (fast mode). Waiting for transcription...\n")
 
         # 6. Receive transcription events
         print("Transcription: ", end="", flush=True)
@@ -196,6 +201,7 @@ async def stream_transcribe(
     print(f"\n\nTotal time: {t_end - t_start:.2f}s")
 
     return {
+        "mode": "fast",
         "text": final_text,
         "deltas": deltas,
         "model": model,
@@ -207,6 +213,153 @@ async def stream_transcribe(
             "total_sec": round(t_end - t_start, 2),
             "stream_sec": round(t_stream_end - t_stream_start, 2),
             "transcription_sec": round(t_end - t_stream_end, 2),
+        },
+        "usage": usage,
+    }
+
+
+async def stream_transcribe_realtime(
+    audio_path: str,
+    host: str,
+    port: int,
+    model: str,
+    chunk_size: int = CHUNK_SIZE,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """Realtime-paced mode: send audio at playback speed with concurrent receive.
+
+    Sends chunks paced to match real audio duration and concurrently receives
+    transcription events. Records:
+      - first_delta_latency_sec: time from first audio chunk sent to first delta received
+      - delta_events: list of {delta, elapsed_audio_sec, wall_clock_sec} for each token
+    """
+    import base64
+
+    import websockets
+
+    uri = f"ws://{host}:{port}/v1/realtime"
+    delta_events: List[Dict[str, Any]] = []
+    final_text = ""
+    usage = {}
+    session_id = "unknown"
+    first_delta_time: Optional[float] = None
+    send_done = asyncio.Event()
+
+    print(f"Connecting to {uri} ...")
+    ws = await websockets.connect(uri)
+
+    try:
+        # 1. Receive session.created
+        response = json.loads(await ws.recv())
+        if response.get("type") != "session.created":
+            raise RuntimeError(f"Expected session.created, got: {response}")
+        session_id = response.get("id", "unknown")
+        if verbose:
+            print(f"Session created: {session_id}")
+
+        # 2. Validate model
+        await ws.send(json.dumps({"type": "session.update", "model": model}))
+
+        # 3. Signal ready
+        await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+
+        # 4. Load audio
+        print(f"Loading audio: {audio_path}")
+        audio_bytes = load_audio_pcm16(audio_path)
+        total_chunks = (len(audio_bytes) + chunk_size - 1) // chunk_size
+        duration_sec = len(audio_bytes) / (16000 * 2)  # 16kHz, 16-bit
+        # Seconds of audio per chunk
+        chunk_duration_sec = chunk_size / (16000 * 2)
+        print(f"Audio duration: {duration_sec:.1f}s ({total_chunks} chunks)")
+        print(f"Mode: REALTIME (pacing at {chunk_duration_sec*1000:.0f}ms per chunk)\n")
+
+        t_start = time.time()
+
+        async def sender():
+            """Send audio chunks paced at realtime speed."""
+            nonlocal send_done
+            t_send_start = time.time()
+            chunks_sent = 0
+            for i in range(0, len(audio_bytes), chunk_size):
+                chunk = audio_bytes[i : i + chunk_size]
+                await ws.send(
+                    json.dumps({
+                        "type": "input_audio_buffer.append",
+                        "audio": base64.b64encode(chunk).decode("utf-8"),
+                    })
+                )
+                chunks_sent += 1
+                # Pace: wait until the wall clock matches the audio time sent so far
+                target_elapsed = chunks_sent * chunk_duration_sec
+                actual_elapsed = time.time() - t_send_start
+                sleep_time = target_elapsed - actual_elapsed
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+
+            # Signal end of audio
+            await ws.send(json.dumps({"type": "input_audio_buffer.commit", "final": True}))
+            send_done.set()
+            t_send_end = time.time()
+            if verbose:
+                print(f"\n[sender done: {t_send_end - t_send_start:.2f}s for {duration_sec:.1f}s audio]")
+
+        async def receiver():
+            """Receive transcription events concurrently."""
+            nonlocal final_text, usage, first_delta_time
+            print("Transcription: ", end="", flush=True)
+            while True:
+                response = json.loads(await ws.recv())
+                msg_type = response.get("type", "")
+                wall_sec = time.time() - t_start
+
+                if msg_type == "transcription.delta":
+                    delta = response.get("delta", "")
+                    if first_delta_time is None:
+                        first_delta_time = wall_sec
+                    delta_events.append({
+                        "delta": delta,
+                        "wall_clock_sec": round(wall_sec, 3),
+                    })
+                    print(delta, end="", flush=True)
+                elif msg_type == "transcription.done":
+                    final_text = response.get("text", "")
+                    usage = response.get("usage", {})
+                    break
+                elif msg_type == "error":
+                    error_msg = response.get("error", response)
+                    raise RuntimeError(f"Server error: {error_msg}")
+                elif verbose:
+                    print(f"\n[event: {msg_type} @ {wall_sec:.2f}s]", end="", flush=True)
+
+        # Run sender and receiver concurrently
+        await asyncio.gather(sender(), receiver())
+
+    finally:
+        await ws.close()
+
+    t_end = time.time()
+    total_sec = t_end - t_start
+    first_delta_latency = first_delta_time if first_delta_time is not None else total_sec
+
+    print(f"\n\nTotal time: {total_sec:.2f}s")
+    print(f"First delta latency: {first_delta_latency:.3f}s")
+    print(f"Audio duration: {duration_sec:.1f}s")
+
+    return {
+        "mode": "realtime",
+        "text": final_text,
+        "deltas": [e["delta"] for e in delta_events],
+        "delta_events": delta_events,
+        "first_delta_latency_sec": round(first_delta_latency, 3),
+        "model": model,
+        "audio": audio_path,
+        "audio_duration_sec": round(duration_sec, 2),
+        "total_chunks": total_chunks,
+        "session_id": session_id,
+        "timing": {
+            "total_sec": round(total_sec, 2),
+            "audio_paced_sec": round(duration_sec, 2),
+            "first_delta_sec": round(first_delta_latency, 3),
         },
         "usage": usage,
     }
@@ -252,6 +405,11 @@ def parse_args() -> argparse.Namespace:
         "--chunk-size", type=int, default=CHUNK_SIZE,
         help="Audio chunk size in bytes for streaming."
     )
+    p.add_argument(
+        "--mode", choices=["fast", "realtime"], default="fast",
+        help="Streaming mode: 'fast' sends as quickly as possible; "
+             "'realtime' paces audio at playback speed with concurrent receive."
+    )
     p.add_argument("--output", default="voxtral_realtime_transcript.json")
     p.add_argument("--format", choices=["json", "txt"], default="json")
     p.add_argument("--verbose", action="store_true")
@@ -269,16 +427,28 @@ def main() -> int:
 
     output_path = resolve_output_path(args.output)
 
-    result = asyncio.run(
-        stream_transcribe(
-            audio_path=audio_path,
-            host=args.host,
-            port=args.port,
-            model=args.model,
-            chunk_size=args.chunk_size,
-            verbose=args.verbose,
+    if args.mode == "realtime":
+        result = asyncio.run(
+            stream_transcribe_realtime(
+                audio_path=audio_path,
+                host=args.host,
+                port=args.port,
+                model=args.model,
+                chunk_size=args.chunk_size,
+                verbose=args.verbose,
+            )
         )
-    )
+    else:
+        result = asyncio.run(
+            stream_transcribe_fast(
+                audio_path=audio_path,
+                host=args.host,
+                port=args.port,
+                model=args.model,
+                chunk_size=args.chunk_size,
+                verbose=args.verbose,
+            )
+        )
 
     print()
     print("Final transcript:")

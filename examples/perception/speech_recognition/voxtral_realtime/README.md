@@ -11,7 +11,7 @@ ASR examples, but no streaming transcription service. Voxtral fills this gap wit
 
 - **Realtime WebSocket streaming** — audio is transcribed as it arrives, not after upload
 - **13 languages** — Arabic, German, English, Spanish, French, Hindi, Italian, Dutch, Portuguese, Chinese, Japanese, Korean, Russian
-- **Configurable latency** — 80ms to 2400ms transcription delay (recommended: 480ms)
+- **Configurable latency** — 80ms to 2400ms upstream transcription delay (default: 480ms; measured first-delta ~530–690ms)
 - **Production-grade serving** — vLLM backend with OpenAI-compatible realtime API
 - **Apache 2.0 license** — free for research and commercial use
 
@@ -22,7 +22,7 @@ ASR examples, but no streaming transcription service. Voxtral fills this gap wit
 | First-run model download | ~8 GB (cached in `~/.cache/huggingface`) |
 | Docker image size | ~40 GB (PyTorch 2.11 + CUDA 13 + vLLM 0.25) |
 | Server startup time | 60–180s (model loading) |
-| Transcription latency | <500ms per utterance at default settings |
+| Transcription delay | 480ms default (upstream `transcription_delay_ms`; use `--mode realtime` to measure) |
 | Output location | `./voxtral_realtime_transcript.json` in your working directory |
 | Output format | JSON with transcript text, incremental deltas, timing, and usage stats |
 
@@ -33,18 +33,35 @@ ASR examples, but no streaming transcription service. Voxtral fills this gap wit
 
 A 16 kHz mono WAV clip: _"It's an amazing gift and a unique privilege and I love going."_
 
-**Output** — streaming transcript with incremental deltas
+**Output (fast mode)** — streaming transcript with incremental deltas
 ([sample_output.json](https://huggingface.co/datasets/zzsi/cvl/blob/main/voxtral_realtime/sample_output.json)):
 
 ```json
 {
+  "mode": "fast",
   "text": " It's amazing gift and a unique privilege. And I love going",
-  "deltas": ["", "", " It", "'s", " amazing", " gift", " and", " a", " unique", " privilege", ".", " And", " I", " love", " going"],
   "audio_duration_sec": 5.0,
   "timing": {
-    "total_sec": 7.94,
+    "total_sec": 2.42,
     "stream_sec": 0.0,
     "transcription_sec": 1.15
+  }
+}
+```
+
+**Output (realtime mode)** — paced at playback speed with latency metrics
+([sample_output_realtime.json](https://huggingface.co/datasets/zzsi/cvl/blob/main/voxtral_realtime/sample_output_realtime.json)):
+
+```json
+{
+  "mode": "realtime",
+  "text": " It's amazing gift and a unique privilege. And I love going",
+  "first_delta_latency_sec": 0.692,
+  "audio_duration_sec": 5.0,
+  "timing": {
+    "total_sec": 5.35,
+    "audio_paced_sec": 5.0,
+    "first_delta_sec": 0.692
   }
 }
 ```
@@ -121,6 +138,7 @@ output to `./voxtral_realtime_transcript.json`.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--audio` | `sample` | Audio file path or `sample` for the default CVL sample |
+| `--mode` | `fast` | `fast` = send all audio immediately; `realtime` = pace at playback speed with concurrent receive and latency measurement |
 | `--host` | `localhost` | vLLM server host |
 | `--port` | `8000` | vLLM server port |
 | `--model` | `mistralai/Voxtral-Mini-4B-Realtime-2602` | Model ID |
@@ -131,16 +149,22 @@ output to `./voxtral_realtime_transcript.json`.
 
 ## Latency / Quality Tradeoffs
 
-Voxtral exposes a transcription delay parameter (configurable via `--max-model-len`):
+Voxtral's transcription delay is controlled by `transcription_delay_ms` in the
+upstream model/tokenizer configuration (default: 480ms). This is **not**
+configurable via `--max-model-len`, which only sets the maximum context length
+(i.e., how much total audio the session can handle — 45000 tokens ~ 1 hour).
 
-| Delay | Use Case | Approx. WER (English) |
-|-------|----------|----------------------|
+| Delay (upstream config) | Use Case | Approx. WER (English) |
+|-------------------------|----------|----------------------|
 | 80ms | Ultra-low latency, live captions | Higher |
-| 480ms | **Recommended** balance | ~7% (GigaSpeech) |
+| 480ms | **Default** — recommended balance | ~7% (GigaSpeech) |
 | 2400ms | Maximum accuracy, batch-like | Lowest |
 
-One text token corresponds to 80ms of audio. Increasing `max_model_len` allows
-longer recordings (45000 tokens ~ 1 hour).
+One output text token corresponds to 80ms of input audio. The delay parameter
+determines how far ahead the model buffers audio before emitting tokens.
+
+Use `--mode realtime` in predict.py to measure actual first-delta latency with
+audio paced at playback speed.
 
 ## Supported Languages
 
@@ -185,13 +209,16 @@ incremental transcription events as they are generated.
 
 ## GPU Requirements
 
-- **Minimum**: 16 GB VRAM (e.g., NVIDIA T4, RTX 4080)
+- **Minimum (upstream claim)**: 16 GB VRAM (e.g., NVIDIA T4, RTX 4080).
+  Not locally verified with max_model_len=45000; a smaller context length
+  may be needed on 16 GB cards.
 - **Recommended**: 24+ GB VRAM (e.g., RTX 4090, A10, L4)
+- **Verified on**: RTX PRO 6000 Blackwell (98 GB VRAM)
 - Model weights: ~8 GB (4B params in BF16)
 - vLLM pre-allocates remaining VRAM for KV cache (configurable via
   `VLLM_GPU_MEMORY_UTILIZATION`). On a 98 GB GPU with max_model_len=45000 the
-  server may report ~92 GB allocated; on a 16 GB GPU it will fill ~14 GB,
-  leaving headroom for the OS
+  server pre-allocates ~92 GB for KV cache; on smaller GPUs it will fill
+  available VRAM proportionally, reducing maximum concurrent sessions
 
 ## References
 

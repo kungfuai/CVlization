@@ -43,12 +43,9 @@ done
 echo "Server ready after ${ELAPSED}s."
 
 echo ""
-echo "=== Step 4/4: Run streaming transcription ==="
-# Run client directly on the host to avoid nested Docker complexity during test
-python3 "${SCRIPT_DIR}/predict.py" \
-  --host "${HOST}" \
-  --port "${PORT}" \
-  --output "voxtral_realtime_transcript.json" \
+echo "=== Step 4/4: Run streaming transcription (containerized client) ==="
+bash "${SCRIPT_DIR}/predict.sh" \
+  --mode realtime \
   --verbose \
   "$@"
 
