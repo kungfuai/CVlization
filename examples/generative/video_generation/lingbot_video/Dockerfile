@@ -4,12 +4,16 @@
 #
 # Upstream pinned to commit a638721 for reproducibility.
 # Tested dependency stack (resolved in this image):
-#   torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1,
-#   flash-attn 2.8.3.post1 (prebuilt wheel, standard attention backend)
+#   torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1
 #
-# Note: --batch-cfg requires flash_attn_3 (Hopper/Blackwell flash_attn_interface).
-# Prebuilt wheels (sm80/sm90a/sm100a) do not cover sm120 (Blackwell Max-Q).
-# Omitted until a compatible wheel is available; sequential CFG works correctly.
+# FlashAttention is NOT installed. The wrapper (predict.py) uses PyTorch native
+# SDPA for sequential CFG attention — no flash_attn import is needed. The
+# upstream runner (lingbot_video.runner) monkey-patches attn_implementation to
+# flash_attention_3 by default, but this can be overridden with the env var
+# LINGBOT_QWEN_ATTN_IMPLEMENTATION=sdpa (no FA wheel required).
+#
+# --batch-cfg requires flash_attn_3 (Hopper/Blackwell flash_attn_interface).
+# No prebuilt wheel covers sm120 (Blackwell Max-Q).
 
 FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
 
@@ -28,10 +32,6 @@ WORKDIR /workspace
 
 # Upgrade pip
 RUN pip install --upgrade pip setuptools wheel
-
-# Install prebuilt FlashAttention v2 (standard attention backend)
-RUN pip install --no-cache-dir \
-    "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3.post1%2Bcu12torch2.7cxx11abiFALSE-cp311-cp311-linux_x86_64.whl"
 
 # Copy and install Python dependencies
 COPY requirements.txt /tmp/requirements.txt

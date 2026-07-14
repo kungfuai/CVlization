@@ -34,6 +34,8 @@ Full video: [demo_t2v_dense_structured_81f.mp4](https://huggingface.co/datasets/
 
 Full video: [demo_ti2v_dense_structured_41f.mp4](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_ti2v_dense_structured_41f.mp4)
 
+Canonical TI2V input image: [ti2v_input.png](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/ti2v_input.png)
+
 ## Structured vs Raw Prompts
 
 The upstream DiT inference pipeline is designed for **structured JSON prompts** generated
@@ -72,8 +74,11 @@ cvl run lingbot_video predict -- \
     --prompt-json canonical_t2v_prompt.json
 
 # Text+image-to-video (animate from a reference image)
+# Download the canonical TI2V input image:
+curl -L -o ti2v_input.png \
+    https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/ti2v_input.png
 cvl run lingbot_video predict -- \
-    --prompt-json canonical_t2v_prompt.json --image reference.png
+    --prompt-json canonical_t2v_prompt.json --image ti2v_input.png
 
 # MoE variant (needs ~80GB VRAM)
 cvl run lingbot_video predict -- --model moe-30b-a3b \
@@ -110,7 +115,7 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20 \
 | `--output` | output.mp4 | Output file path |
 | `--height` | 480 | Video height (multiple of 16) |
 | `--width` | 832 | Video width (multiple of 16) |
-| `--num-frames` | 81 | Frame count (must be 4n+1, e.g. 21, 41, 61, 81) |
+| `--num-frames` | 81 | Frame count (4n+1). If omitted, derived from `duration` in `--prompt-json` |
 | `--fps` | 24.0 | Output video frame rate |
 | `--steps` | 40 | Denoising steps |
 | `--guidance-scale` | 3.0 | CFG guidance scale |
@@ -148,9 +153,12 @@ Resolved dependency stack in Docker image:
 - torch 2.7.0+cu128
 - diffusers 0.39.0
 - transformers 5.13.1
-- flash-attn 2.8.3.post1
 - accelerate 1.14.0
 - peft 0.19.1
+
+FlashAttention is not installed. The wrapper uses PyTorch native SDPA for
+sequential CFG attention. The upstream runner (`lingbot_video.runner`) can be
+invoked with `LINGBOT_QWEN_ATTN_IMPLEMENTATION=sdpa` to bypass its FA3 default.
 
 ## Links
 

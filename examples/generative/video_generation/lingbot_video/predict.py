@@ -87,6 +87,19 @@ CANONICAL_PROMPT_URL = (
 )
 
 
+DEFAULT_NUM_FRAMES = 81
+
+
+def num_frames_from_duration(duration: float, fps: int = 24) -> int:
+    """Derive num_frames from duration and fps, aligned to 4n+1.
+
+    Follows the upstream lingbot_video.utils.num_frames_from_duration logic:
+    compute raw frame count, then round up to the nearest 4n+1 value.
+    """
+    frame_count = int(float(duration) * int(fps))
+    return ((frame_count - 1) // 4 + 1) * 4 + 1
+
+
 def caption_from_sample(sample: dict) -> str:
     """Extract the caption string from a structured prompt JSON.
 
@@ -359,8 +372,10 @@ def main():
     parser.add_argument(
         "--num-frames",
         type=int,
-        default=81,
-        help="Number of frames (must be 1 for t2i, or 4n+1 for t2v, e.g. 21, 41, 61, 81)",
+        default=None,
+        help="Number of frames (4n+1 for t2v, e.g. 21, 41, 61, 81; default 81). "
+             "If omitted and --prompt-json contains a 'duration' field, num_frames "
+             "is derived from duration * fps (upstream semantics).",
     )
     parser.add_argument(
         "--fps",
@@ -426,6 +441,7 @@ def main():
     output_path = resolve_output_path(args.output)
 
     # Resolve prompt: --prompt-json takes precedence over --prompt
+    duration = None
     if args.prompt_json:
         prompt_json_path = resolve_input_path(args.prompt_json)
         if not os.path.exists(prompt_json_path):
@@ -451,8 +467,19 @@ def main():
             print(f"Error: Image file not found: {image_path}", flush=True)
             sys.exit(1)
 
-    # Adjust num_frames for t2i mode
-    num_frames = args.num_frames
+    # Resolve num_frames with upstream-compatible precedence:
+    #   1. Explicit --num-frames wins
+    #   2. Otherwise derive from structured prompt duration (if present)
+    #   3. Otherwise use DEFAULT_NUM_FRAMES (81)
+    if args.num_frames is not None:
+        num_frames = args.num_frames
+    elif duration is not None and args.mode != "t2i":
+        num_frames = num_frames_from_duration(duration, int(args.fps))
+        print(f"  num_frames derived from duration: {num_frames} "
+              f"({duration}s * {int(args.fps)}fps, aligned to 4n+1)", flush=True)
+    else:
+        num_frames = DEFAULT_NUM_FRAMES
+
     if args.mode == "t2i":
         num_frames = 1
         if not output_path.endswith(".png"):

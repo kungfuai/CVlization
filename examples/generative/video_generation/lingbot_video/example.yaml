@@ -64,8 +64,13 @@ verification:
     ~2m24s, clean coherent output), TI2V dense (41f, 40 steps, ~58s, conditioning
     preserved, coherent throughout). Raw text prompts produce lower quality. T2I MoE
     (clear image). T2I dense: poor quality. MoE T2V not re-tested with structured
-    prompt (121GB download constraint). batch_cfg blocked: requires flash_attn_3 v3
+    prompt (121GB download constraint). batch_cfg blocked: requires flash_attn_3
     (Hopper), prebuilt wheels lack sm120 kernels. Refiner not exposed (base generation
-    only). Dependency stack: torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1,
-    flash-attn 2.8.3.post1. cvl run from external cwd confirmed. Demo artifacts at
+    only). FlashAttention v2 removed (unused by wrapper; upstream runner needs
+    LINGBOT_QWEN_ATTN_IMPLEMENTATION=sdpa env var, not FA2 wheel). Upstream runner
+    parity check: dense T2V with same structured prompt via lingbot_video.runner
+    produces equivalent quality (121f at seed 42). Duration-to-num_frames derivation
+    implemented (upstream formula). Canonical TI2V input linked. Dependency stack:
+    torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1. cvl run from external
+    cwd confirmed. Demo artifacts at
     https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_video.
