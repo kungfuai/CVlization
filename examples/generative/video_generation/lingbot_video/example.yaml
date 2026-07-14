@@ -19,6 +19,8 @@ presets:
     script: predict.sh
     description: Generate video from text prompt (or text+image)
     path_args:
+      - flag: "--prompt-json"
+        type: file
       - flag: "--image"
         type: file
       - flag: "--output"
@@ -50,17 +52,20 @@ description: >
   (~8GB VRAM) and a MoE 30B-A3B model (~3B active parameters, ~80GB peak VRAM).
   Trained on 70,000+ hours of embodied and web video data with physical-rationality
   and task-completion reward alignment. Supports text-to-video, text-to-image,
-  and text+image-to-video generation. Requires detailed multi-sentence prompts.
+  and text+image-to-video generation. Best results with structured JSON prompts
+  (upstream Rewriter format); raw text prompts are best-effort.
 
 verification:
   status: PARTIAL
-  last_verified: "2026-07-12"
+  last_verified: "2026-07-14"
   last_verification_note: >
-    Verified on RTX PRO 6000 Blackwell (98GB VRAM). Tested: T2V dense (81f, 40 steps,
-    ~2m24s, recognizable but with structural artifacts), T2V MoE (81f, 40 steps,
-    ~6m27s, ~80GB peak VRAM, some noise/overexposure in frames), T2I MoE (clear image),
-    TI2V dense (41f, conditioning preserved initially, degrades toward end). T2I dense:
-    poor quality. Short prompts produce abstract output; detailed prompts required.
-    MoE weights ~121GB download. cvl run from external cwd confirmed with host
-    persistence. Demo artifacts at
+    Verified on RTX PRO 6000 Blackwell (98GB VRAM, sm120). Upstream pinned to commit
+    a638721. With structured JSON prompts (--prompt-json): T2V dense (81f, 40 steps,
+    ~2m24s, clean coherent output), TI2V dense (41f, 40 steps, ~58s, conditioning
+    preserved, coherent throughout). Raw text prompts produce lower quality. T2I MoE
+    (clear image). T2I dense: poor quality. MoE T2V not re-tested with structured
+    prompt (121GB download constraint). batch_cfg blocked: requires flash_attn_3 v3
+    (Hopper), prebuilt wheels lack sm120 kernels. Refiner not exposed (base generation
+    only). Dependency stack: torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1,
+    flash-attn 2.8.3.post1. cvl run from external cwd confirmed. Demo artifacts at
     https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_video.

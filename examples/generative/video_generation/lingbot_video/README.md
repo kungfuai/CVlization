@@ -18,20 +18,31 @@ Two model variants are available:
 
 ## Sample Output
 
-**MoE 30B-A3B, T2V** (21 frames, 832x480, 40 steps) -- frame 10.
-Quality note: MoE T2V output may show noise/overexposure in some frames; individual frames
-vary in clarity. Best results require detailed, multi-sentence prompts.
+**Dense 1.3B, T2V with structured prompt** (81 frames, 832x480, 40 steps) -- frames 0 / 40 / 80:
 
-![T2V MoE sample frame](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2v_moe_21f_frame10.png)
+![T2V Dense frame 0](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2v_dense_structured_frame0.png)
+![T2V Dense frame 40](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2v_dense_structured_frame40.png)
+![T2V Dense frame 80](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2v_dense_structured_frame80.png)
 
-**MoE 30B-A3B, T2I** (832x480, 40 steps):
+Full video: [demo_t2v_dense_structured_81f.mp4](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2v_dense_structured_81f.mp4)
 
-![T2I MoE sample](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2i_moe.png)
+**Dense 1.3B, TI2V with structured prompt** (41 frames, 832x480, 40 steps) -- frames 0 / 20 / 40:
 
-**Dense 1.3B, T2V** (81 frames, 832x480, 40 steps) -- frame 40.
-Quality note: Dense variant output is recognizable but may contain structural artifacts.
+![TI2V Dense frame 0](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_ti2v_dense_structured_frame0.png)
+![TI2V Dense frame 20](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_ti2v_dense_structured_frame20.png)
+![TI2V Dense frame 40](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_ti2v_dense_structured_frame40.png)
 
-![T2V Dense sample frame](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_t2v_dense_81f_frame40.png)
+Full video: [demo_ti2v_dense_structured_41f.mp4](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_ti2v_dense_structured_41f.mp4)
+
+## Structured vs Raw Prompts
+
+The upstream DiT inference pipeline is designed for **structured JSON prompts** generated
+by the Rewriter model (Qwen3-VL-27B). Raw natural-language prompts (`--prompt`) work but
+produce lower quality output. For best results, use `--prompt-json` with a structured
+caption file following the format in upstream `docs/en/dit_inference.md`.
+
+A canonical structured prompt is hosted at:
+[zzsi/cvl/lingbot_video/canonical_t2v_prompt.json](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/canonical_t2v_prompt.json)
 
 ## Requirements
 
@@ -49,29 +60,41 @@ cvl run lingbot_video build
 
 ### Run Inference
 
-**Important**: This model produces the best results with detailed, descriptive prompts
-(multiple sentences describing the scene, subject, clothing, camera angle, lighting).
-Short prompts may produce poor or abstract output.
+**With structured prompt (recommended)**:
 
 ```bash
-# Text-to-video with dense 1.3B model (default)
+# Download the canonical structured prompt
+curl -L -o canonical_t2v_prompt.json \
+    https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/canonical_t2v_prompt.json
+
+# Text-to-video with structured prompt
 cvl run lingbot_video predict -- \
-    --prompt "A young woman with long brown hair is standing in a bright apartment. She is wearing a cream cardigan over a white top, paired with beige trousers. The background has a sofa, plant, and large windows with soft natural light. The camera is stationary at eye level."
-
-# Text-to-video with MoE 30B model (needs ~80GB VRAM for 81 frames)
-cvl run lingbot_video predict -- --model moe-30b-a3b \
-    --prompt "A young woman with long brown hair is standing in a bright apartment..."
-
-# Text-to-image (MoE recommended for quality)
-cvl run lingbot_video predict -- --model moe-30b-a3b --mode t2i \
-    --prompt "A detailed scene of a woman in a modern apartment..." --output output.png
+    --prompt-json canonical_t2v_prompt.json
 
 # Text+image-to-video (animate from a reference image)
-cvl run lingbot_video predict -- --image reference.png \
-    --prompt "The woman turns slightly and adjusts her cardigan"
+cvl run lingbot_video predict -- \
+    --prompt-json canonical_t2v_prompt.json --image reference.png
+
+# MoE variant (needs ~80GB VRAM)
+cvl run lingbot_video predict -- --model moe-30b-a3b \
+    --prompt-json canonical_t2v_prompt.json
+```
+
+**With raw text prompt (best-effort)**:
+
+```bash
+# Raw text prompts work but produce lower quality than structured prompts.
+# Use detailed, multi-sentence descriptions for best results.
+cvl run lingbot_video predict -- \
+    --prompt "A young woman with long brown hair standing in a bright apartment. She is wearing a cream cardigan over a white top, paired with beige trousers. The background has a sofa, plant, and large windows with soft natural light. The camera is stationary at eye level."
+
+# Text-to-image (MoE recommended)
+cvl run lingbot_video predict -- --model moe-30b-a3b --mode t2i \
+    --prompt "A detailed scene description..." --output output.png
 
 # Fewer frames for faster inference
-cvl run lingbot_video predict -- --num-frames 21 --steps 20
+cvl run lingbot_video predict -- --num-frames 21 --steps 20 \
+    --prompt "A detailed scene description..."
 ```
 
 ### Arguments
@@ -80,7 +103,8 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20
 |----------|---------|-------------|
 | `--model` | dense-1.3b | Model variant: `dense-1.3b` or `moe-30b-a3b` |
 | `--mode` | t2v | Generation mode: `t2v` (video) or `t2i` (image) |
-| `--prompt` | sample | Text prompt describing the video to generate |
+| `--prompt` | - | Raw text prompt (best-effort quality without Rewriter) |
+| `--prompt-json` | - | Structured prompt JSON file (official format, best quality) |
 | `--negative-prompt` | auto | Negative prompt (auto-loaded from package if empty) |
 | `--image` | - | Conditioning image for text+image-to-video (TI2V) |
 | `--output` | output.mp4 | Output file path |
@@ -92,6 +116,7 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20
 | `--guidance-scale` | 3.0 | CFG guidance scale |
 | `--shift` | 3.0 | Flow matching timestep shift |
 | `--seed` | 42 | Random seed |
+| `--batch-cfg` | false | Batch CFG (requires FlashAttention v3 / Hopper+) |
 | `--verbose` | false | Enable verbose logging |
 
 ## What to Expect
@@ -100,23 +125,32 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20
 - **Output**: MP4 video file (or PNG for T2I mode) in the current directory
 - **Runtime on RTX PRO 6000 Blackwell (98 GB VRAM)**:
   - Dense 1.3B, 81 frames, 40 steps: ~2m24s
+  - Dense 1.3B, 41 frames (TI2V), 40 steps: ~58s
   - MoE 30B-A3B, 81 frames, 40 steps: ~6m27s
-  - MoE 30B-A3B, 21 frames, 40 steps: ~1m28s
 - **Peak VRAM**: Dense ~8 GB, MoE ~80 GB (81 frames at 832x480)
 - **Resolution**: Default 832x480 (landscape). Both dimensions must be multiples of 16
 - **Duration**: Default 81 frames at 24 FPS = ~3.4 seconds of video
-- **Prompt quality**: Detailed, multi-sentence prompts produce far better results than short prompts
 
 ## Limitations
 
-- **Detailed prompts required**: The model was trained on structured captions; short prompts produce poor results. Use multiple sentences describing scene, subject, camera, and lighting.
-- **MoE T2V quality**: MoE T2V output can exhibit noise, overexposure, or corrupted frames, especially at the start of sequences. Quality varies by prompt and seed.
-- **TI2V temporal degradation**: Text+image-to-video preserves the conditioning frame initially but may degrade with visible artifacts toward the end of longer sequences.
-- **Dense variant artifacts**: Dense 1.3B output is recognizable but typically has structural/glitch artifacts compared to MoE.
-- **T2I quality varies**: T2I mode works best with MoE; dense 1.3B produces poor quality single images.
+- **Structured prompts recommended**: The model was trained on structured JSON captions from the Rewriter. Raw text prompts produce lower quality output. The Rewriter (Qwen3-VL-27B) is not included in this example.
+- **Refiner not exposed**: The MoE checkpoint includes a refiner transformer for upscaling base output to higher resolution. This example verifies base generation only; the refiner path is not exposed. See upstream `scripts/inference.py --run_refiner` for the full refiner workflow.
+- **batch_cfg blocked**: The `--batch-cfg` flag requires `flash_attn_interface` (FlashAttention v3 / Hopper). Prebuilt wheels (sm80/sm90a/sm100a) do not cover sm120 (Blackwell Max-Q). Sequential CFG works correctly.
+- **T2I quality varies**: T2I mode works best with MoE; dense 1.3B produces lower quality single images.
 - **MoE VRAM**: The MoE 30B-A3B variant requires ~80 GB VRAM for 81-frame generation at 832x480. Use fewer frames (`--num-frames 21`) to reduce memory.
 - **MoE download size**: The MoE model is ~121 GB (includes transformer + refiner shards). Ensure sufficient disk space.
-- **No prompt rewriter**: The upstream prompt rewriter (Qwen3-VL-27B) is not included; plain text prompts are used directly.
+
+## Pinned Dependencies
+
+Upstream pinned to commit [`a638721`](https://github.com/Robbyant/lingbot-video/commit/a638721cf2271804d02738b69f2ad788c4a559fc).
+
+Resolved dependency stack in Docker image:
+- torch 2.7.0+cu128
+- diffusers 0.39.0
+- transformers 5.13.1
+- flash-attn 2.8.3.post1
+- accelerate 1.14.0
+- peft 0.19.1
 
 ## Links
 
