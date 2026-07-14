@@ -39,5 +39,6 @@ model_source: robbyant/lingbot-vision-vit-large
 license: Apache-2.0
 repository: https://github.com/Robbyant/lingbot-vision
 verification:
-  last_verified: "2026-07-13"
-  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell. ViT-L PCA feature extraction on 2 images (indoor scene, person portrait). Peak VRAM ~1.9 GB. Model cached in ~/.cache/huggingface, second run reuses without re-download. Sample images lazy-downloaded from zzsi/cvl."
+  status: PARTIAL
+  last_verified: "2026-07-14"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell. ViT-L PCA feature extraction on 2 images (indoor scene, person portrait). Peak VRAM ~1.9 GB. Model cached in ~/.cache/huggingface, second run reuses without re-download. Sample images lazy-downloaded from zzsi/cvl. CVL CLI (cvl info/run) verified from external cwd. PARTIAL: sample images reuse existing zzsi/cvl prefixes (no HF write token for dedicated lingbot_vision/ prefix)."
