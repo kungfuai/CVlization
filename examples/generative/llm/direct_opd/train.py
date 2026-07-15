@@ -479,5 +479,5 @@ def train(config_path: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Direct-OPD Training")
     parser.add_argument("--config", default="config.yaml", help="Config file path")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     train(args.config)
