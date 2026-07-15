@@ -1,0 +1,10 @@
+outputs/
+checkpoints/
+data/
+logs/
+wandb/
+*.pt
+*.safetensors
+*.jsonl
+__pycache__/
+*.pyc

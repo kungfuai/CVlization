@@ -1,0 +1,45 @@
+name: direct-opd
+capability: generative/llm
+modalities:
+  - text
+datasets:
+  - Skywork/Skywork-OR1-RL-Data
+stability: experimental
+resources:
+  gpu: 1
+  vram_gb: 24
+  disk_gb: 30
+image: direct_opd
+presets:
+  build:
+    script: build.sh
+    description: Build the Docker image
+  train:
+    script: train.sh
+    description: Run Direct-OPD weak-to-strong distillation training
+tags:
+  - direct-opd
+  - weak-to-strong
+  - on-policy-distillation
+  - reinforcement-learning
+  - qwen
+  - math-reasoning
+  - policy-gradient
+tasks:
+  - text_generation
+  - rl_training
+frameworks:
+  - pytorch
+  - transformers
+description: >
+  Direct On-Policy Distillation (Direct-OPD) — transfer RL-induced policy
+  shifts from a weak teacher to a stronger student without re-running sparse
+  reward RL. Uses per-token log-ratio between post-RL and pre-RL teacher
+  checkpoints as dense implicit reward on student on-policy rollouts.
+verification:
+  last_verified: "2026-07-15"
+  last_verification_note: >
+    Verified on RTX PRO 6000 Blackwell (102 GB). 20-step smoke test completed
+    in 215s (~10.7s/step). Peak VRAM: 20.1 GB. All 3 models loaded in bf16
+    (Qwen3-1.7B student, JustRL-DeepSeek-1.5B teacher, DeepSeek-R1-Distill-Qwen-1.5B
+    teacher ref). Cache reuse verified on second run. Outputs saved to host.
