@@ -57,20 +57,19 @@ description: >
 
 verification:
   status: PARTIAL
-  last_verified: "2026-07-14"
+  last_verified: "2026-07-16"
   last_verification_note: >
-    Verified on RTX PRO 6000 Blackwell (98GB VRAM, sm120). Upstream pinned to commit
-    a638721. With structured JSON prompts (--prompt-json): T2V dense (81f, 40 steps,
-    ~2m24s, clean coherent output), TI2V dense (41f, 40 steps, ~58s, conditioning
-    preserved, coherent throughout). Raw text prompts produce lower quality. T2I MoE
-    (clear image). T2I dense: poor quality. MoE T2V not re-tested with structured
-    prompt (121GB download constraint). batch_cfg blocked: requires flash_attn_3
-    (Hopper), prebuilt wheels lack sm120 kernels. Refiner not exposed (base generation
-    only). FlashAttention v2 removed (unused by wrapper; upstream runner needs
-    LINGBOT_QWEN_ATTN_IMPLEMENTATION=sdpa env var, not FA2 wheel). Upstream runner
-    parity check: dense T2V with same structured prompt via lingbot_video.runner
-    produces equivalent quality (121f at seed 42). Duration-to-num_frames derivation
-    implemented (upstream formula). Canonical TI2V input linked. Dependency stack:
-    torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1. cvl run from external
-    cwd confirmed. Demo artifacts at
+    Verified on RTX PRO 6000 Blackwell (98GB VRAM x2, sm120). Upstream pinned to
+    commit a638721. Full mode matrix with structured JSON prompts (--prompt-json):
+    Dense T2V (81f/40s, ~2m24s, PASS clean), Dense T2I (40s, ~4s, PASS clean),
+    Dense TI2V (41f/40s, ~58s, PASS), MoE T2V (81f/40s, ~6m37s, PASS coherent
+    but edge vignetting), MoE T2I (40s, ~27s, PASS clean), MoE TI2V (41f/40s,
+    ~3m10s, PASS excellent physical dynamics). Dense T2I quality now PASS with
+    official structured prompt (prior poor result was raw text). batch_cfg disabled:
+    no prebuilt FA3 wheel with SM120 kernels (FA3 targets SM80/SM90a/SM100a only).
+    Refiner blocked: single GPU OOM (base 94GB + refiner 60GB), FSDP 2-GPU crashes
+    with CUDA error on SM120. FlashAttention not installed (wrapper uses SDPA).
+    Upstream runner parity confirmed (dense T2V, seed 42). Duration-to-num_frames
+    with test_duration_frames.py. Canonical prompts for all modes hosted. Stack:
+    torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1. Demo artifacts at
     https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_video.

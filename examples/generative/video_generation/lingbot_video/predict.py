@@ -410,13 +410,16 @@ def main():
         help="Random seed for reproducibility",
     )
 
-    # Performance
+    # Performance — batch_cfg is intentionally disabled.
+    # It requires flash_attn_3 (top-level flash_attn_interface package) which
+    # only ships Hopper (SM90a) and Ampere (SM80) kernels. No prebuilt FA3
+    # wheel includes SM120 (Blackwell) or SM100a varlen support. Sequential
+    # CFG works correctly on all GPU architectures via PyTorch native SDPA.
     parser.add_argument(
         "--batch-cfg",
         action="store_true",
-        help="Batch conditional and unconditional CFG passes into a single "
-             "forward pass (requires FlashAttention). May improve throughput "
-             "but does not change output quality.",
+        help="UNSUPPORTED: requires FlashAttention v3 with SM120 kernels "
+             "(no prebuilt wheel exists). Use sequential CFG (default).",
     )
 
     # Debug
@@ -433,6 +436,17 @@ def main():
         logging.basicConfig(level=logging.INFO, force=True)
         for name in ["transformers", "diffusers", "torch", "accelerate"]:
             logging.getLogger(name).setLevel(logging.INFO)
+
+    # Guard: reject --batch-cfg (no FA3 prebuilt wheel with SM120 support)
+    if args.batch_cfg:
+        print(
+            "Error: --batch-cfg is unsupported. It requires FlashAttention v3 "
+            "(top-level flash_attn_interface package) with SM120 (Blackwell) "
+            "kernels. No prebuilt wheel exists. Sequential CFG (default) works "
+            "correctly on all GPU architectures.",
+            flush=True,
+        )
+        sys.exit(1)
 
     # Select model repo
     model_id = DENSE_REPO if args.model == "dense-1.3b" else MOE_REPO

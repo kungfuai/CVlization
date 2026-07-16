@@ -36,6 +36,34 @@ Full video: [demo_ti2v_dense_structured_41f.mp4](https://huggingface.co/datasets
 
 Canonical TI2V input image: [ti2v_input.png](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/ti2v_input.png)
 
+**Dense 1.3B, T2I with structured prompt** (832x480, 40 steps):
+
+![T2I Dense](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_dense_t2i_structured.png)
+
+**MoE 30B-A3B, T2I with structured prompt** (832x480, 40 steps):
+
+![T2I MoE](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_t2i_structured.png)
+
+**MoE 30B-A3B, T2V with structured prompt** (81 frames, 832x480, 40 steps) -- frames 0 / 40 / 80:
+
+![T2V MoE frame 0](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_t2v_structured_frame0.png)
+![T2V MoE frame 40](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_t2v_structured_frame40.png)
+![T2V MoE frame 80](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_t2v_structured_frame80.png)
+
+Full video: [demo_moe_t2v_structured_81f.mp4](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_t2v_structured_81f.mp4)
+
+Note: MoE T2V with sequential CFG shows edge vignetting and painterly texture compared to dense. This may improve with batch_cfg (blocked, see Limitations).
+
+**MoE 30B-A3B, TI2V with structured prompt** (41 frames, 832x480, 40 steps) -- frames 0 / 20 / 40:
+
+![TI2V MoE frame 0](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_ti2v_structured_frame0.png)
+![TI2V MoE frame 20](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_ti2v_structured_frame20.png)
+![TI2V MoE frame 40](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_ti2v_structured_frame40.png)
+
+Full video: [demo_moe_ti2v_structured_41f.mp4](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/demo_moe_ti2v_structured_41f.mp4)
+
+Canonical TI2V input: [ti2v_first_frame_whiskey.png](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/ti2v_first_frame_whiskey.png) (upstream `assets/cases/ti2v/example_1/first_frame.png`)
+
 ## Structured vs Raw Prompts
 
 The upstream DiT inference pipeline is designed for **structured JSON prompts** generated
@@ -43,8 +71,10 @@ by the Rewriter model (Qwen3-VL-27B). Raw natural-language prompts (`--prompt`) 
 produce lower quality output. For best results, use `--prompt-json` with a structured
 caption file following the format in upstream `docs/en/dit_inference.md`.
 
-A canonical structured prompt is hosted at:
-[zzsi/cvl/lingbot_video/canonical_t2v_prompt.json](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/canonical_t2v_prompt.json)
+Canonical structured prompts are hosted at:
+- T2V/T2I: [canonical_t2v_prompt.json](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/canonical_t2v_prompt.json)
+- T2I-specific: [canonical_t2i_prompt.json](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/canonical_t2i_prompt.json)
+- TI2V: [canonical_ti2v_prompt.json](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_video/canonical_ti2v_prompt.json)
 
 ## Requirements
 
@@ -121,7 +151,7 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20 \
 | `--guidance-scale` | 3.0 | CFG guidance scale |
 | `--shift` | 3.0 | Flow matching timestep shift |
 | `--seed` | 42 | Random seed |
-| `--batch-cfg` | false | Batch CFG (requires FlashAttention v3 / Hopper+) |
+| `--batch-cfg` | false | UNSUPPORTED: requires FA3 with SM120 kernels (no prebuilt wheel) |
 | `--verbose` | false | Enable verbose logging |
 
 ## What to Expect
@@ -129,19 +159,22 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20 \
 - **First run**: Downloads model weights from HuggingFace (~5 GB dense, ~121 GB MoE), cached afterward
 - **Output**: MP4 video file (or PNG for T2I mode) in the current directory
 - **Runtime on RTX PRO 6000 Blackwell (98 GB VRAM)**:
-  - Dense 1.3B, 81 frames, 40 steps: ~2m24s
-  - Dense 1.3B, 41 frames (TI2V), 40 steps: ~58s
-  - MoE 30B-A3B, 81 frames, 40 steps: ~6m27s
+  - Dense T2V, 81 frames, 40 steps: ~2m24s
+  - Dense T2I, 40 steps: ~4s
+  - Dense TI2V, 41 frames, 40 steps: ~58s
+  - MoE T2V, 81 frames, 40 steps: ~6m37s
+  - MoE T2I, 40 steps: ~27s
+  - MoE TI2V, 41 frames, 40 steps: ~3m10s
 - **Peak VRAM**: Dense ~8 GB, MoE ~80 GB (81 frames at 832x480)
 - **Resolution**: Default 832x480 (landscape). Both dimensions must be multiples of 16
-- **Duration**: Default 81 frames at 24 FPS = ~3.4 seconds of video
+- **Duration**: Default 81 frames at 24 FPS = ~3.4 seconds. If `--prompt-json` includes `duration`, frame count is derived automatically
 
 ## Limitations
 
 - **Structured prompts recommended**: The model was trained on structured JSON captions from the Rewriter. Raw text prompts produce lower quality output. The Rewriter (Qwen3-VL-27B) is not included in this example.
-- **Refiner not exposed**: The MoE checkpoint includes a refiner transformer for upscaling base output to higher resolution. This example verifies base generation only; the refiner path is not exposed. See upstream `scripts/inference.py --run_refiner` for the full refiner workflow.
-- **batch_cfg blocked**: The `--batch-cfg` flag requires `flash_attn_interface` (FlashAttention v3 / Hopper). Prebuilt wheels (sm80/sm90a/sm100a) do not cover sm120 (Blackwell Max-Q). Sequential CFG works correctly.
-- **T2I quality varies**: T2I mode works best with MoE; dense 1.3B produces lower quality single images.
+- **MoE T2V edge vignetting**: MoE T2V with sequential CFG shows pillarbox edge bars and painterly texture. MoE TI2V does not exhibit this. The issue may be related to batch_cfg being unavailable (see below).
+- **Refiner blocked**: The MoE checkpoint includes a refiner transformer (~60GB bf16) for upscaling base output. Tested: single GPU OOM (base ~94GB + refiner ~60GB > 98GB), FSDP across 2 GPUs crashes with CUDA memory error on SM120. The upstream runner preloads both models simultaneously with no sequential loading mode. See upstream `--run_refiner` for the workflow.
+- **batch_cfg disabled**: The `--batch-cfg` flag requires `flash_attn_interface` (FlashAttention v3). No prebuilt FA3 wheel includes SM120 (Blackwell) kernels. FA3 `hopper/setup.py` targets SM80/SM90a/SM100a only. FA4 supports SM120 via JIT but uses a different API. Sequential CFG works correctly via PyTorch native SDPA.
 - **MoE VRAM**: The MoE 30B-A3B variant requires ~80 GB VRAM for 81-frame generation at 832x480. Use fewer frames (`--num-frames 21`) to reduce memory.
 - **MoE download size**: The MoE model is ~121 GB (includes transformer + refiner shards). Ensure sufficient disk space.
 
