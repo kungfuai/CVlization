@@ -54,8 +54,10 @@ verification:
   status: PARTIAL
   last_verified: "2026-07-16"
   last_verification_note: >
-    Build PASS (955 MB image, pinned upstream 2d317da). Dry-run smoke test
-    PASS (structured JSON output, trajectory+memory artifacts collected,
-    host persistence verified). Full inference SKIPPED: requires external
-    OpenAI-compatible VLM endpoint. ADB backend SKIPPED: no Android device
-    available. iOS/HarmonyOS backends UNTESTED.
+    Build PASS (955 MB image, pinned upstream 2d317da). Dry-run with VLM
+    PASS on RTX PRO 6000 Blackwell (98 GB): Qwen3-VL-8B-Instruct via
+    vLLM 0.21.0 (--enable-auto-tool-choice --tool-call-parser hermes).
+    15 steps across 3 attempts, tool calls with computer_use function,
+    26073 tokens consumed, 22.95s wall. Trajectory, memory (policy.md),
+    host persistence all verified. ADB backend SKIPPED: no Android device.
+    iOS/HarmonyOS UNTESTED.

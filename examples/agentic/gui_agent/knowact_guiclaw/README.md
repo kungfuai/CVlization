@@ -29,12 +29,19 @@ Key capabilities demonstrated:
 
 ## Prerequisites
 
-An OpenAI-compatible VLM endpoint must be running. For example, serve
-Qwen3.5-35B-A3B with vLLM:
+An OpenAI-compatible VLM endpoint must be running. GUIClaw uses tool calling
+(function calling), so vLLM must be started with `--enable-auto-tool-choice`
+and a compatible `--tool-call-parser`. Example with Qwen3-VL-8B-Instruct:
 
 ```bash
-vllm serve Qwen/Qwen3.5-35B-A3B --tensor-parallel-size 2
+vllm serve Qwen/Qwen3-VL-8B-Instruct \
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes \
+    --max-model-len 4096 \
+    --gpu-memory-utilization 0.5
 ```
+
+For larger models (e.g. Qwen3.5-35B-A3B), add `--tensor-parallel-size 2`.
 
 For Android automation, connect a device or start an emulator with ADB:
 
@@ -50,13 +57,13 @@ adb devices  # verify device is connected
 
 # Dry-run (plans actions, no device needed)
 GUICLAW_BASE_URL=http://localhost:8000/v1 \
-GUICLAW_MODEL=Qwen/Qwen3.5-35B-A3B \
+GUICLAW_MODEL=Qwen/Qwen3-VL-8B-Instruct \
 ./predict.sh --task "Open the Settings app and navigate to Wi-Fi"
 
 # With Android device
 GUICLAW_BACKEND=adb \
 GUICLAW_BASE_URL=http://localhost:8000/v1 \
-GUICLAW_MODEL=Qwen/Qwen3.5-35B-A3B \
+GUICLAW_MODEL=Qwen/Qwen3-VL-8B-Instruct \
 ./predict.sh --task "Open Settings and enable Wi-Fi"
 ```
 
