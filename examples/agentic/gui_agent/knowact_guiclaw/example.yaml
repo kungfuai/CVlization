@@ -22,6 +22,11 @@ presets:
       Run GUIClaw in dry-run or live mode. Requires an OpenAI-compatible
       VLM endpoint. Set GUICLAW_BASE_URL, GUICLAW_MODEL, GUICLAW_BACKEND.
       Default: dry-run with Qwen3.5-35B-A3B.
+  test:
+    script: test.sh
+    description: >
+      Smoke test exercising cvl info, cvl run build, cvl run predict
+      (dry-run), and host artifact verification.
 tags:
   - gui-agent
   - computer-use
