@@ -59,7 +59,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                    help="Override the provider's light-tier model id (extraction / synthesis).")
     p.add_argument("--search-provider", default=os.environ.get("SF_SEARCH_PROVIDER", ""),
                    help="web mode: serper | tavily (default: auto-detect from present API key).")
-    p.add_argument("--output-dir", default=os.environ.get("SEARCHOS_OUTPUT_DIR", "./artifacts"),
+    p.add_argument("--output-dir", default=os.environ.get("SEARCHOS_OUTPUT_DIR", "./searchos_outputs"),
                    help="Where to write the workspace + collected artifacts.")
     p.add_argument("--max-parallel-agents", type=int, default=3,
                    help="Cap on concurrent sub-agents (keeps the demo bounded/cheap).")

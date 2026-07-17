@@ -23,7 +23,8 @@ presets:
       judge-based extraction -> synthesis — runs with only an LLM key (default
       provider `openai`; pass OPENAI_API_KEY). Writes report.md (citation-grounded
       answer), search_state.json (full SOCM state: coverage map + evidence graph +
-      frontier queue + failure memory), and summary.json to ./artifacts/.
+      frontier queue + failure memory), and summary.json to searchos_outputs/ in
+      the caller's working directory (override with SEARCHOS_OUTPUTS).
       Custom query: `./run.sh -- "your open-domain question"`.
       Live web search: `./run.sh -- --mode web "your question"` (needs
       SERPER_API_KEY or TAVILY_API_KEY in addition to the LLM key).
@@ -69,6 +70,14 @@ description: >-
   schema completion.
 
 verification:
-  last_verified: ""
-  last_verification_note: ""
-  status: UNVERIFIED
+  last_verified: "2026-07-17"
+  last_verification_note: >-
+    Offline mode verified end-to-end on CPU (macOS/arm64 Docker) with
+    --model gpt-4.1 --fast-model gpt-4.1-mini: 16/16 coverage cells filled,
+    every evidence value matches corpus.json ground truth, 9/12 attribute
+    cells anchored to the exact corpus page with verbatim source excerpts,
+    remaining cells explicitly labeled orchestrator-asserted/explore-seeded
+    (values correct). Grounding audited programmatically against the corpus.
+    Web mode (Serper/Tavily) not run: no search API key on the verification
+    host; its no-key guard verified to fail fast with a clear message.
+  status: PARTIAL
