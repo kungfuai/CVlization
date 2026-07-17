@@ -1,0 +1,74 @@
+name: agentic-searchos
+capability: agentic/research
+modalities:
+  - language
+  - code
+stability: experimental
+resources:
+  gpu: 0        # pure API-based LLM orchestration; runs on CPU
+  vram_gb: 0
+  disk_gb: 1    # python:3.12-slim + searchos (no torch / CUDA)
+image: searchos
+presets:
+  build:
+    script: build.sh
+    description: Build the searchos image (python:3.12-slim + searchos[tavily] pinned to an upstream commit, CPU-only).
+  run:
+    script: run.sh
+    description: |
+      Run one SearchOS open-domain research session end-to-end. Default is the
+      keyless **offline** mode: a bundled local corpus (corpus.json) is served
+      through SearchOS's pluggable SearchProvider, so the full multi-agent
+      pipeline — Explore -> coverage-map schema -> pipelined sub-agents ->
+      judge-based extraction -> synthesis — runs with only an LLM key (default
+      provider `openai`; pass OPENAI_API_KEY). Writes report.md (citation-grounded
+      answer), search_state.json (full SOCM state: coverage map + evidence graph +
+      frontier queue + failure memory), and summary.json to ./artifacts/.
+      Custom query: `./run.sh -- "your open-domain question"`.
+      Live web search: `./run.sh -- --mode web "your question"` (needs
+      SERPER_API_KEY or TAVILY_API_KEY in addition to the LLM key).
+tags:
+  - searchos
+  - multi-agent
+  - deep-research
+  - open-domain-information-seeking
+  - agentic-search
+  - socm
+  - coverage-map
+  - evidence-graph
+  - citation-grounded
+  - langgraph
+  - langchain
+  - openai-compatible
+  - anthropic-protocol
+tasks:
+  - open_domain_research
+  - multi_agent_search
+  - information_seeking
+  - structured_extraction
+frameworks:
+  - python
+  - langgraph
+  - langchain
+  - searchos
+
+description: >-
+  SearchOS (Ant Group, arXiv:2607.15257) is a multi-agent collaboration system
+  for open-domain information seeking / "deep research". It compiles a question
+  into a normalized entity×attribute coverage map, dispatches empty cells to
+  pipelined-parallel sub-agents, writes every (entity, attribute, value, source)
+  fact into a shared evidence graph (SOCM — Search-Oriented Context Management),
+  and synthesizes a citation-grounded answer. This example wraps SearchOS as a
+  thin, reproducible orchestration demo. The default offline mode swaps the web
+  search API for a bundled local corpus so the entire pipeline — and the SOCM
+  coverage map / evidence graph / failure memory — runs end-to-end with only an
+  LLM key; the same pipeline drives live Serper/Tavily web search in `--mode web`.
+  Distinct from `agentic/web/browser_use` (single browser agent) and `agentic/rag`
+  (retrieval-augmented QA): SearchOS contributes search-state-as-a-system-asset,
+  pipelined-parallel sub-agent scheduling, and citation-grounded relational
+  schema completion.
+
+verification:
+  last_verified: ""
+  last_verification_note: ""
+  status: UNVERIFIED

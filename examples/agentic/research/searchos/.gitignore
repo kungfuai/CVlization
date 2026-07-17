@@ -1,0 +1,7 @@
+artifacts/
+workspace/
+searchos_workspace/
+outputs/
+__pycache__/
+*.pyc
+.env
