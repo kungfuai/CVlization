@@ -19,6 +19,16 @@ ARG SEARCHOS_REF=361373bfc7196697a9bcd4731dfc34880790f4aa
 RUN pip install --no-cache-dir \
       "searchos[tavily] @ git+https://github.com/antins-labs/SearchOS.git@${SEARCHOS_REF}"
 
+# Two surgical grounding patches (see patch_search_persona.py for the full
+# rationale): (1) reword the search-agent persona so gpt-4.1-class models
+# don't read "end with no tool call" as license to answer from prior
+# knowledge without ever searching; (2) add an SF_ENABLE_SUMMARY_REPLAY env
+# gate so hallucinated sub-agent summaries can't fill coverage cells as
+# unanchored agent:// evidence. Exact-match patches: the build fails if the
+# upstream text drifts, so they can't rot silently.
+COPY patch_search_persona.py /tmp/patch_search_persona.py
+RUN python /tmp/patch_search_persona.py && rm /tmp/patch_search_persona.py
+
 WORKDIR /workspace
 COPY run_search.py local_corpus_provider.py corpus.json /workspace/
 

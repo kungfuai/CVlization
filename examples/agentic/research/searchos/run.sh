@@ -14,7 +14,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMG="${CVL_IMAGE:-searchos}"
 
 # Host artifacts dir (bind-mounted to /work/outputs in the container).
-OUTPUTS_DIR="${SEARCHOS_OUTPUTS:-${SCRIPT_DIR}/artifacts}"
+# Defaults to <caller cwd>/searchos_outputs so `cvl run` (which sets
+# CVL_WORK_DIR to the user's cwd) persists artifacts on the host.
+WORK_DIR="${CVL_WORK_DIR:-$(pwd)}"
+OUTPUTS_DIR="${SEARCHOS_OUTPUTS:-${WORK_DIR}/searchos_outputs}"
 mkdir -p "${OUTPUTS_DIR}"
 
 DOCKER_ARGS=(run --rm)

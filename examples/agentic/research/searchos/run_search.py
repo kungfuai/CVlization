@@ -91,6 +91,10 @@ def _configure_env(args: argparse.Namespace) -> None:
     os.environ["SF_MAX_PARALLEL_AGENTS"] = str(args.max_parallel_agents)
     os.environ["SF_ORCH_MAX_ITERATIONS"] = str(args.max_iterations)
     os.environ["SF_DEFAULT_MAX_TIME_S"] = str(args.max_time_s)
+    # gpt-4.1-class orchestrators tend to end their turn while sub-agents are
+    # still browsing; the harness re-prompts ("premature end resume") up to
+    # this many times so in-flight agents can land their anchored evidence.
+    os.environ.setdefault("SF_ORCH_PREMATURE_END_MAX_RESUMES", "5")
     os.environ["SF_ENABLE_SKILLS"] = "true" if args.enable_skills else "false"
     os.environ["SF_ENABLE_SKILL_ROUTER"] = "true" if args.enable_skills else "false"
 
@@ -99,6 +103,12 @@ def _configure_env(args: argparse.Namespace) -> None:
     # That keeps every filled cell backed by an actual page-open (tier-2 anchored
     # evidence with a real source URL) instead of an unsourced scout guess.
     os.environ["SF_ENABLE_EXPLORE_REPLAY"] = "false"
+    # Same for the search sub-agents' final summaries (gate added by this
+    # example's build-time patch, see patch_search_persona.py): a hallucinated
+    # summary must not fill coverage cells as agent://…/final_summary evidence.
+    # With replay off, cells fill only from anchored page-open extraction, and
+    # an un-grounded cell stays open for re-dispatch.
+    os.environ["SF_ENABLE_SUMMARY_REPLAY"] = "false"
 
     workspace = str(Path(args.output_dir).resolve() / "workspace")
     os.environ["SF_WORKSPACE_ROOT"] = workspace
