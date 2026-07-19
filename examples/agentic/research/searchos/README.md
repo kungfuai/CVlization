@@ -171,10 +171,10 @@ offline mode; 16/16 cells filled, every value matches `corpus.json`, 9/12
 attribute cells page-anchored with verbatim excerpts):
 
 The complete artifact bundle from that run is committed in
-[`sample_output/`](sample_output/) —
-[`report.md`](sample_output/report.md) (the citation-grounded answer),
-[`summary.json`](sample_output/summary.json) (verdict / coverage / tokens),
-and [`search_state.json`](sample_output/search_state.json) (**the central
+[`sample_run/`](sample_run/) —
+[`report.md`](sample_run/report.md) (the citation-grounded answer),
+[`summary.json`](sample_run/summary.json) (verdict / coverage / tokens),
+and [`search_state.json`](sample_run/search_state.json) (**the central
 artifact**: the full SOCM state — coverage map, evidence graph with per-cell
 source URLs and verbatim `source_excerpt` quotes, frontier queue, strategy
 log). The excerpts below are a preview of those files:
