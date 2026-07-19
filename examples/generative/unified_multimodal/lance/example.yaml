@@ -41,6 +41,17 @@ frameworks:
   - transformers
 
 verification:
-  last_verified: 2026-07-12
-  last_verification_note: "All three modes verified (t2i, x2t_image, image_edit) on RTX PRO 6000 Blackwell (98GB). Model cache 39GB. Sample data lazy-downloaded from zzsi/cvl. Host persistence via cvl run confirmed."
+  last_verified: 2026-07-19
+  last_verification_note: >
+    All three modes verified (t2i, x2t_image, image_edit) at 768px/5 steps on
+    RTX PRO 6000 Blackwell (98 GB). Peak VRAM measured at 200ms polling:
+    t2i 35.9 GB, x2t_image 29.3 GB, image_edit 31.3 GB (process-level).
+    Baseline 15 MiB idle, fully released post-run. Model cache 39 GB.
+    Sample data lazy-downloaded from zzsi/cvl. Host persistence via cvl run confirmed.
+    40 GB GPU compatibility not independently tested.
+  peak_vram_gb:
+    t2i: 35.9
+    x2t_image: 29.3
+    image_edit: 31.3
+  tested_gpu: "NVIDIA RTX PRO 6000 Blackwell Max-Q (98 GB)"
   status: VERIFIED

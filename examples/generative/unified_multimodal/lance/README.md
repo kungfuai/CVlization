@@ -95,11 +95,17 @@ on first run (~39 GB, cached afterward).
 
 ## Hardware Requirements
 
-- **GPU**: NVIDIA GPU with >= 40 GB VRAM (A100, A6000, etc.) —
-  *unverified upstream estimate; tested on 98 GB only*
+- **GPU**: NVIDIA GPU with >= 40 GB VRAM (A100, A6000, etc.)
+- **Measured peak VRAM** (768px, 5 steps, RTX PRO 6000 Blackwell 98 GB):
+  | Mode | Peak process VRAM |
+  |------|------------------|
+  | t2i | 35.9 GB |
+  | x2t_image | 29.3 GB |
+  | image_edit | 31.3 GB |
 - **Disk**: ~39 GB for model weights + Docker image
-- **Note**: The 3B model may fit on 24 GB GPUs for image-only tasks at
-  lower resolution, but this is not officially supported by upstream.
+- **Note**: Peak was measured on a 98 GB GPU. A 40 GB GPU (A100/A6000)
+  has not been independently tested but the measured peak (36 GB for t2i)
+  suggests it should fit. 24 GB GPUs are unlikely to work at 768px.
 
 ## References
 
