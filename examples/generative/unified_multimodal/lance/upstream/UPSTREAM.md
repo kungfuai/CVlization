@@ -27,7 +27,7 @@ upstream/
   modeling/                    # Lance model, Qwen2 LLM, VIT, VAE
 ```
 
-Total: 47 files, ~788 KB (vs. 229 MB full repo with .git and assets).
+Total: 48 files, 619 KB (vs. 229 MB full repo with .git and assets).
 
 ## Intentionally omitted paths
 

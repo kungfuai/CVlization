@@ -76,9 +76,15 @@ def download_model(model_id: str, cache_dir: str | None = None) -> Path:
     return Path(snapshot_path)
 
 
-def setup_downloads_symlink(snapshot_path: Path) -> None:
-    """Create downloads/ symlink in the Lance repo so default paths resolve."""
-    downloads_dir = LANCE_REPO / "downloads"
+def setup_downloads_symlink(snapshot_path: Path, work_dir: Path) -> None:
+    """Create downloads/ symlink in work_dir so upstream paths resolve.
+
+    The upstream inference script expects a `downloads/` directory relative to
+    its cwd containing Lance_3B/, Qwen2.5-VL-ViT/, Wan2.2_VAE.pth.  We place
+    the symlink in the temporary work directory (not in the vendored upstream/
+    tree) to keep upstream/ read-only.
+    """
+    downloads_dir = work_dir / "downloads"
     if downloads_dir.is_symlink() or downloads_dir.exists():
         if downloads_dir.is_symlink():
             downloads_dir.unlink()
@@ -150,8 +156,14 @@ def run_lance_inference(
     num_steps: int,
     cfg_scale: float,
     timestep_shift: float,
+    work_dir: Path,
 ) -> None:
-    """Invoke the upstream Lance inference_lance.py via accelerate."""
+    """Invoke the upstream Lance inference_lance.py via accelerate.
+
+    The subprocess runs with *work_dir* as its cwd so it finds the
+    ``downloads/`` symlink there, while LANCE_REPO stays on PYTHONPATH
+    for module imports.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Use accelerate launch for proper TrainingArguments compatibility
@@ -195,7 +207,7 @@ def run_lance_inference(
     env["PYTHONPATH"] = str(LANCE_REPO) + ":" + env.get("PYTHONPATH", "")
 
     print(f"[lance] Running {task} inference ...", flush=True)
-    result = subprocess.run(cmd, env=env, cwd=str(LANCE_REPO))
+    result = subprocess.run(cmd, env=env, cwd=str(work_dir))
     if result.returncode != 0:
         print(f"[lance] Inference exited with code {result.returncode}", flush=True)
         sys.exit(result.returncode)
@@ -316,12 +328,6 @@ Examples:
         default=DEFAULT_CFG_SCALE,
         help=f"Classifier-free guidance scale (default: {DEFAULT_CFG_SCALE})",
     )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="auto",
-        help="Device to use (default: auto)",
-    )
     args = parser.parse_args()
 
     # Default --edit-instruction when not provided
@@ -343,14 +349,17 @@ Examples:
         if not os.path.isfile(input_image):
             parser.error(f"Input image not found: {input_image}")
 
-    # Download model
+    # Create temp working directory — used as cwd for the inference subprocess
+    # so that the `downloads/` symlink lives here (not in vendored upstream/).
+    work_dir = Path(tempfile.mkdtemp(prefix="lance_"))
+
+    # Download model and link into work_dir
     snapshot_path = download_model(args.model_id)
-    setup_downloads_symlink(snapshot_path)
+    setup_downloads_symlink(snapshot_path, work_dir)
 
     model_path = str(snapshot_path / "Lance_3B")
 
     # Create task-specific example JSON
-    work_dir = Path(tempfile.mkdtemp(prefix="lance_"))
     gen_output_dir = work_dir / "results"
 
     if args.task == "t2i":
@@ -381,14 +390,17 @@ Examples:
         num_steps=args.num_steps,
         cfg_scale=args.cfg_scale,
         timestep_shift=DEFAULT_TIMESTEP_SHIFT,
+        work_dir=work_dir,
     )
 
     # Collect results — resolve output dir via cvlization paths for host persistence
-    final_dir = Path(args.output_dir)
     try:
         from cvlization.paths import resolve_output_path
+        # resolve_output_path expects a file path; append a dummy filename,
+        # then take the parent to get the directory.
         resolved = resolve_output_path(
-            args.output_dir.rstrip("/") + "/", default_filename="output"
+            os.path.join(args.output_dir, "placeholder"),
+            default_filename="placeholder",
         )
         final_dir = Path(resolved).parent
     except ImportError:

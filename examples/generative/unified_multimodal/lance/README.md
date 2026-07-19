@@ -19,8 +19,8 @@ three capabilities from one Docker container.
   default VQA/edit demos.
 - **Task**: Default mode is text-to-image (768x768 PNG). VQA and image
   editing use a canonical sample image when `--input-image` is omitted.
-- **Output location**: Saved to your current working directory (e.g.,
-  `000000.png`, `metrics.json`).
+- **Output location**: Saved to `--output-dir` (default: `./artifacts`).
+  E.g., `artifacts/000000.png`, `artifacts/metrics.json`.
 - **Runtime**: ~18s model loading + ~7s inference at 30 steps on an
   RTX PRO 6000 Blackwell. Use `--num-steps 5` for fast validation (~2.5s
   inference).
@@ -88,14 +88,15 @@ on first run (~39 GB, cached afterward).
 
 ## Output
 
-- **t2i**: PNG image (e.g., `000000.png`) saved to current working directory
-- **x2t_image**: JSON with question-answer pairs (`result.json`)
-- **image_edit**: Edited PNG image saved to current working directory
+- **t2i**: PNG image (e.g., `000000.png`) saved to `--output-dir`
+- **x2t_image**: JSON with question-answer pairs (`result.json`) in `--output-dir`
+- **image_edit**: Edited PNG image saved to `--output-dir`
 - All tasks produce `metrics.json` summarizing the run.
 
 ## Hardware Requirements
 
-- **GPU**: NVIDIA GPU with >= 40 GB VRAM (A100, A6000, etc.)
+- **GPU**: NVIDIA GPU with >= 40 GB VRAM (A100, A6000, etc.) —
+  *unverified upstream estimate; tested on 98 GB only*
 - **Disk**: ~39 GB for model weights + Docker image
 - **Note**: The 3B model may fit on 24 GB GPUs for image-only tasks at
   lower resolution, but this is not officially supported by upstream.
