@@ -145,6 +145,45 @@ api.upload_file(
 )
 ```
 
+### 1c. Upstream Source Strategy
+
+When an example depends on an upstream research repository that is not
+available as a suitable versioned package, review how its source enters the
+example. A Dockerfile `git clone` is not automatically the best choice.
+
+Choose deliberately:
+
+- Use a released package when it exposes the required, compatible API.
+- Consider vendoring a minimal, coherent inference subset when the code is
+  small, permissively licensed, likely to need local compatibility fixes, and
+  practical to test as part of CVlization.
+- Retain an external checkout when the repository is large, changes rapidly,
+  relies on submodules or native build machinery, or cannot be separated
+  without creating a fragile partial copy.
+
+For vendored source, prefer an example-local `upstream/` directory. The
+example name is already supplied by its parent directory, so avoid redundant
+layouts such as `vendor/<example_name>/`. Verify that:
+
+- `upstream/UPSTREAM.md` records the repository URL, exact source commit,
+  intentionally omitted paths, and CVlization modifications.
+- Upstream copyright headers and all required `LICENSE` and `NOTICE` files are
+  retained.
+- The vendored tree excludes model weights, datasets, demo media, Git
+  metadata, build outputs, and unrelated training or UI code.
+- CVlization integration remains in the root wrapper when possible; upstream
+  files are changed only when necessary and deviations are documented.
+- The selected tree is a coherent runtime dependency, not copied functions
+  whose hidden imports or configuration files were missed.
+
+For an external checkout, pin an immutable commit, fetch only that revision,
+and remove `.git` from the final image. Do not clone an unpinned branch or
+perform a full-history clone followed by `git checkout`.
+
+Changing between checkout and vendored source invalidates prior runtime
+evidence. Rebuild and rerun every advertised primary mode before retaining
+`VERIFIED`.
+
 ### 2. Build Verification
 
 ```bash
@@ -611,7 +650,8 @@ An inference example passes verification when:
 9. ✅ **Caching**: Models/data remain outside the image and a second run proves shared-cache reuse
 10. ✅ **CVL CLI**: `cvl info <name>` and build/predict presets work
 11. ✅ **Documentation**: README states first-run cost, behavior, output location/format, runtime, canonical inputs, and curated representative outputs
-12. ✅ **Verification Metadata**: `verification.status` matches the rules above and the note names exact coverage and limitations
+12. ✅ **Upstream Source**: Package, vendored source, or pinned checkout is a deliberate and reproducible choice with required provenance and licensing
+13. ✅ **Verification Metadata**: `verification.status` matches the rules above and the note names exact coverage and limitations
 
 ## Related Files
 
