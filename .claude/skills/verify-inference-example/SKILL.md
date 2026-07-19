@@ -391,34 +391,73 @@ grep -i "downloading" second_run.log
 
 **GPU VRAM Usage Monitoring (REQUIRED for GPU models):**
 
-Monitor GPU VRAM usage before, during, and after inference:
+Measure VRAM for every primary mode from model loading through inference and
+shutdown. A one-time `nvidia-smi` query or manually watching `watch nvidia-smi`
+does not establish a peak: short-lived allocations can occur between samples.
+
+Use an otherwise-idle GPU and a polling interval of 100-250 ms. The wrapper
+below records both device memory and the sum of compute-process memory on the
+selected GPU UUID, stops its monitor on exit, and preserves the inference
+command's exit status.
 
 ```bash
-# In another terminal, watch GPU memory in real-time
-watch -n 1 nvidia-smi
+repo_root=$(git rev-parse --show-toplevel)
+vram_monitor="$repo_root/.claude/skills/verify-inference-example/scripts/monitor_vram.sh"
 
-# Or get detailed memory breakdown
-nvidia-smi --query-gpu=index,name,memory.used,memory.total,memory.free,utilization.gpu --format=csv,noheader,nounits
+# Confirm the selected GPU is idle and note its UUID and total memory.
+nvidia-smi \
+    --query-gpu=index,name,uuid,memory.used,memory.total,utilization.gpu \
+    --format=csv,noheader
+nvidia-smi \
+    --query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory \
+    --format=csv,noheader
 
-# Record peak VRAM usage during inference
-nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | awk '{print $1 " MB"}'
+# Repeat with the canonical command for every primary mode.
+"$vram_monitor" /tmp/vram-<mode>.csv 0 -- \
+    bash predict.sh <canonical-mode-arguments>
 ```
 
-**Expected metrics:**
+**Measurement validity rules:**
+- Confirm the selected GPU has no competing compute processes before each run.
+  If it is shared or becomes contaminated, do not subtract the baseline and
+  call the result clean; wait or rerun on an idle GPU.
+- Record an observed peak for every primary mode and materially different
+  configuration. Include resolution, batch size, sequence/frame count,
+  precision, quantization, offload settings, and shortened sampling steps.
+- Keep the raw CSV until the PR is reviewed. Verify its sample count and check
+  that no orphan monitor remains after an interrupted or failed attempt.
+- Process memory is the sum of compute processes on the selected GPU. Device
+  memory also includes driver/context overhead. Record both and identify which
+  value is used in documentation.
+- `nvidia-smi` reports memory values in MiB when `nounits` is used. Report the
+  exact MiB value and optionally GiB (`MiB / 1024`). Do not divide MiB by 1000
+  and label the result GB.
+- Treat the result as the **observed peak for the tested configuration**, not a
+  guaranteed minimum requirement. A run on a larger GPU does not prove that a
+  smaller GPU works, even when the observed peak is below its nominal capacity.
+- If monitoring fails or a primary mode is not measured, use `PARTIAL` rather
+  than `VERIFIED`.
+
+**Expected behavior:**
 - **Model loading**: VRAM usage increases as model loads into memory
 - **Inference peak**: VRAM spikes during forward pass
 - **Cleanup**: Memory released after inference completes (for short-running containers)
 - **Temperature**: Stable (<85°C)
 
 **What to record for verification metadata:**
-- Peak VRAM usage in GB (e.g., "8.2GB VRAM" or "12.5GB VRAM")
-- Percentage of total VRAM (e.g., "52%" for 12.5GB on 24GB GPU)
+- GPU index, exact model, UUID, and total VRAM reported by `nvidia-smi`
+- Idle baseline and post-run device memory
+- Polling interval, sample count, and whether competing processes were absent
+- Observed process and device peaks in MiB, plus correctly converted GiB
+- Per-mode configuration that produced each peak
 - Whether 4-bit/8-bit quantization was used (affects VRAM requirements)
 
 **Troubleshooting:**
 - **CUDA OOM**: Use smaller model variant, enable quantization (4-bit/8-bit), or run on CPU
 - **High VRAM idle usage**: Check if other processes are using GPU
 - **Memory not released**: Container may still be running (`docker ps`)
+- **Implausible or duplicated samples**: Check for an orphan polling process,
+  remove the invalid CSV, and rerun from an idle baseline
 
 **Docker Container Health:**
 ```bash
@@ -522,7 +561,15 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 verification:
   status: VERIFIED
   last_verified: 2025-10-25
-  last_verification_note: "Verified build, inference, model caching, and outputs on [GPU_MODEL] ([VRAM]GB VRAM)"
+  last_verification_note: >
+    All primary modes verified on [GPU_MODEL] ([TOTAL_MIB] MiB total).
+    Observed process peaks at 200 ms polling: mode_a [PEAK_MIB] MiB
+    ([PEAK_GIB] GiB), mode_b [PEAK_MIB] MiB ([PEAK_GIB] GiB).
+    Idle baseline [BASELINE_MIB] MiB; no competing processes.
+  peak_vram_mib:
+    mode_a: 12345
+    mode_b: 23456
+  vram_poll_interval_ms: 200
 ```
 
 Use `status: PARTIAL` when any advertised primary mode or critical check is
@@ -533,13 +580,16 @@ failed/skipped, and name those gaps in `last_verification_note`. Use
 **What to include in the note:**
 - What was verified: build, inference, outputs
 - Key aspects: model caching, GPU/CPU inference
-- **GPU info**: Dynamically determine GPU model and VRAM using nvidia-smi (e.g., "A10 GPU (24GB VRAM)", "RTX 4090 (24GB)")
+- **GPU info**: Dynamically determine GPU model and total VRAM using
+  `nvidia-smi`; preserve the reported MiB value
   - If no GPU: Use "CPU-only"
-- **VRAM usage**: Peak VRAM used during inference (e.g., "Uses 8.2GB VRAM (34%) with 4-bit quantization")
-  - Get with: `nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits`
-  - Convert to GB and calculate percentage of total VRAM
+- **VRAM usage**: Per-mode observed process and device peaks from the polling
+  CSV, including the baseline, interval, and tested configuration
+  - Store exact values under `peak_vram_mib` when adding structured metadata
+  - Convert MiB to GiB by dividing by 1024
   - Note if quantization (4-bit/8-bit) was used
-- Any limitations: e.g., "Requires 8GB VRAM", "GPU memory constraints"
+- Any limitations: e.g., "Observed on a 48 GiB GPU; 24 GiB compatibility was
+  not tested", "CUDA OOM with the documented full-resolution preset"
 - Quick notes: e.g., "First run downloads 470MB models"
 
 **Example complete entry:**
@@ -654,7 +704,8 @@ An inference example passes verification when:
 10. ✅ **CVL CLI**: `cvl info <name>` and build/predict presets work
 11. ✅ **Documentation**: README states first-run cost, behavior, output location/format, runtime, canonical inputs, and curated representative outputs
 12. ✅ **Upstream Source**: Package, vendored source, or pinned checkout is deliberate and reproducible; vendored source is runtime-mounted, not copied into the image
-13. ✅ **Verification Metadata**: `verification.status` matches the rules above and the note names exact coverage and limitations
+13. ✅ **VRAM Evidence**: Every GPU mode has a clean, continuously sampled observed peak with exact units and tested configuration
+14. ✅ **Verification Metadata**: `verification.status` matches the rules above and the note names exact coverage and limitations
 
 ## Related Files
 
@@ -669,7 +720,8 @@ Check these files for debugging:
 ## Tips
 
 - Use small sample inputs for fast validation
-- Monitor GPU memory with `nvidia-smi` if using GPU
+- Use the polling wrapper above for GPU memory; a one-shot `nvidia-smi` sample
+  is not peak evidence
 - Check `docker logs <container>` if inference hangs
 - For HuggingFace models, set `HF_TOKEN` environment variable if needed
 - Most examples support custom input paths as arguments to predict.sh
