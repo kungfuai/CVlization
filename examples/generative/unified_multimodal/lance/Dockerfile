@@ -7,21 +7,17 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /workspace
 
-# System dependencies
+# System dependencies (git/git-lfs no longer needed — upstream is vendored)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
-        git \
-        git-lfs \
         libgl1 \
         libglib2.0-0 \
         ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
-# Clone Lance repo (pinned to a known commit for reproducibility)
-RUN git clone https://github.com/bytedance/Lance.git /opt/lance && \
-    cd /opt/lance && \
-    git checkout 3c757d257eecf9b88b83124c63883038bafccf72
+# Copy vendored Lance inference source (see upstream/UPSTREAM.md for provenance)
+COPY upstream/ /opt/lance/
 
 # Install Lance dependencies
 COPY requirements.txt .
