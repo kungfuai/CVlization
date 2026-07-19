@@ -1,0 +1,138 @@
+{
+  "mode": "local",
+  "user_id": "demo-user",
+  "session_id": "session-1",
+  "brain": "mock",
+  "num_turns": 4,
+  "avg_slides_touched": 0.75,
+  "tool_reuse_count": 1,
+  "working_memory_constraints": {
+    "theme": "dark"
+  },
+  "profile_after": {
+    "theme": "dark",
+    "tone": "executive",
+    "max_bullets_per_slide": 4,
+    "preferred_layouts": [
+      "title-bullets"
+    ],
+    "avoid_topics": [
+      "licensing"
+    ]
+  },
+  "turns": [
+    {
+      "turn": 1,
+      "feedback": "Make slide 3 more concise",
+      "plan": {
+        "op": "shorten",
+        "scope": "slide",
+        "params": {
+          "slide_id": 3,
+          "max_bullets": 3
+        },
+        "durable": false,
+        "preference": null
+      },
+      "tool_recipe_reused": false,
+      "surface": {
+        "changed_slide_ids": [
+          3
+        ],
+        "added_slide_ids": [],
+        "removed_slide_ids": [],
+        "unchanged_slides": 6,
+        "deck_fields_changed": [],
+        "slides_touched": 1,
+        "preservation_ratio": 0.857
+      },
+      "promoted_to_profile": null
+    },
+    {
+      "turn": 2,
+      "feedback": "From now on always use a dark theme",
+      "plan": {
+        "op": "set_theme",
+        "scope": "deck",
+        "params": {
+          "theme": "dark"
+        },
+        "durable": true,
+        "preference": [
+          "theme",
+          "dark"
+        ]
+      },
+      "tool_recipe_reused": false,
+      "surface": {
+        "changed_slide_ids": [],
+        "added_slide_ids": [],
+        "removed_slide_ids": [],
+        "unchanged_slides": 7,
+        "deck_fields_changed": [
+          "theme"
+        ],
+        "slides_touched": 0,
+        "preservation_ratio": 1.0
+      },
+      "promoted_to_profile": {
+        "field": "theme",
+        "value": "dark"
+      }
+    },
+    {
+      "turn": 3,
+      "feedback": "Add a slide about pricing and total cost of ownership",
+      "plan": {
+        "op": "add_slide",
+        "scope": "slide",
+        "params": {
+          "title": "Pricing And Total Cost Of Ownership",
+          "after_id": 3
+        },
+        "durable": false,
+        "preference": null
+      },
+      "tool_recipe_reused": false,
+      "surface": {
+        "changed_slide_ids": [],
+        "added_slide_ids": [
+          8
+        ],
+        "removed_slide_ids": [],
+        "unchanged_slides": 7,
+        "deck_fields_changed": [],
+        "slides_touched": 1,
+        "preservation_ratio": 1.0
+      },
+      "promoted_to_profile": null
+    },
+    {
+      "turn": 4,
+      "feedback": "Make slide 4 more concise",
+      "plan": {
+        "op": "shorten",
+        "scope": "slide",
+        "params": {
+          "slide_id": 4,
+          "max_bullets": 3
+        },
+        "durable": false,
+        "preference": null
+      },
+      "tool_recipe_reused": true,
+      "surface": {
+        "changed_slide_ids": [
+          4
+        ],
+        "added_slide_ids": [],
+        "removed_slide_ids": [],
+        "unchanged_slides": 7,
+        "deck_fields_changed": [],
+        "slides_touched": 1,
+        "preservation_ratio": 0.875
+      },
+      "promoted_to_profile": null
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+# Deck: Adopting Retrieval-Augmented Generation
+theme=light | audience=enterprise architects | tone=executive | slides=7
+
+[1] (section) Adopting Retrieval-Augmented Generation
+    - Prepared for: enterprise architects
+
+[2] (title-bullets) Agenda
+    - Bottom line: Motivation
+    - Bottom line: Architecture
+    - Bottom line: Evaluation
+    - Bottom line: Rollout
+
+[3] (title-bullets) Motivation
+    - Bottom line: Why motivation matters for enterprise architects
+    - Bottom line: Key point about motivation
+    - Bottom line: Concrete example of motivation
+    - Bottom line: Implication for enterprise architects
+
+[4] (title-bullets) Architecture
+    - Bottom line: Why architecture matters for enterprise architects
+    - Bottom line: Key point about architecture
+    - Bottom line: Concrete example of architecture
+    - Bottom line: Implication for enterprise architects
+
+[5] (title-bullets) Evaluation
+    - Bottom line: Why evaluation matters for enterprise architects
+    - Bottom line: Key point about evaluation
+    - Bottom line: Concrete example of evaluation
+    - Bottom line: Implication for enterprise architects
+
+[6] (title-bullets) Rollout
+    - Bottom line: Why rollout matters for enterprise architects
+    - Bottom line: Key point about rollout
+    - Bottom line: Concrete example of rollout
+    - Bottom line: Implication for enterprise architects
+
+[7] (title-bullets) Summary
+    - Bottom line: Recap: Motivation
+    - Bottom line: Recap: Architecture
+    - Bottom line: Recap: Evaluation
+    - Bottom line: Recap: Rollout

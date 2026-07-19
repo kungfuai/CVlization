@@ -1,0 +1,46 @@
+name: agentic-memslides-hierarchical-memory
+capability: agentic/memory
+modalities:
+- language
+stability: experimental
+resources:
+  gpu: 0
+  vram_gb: 0
+  disk_gb: 1
+presets:
+  build:
+    script: build.sh
+    description: Build the CPU-only MemSlides Docker image
+  generate:
+    script: generate.sh
+    description: Round-0 personalized deck generation driven by long-term user memory
+  revise:
+    script: revise.sh
+    description: Multi-turn scoped local revision with working + tool + long-term memory
+  evaluate:
+    script: evaluate.sh
+    description: Smoke test — scoped-vs-full comparison, memory reuse, preference adherence
+tags:
+- agentic
+- memory-architecture
+- hierarchical-memory
+- personalization
+- multi-turn-revision
+- litellm
+frameworks:
+- litellm
+description: >-
+  A minimal, CPU-viable hierarchical-memory agent (MemSlides) that demonstrates
+  a tri-partite memory design — long-term user-profile memory, session working
+  memory, and reusable tool memory — plus scoped slide-local revision, using
+  LLM-API orchestration with a deterministic mock fallback.
+verification:
+  last_verified: 2026-07-13
+  last_verification_note: >-
+    Verified build.sh and evaluate.sh in Docker with the deterministic mock brain
+    (no API key). All three checks pass: scoped local revision touches 0.75
+    slides/turn (preserve 0.923) vs full regeneration 2.5 (preserve 0.786);
+    tool-memory reuse across a second host-cached pass (pass2 hits=4); durable
+    'always use a dark theme' preference promoted to the long-term profile and
+    honored in a brand-new deck. Real-provider path (openai/groq/ollama) wired
+    via LiteLLM but not exercised in CI.

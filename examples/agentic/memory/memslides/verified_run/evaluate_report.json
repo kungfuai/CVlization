@@ -1,0 +1,22 @@
+{
+  "brain": "mock",
+  "check1_scoped_vs_full": {
+    "pass": true,
+    "local_avg_slides_touched": 0.75,
+    "full_avg_slides_touched": 2.5,
+    "local_avg_preservation": 0.923,
+    "full_avg_preservation": 0.786
+  },
+  "check2_memory_reuse": {
+    "pass": true,
+    "pass1_tool_hits": 1,
+    "pass1_tool_misses": 3,
+    "pass2_tool_hits": 4,
+    "profile_seeded_after_pass1": true
+  },
+  "check3_preference_adherence": {
+    "pass": true,
+    "promoted_theme": "dark",
+    "new_deck_theme": "dark"
+  }
+}
