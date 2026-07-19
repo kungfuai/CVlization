@@ -8,7 +8,7 @@ datasets:
 stability: experimental
 resources:
   gpu: 1
-  vram_gb: 16
+  vram_gb: 16  # upstream claim; not locally verified (tested on 98GB GPU, peak 92 GiB)
   disk_gb: 50
 image: cvl-voxtral-realtime
 presets:
@@ -57,16 +57,16 @@ description: >
   with configurable latency (80ms–2400ms). Measured first visible text ~1.0s.
 
 verification:
-  last_verified: "2026-07-13"
+  last_verified: "2026-07-19"
   last_verification_note: >
-    Docker build OK (pytorch:2.11.0-cuda13.0 + vLLM 0.25.0; image ~40GB).
-    Server startup 100s on RTX PRO 6000 Blackwell (98GB VRAM; model ~8GB,
-    vLLM pre-allocates ~92GB for KV cache with max_model_len=45000).
-    Realtime-paced streaming PASS: first event (empty protocol delta) 0.692s,
-    first visible text 1.055s, with concurrent sender/receiver and per-delta
-    wall_clock_sec + audio_sent_sec. Fast-mode PASS: 2.42s for 5s audio.
-    English and French transcripts correct. Containerized client via predict.sh
-    PASS. test.sh uses predict.sh (no host python3 dependency). CVL CLI verified
-    from /tmp/cvl_cli_test/. Cache reuse confirmed. 16GB VRAM minimum is
-    upstream claim (tested on 98GB only). 11/13 langs untested.
+    VRAM lifecycle measured with monitor_vram.sh (PR #248): idle 15 MiB ->
+    device peak 92027 MiB (89.9 GiB) -> release 15 MiB. 509 samples at
+    200ms interval. GPU: RTX PRO 6000 Blackwell Max-Q (97887 MiB total),
+    UUID GPU-dd55f371-5b6e-3708-2aa5-34ef3e875ee0. Config:
+    VLLM_MAX_MODEL_LEN=45000, gpu-memory-utilization=0.9 (default).
+    Process peak 92004 MiB. This is vLLM KV cache reservation for the tested
+    configuration, not model minimum. resources.vram_gb=16 is upstream claim,
+    not locally verified. Realtime-paced streaming PASS: first event 0.529s,
+    first visible text 1.057s. Fast-mode PASS: 2.23s for 5s audio.
+    English and French transcripts correct. 11/13 langs untested.
   status: PARTIAL

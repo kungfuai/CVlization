@@ -215,16 +215,37 @@ incremental transcription events as they are generated.
 
 ## GPU Requirements
 
-- **Minimum (upstream claim)**: 16 GB VRAM (e.g., NVIDIA T4, RTX 4080).
-  Not locally verified with max_model_len=45000; a smaller context length
-  may be needed on 16 GB cards.
-- **Recommended**: 24+ GB VRAM (e.g., RTX 4090, A10, L4)
-- **Verified on**: RTX PRO 6000 Blackwell (98 GB VRAM)
-- Model weights: ~8 GB (4B params in BF16)
-- vLLM pre-allocates remaining VRAM for KV cache (configurable via
-  `VLLM_GPU_MEMORY_UTILIZATION`). On a 98 GB GPU with max_model_len=45000 the
-  server pre-allocates ~92 GB for KV cache; on smaller GPUs it will fill
-  available VRAM proportionally, reducing maximum concurrent sessions
+### Measured VRAM (tested configuration)
+
+| Metric | Value |
+|--------|-------|
+| GPU | NVIDIA RTX PRO 6000 Blackwell Max-Q (97887 MiB total) |
+| Idle baseline | 15 MiB |
+| Device peak | 92027 MiB (89.9 GiB) |
+| Process peak | 92004 MiB (89.8 GiB) |
+| Post-release | 15 MiB (full release confirmed) |
+| `VLLM_MAX_MODEL_LEN` | 45000 |
+| `gpu-memory-utilization` | 0.9 (vLLM default) |
+| Polling interval | 200 ms (509 samples over ~135s lifecycle) |
+
+The 92 GiB peak is vLLM's KV cache reservation for `max_model_len=45000` at
+the default `gpu-memory-utilization=0.9`. This is **not** the model minimum —
+it is the pre-allocation for the tested configuration. On a smaller GPU, vLLM
+fills available VRAM proportionally, reducing max concurrent sessions and/or
+requiring a smaller `max_model_len`.
+
+### Upstream minimum (not locally verified)
+
+The model card claims 16 GB minimum VRAM. This has **not** been locally tested
+with `max_model_len=45000`. A 16 GB GPU would likely require a significantly
+smaller `VLLM_MAX_MODEL_LEN` (perhaps 4000–8000 tokens) or
+`--gpu-memory-utilization 0.95`.
+
+### Summary
+
+- **Model weights**: ~8 GB (4B params in BF16)
+- **Tested on**: RTX PRO 6000 Blackwell Max-Q (98 GB) — peak 92 GiB
+- **Upstream claim**: 16 GB minimum (unverified for this configuration)
 
 ## References
 
