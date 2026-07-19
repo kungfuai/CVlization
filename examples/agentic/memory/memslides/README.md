@@ -103,10 +103,32 @@ python evaluate.py --memory-dir /tmp/mem --fresh
 
 ## Output
 
+Your run writes to `artifacts/` (git-ignored):
+
 - `artifacts/deck.json` / `deck.txt` — the generated deck (JSON + readable render)
 - `artifacts/deck_revised.json` / `.txt` — after revision
 - `artifacts/revision_report.json` — per-turn edit surface, tool reuse, promotions
 - `artifacts/evaluate_report.json` — the three-check comparison
+
+### Inspect a verified run without running anything
+
+A committed, deterministic mock-brain bundle lives in
+[`verified_run/`](verified_run/) so you can read the actual artifacts
+straight from the repo:
+
+- Round-0 personalized deck — [`verified_run/deck.txt`](verified_run/deck.txt)
+  ([json](verified_run/deck.json))
+- After scoped revision — [`verified_run/deck_revised.txt`](verified_run/deck_revised.txt)
+  ([json](verified_run/deck_revised.json)) — theme → dark, slides 3 & 4
+  shortened, a Pricing slide inserted, unrelated slides untouched
+- Per-turn revision report — [`verified_run/revision_report.json`](verified_run/revision_report.json)
+- Evaluation report — [`verified_run/evaluate_report.json`](verified_run/evaluate_report.json)
+
+See [`verified_run/README.md`](verified_run/README.md) for the exact commands
+that regenerate them. (These small text artifacts are committed in-repo rather
+than uploaded to the `zzsi/cvl` dataset because they carry no binary media and
+are deterministically reproducible from the code; a `zzsi/cvl/memslides/` mirror
+is pending a dataset write token — see the PR notes.)
 
 Example `evaluate` result (mock brain):
 
@@ -134,7 +156,8 @@ memslides/
 │   ├── deck.py     # Deck/Slide model + edit-surface diff metrics
 │   ├── llm.py      # Brain interface: MockBrain (deterministic) + LLMBrain (LiteLLM)
 │   └── agent.py    # MemSlidesAgent: personalize, scoped revise, full_regenerate
-└── data/           # sample user profile + feedback script
+├── data/           # sample user profile + feedback script
+└── verified_run/   # committed deterministic mock-brain artifacts (inspectable)
 ```
 
 ## Notes & limitations
