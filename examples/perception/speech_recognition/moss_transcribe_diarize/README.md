@@ -37,8 +37,9 @@ Hosted at [`zzsi/cvl/moss_transcribe_diarize/multi_speaker_sample.wav`](https://
   (when using `cvl run`).
 - **Output format**: JSON with `segments` (each has `start`, `end`, `speaker`,
   `text`), `speakers` list, plus raw model text.
-- **Runtime**: ~10 s on RTX PRO 6000 Blackwell (98 GB VRAM).
-  Peak VRAM: ~2.5 GB.
+- **Runtime**: ~14 s cached on RTX PRO 6000 Blackwell (95.6 GiB VRAM).
+  Peak VRAM: 2522 MiB process / 2545 MiB device (2.46 / 2.49 GiB), bfloat16.
+  Measured with `monitor_vram.sh` at 200 ms polling (68 samples).
 
 ## Quick Start
 
@@ -84,7 +85,7 @@ USE_GPU=1 ./predict.sh --audio /path/to/conversation.wav --output result.json
 | **Input** | Audio (WAV, MP3, FLAC, video containers via PyAV) |
 | **Output** | Timestamped speaker-diarized transcript |
 | **Sampling rate** | 16 kHz |
-| **VRAM** | ~2.5 GB (bfloat16) |
+| **VRAM** | 2522 MiB process peak (2.46 GiB), bfloat16 |
 
 ## References
 

@@ -49,5 +49,14 @@ description: >-
   No separate pyannote or gated models required.
 verification:
   status: VERIFIED
-  last_verified: "2026-07-12"
-  last_verification_note: "Verified build (build.sh + cvl run build), GPU inference via cvl run predict from external dir, host persistence, cache reuse (second run 0 downloads), semantic output inspection (2 speakers, 5 segments, accurate timestamps and text), and cvl info metadata on RTX PRO 6000 Blackwell (98GB VRAM). Peak VRAM: ~2.5GB. First run downloads ~2GB model."
+  last_verified: "2026-07-19"
+  last_verification_note: >-
+    Verified build (build.sh + cvl run build), GPU inference via predict.sh
+    from external dir, host persistence, cache reuse (second run 0 downloads),
+    semantic output inspection (2 speakers, 5 segments, accurate timestamps
+    and text), and cvl info metadata on RTX PRO 6000 Blackwell Max-Q
+    (GPU-dd55f371-5b6e-3708-2aa5-34ef3e875ee0, 97887 MiB total).
+    VRAM measured with monitor_vram.sh at 200ms polling (68 samples):
+    idle baseline 15 MiB, device peak 2545 MiB (2.49 GiB),
+    process peak 2522 MiB (2.46 GiB), post-run 15 MiB (full release).
+    bfloat16, no quantization. First run downloads ~2GB model.
