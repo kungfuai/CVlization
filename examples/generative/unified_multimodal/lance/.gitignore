@@ -9,7 +9,3 @@ results/
 *.safetensors
 __pycache__/
 *.pyc
-metrics.json
-prompt.json
-result.json
-upstream/downloads
