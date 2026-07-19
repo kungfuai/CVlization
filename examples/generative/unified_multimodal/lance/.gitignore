@@ -1,0 +1,11 @@
+# Runtime artifacts
+outputs/
+artifacts/
+results/
+*.png
+*.jpg
+*.mp4
+*.pth
+*.safetensors
+__pycache__/
+*.pyc
