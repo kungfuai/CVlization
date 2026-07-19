@@ -170,6 +170,15 @@ Verified run (2026-07-17, `--model gpt-4.1 --fast-model gpt-4.1-mini`,
 offline mode; 16/16 cells filled, every value matches `corpus.json`, 9/12
 attribute cells page-anchored with verbatim excerpts):
 
+The complete artifact bundle from that run is committed in
+[`sample_output/`](sample_output/) —
+[`report.md`](sample_output/report.md) (the citation-grounded answer),
+[`summary.json`](sample_output/summary.json) (verdict / coverage / tokens),
+and [`search_state.json`](sample_output/search_state.json) (**the central
+artifact**: the full SOCM state — coverage map, evidence graph with per-cell
+source URLs and verbatim `source_excerpt` quotes, frontier queue, strategy
+log). The excerpts below are a preview of those files:
+
 ```
   Table `AI Research Labs`  (4 rows × 4 cols)
     row                     lab_name        founding_year   headquarters_c  flagship_model
