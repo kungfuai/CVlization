@@ -11,10 +11,10 @@ generating videos with physically plausible dynamics.
 
 Two model variants are available:
 
-| Variant | Parameters | Active Params | Peak VRAM (81 frames, bf16) | Download |
+| Variant | Parameters | Active Params | Peak VRAM (81f T2V, bf16) | Download |
 |---------|-----------|---------------|---------------------------|----------|
-| Dense 1.3B | 1.3B | 1.3B | ~8 GB | ~5 GB |
-| MoE 30B-A3B | 30B | ~3B | ~80 GB | ~121 GB |
+| Dense 1.3B | 1.3B | 1.3B | 22.9 GiB (23427 MiB) | ~5 GB |
+| MoE 30B-A3B | 30B | ~3B | 78.1 GiB (79997 MiB) | ~121 GB |
 
 ## Sample Output
 
@@ -78,7 +78,7 @@ Canonical structured prompts are hosted at:
 
 ## Requirements
 
-- **GPU**: NVIDIA GPU with 8 GB+ VRAM (dense) or 80 GB+ VRAM (MoE 81 frames)
+- **GPU**: NVIDIA GPU with 24 GB+ VRAM (dense T2V/TI2V) or 80 GB+ VRAM (MoE 81 frames)
 - **Disk**: ~5 GB for dense weights, ~121 GB for MoE weights (downloaded on first run)
 - **Docker**: With NVIDIA runtime
 
@@ -165,7 +165,19 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20 \
   - MoE T2V, 81 frames, 40 steps: ~6m37s
   - MoE T2I, 40 steps: ~27s
   - MoE TI2V, 41 frames, 40 steps: ~3m10s
-- **Peak VRAM**: Dense ~8 GB, MoE ~80 GB (81 frames at 832x480)
+- **Peak VRAM** (measured with 200ms nvidia-smi polling, 832x480, sequential CFG, bf16):
+
+  | Mode | Frames | Device Peak | Process Peak |
+  |------|--------|-------------|--------------|
+  | Dense T2V | 81 | 23427 MiB (22.9 GiB) | 23404 MiB |
+  | Dense T2I | 1 | 16007 MiB (15.6 GiB) | 15984 MiB |
+  | Dense TI2V | 41 | 23259 MiB (22.7 GiB) | 23236 MiB |
+  | MoE T2V | 81 | 79997 MiB (78.1 GiB) | 79974 MiB |
+  | MoE T2I | 1 | 70819 MiB (69.2 GiB) | 70796 MiB |
+  | MoE TI2V | 41 | 78093 MiB (76.3 GiB) | 78070 MiB |
+
+  GPU: RTX PRO 6000 Blackwell (97887 MiB total), idle baseline 15 MiB.
+  Configuration: 5 denoising steps (cached run), seed 42, guidance 3.0, shift 3.0.
 - **Resolution**: Default 832x480 (landscape). Both dimensions must be multiples of 16
 - **Duration**: Default 81 frames at 24 FPS = ~3.4 seconds. If `--prompt-json` includes `duration`, frame count is derived automatically
 
@@ -175,7 +187,7 @@ cvl run lingbot_video predict -- --num-frames 21 --steps 20 \
 - **MoE T2V edge vignetting**: MoE T2V with sequential CFG shows pillarbox edge bars and painterly texture. MoE TI2V does not exhibit this. The issue may be related to batch_cfg being unavailable (see below).
 - **Refiner blocked**: The MoE checkpoint includes a refiner transformer (~60GB bf16) for upscaling base output. Tested: single GPU OOM (base ~94GB + refiner ~60GB > 98GB), FSDP across 2 GPUs crashes with CUDA memory error on SM120. The upstream runner preloads both models simultaneously with no sequential loading mode. See upstream `--run_refiner` for the workflow.
 - **batch_cfg disabled**: The `--batch-cfg` flag requires `flash_attn_interface` (FlashAttention v3). No prebuilt FA3 wheel includes SM120 (Blackwell) kernels. FA3 `hopper/setup.py` targets SM80/SM90a/SM100a only. FA4 supports SM120 via JIT but uses a different API. Sequential CFG works correctly via PyTorch native SDPA.
-- **MoE VRAM**: The MoE 30B-A3B variant requires ~80 GB VRAM for 81-frame generation at 832x480. Use fewer frames (`--num-frames 21`) to reduce memory.
+- **MoE VRAM**: The MoE 30B-A3B variant requires ~78 GiB (79997 MiB) VRAM for 81-frame T2V at 832x480. T2I requires ~69 GiB (70819 MiB). Use fewer frames (`--num-frames 21`) to reduce memory.
 - **MoE download size**: The MoE model is ~121 GB (includes transformer + refiner shards). Ensure sufficient disk space.
 
 ## Pinned Dependencies

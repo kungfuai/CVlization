@@ -9,7 +9,7 @@ datasets: []
 stability: experimental
 resources:
   gpu_count: 1
-  vram_gb: 80  # MoE 30B peak at 81 frames 832x480; Dense 1.3B ~8GB
+  vram_gb: 80  # MoE 30B T2V 81f peak: 79997 MiB (78.1 GiB); Dense T2V 81f: 23427 MiB (22.9 GiB)
   disk_gb: 130  # MoE weights ~121GB; Dense ~5GB
 presets:
   build:
@@ -49,27 +49,33 @@ tags:
 description: >
   LingBot-Video is the first large-scale open-source MoE video foundation model,
   designed for embodied intelligence. It offers two variants: a dense 1.3B model
-  (~8GB VRAM) and a MoE 30B-A3B model (~3B active parameters, ~80GB peak VRAM).
-  Trained on 70,000+ hours of embodied and web video data with physical-rationality
-  and task-completion reward alignment. Supports text-to-video, text-to-image,
-  and text+image-to-video generation. Best results with structured JSON prompts
-  (upstream Rewriter format); raw text prompts are best-effort.
+  (23 GiB VRAM for 81f T2V) and a MoE 30B-A3B model (~3B active parameters,
+  78 GiB peak VRAM for 81f T2V). Trained on 70,000+ hours of embodied and web
+  video data with physical-rationality and task-completion reward alignment.
+  Supports text-to-video, text-to-image, and text+image-to-video generation.
+  Best results with structured JSON prompts (upstream Rewriter format); raw text
+  prompts are best-effort.
 
 verification:
   status: PARTIAL
-  last_verified: "2026-07-16"
+  last_verified: "2026-07-19"
   last_verification_note: >
-    Verified on RTX PRO 6000 Blackwell (98GB VRAM x2, sm120). Upstream pinned to
-    commit a638721. Full mode matrix with structured JSON prompts (--prompt-json):
-    Dense T2V (81f/40s, ~2m24s, PASS clean), Dense T2I (40s, ~4s, PASS clean),
-    Dense TI2V (41f/40s, ~58s, PASS), MoE T2V (81f/40s, ~6m37s, PASS coherent
-    but edge vignetting), MoE T2I (40s, ~27s, PASS clean), MoE TI2V (41f/40s,
-    ~3m10s, PASS excellent physical dynamics). Dense T2I quality now PASS with
-    official structured prompt (prior poor result was raw text). batch_cfg disabled:
-    no prebuilt FA3 wheel with SM120 kernels (FA3 targets SM80/SM90a/SM100a only).
-    Refiner blocked: single GPU OOM (base 94GB + refiner 60GB), FSDP 2-GPU crashes
-    with CUDA error on SM120. FlashAttention not installed (wrapper uses SDPA).
-    Upstream runner parity confirmed (dense T2V, seed 42). Duration-to-num_frames
-    with test_duration_frames.py. Canonical prompts for all modes hosted. Stack:
-    torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1. Demo artifacts at
-    https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_video.
+    Verified on RTX PRO 6000 Blackwell (GPU-dd55f371-5b6e-3708-2aa5-34ef3e875ee0,
+    97887 MiB total, sm120). VRAM measured with 200ms nvidia-smi polling (PR #248
+    monitor_vram.sh), idle baseline 15 MiB, 5-step cached runs at 832x480:
+    Dense T2V 81f: 23427/23404 MiB device/process peak (22.9 GiB),
+    Dense T2I: 16007/15984 MiB (15.6 GiB),
+    Dense TI2V 41f: 23259/23236 MiB (22.7 GiB),
+    MoE T2V 81f: 79997/79974 MiB (78.1 GiB),
+    MoE T2I: 70819/70796 MiB (69.2 GiB),
+    MoE TI2V 41f: 78093/78070 MiB (76.3 GiB).
+    Post-run release: all back to 15 MiB baseline. Full mode matrix with structured
+    JSON prompts (--prompt-json): Dense T2V (81f/40s, ~2m24s, PASS clean),
+    Dense T2I (40s, ~4s, PASS clean), Dense TI2V (41f/40s, ~58s, PASS),
+    MoE T2V (81f/40s, ~6m37s, PASS coherent but edge vignetting),
+    MoE T2I (40s, ~27s, PASS clean), MoE TI2V (41f/40s, ~3m10s, PASS excellent
+    physical dynamics). batch_cfg disabled: no prebuilt FA3 wheel with SM120 kernels.
+    Refiner blocked: single GPU OOM, FSDP 2-GPU CUDA error on SM120.
+    FlashAttention not installed (wrapper uses SDPA). Upstream pinned to commit
+    a638721. Stack: torch 2.7.0+cu128, diffusers 0.39.0, transformers 5.13.1.
+    Demo artifacts at https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_video.
