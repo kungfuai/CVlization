@@ -96,16 +96,19 @@ on first run (~39 GB, cached afterward).
 ## Hardware Requirements
 
 - **GPU**: NVIDIA GPU with >= 40 GB VRAM (A100, A6000, etc.)
-- **Measured peak VRAM** (768px, 5 steps, RTX PRO 6000 Blackwell 98 GB):
-  | Mode | Peak process VRAM |
-  |------|------------------|
-  | t2i | 35.9 GB |
-  | x2t_image | 29.3 GB |
-  | image_edit | 31.3 GB |
 - **Disk**: ~39 GB for model weights + Docker image
-- **Note**: Peak was measured on a 98 GB GPU. A 40 GB GPU (A100/A6000)
-  has not been independently tested but the measured peak (36 GB for t2i)
-  suggests it should fit. 24 GB GPUs are unlikely to work at 768px.
+
+**Measured peak VRAM** (768px, 5 steps, RTX PRO 6000 Blackwell 98 GB):
+
+| Mode | Peak process VRAM |
+|------|------------------|
+| t2i | 35,888 MiB (35.1 GiB) |
+| x2t_image | 29,290 MiB (28.6 GiB) |
+| image_edit | 31,264 MiB (30.5 GiB) |
+
+Peak was measured on a 98 GB GPU. A 40 GB GPU (A100/A6000) has not been
+independently tested but the measured peak (~35 GiB for t2i) suggests it
+should fit. 24 GB GPUs are unlikely to work at 768px.
 
 ## References
 
