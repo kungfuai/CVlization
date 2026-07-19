@@ -304,17 +304,6 @@ MAX_TRAIN_SAMPLES=10 NUM_EPOCHS=1 ./train.sh
 # Verify: Completes without errors, metrics logged
 ```
 
-### 7b. PR Presentation
-
-Before opening or updating a PR, link its feature-branch README near the top
-of the PR body. New example documentation does not exist on `main` yet:
-
-```markdown
-[Rendered example README](https://github.com/<owner>/CVlization/blob/<head-branch>/examples/<capability>/<task>/<example>/README.md)
-```
-
-Verify that the link opens and renders before reporting the PR complete.
-
 ### 8. Update Verification Metadata
 
 After successful verification, update the example.yaml with verification metadata:
@@ -465,9 +454,8 @@ A training pipeline passes verification when:
 7. ✅ **Outputs**: Checkpoints/adapters/logs saved correctly; `.gitignore` covers all runtime artifacts (weights land in example dir root via CVL_OUTPUTS, not `outputs/`)
 8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
 9. ✅ **Documentation**: README explains how to use the example
-10. ✅ **PR Presentation**: PR body links the rendered README on the feature branch
-11. ✅ **Upstream Source**: Package, vendored source, or pinned checkout is deliberate and reproducible; vendored source is runtime-mounted, not copied into the image
-12. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
+10. ✅ **Upstream Source**: Package, vendored source, or pinned checkout is deliberate and reproducible; vendored source is runtime-mounted, not copied into the image
+11. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
 
 ## Related Files
 

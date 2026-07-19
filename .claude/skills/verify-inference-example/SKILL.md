@@ -478,16 +478,6 @@ permission. Use a stable per-example prefix and descriptive names, for example:
 https://huggingface.co/datasets/zzsi/cvl/resolve/main/<path-in-repo>
 ```
 
-**PR review link**: Before opening or updating a PR, link its feature-branch
-README near the top of the PR body. New example documentation does not exist
-on `main` yet, so link the head branch directly:
-
-```markdown
-[Rendered example README](https://github.com/<owner>/CVlization/blob/<head-branch>/examples/<capability>/<task>/<example>/README.md)
-```
-
-Verify that the link opens and renders before reporting the PR complete.
-
 **Upload a file to zzsi/cvl:**
 ```python
 from huggingface_hub import HfApi
@@ -663,9 +653,8 @@ An inference example passes verification when:
 9. ✅ **Caching**: Models/data remain outside the image and a second run proves shared-cache reuse
 10. ✅ **CVL CLI**: `cvl info <name>` and build/predict presets work
 11. ✅ **Documentation**: README states first-run cost, behavior, output location/format, runtime, canonical inputs, and curated representative outputs
-12. ✅ **PR Presentation**: PR body links the rendered README on the feature branch
-13. ✅ **Upstream Source**: Package, vendored source, or pinned checkout is deliberate and reproducible; vendored source is runtime-mounted, not copied into the image
-14. ✅ **Verification Metadata**: `verification.status` matches the rules above and the note names exact coverage and limitations
+12. ✅ **Upstream Source**: Package, vendored source, or pinned checkout is deliberate and reproducible; vendored source is runtime-mounted, not copied into the image
+13. ✅ **Verification Metadata**: `verification.status` matches the rules above and the note names exact coverage and limitations
 
 ## Related Files
 
