@@ -52,6 +52,48 @@ cd examples/<capability>/<task>/<framework>/
 - `train.sh` - Must mount volumes correctly, pass environment variables, and forward `CUDA_VISIBLE_DEVICES` to the container (use `${CUDA_VISIBLE_DEVICES:+--env "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"}` so it's only set when the host has it set)
 - `.gitignore` - Must cover all runtime artifacts (weights, checkpoints, results). Note: `CVL_OUTPUTS` maps to the workspace root (the example dir itself), NOT `outputs/`, so files like `*.pt`, `result.txt` etc. will land in the example directory directly. Verify with `git status` after a test run.
 
+### 1b. Upstream Source Strategy
+
+When a training example depends on an upstream research repository that is not
+available as a suitable versioned package, review how its source enters the
+example. A Dockerfile `git clone` is not automatically the best choice.
+
+Choose deliberately:
+
+- Use a released package when it exposes the required, compatible API.
+- Consider vendoring a minimal, coherent runtime subset when the code is
+  small, permissively licensed, likely to need local compatibility fixes, and
+  practical to test as part of CVlization.
+- Retain an external checkout when the repository is large, changes rapidly,
+  relies on submodules or native build machinery, or cannot be separated
+  without creating a fragile partial copy.
+
+For vendored source, prefer an example-local `upstream/` directory. The
+example name is already supplied by its parent directory, so avoid redundant
+layouts such as `vendor/<example_name>/`. Verify that:
+
+- `upstream/UPSTREAM.md` records the repository URL, exact source commit,
+  intentionally omitted paths, and CVlization modifications.
+- Upstream copyright headers and all required `LICENSE` and `NOTICE` files are
+  retained.
+- The vendored tree excludes model weights, datasets, demo media, Git
+  metadata, build outputs, and unrelated UI or benchmark code.
+- `train.sh` exposes the committed `upstream/` tree through the example's
+  runtime bind mount. The Dockerfile does not `COPY` either the CVlization
+  wrapper or vendored source into the image.
+- CVlization integration remains in the root wrapper when possible; upstream
+  files are changed only when necessary and deviations are documented.
+- The selected tree is a coherent runtime dependency, not copied functions
+  whose hidden imports or configuration files were missed.
+
+For an external checkout, pin an immutable commit, fetch only that revision,
+and remove `.git` from the final image. Do not clone an unpinned branch or
+perform a full-history clone followed by `git checkout`.
+
+Changing between checkout and vendored source invalidates prior training
+evidence. Rebuild and rerun the required training checks before retaining a
+verified result.
+
 ### 2. Build Verification
 
 ```bash
@@ -412,7 +454,8 @@ A training pipeline passes verification when:
 7. ✅ **Outputs**: Checkpoints/adapters/logs saved correctly; `.gitignore` covers all runtime artifacts (weights land in example dir root via CVL_OUTPUTS, not `outputs/`)
 8. ✅ **CVL CLI**: `cvl info <name>` shows correct metadata, build and train presets work
 9. ✅ **Documentation**: README explains how to use the example
-10. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
+10. ✅ **Upstream Source**: Package, vendored source, or pinned checkout is deliberate and reproducible; vendored source is runtime-mounted, not copied into the image
+11. ✅ **Verification Metadata**: example.yaml updated with `verification` field containing `last_verified` date and `last_verification_note`
 
 ## Related Files
 
