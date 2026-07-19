@@ -1,0 +1,7 @@
+vllm>=0.8.5
+websockets>=13.0
+numpy>=1.24
+librosa>=0.10
+soundfile>=0.12
+huggingface-hub>=0.20
+mistral-common[audio]>=1.9.0
