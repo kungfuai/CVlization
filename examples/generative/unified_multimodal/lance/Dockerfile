@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /workspace
 
-# System dependencies (git/git-lfs no longer needed — upstream is vendored)
+# System dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
@@ -16,12 +16,9 @@ RUN apt-get update && \
         ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy vendored Lance inference source (see upstream/UPSTREAM.md for provenance)
-COPY upstream/ /opt/lance/
-
 # Install Lance dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 # Install flash-attn from prebuilt wheel (cu128 + torch2.9, cp311)
 # Required by Lance qwen2_navit.py (hard dependency on flash_attn_varlen_func)
@@ -34,6 +31,6 @@ RUN python -c "import flash_attn, torch; print(flash_attn.__version__, torch.__v
 # Pin transformers to the version Lance requires (4.49.0 avoids LM loading bug)
 RUN pip install --no-cache-dir transformers==4.49.0
 
-COPY . .
-
-CMD ["python3", "predict.py", "--help"]
+# No source code is copied into the image.
+# predict.sh bind-mounts the example directory at /workspace at runtime,
+# so predict.py and upstream/ are available via the mount.

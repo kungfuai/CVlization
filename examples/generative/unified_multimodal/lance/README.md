@@ -37,8 +37,9 @@ same image above)
 
 ![edit output](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lance/edit_output.png)
 
-**Image understanding** — question: *"Describe this image in detail. What
-animal is shown and what is the setting?"* — answer: **Dog**
+**Image understanding** — question: *"What animal is in this image?"* —
+answer: **Dog**
+([full result](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lance/vqa_result.json))
 
 ## What
 

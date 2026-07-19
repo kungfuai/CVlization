@@ -18,7 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-LANCE_REPO = Path("/opt/lance")
+LANCE_REPO = Path("/workspace/upstream")
 SUPPORTED_TASKS = {
     "t2i": "Text-to-image generation",
     "x2t_image": "Image understanding (VQA)",
