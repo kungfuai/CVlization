@@ -10,7 +10,8 @@ resources:
   disk_gb: 1
   note: >
     GPU is used by the external VLM server (not this container).
-    Qwen3.5-35B-A3B requires ~20 GB VRAM on the vLLM endpoint.
+    Measured: Qwen3-VL-8B-Instruct via vLLM 0.21.0 uses ~49 GB steady
+    at --gpu-memory-utilization 0.5 on a 98 GB GPU.
 image: knowact-guiclaw
 presets:
   build:
@@ -57,12 +58,15 @@ description: |
 
 verification:
   status: PARTIAL
-  last_verified: "2026-07-16"
+  last_verified: "2026-07-20"
   last_verification_note: >
     Build PASS (955 MB image, pinned upstream 2d317da). Dry-run with VLM
     PASS on RTX PRO 6000 Blackwell (98 GB): Qwen3-VL-8B-Instruct via
     vLLM 0.21.0 (--enable-auto-tool-choice --tool-call-parser hermes).
     15 steps across 3 attempts, tool calls with computer_use function,
     26073 tokens consumed, 22.95s wall. Trajectory, memory (policy.md),
-    host persistence all verified. ADB backend SKIPPED: no Android device.
-    iOS/HarmonyOS UNTESTED.
+    host persistence all verified. Two-tier test.sh: Tier 1 wiring 4/4
+    PASS (no VLM); Tier 2 VLM semantic PASS (steps_taken>0, tool_calls,
+    memory). GPU memory measured: 49 GB steady (Qwen3-VL-8B at 0.5
+    utilization on 98 GB). ADB backend SKIPPED: no Android device.
+    iOS/HarmonyOS/desktop UNTESTED.

@@ -27,6 +27,70 @@ Key capabilities demonstrated:
 | Output format | JSON result, trajectory logs, memory/skill snapshots |
 | Runtime | Depends on VLM latency; typically 10-60 s per task in dry-run |
 
+## Sample output
+
+A sanitized dry-run sample is committed in [`sample_run/`](sample_run/) (task:
+*"Open the Settings app and find the Wi-Fi toggle"*, Qwen3-VL-8B-Instruct,
+`--backend dry-run`, 5 steps). Dry-run mode produces 1×1 placeholder screenshots
+(no real device), so the VLM sees a blank screen and repeatedly presses Home —
+this is expected behavior without a connected device.
+
+**Result** ([`result.json`](sample_run/result.json)):
+```json
+{
+  "task": "Open the Settings app and find the Wi-Fi toggle",
+  "backend": "dry-run",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "max_steps": 5,
+  "result": {
+    "exit_code": 1,
+    "parsed": {
+      "success": false,
+      "steps_taken": 5,
+      "error": "max_steps_exceeded"
+    }
+  }
+}
+```
+
+**Trajectory excerpt** ([`trajectory_excerpt.json`](sample_run/trajectory_excerpt.json)) —
+each step shows the VLM's `computer_use` tool call with `action_type`, `intent`,
+and `summary`:
+```json
+{
+  "step": 1,
+  "model_output": {
+    "tool_calls": [{
+      "name": "computer_use",
+      "arguments": {
+        "action_type": "home",
+        "intent": "Navigate to the home screen to access the Settings app.",
+        "summary": "The device is currently on a solid green screen..."
+      }
+    }]
+  },
+  "token_usage": { "prompt_tokens": 1646, "completion_tokens": 72 }
+}
+```
+
+**Memory snapshot** ([`policy.md`](sample_run/policy.md)) — GUIClaw bootstraps a
+conservative default policy on first run:
+> *Treat permission requests conservatively. Unless the current task explicitly
+> requires and authorizes a permission, choose Deny, Cancel, Not now, or go
+> back.*
+
+With a real device (ADB backend), successful task completions produce additional
+memory entries and reusable skill functions in `~/.guiclaw/skill/skills.py`.
+
+### VLM resource usage (measured)
+
+| VLM | vLLM flags | GPU | Baseline | Peak | Steady | Utilization |
+|-----|-----------|-----|----------|------|--------|-------------|
+| Qwen3-VL-8B-Instruct | `--gpu-memory-utilization 0.5 --max-model-len 4096` | RTX PRO 6000 (98 GB) | 15 MB | 50,097 MB | 48,639 MB | 0.512 |
+
+Measured with 200 ms polling during a 15-step dry-run session. The agent
+container itself uses no GPU (VLM is served externally).
+
 ## Prerequisites
 
 An OpenAI-compatible VLM endpoint must be running. GUIClaw uses tool calling
