@@ -23,12 +23,17 @@ if [ -t 0 ] && [ -t 1 ]; then
 fi
 DOCKER_ARGS+=(--network host)
 
+# Persistent GUIClaw state (memory, skills, runs) across episodes
+GUICLAW_STATE="${GUICLAW_STATE:-${HOME}/.cache/cvlization/guiclaw}"
+mkdir -p "${GUICLAW_STATE}"
+
 docker "${DOCKER_ARGS[@]}" \
     ${CVL_CONTAINER_NAME:+--name "$CVL_CONTAINER_NAME"} \
     --workdir /workspace \
     --mount "type=bind,src=${SCRIPT_DIR},dst=/workspace,readonly" \
     --mount "type=bind,src=${REPO_ROOT},dst=/cvlization_repo,readonly" \
     --mount "type=bind,src=${WORK_DIR},dst=/mnt/cvl/workspace" \
+    --mount "type=bind,src=${GUICLAW_STATE},dst=/root/.guiclaw" \
     --mount "type=bind,src=${HOME}/.cache/cvlization,dst=/root/.cache/cvlization" \
     --mount "type=bind,src=${HOME}/.cache/huggingface,dst=/root/.cache/huggingface" \
     --env "PYTHONPATH=/cvlization_repo" \

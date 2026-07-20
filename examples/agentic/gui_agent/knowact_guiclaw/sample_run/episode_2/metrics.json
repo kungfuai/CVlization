@@ -1,0 +1,11 @@
+{
+  "task": "Open the Settings app and toggle Bluetooth",
+  "backend": "dry-run",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "exit_code": 1,
+  "steps_taken": 15,
+  "duration_s": 21.2,
+  "prompt_tokens_step_1": 1710,
+  "total_prompt_tokens": 25983,
+  "total_completion_tokens": 881
+}

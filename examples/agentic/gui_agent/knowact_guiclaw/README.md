@@ -29,58 +29,85 @@ Key capabilities demonstrated:
 
 ## Sample output
 
-A sanitized dry-run sample is committed in [`sample_run/`](sample_run/) (task:
-*"Open the Settings app and find the Wi-Fi toggle"*, Qwen3-VL-8B-Instruct,
-`--backend dry-run`, 5 steps). Dry-run mode produces 1×1 placeholder screenshots
-(no real device), so the VLM sees a blank screen and repeatedly presses Home —
-this is expected behavior without a connected device.
+Sanitized dry-run samples are committed under [`sample_run/`](sample_run/) in
+two episodes, demonstrating memory accumulation and reuse across runs.
+Dry-run mode produces 1×1 placeholder screenshots (no real device), so the VLM
+sees a blank screen and repeatedly presses Home — this is expected behavior
+without a connected device.
 
-**Result** ([`result.json`](sample_run/result.json)):
+### Episode 1 — baseline (clean memory)
+
+Task: *"Open the Settings app and navigate to Wi-Fi"*
+([`episode_1/`](sample_run/episode_1/))
+
+GUIClaw starts with no prior memory. It bootstraps a conservative default
+policy entry and runs the task. The VLM sees a 1×1 green screen and presses
+Home on every step.
+
+**Result** ([`result.json`](sample_run/episode_1/result.json)):
 ```json
 {
-  "task": "Open the Settings app and find the Wi-Fi toggle",
-  "backend": "dry-run",
-  "model": "Qwen/Qwen3-VL-8B-Instruct",
-  "max_steps": 5,
+  "task": "Open the Settings app and navigate to Wi-Fi",
   "result": {
-    "exit_code": 1,
-    "parsed": {
-      "success": false,
-      "steps_taken": 5,
-      "error": "max_steps_exceeded"
-    }
+    "parsed": { "success": false, "steps_taken": 15, "error": "max_steps_exceeded" },
+    "token_usage": { "prompt_tokens": 25035, "total_tokens": 26057 },
+    "duration_s": 40.2
   }
 }
 ```
 
-**Trajectory excerpt** ([`trajectory_excerpt.json`](sample_run/trajectory_excerpt.json)) —
-each step shows the VLM's `computer_use` tool call with `action_type`, `intent`,
-and `summary`:
-```json
-{
-  "step": 1,
-  "model_output": {
-    "tool_calls": [{
-      "name": "computer_use",
-      "arguments": {
-        "action_type": "home",
-        "intent": "Navigate to the home screen to access the Settings app.",
-        "summary": "The device is currently on a solid green screen..."
-      }
-    }]
-  },
-  "token_usage": { "prompt_tokens": 1646, "completion_tokens": 72 }
-}
-```
-
-**Memory snapshot** ([`policy.md`](sample_run/policy.md)) — GUIClaw bootstraps a
-conservative default policy on first run:
+**Memory written** ([`policy.md`](sample_run/episode_1/policy.md)) — one entry:
 > *Treat permission requests conservatively. Unless the current task explicitly
 > requires and authorizes a permission, choose Deny, Cancel, Not now, or go
 > back.*
 
-With a real device (ADB backend), successful task completions produce additional
-memory entries and reusable skill functions in `~/.guiclaw/skill/skills.py`.
+Step 1 prompt: **1645 tokens** (includes default policy only).
+
+### Episode 2 — with accumulated memory
+
+Task: *"Open the Settings app and toggle Bluetooth"*
+([`episode_2/`](sample_run/episode_2/))
+
+Between episodes, a failure-avoidance policy entry is added to memory
+(simulating what `enable_memory_extraction` produces from Episode 1's failed
+trajectory):
+> *When the screen is solid green or blank (1×1 placeholder), the device is in
+> dry-run mode with no real UI. Repeatedly pressing Home will not change the
+> screen. Instead, report the task as blocked using the done action.*
+
+**Result** ([`result.json`](sample_run/episode_2/result.json)):
+```json
+{
+  "task": "Open the Settings app and toggle Bluetooth",
+  "result": {
+    "parsed": { "success": false, "steps_taken": 15, "error": "max_steps_exceeded" },
+    "token_usage": { "prompt_tokens": 25983, "total_tokens": 26864 },
+    "duration_s": 21.2
+  }
+}
+```
+
+**Memory loaded** ([`policy.md`](sample_run/episode_2/policy.md)) — two entries
+(original + failure-avoidance).
+
+### Memory reuse evidence
+
+| Metric | Episode 1 | Episode 2 | Delta |
+|--------|-----------|-----------|-------|
+| Policy entries | 1 | 2 | +1 (failure-avoidance) |
+| Step 1 prompt tokens | 1,645 | 1,710 | **+65** (expanded policy context) |
+| Total prompt tokens | 25,035 | 25,983 | +948 |
+
+The +65 prompt token increase on Step 1 corresponds to the additional policy
+entry being injected into the VLM prompt as "Advisory Policy Hints." The
+GUIClaw agent loads all policy entries from `~/.guiclaw/memory/policy.md` at
+the start of each run and injects them into every VLM call.
+
+In dry-run mode, both episodes produce the same actions (press Home) because
+the 1×1 green placeholder provides no visual information for the VLM to act
+on. With a real device (ADB backend), the expanded memory context would
+influence action selection, and successful task completions would also generate
+reusable skill functions in `~/.guiclaw/skill/skills.py`.
 
 ### VLM resource usage (measured)
 
@@ -140,6 +167,7 @@ GUICLAW_MODEL=Qwen/Qwen3-VL-8B-Instruct \
 | `GUICLAW_API_KEY` | `sk-local` | API key for the endpoint |
 | `GUICLAW_BACKEND` | `dry-run` | Backend: `dry-run`, `adb`, `local`, `ios`, `hdc` |
 | `GUICLAW_MAX_STEPS` | `15` | Max GUI steps per task |
+| `GUICLAW_STATE` | `~/.cache/cvlization/guiclaw` | Host dir mounted as `~/.guiclaw` for memory/skill persistence |
 
 ## Architecture: Know-Route-Act-Reflect
 
@@ -179,8 +207,9 @@ GUIClaw stores learned artifacts in `~/.guiclaw/`:
 | `~/.guiclaw/memory/` | Experience memory (policy rules, lessons learned) |
 | `~/.guiclaw/skill/skills.py` | Validated reusable action sequences |
 
-These persist across runs and accumulate over episodes, enabling the agent to
-improve on repeated tasks. Memory and skills are transferable across base
+These persist across runs via the `GUICLAW_STATE` host mount
+(`~/.cache/cvlization/guiclaw` by default) and accumulate over episodes,
+enabling the agent to improve on repeated tasks. Memory and skills are transferable across base
 models (+8.5% with Kimi-2.6, +16.2% with Qwen3.5-35B-A3B on MobileWorld).
 
 ## Limitations

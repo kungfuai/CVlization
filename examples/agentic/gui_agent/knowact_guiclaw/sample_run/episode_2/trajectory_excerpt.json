@@ -1,0 +1,109 @@
+{
+  "instruction": "Open the Settings app and toggle Bluetooth",
+  "platform": "dry-run",
+  "steps": [
+    {
+      "step": 1,
+      "subtask": 1,
+      "attempt": 1,
+      "phase": "agent",
+      "model_output": {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "chatcmpl-tool-89652724ffd2274f",
+            "name": "computer_use",
+            "arguments": {
+              "action_type": "home",
+              "intent": "Return to home screen to access the Settings app.",
+              "summary": "The screen is blank, so returning to the home screen is necessary to proceed."
+            }
+          }
+        ]
+      },
+      "action": {
+        "action_type": "home",
+        "points": [],
+        "categories": [],
+        "extras": [],
+        "params": {},
+        "auto_enter": true
+      },
+      "app": "DryRun",
+      "token_usage": {
+        "prompt_tokens": 1710,
+        "completion_tokens": 55,
+        "total_tokens": 1765
+      }
+    },
+    {
+      "step": 2,
+      "subtask": 1,
+      "attempt": 1,
+      "phase": "agent",
+      "model_output": {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "chatcmpl-tool-bbd4920ab5ae43e6",
+            "name": "computer_use",
+            "arguments": {
+              "action_type": "home",
+              "intent": "Return to home screen to access the Settings app.",
+              "summary": "The device is on a solid green screen, indicating no visible UI elements. Returning to home screen is necessary to proceed."
+            }
+          }
+        ]
+      },
+      "action": {
+        "action_type": "home",
+        "points": [],
+        "categories": [],
+        "extras": [],
+        "params": {},
+        "auto_enter": true
+      },
+      "app": "DryRun",
+      "token_usage": {
+        "prompt_tokens": 1724,
+        "completion_tokens": 63,
+        "total_tokens": 1787
+      }
+    },
+    {
+      "step": 3,
+      "subtask": 1,
+      "attempt": 1,
+      "phase": "agent",
+      "model_output": {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "chatcmpl-tool-9811a96ff864a3cc",
+            "name": "computer_use",
+            "arguments": {
+              "action_type": "home",
+              "intent": "Return to home screen to access the Settings app.",
+              "summary": "The screen is blank, indicating no visible UI elements. Returning to home screen is necessary to proceed."
+            }
+          }
+        ]
+      },
+      "action": {
+        "action_type": "home",
+        "points": [],
+        "categories": [],
+        "extras": [],
+        "params": {},
+        "auto_enter": true
+      },
+      "app": "DryRun",
+      "token_usage": {
+        "prompt_tokens": 1735,
+        "completion_tokens": 59,
+        "total_tokens": 1794
+      }
+    }
+  ],
+  "total_steps": 15
+}

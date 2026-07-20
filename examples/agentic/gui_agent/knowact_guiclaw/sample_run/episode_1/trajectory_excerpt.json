@@ -1,13 +1,6 @@
 {
-  "instruction": "Open the Settings app and find the Wi-Fi toggle",
+  "instruction": "Open the Settings app and navigate to Wi-Fi",
   "platform": "dry-run",
-  "subtasks": [
-    {
-      "subtask": 1,
-      "task": "Open the Settings app and find the Wi-Fi toggle",
-      "app_hint": null
-    }
-  ],
   "steps": [
     {
       "step": 1,
@@ -18,11 +11,45 @@
         "content": "",
         "tool_calls": [
           {
-            "id": "chatcmpl-tool-b6a6dad7a8ad953c",
+            "id": "chatcmpl-tool-9a5ce6936115d131",
             "name": "computer_use",
             "arguments": {
               "action_type": "home",
               "intent": "Navigate to the home screen to access the Settings app.",
+              "summary": "The screen is blank, so returning to the home screen to proceed with the task."
+            }
+          }
+        ]
+      },
+      "action": {
+        "action_type": "home",
+        "points": [],
+        "categories": [],
+        "extras": [],
+        "params": {},
+        "auto_enter": true
+      },
+      "app": "DryRun",
+      "token_usage": {
+        "prompt_tokens": 1645,
+        "completion_tokens": 57,
+        "total_tokens": 1702
+      }
+    },
+    {
+      "step": 2,
+      "subtask": 1,
+      "attempt": 1,
+      "phase": "agent",
+      "model_output": {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "chatcmpl-tool-92bd0ace889e547b",
+            "name": "computer_use",
+            "arguments": {
+              "action_type": "home",
+              "intent": "Return to the home screen to access the Settings app.",
               "summary": "The device is currently on a solid green screen, which is not a valid UI state for interacting with apps. Returning to the home screen is necessary to proceed."
             }
           }
@@ -36,47 +63,11 @@
         "params": {},
         "auto_enter": true
       },
-      "screenshot": "attempt_01/screenshots/001_home.png",
       "app": "DryRun",
       "token_usage": {
-        "prompt_tokens": 1646,
+        "prompt_tokens": 1660,
         "completion_tokens": 72,
-        "total_tokens": 1718
-      }
-    },
-    {
-      "step": 2,
-      "subtask": 1,
-      "attempt": 1,
-      "phase": "agent",
-      "model_output": {
-        "content": "",
-        "tool_calls": [
-          {
-            "id": "chatcmpl-tool-94d252941e479ddc",
-            "name": "computer_use",
-            "arguments": {
-              "action_type": "home",
-              "intent": "Navigate to the home screen to access the Settings app.",
-              "summary": "The device is currently on a solid green screen, indicating a need to return to the home screen."
-            }
-          }
-        ]
-      },
-      "action": {
-        "action_type": "home",
-        "points": [],
-        "categories": [],
-        "extras": [],
-        "params": {},
-        "auto_enter": true
-      },
-      "screenshot": "attempt_01/screenshots/002_home.png",
-      "app": "DryRun",
-      "token_usage": {
-        "prompt_tokens": 1661,
-        "completion_tokens": 60,
-        "total_tokens": 1721
+        "total_tokens": 1732
       }
     },
     {
@@ -88,12 +79,12 @@
         "content": "",
         "tool_calls": [
           {
-            "id": "chatcmpl-tool-ac644af33f2487d0",
+            "id": "chatcmpl-tool-843ccf2427ddda6f",
             "name": "computer_use",
             "arguments": {
               "action_type": "home",
               "intent": "Return to the home screen to access the Settings app.",
-              "summary": "The device is currently on a solid green screen, which is not a valid UI state for interacting with apps."
+              "summary": "The device is currently on a solid green screen, which is not a valid UI state for navigation. Returning to the home screen is necessary to proceed."
             }
           }
         ]
@@ -106,39 +97,13 @@
         "params": {},
         "auto_enter": true
       },
-      "screenshot": "attempt_01/screenshots/003_home.png",
       "app": "DryRun",
       "token_usage": {
-        "prompt_tokens": 1673,
-        "completion_tokens": 62,
-        "total_tokens": 1735
+        "prompt_tokens": 1672,
+        "completion_tokens": 70,
+        "total_tokens": 1742
       }
     }
   ],
-  "screenshots": [
-    {
-      "subtask": 1,
-      "attempt": 1,
-      "sequence": 0,
-      "kind": "initial"
-    },
-    {
-      "subtask": 1,
-      "attempt": 1,
-      "sequence": 1,
-      "kind": "home"
-    },
-    {
-      "subtask": 1,
-      "attempt": 1,
-      "sequence": 2,
-      "kind": "home"
-    },
-    {
-      "subtask": 1,
-      "attempt": 1,
-      "sequence": 3,
-      "kind": "home"
-    }
-  ]
+  "total_steps": 15
 }

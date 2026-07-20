@@ -1,9 +1,0 @@
-{
-  "task": "Open the Settings app and find the Wi-Fi toggle",
-  "backend": "dry-run",
-  "model": "Qwen/Qwen3-VL-8B-Instruct",
-  "exit_code": 1,
-  "has_memory": true,
-  "has_skills": false,
-  "trajectory_files": 23
-}
