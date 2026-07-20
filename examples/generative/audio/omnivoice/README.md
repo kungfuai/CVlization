@@ -50,11 +50,25 @@ Verification metrics and artifact hashes:
 - **Output**: saved to your working directory as `speech.wav` (24 kHz mono WAV)
 - **Runtime**: ~5–15 s per utterance on a modern GPU (32 diffusion steps);
   ~3 s with `--num-step 16`
-- **VRAM**: peak ~2.7 GB on RTX PRO 6000 Blackwell (float16)
+
+### VRAM Usage
+
+Measured with `monitor_vram.sh` (PR #248), 150 ms polling, float16 precision,
+32 diffusion steps, on NVIDIA RTX PRO 6000 Blackwell Max-Q
+(GPU-dd55f371, 97887 MiB total):
+
+| Mode | Device Peak | Process Peak | Samples | Baseline | Post-Run |
+|------|-------------|--------------|---------|----------|----------|
+| Voice design | 2841 MiB (2.77 GiB) | 2818 MiB (2.75 GiB) | 41 | 15 MiB | 15 MiB |
+| Voice cloning | 4683 MiB (4.57 GiB) | 4660 MiB (4.55 GiB) | 44 | 15 MiB | 15 MiB |
+
+Voice cloning peaks higher because it loads Whisper large-v3-turbo (~1.6 GB)
+for auto-transcription when `--ref-text` is omitted. Providing `--ref-text`
+skips Whisper and should yield VRAM closer to the voice-design peak.
 
 ## Requirements
 
-- NVIDIA GPU with 4 GB+ VRAM (or CPU, much slower)
+- NVIDIA GPU with 5 GB+ VRAM (or CPU, much slower)
 - Docker with NVIDIA Container Toolkit
 - ~10 GB disk space (image + cached model weights)
 

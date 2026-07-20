@@ -8,7 +8,7 @@ datasets:
 stability: experimental
 resources:
   gpu: 1
-  vram_gb: 4
+  vram_gb: 5
   disk_gb: 10
 presets:
   build:
@@ -49,16 +49,26 @@ description: >
   weights are CC-BY-NC due to training-data constraints.
 verification:
   status: PARTIAL
-  last_verified: "2026-07-13"
+  last_verified: "2026-07-20"
+  peak_vram_mib:
+    voice_design: 2818
+    voice_cloning: 4660
+  vram_poll_interval_ms: 150
   last_verification_note: >
     Build, voice design, voice cloning, cvl info, cvl run (both modes from
     external cwd), model caching (3.1 GB + 1.6 GB Whisper), cache reuse, and
-    host persistence all pass on RTX PRO 6000 Blackwell. Peak ~2.7 GB VRAM
-    (float16). ASR intelligibility (jiwer Levenshtein WER): English raw WER
-    14.3%/0.0% (punctuation-only difference, normalized WER 0.0%), Chinese
-    raw CER 13.6% (normalized 0.0%). Whisper large-v3-turbo rev 41f01f3f.
-    ECAPA-TDNN speaker similarity 0.83 (rev 0f99f2d0). OmniVoice rev
-    c5fdb5cc. Multilingual: English and Chinese locally verified; 644 other
-    languages upstream-claimed. PARTIAL: subjective voice-character, accent
-    fidelity, and perceptual quality deferred to human listening review.
-    Reproducible metrics at zzsi/cvl omnivoice/verification_metrics.json.
+    host persistence all pass on RTX PRO 6000 Blackwell Max-Q (GPU-dd55f371,
+    97887 MiB total). VRAM (float16, 32 diffusion steps, monitor_vram.sh
+    150 ms polling): voice design process peak 2818 MiB (2.75 GiB), device
+    peak 2841 MiB (2.77 GiB), 41 samples; voice cloning process peak
+    4660 MiB (4.55 GiB), device peak 4683 MiB (4.57 GiB), 44 samples;
+    idle baseline 15 MiB, full release to 15 MiB post-run. Voice cloning
+    peaks higher due to Whisper auto-transcription (skippable with
+    --ref-text). ASR intelligibility (jiwer Levenshtein WER): English raw
+    WER 14.3%/0.0% (punctuation-only, normalized 0.0%), Chinese raw CER
+    13.6% (normalized 0.0%). Whisper large-v3-turbo rev 41f01f3f. ECAPA-TDNN
+    speaker similarity 0.83 (rev 0f99f2d0). OmniVoice rev c5fdb5cc.
+    Multilingual: English and Chinese locally verified; 644 other languages
+    upstream-claimed. PARTIAL: subjective voice-character, accent fidelity,
+    and perceptual quality deferred to human listening review. Reproducible
+    metrics at zzsi/cvl omnivoice/verification_metrics.json.
