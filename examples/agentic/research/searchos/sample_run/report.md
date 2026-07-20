@@ -3,20 +3,21 @@
 _(empty body)_
 
 ### Coverage Table
-| lab_name | founding_year | headquarters_city | flagship_model |
-|---|---|---|---|
-| Basilisk Research | 2018 [2] | Tallinn [2] | Gaze-XL [3] |
-| Nimbus Labs | 2019 [4] | Reykjavik [5] | StormCast-3 [6] |
-| Orchard AI | 2021 [7] | Lisbon [7] | Pippin-1B [8] |
-| Tidewater Institute | 2016 [9] | Hobart [9] | Ebb-Sim [9] |
+| lab_name | founding_year | founding_year_citation | headquarters_city | headquarters_city_citation | flagship_open_model | flagship_open_model_citation |
+|---|---|---|---|---|---|---|
+| Basilisk Research | 2018 [7] | https://basilisk-research.example/home [7] | Tallinn [7] | https://basilisk-research.example/home [7] | Gaze-XL [8] | https://basilisk-research.example/gaze [8] |
+| Nimbus Labs | 2019 [2] | https://nimbus-labs.example/about [2] | Reykjavik [3] | https://nimbus-labs.example/contact [3] | StormCast-3 [4] | https://nimbus-labs.example/models [4] |
+| Orchard AI | 2021 [5] | https://orchard-ai.example/about [5] | Lisbon [5] | https://orchard-ai.example/about [5] | Pippin-1B [6] | https://orchard-ai.example/flagship [6] |
+| Tidewater Institute | 2016 [9] | https://tidewater-institute.example/profile [9] | Hobart [9] | https://tidewater-institute.example/profile [9] | Ebb-Sim [10] | https://tidewater-institute.example/ebb [10] |
 
 ### Sources
 [1] agent://explore_agent/final_summary
-[2] https://basilisk-research.example/home
-[3] https://basilisk-research.example/gaze
-[4] https://nimbus-labs.example/about
-[5] https://nimbus-labs.example/contact
-[6] https://nimbus-labs.example/models
-[7] https://orchard-ai.example/about
-[8] https://orchard-ai.example/flagship
-[9] agent://orchestrator/asserted
+[2] https://nimbus-labs.example/about
+[3] https://nimbus-labs.example/contact
+[4] https://nimbus-labs.example/models
+[5] https://orchard-ai.example/about
+[6] https://orchard-ai.example/flagship
+[7] https://basilisk-research.example/home
+[8] https://basilisk-research.example/gaze
+[9] https://tidewater-institute.example/profile
+[10] https://tidewater-institute.example/ebb

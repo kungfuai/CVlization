@@ -70,14 +70,19 @@ description: >-
   schema completion.
 
 verification:
-  last_verified: "2026-07-17"
+  last_verified: "2026-07-19"
   last_verification_note: >-
     Offline mode verified end-to-end on CPU (macOS/arm64 Docker) with
-    --model gpt-4.1 --fast-model gpt-4.1-mini: 16/16 coverage cells filled,
-    every evidence value matches corpus.json ground truth, 9/12 attribute
-    cells anchored to the exact corpus page with verbatim source excerpts,
-    remaining cells explicitly labeled orchestrator-asserted/explore-seeded
-    (values correct). Grounding audited programmatically against the corpus.
-    Web mode (Serper/Tavily) not run: no search API key on the verification
-    host; its no-key guard verified to fail fast with a clear message.
+    --model gpt-4.1 --fast-model gpt-4.1-mini --max-iterations 36 under the
+    strict grounding gate (verify_grounding.py --require-complete): every
+    non-identity coverage cell filled AND page-anchored — http(s) corpus
+    source + verbatim source_excerpt + value present in the page; zero
+    agent:// (summary-replay or orchestrator-asserted) evidence in cells.
+    Gate transcript committed at sample_run/grounding_check.txt
+    (anchored=24 unresolved=0 missing=0). Coverage is stochastic run-to-run
+    (25-100% observed); filled-but-ungrounded cells cannot occur with the
+    example's three replay/assert gates. Web mode (Serper/Tavily) remains
+    unverified: no search API key on the verification host; its no-key
+    guard fails fast with a clear message. The offline artifact does not
+    verify live open-domain retrieval.
   status: PARTIAL

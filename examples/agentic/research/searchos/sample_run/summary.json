@@ -6,37 +6,37 @@
   "model": "gpt-4.1",
   "verdict": "COMPLETE",
   "coverage_score": 1.0,
-  "evidence_count": 16,
-  "total_steps": 32,
-  "elapsed_s": 69.4,
+  "evidence_count": 28,
+  "total_steps": 45,
+  "elapsed_s": 85.8,
   "token_usage": {
-    "prompt_tokens": 210804,
-    "completion_tokens": 9565,
-    "total_tokens": 220369,
-    "cached_prompt_tokens": 132224,
-    "llm_calls": 36,
-    "cache_hit_calls": 29,
-    "cache_hit_rate": 0.6705,
+    "prompt_tokens": 445393,
+    "completion_tokens": 12673,
+    "total_tokens": 458066,
+    "cached_prompt_tokens": 295040,
+    "llm_calls": 84,
+    "cache_hit_calls": 58,
+    "cache_hit_rate": 0.7438,
     "by_role": {
       "orchestrator": {
-        "prompt_tokens": 115253,
-        "completion_tokens": 2163,
-        "cached_prompt_tokens": 88320,
-        "llm_calls": 13,
-        "cache_hit_calls": 13
+        "prompt_tokens": 242111,
+        "completion_tokens": 2975,
+        "cached_prompt_tokens": 192768,
+        "llm_calls": 23,
+        "cache_hit_calls": 23
       },
       "sub_agent": {
-        "prompt_tokens": 81961,
-        "completion_tokens": 5748,
-        "cached_prompt_tokens": 43904,
-        "llm_calls": 17,
-        "cache_hit_calls": 16
+        "prompt_tokens": 154581,
+        "completion_tokens": 6394,
+        "cached_prompt_tokens": 102272,
+        "llm_calls": 39,
+        "cache_hit_calls": 35
       },
       "extraction": {
-        "prompt_tokens": 13590,
-        "completion_tokens": 1654,
+        "prompt_tokens": 48701,
+        "completion_tokens": 3304,
         "cached_prompt_tokens": 0,
-        "llm_calls": 6,
+        "llm_calls": 22,
         "cache_hit_calls": 0
       }
     }

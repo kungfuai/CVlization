@@ -88,10 +88,12 @@ Artifacts land in `searchos_outputs/` in your current directory (override with
   coverage map (cells filling in), the citation-grounded report table, and a
   one-line run summary (verdict / coverage / evidence / tokens).
 - **Stochastic by nature**: the LLM designs the table schema and the dispatch
-  plan, so column names and coverage differ run to run (typically 80–100%
-  of cells filled within the demo budget). Unfilled cells print as `—` —
-  with this example's grounding setup a cell is either backed by evidence or
-  honestly missing, never guessed.
+  plan, so column names and coverage differ run to run — observed anywhere
+  from 25% to 100% of cells filled within the demo budget (raising
+  `--max-iterations` helps). Unfilled cells print as `—` with an explicit
+  warning — with this example's grounding gates a cell is either
+  page-anchored or honestly missing, never guessed. Audit any run with
+  `python3 verify_grounding.py`.
 
 ## Choosing the LLM
 
@@ -151,66 +153,81 @@ evidence-laundering paths easy to catch and fix while building this example
    originally used a `corpus://` scheme and every page-anchored citation lost
    its URL. The corpus now uses reserved `.example`-TLD https URLs (RFC 2606;
    never fetched — offline mode serves every page from the local corpus).
+4. **Orchestrator inline assertion.** The orchestrator's `add_entities` tool
+   can write attribute values straight into cells as
+   `agent://orchestrator/asserted` evidence, relayed from a sub-agent's
+   free-text summary with no page backing — correct or not, such cells are
+   not inspectable against a source. The build patch adds an
+   `SF_ENABLE_ORCH_ASSERT` gate (default `true` = stock); this example sets
+   it to `false`, so the orchestrator is told the values were ignored and
+   must dispatch search agents to ground those cells.
 
-Remaining provenance tiers you will see in `search_state.json`:
-**page-anchored** evidence (a real corpus URL plus a verbatim
-`source_excerpt` from that page — the bulk of filled cells),
-**orchestrator-asserted** (`agent://orchestrator/asserted`, an upstream
-orchestrator tool for relaying a value verbatim from a sub-agent's summary;
-lower confidence, clearly labeled), and **explore-seeded** identity cells
-(the entity names themselves). Audit any run with two greps: every value
-should appear in `corpus.json`, and every anchored `source_excerpt` should be
-a verbatim quote of its source page.
+With all three replay/assert gates off, a **filled cell is page-anchored by
+construction**: the only evidence that can fill it carries a real corpus URL
+and a verbatim `source_excerpt` from that page. Identity cells (the row's own
+entity name, seeded at schema time) are the one labeled exception. A cell
+with no anchored evidence stays honestly `—` instead of absorbing a guess.
+
+**Audit any run mechanically** with the bundled strict gate:
+
+```bash
+python3 verify_grounding.py                      # after a run; add --require-complete
+```
+
+It fails unless every filled non-identity cell has an http(s) corpus source,
+a verbatim `source_excerpt` from that page, and the cell value present in the
+page (URL-valued `*_citation` columns must instead match the page their
+excerpt came from). `agent://` evidence never counts toward the gate.
 
 ## Output — what a good run looks like
 
 The printed **SOCM state** shows the coverage map filling in cell by cell, and
 `report.md` is a table where every cell cites the corpus page it came from.
-Verified run (2026-07-17, `--model gpt-4.1 --fast-model gpt-4.1-mini`,
-offline mode; 16/16 cells filled, every value matches `corpus.json`, 9/12
-attribute cells page-anchored with verbatim excerpts):
+Verified run (2026-07-19, `--model gpt-4.1 --fast-model gpt-4.1-mini
+--max-iterations 36`, offline mode): **all 12 attribute cells filled, every
+value matches `corpus.json`, and `verify_grounding.py --require-complete`
+passes** — every non-identity cell page-anchored with a verbatim excerpt
+(this run's LLM-designed schema also added explicit `*_citation` provenance
+columns, each verified to match the page its excerpt came from).
 
 The complete artifact bundle from that run is committed in
 [`sample_run/`](sample_run/) —
 [`report.md`](sample_run/report.md) (the citation-grounded answer),
 [`summary.json`](sample_run/summary.json) (verdict / coverage / tokens),
-and [`search_state.json`](sample_run/search_state.json) (**the central
+[`search_state.json`](sample_run/search_state.json) (**the central
 artifact**: the full SOCM state — coverage map, evidence graph with per-cell
 source URLs and verbatim `source_excerpt` quotes, frontier queue, strategy
-log). The excerpts below are a preview of those files:
-
-```
-  Table `AI Research Labs`  (4 rows × 4 cols)
-    row                     lab_name        founding_year   headquarters_c  flagship_model
-    Nimbus Labs               ✓               ✓               ✓               ✓
-    Orchard AI                ✓               ✓               ✓               ✓
-    Basilisk Research         ✓               ✓               ✓               ✓
-    Tidewater Institute       ✓               ✓               ✓               ✓
-  cells filled: 16/16
-  evidence nodes: 16
-```
+log), and [`grounding_check.txt`](sample_run/grounding_check.txt) (the strict
+gate's per-cell transcript: `anchored=24 unresolved=0 missing=0`). The
+excerpts below are a preview of those files:
 
 ```markdown
-| lab_name | founding_year | headquarters_city | flagship_model |
+| lab_name | founding_year | headquarters_city | flagship_open_model |
 |---|---|---|---|
-| Basilisk Research | 2018 [2] | Tallinn [2] | Gaze-XL [3] |
-| Nimbus Labs | 2019 [4] | Reykjavik [5] | StormCast-3 [6] |
-| Orchard AI | 2021 [7] | Lisbon [7] | Pippin-1B [8] |
-| Tidewater Institute | 2016 [9] | Hobart [9] | Ebb-Sim [9] |
+| Basilisk Research | 2018 [7] | Tallinn [7] | Gaze-XL [8] |
+| Nimbus Labs | 2019 [2] | Reykjavik [3] | StormCast-3 [4] |
+| Orchard AI | 2021 [5] | Lisbon [5] | Pippin-1B [6] |
+| Tidewater Institute | 2016 [9] | Hobart [9] | Ebb-Sim [10] |
 
-[2] https://basilisk-research.example/home
-[3] https://basilisk-research.example/gaze
-[4] https://nimbus-labs.example/about
-[5] https://nimbus-labs.example/contact
-[6] https://nimbus-labs.example/models
-[7] https://orchard-ai.example/about
-[8] https://orchard-ai.example/flagship
-[9] agent://orchestrator/asserted
+[2] https://nimbus-labs.example/about      [3] https://nimbus-labs.example/contact
+[4] https://nimbus-labs.example/models     [5] https://orchard-ai.example/about
+[6] https://orchard-ai.example/flagship    [7] https://basilisk-research.example/home
+[8] https://basilisk-research.example/gaze [9] https://tidewater-institute.example/profile
+[10] https://tidewater-institute.example/ebb
 ```
 
+(The full report table in `sample_run/report.md` also carries the
+`*_citation` columns.)
+
 ```
-verdict=COMPLETE  coverage=100%  evidence=16  steps=32  time=69.4s  tokens=220,369/36 calls
+verdict=COMPLETE  coverage=100%  evidence=28  steps=45  time=85.8s  tokens=458,066/84 calls
 ```
+
+A run that ends before every cell is grounded renders the unfilled cells as
+`—` with an explicit warning — of two curated verification runs, one reached
+full anchored coverage (above) and one ended at 3/12 cells, all anchored,
+rest honestly missing. `verify_grounding.py` (without `--require-complete`)
+passed on both: with the gates off, filled-but-ungrounded does not occur.
 
 ## Notes & caveats
 

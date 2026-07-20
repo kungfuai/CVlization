@@ -23,6 +23,19 @@ gpt-4.1; upstream's default gpt-5.5 is presumably more robust):
    anchored page-open evidence and un-grounded cells stay open for
    re-dispatch instead of silently absorbing a guess.
 
+3. **Orchestrator inline value assertion** (``schema.py``): the
+   ``add_entities`` tool lets the orchestrator write attribute values
+   straight into cells as ``agent://orchestrator/asserted`` evidence,
+   relaying them from sub-agent free-text summaries with no page backing.
+   Even when the relayed values are correct, the resulting cells are not
+   inspectable against a source page — and a hallucinated summary would be
+   laundered the same way. The patch adds ``SF_ENABLE_ORCH_ASSERT``
+   (default ``true`` = stock behavior); ``run_search.py`` sets it to
+   ``false``, so inline values are ignored with an explanatory tool message
+   and the orchestrator must dispatch search agents to ground those cells.
+   With all three gates off, a *filled* cell is page-anchored by
+   construction (see ``verify_grounding.py``).
+
 Exact-match replacement: if upstream changes either file, this script exits
 non-zero and the Docker build fails, so the patches cannot rot silently.
 """
@@ -32,6 +45,7 @@ from pathlib import Path
 
 import searchos.agents.search as search_role
 import searchos.harness.middleware.extraction.evidence_extraction as evx
+import searchos.tools.schema as schema_mod
 
 PERSONA_REPLACEMENTS = [
     (
@@ -70,6 +84,37 @@ EVIDENCE_REPLACEMENTS = [
 ]
 
 
+SCHEMA_REPLACEMENTS = [
+    (
+        "    asserted: dict[str, dict[str, Any]] = {}\n"
+        "    if attributes_json:",
+        "    asserted: dict[str, dict[str, Any]] = {}\n"
+        "    import os as _os\n"
+        '    _assert_gate_off = _os.environ.get("SF_ENABLE_ORCH_ASSERT", '
+        '"true").lower() in ("0", "false", "no")\n'
+        "    _assert_attrs_dropped = bool(attributes_json) and _assert_gate_off\n"
+        "    if _assert_attrs_dropped:\n"
+        '        attributes_json = ""\n'
+        "    if attributes_json:",
+    ),
+    (
+        '    asserted_msg = ""\n'
+        "    if any(asserted_cells.values()):",
+        '    asserted_msg = ""\n'
+        "    if _assert_attrs_dropped:\n"
+        "        asserted_msg = (\n"
+        '            " Inline attribute values were IGNORED (assertion disabled'
+        ' by"\n'
+        '            " SF_ENABLE_ORCH_ASSERT=false): cells fill only from'
+        ' page-anchored"\n'
+        '            " evidence. Dispatch search_agent(s) for these cells'
+        ' instead."\n'
+        "        )\n"
+        "    if any(asserted_cells.values()):",
+    ),
+]
+
+
 def _patch(path: Path, replacements: list[tuple[str, str]]) -> bool:
     text = path.read_text(encoding="utf-8")
     for old, new in replacements:
@@ -93,6 +138,8 @@ def main() -> int:
     if not _patch(persona, PERSONA_REPLACEMENTS):
         return 1
     if not _patch(Path(evx.__file__), EVIDENCE_REPLACEMENTS):
+        return 1
+    if not _patch(Path(schema_mod.__file__), SCHEMA_REPLACEMENTS):
         return 1
     return 0
 

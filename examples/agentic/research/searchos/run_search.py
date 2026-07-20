@@ -109,6 +109,12 @@ def _configure_env(args: argparse.Namespace) -> None:
     # With replay off, cells fill only from anchored page-open extraction, and
     # an un-grounded cell stays open for re-dispatch.
     os.environ["SF_ENABLE_SUMMARY_REPLAY"] = "false"
+    # And for the orchestrator's add_entities(attributes_json=...) inline
+    # assertion (third build-patch gate): relayed summary values must not fill
+    # cells as agent://orchestrator/asserted evidence either. With all three
+    # gates off, every *filled* cell is page-anchored by construction —
+    # auditable with verify_grounding.py against the corpus.
+    os.environ["SF_ENABLE_ORCH_ASSERT"] = "false"
 
     workspace = str(Path(args.output_dir).resolve() / "workspace")
     os.environ["SF_WORKSPACE_ROOT"] = workspace
