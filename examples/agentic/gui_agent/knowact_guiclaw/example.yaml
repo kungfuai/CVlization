@@ -68,5 +68,8 @@ verification:
     host persistence all verified. Two-tier test.sh: Tier 1 wiring 4/4
     PASS (no VLM); Tier 2 VLM semantic PASS (steps_taken>0, tool_calls,
     memory). GPU memory measured: 49 GB steady (Qwen3-VL-8B at 0.5
-    utilization on 98 GB). ADB backend SKIPPED: no Android device.
-    iOS/HarmonyOS/desktop UNTESTED.
+    utilization on 98 GB). Memory accumulation/reuse: IMPLEMENTED BUT
+    UNVERIFIED — dry-run cannot demonstrate it (1x1 placeholder gives
+    VLM no visual signal; behavior identical regardless of memory).
+    Requires ADB backend + embedding provider. ADB backend SKIPPED: no
+    Android device. iOS/HarmonyOS/desktop UNTESTED.

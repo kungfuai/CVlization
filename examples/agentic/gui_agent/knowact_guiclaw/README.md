@@ -29,22 +29,14 @@ Key capabilities demonstrated:
 
 ## Sample output
 
-Sanitized dry-run samples are committed under [`sample_run/`](sample_run/) in
-two episodes, demonstrating memory accumulation and reuse across runs.
+A sanitized dry-run sample is committed in [`sample_run/`](sample_run/)
+(Qwen3-VL-8B-Instruct, `--backend dry-run`, 15 steps across 3 attempts).
+
 Dry-run mode produces 1×1 placeholder screenshots (no real device), so the VLM
-sees a blank screen and repeatedly presses Home — this is expected behavior
-without a connected device.
+sees a blank green screen and repeatedly presses Home — this is expected
+behavior. The task fails with `max_steps_exceeded`.
 
-### Episode 1 — baseline (clean memory)
-
-Task: *"Open the Settings app and navigate to Wi-Fi"*
-([`episode_1/`](sample_run/episode_1/))
-
-GUIClaw starts with no prior memory. It bootstraps a conservative default
-policy entry and runs the task. The VLM sees a 1×1 green screen and presses
-Home on every step.
-
-**Result** ([`result.json`](sample_run/episode_1/result.json)):
+**Result** ([`result.json`](sample_run/result.json)):
 ```json
 {
   "task": "Open the Settings app and navigate to Wi-Fi",
@@ -56,58 +48,53 @@ Home on every step.
 }
 ```
 
-**Memory written** ([`policy.md`](sample_run/episode_1/policy.md)) — one entry:
+**Trajectory excerpt** ([`trajectory_excerpt.json`](sample_run/trajectory_excerpt.json)) —
+each step shows the VLM's `computer_use` tool call:
+```json
+{
+  "step": 1,
+  "model_output": {
+    "tool_calls": [{
+      "name": "computer_use",
+      "arguments": {
+        "action_type": "home",
+        "intent": "Navigate to the home screen to access the Settings app.",
+        "summary": "The screen is blank, so returning to the home screen..."
+      }
+    }]
+  },
+  "token_usage": { "prompt_tokens": 1645, "completion_tokens": 57 }
+}
+```
+
+**Memory snapshot** ([`policy.md`](sample_run/policy.md)) — GUIClaw bootstraps a
+conservative default policy on first run:
 > *Treat permission requests conservatively. Unless the current task explicitly
 > requires and authorizes a permission, choose Deny, Cancel, Not now, or go
 > back.*
 
-Step 1 prompt: **1645 tokens** (includes default policy only).
+### Memory accumulation and reuse (unverified)
 
-### Episode 2 — with accumulated memory
+The Know-Route-Act-Reflect architecture includes cross-episode memory
+accumulation and skill reuse, but **this has not been verified** in the
+CVlization wrapper. Dry-run mode cannot demonstrate memory reuse because the
+1×1 placeholder screenshots provide no visual signal for the VLM to act on —
+behavior is identical regardless of memory content.
 
-Task: *"Open the Settings app and toggle Bluetooth"*
-([`episode_2/`](sample_run/episode_2/))
-
-Between episodes, a failure-avoidance policy entry is added to memory
-(simulating what `enable_memory_extraction` produces from Episode 1's failed
-trajectory):
-> *When the screen is solid green or blank (1×1 placeholder), the device is in
-> dry-run mode with no real UI. Repeatedly pressing Home will not change the
-> screen. Instead, report the task as blocked using the done action.*
-
-**Result** ([`result.json`](sample_run/episode_2/result.json)):
-```json
-{
-  "task": "Open the Settings app and toggle Bluetooth",
-  "result": {
-    "parsed": { "success": false, "steps_taken": 15, "error": "max_steps_exceeded" },
-    "token_usage": { "prompt_tokens": 25983, "total_tokens": 26864 },
-    "duration_s": 21.2
-  }
-}
+To verify memory reuse, connect a real Android device via ADB and enable
+memory extraction in the GUIClaw config:
+```yaml
+# ~/.guiclaw/config.yaml
+enable_memory_extraction: true
+enable_skill_extraction: true
+embedding:
+  base_url: "http://localhost:8000/v1"
+  model: "text-embedding-model"
 ```
 
-**Memory loaded** ([`policy.md`](sample_run/episode_2/policy.md)) — two entries
-(original + failure-avoidance).
-
-### Memory reuse evidence
-
-| Metric | Episode 1 | Episode 2 | Delta |
-|--------|-----------|-----------|-------|
-| Policy entries | 1 | 2 | +1 (failure-avoidance) |
-| Step 1 prompt tokens | 1,645 | 1,710 | **+65** (expanded policy context) |
-| Total prompt tokens | 25,035 | 25,983 | +948 |
-
-The +65 prompt token increase on Step 1 corresponds to the additional policy
-entry being injected into the VLM prompt as "Advisory Policy Hints." The
-GUIClaw agent loads all policy entries from `~/.guiclaw/memory/policy.md` at
-the start of each run and injects them into every VLM call.
-
-In dry-run mode, both episodes produce the same actions (press Home) because
-the 1×1 green placeholder provides no visual information for the VLM to act
-on. With a real device (ADB backend), the expanded memory context would
-influence action selection, and successful task completions would also generate
-reusable skill functions in `~/.guiclaw/skill/skills.py`.
+The upstream paper reports +8.5% accuracy with Kimi-2.6 and +16.2% with
+Qwen3.5-35B-A3B on MobileWorld when memory and skills transfer across
+episodes.
 
 ### VLM resource usage (measured)
 
@@ -216,6 +203,10 @@ models (+8.5% with Kimi-2.6, +16.2% with Qwen3.5-35B-A3B on MobileWorld).
 
 - **Dry-run mode** only plans actions; it does not interact with a real device.
   Use `--backend adb` with a connected Android device for full automation.
+- **Memory/skill reuse** is implemented but unverified in this wrapper. Dry-run
+  mode cannot demonstrate it because the 1×1 placeholder screenshots give the
+  VLM no visual signal — behavior is identical regardless of memory content.
+  Requires a real device (ADB) and an embedding provider for full retrieval.
 - Requires a **multimodal VLM** endpoint (pure text LLMs will not work).
 - Android ADB backend needs the host to forward the ADB socket into Docker.
 - iOS/HarmonyOS backends are untested in this CVlization wrapper.

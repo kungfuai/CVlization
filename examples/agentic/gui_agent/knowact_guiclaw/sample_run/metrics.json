@@ -5,7 +5,5 @@
   "exit_code": 1,
   "steps_taken": 15,
   "duration_s": 40.2,
-  "prompt_tokens_step_1": 1645,
-  "total_prompt_tokens": 25035,
-  "total_completion_tokens": 1022
+  "total_tokens": 26057
 }
