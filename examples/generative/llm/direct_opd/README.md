@@ -1,7 +1,10 @@
-# Direct-OPD: Weak-to-Strong On-Policy Distillation
+# Direct-OPD: Algorithm / Objective Execution Demo
 
-Transfer RL-induced policy shifts from a weak teacher to a stronger student
-without re-running sparse-reward RL on the target model.
+Demonstrates the core Direct-OPD training objective — transferring
+RL-induced policy shifts from a weak teacher to a stronger student using
+per-token log-ratio as a dense implicit reward. This is an algorithm
+execution demo; **weak-to-strong quality improvement requires full-scale
+training (8×A100, 300 steps) plus benchmark evaluation (AIME/MATH)**.
 
 **Paper:** [Weak-to-Strong Generalization via Direct On-Policy Distillation](https://huggingface.co/papers/2607.05394)
 (Feng, Gao, Chi et al., Tsinghua AIR / ByteDance Seed, 2026)
@@ -32,15 +35,16 @@ Key steps per training iteration:
 - **First run:** Downloads three models (~3.5 GB student + ~3 GB teacher +
   ~3 GB teacher reference) and the Skywork math dataset subset. Total first-run
   download is ~10 GB.
-- **VRAM:** ~20-22 GB peak with 3 models loaded simultaneously in bfloat16,
-  8-bit optimizer, and gradient checkpointing. Requires a 24 GB GPU (A10, A5000,
-  RTX 4090, etc.) or larger.
+- **VRAM:** nvidia-smi device peak 23.2 GiB, PyTorch allocator peak 20.1 GiB.
+  Requires a 24 GB GPU (A10, A5000, RTX 4090, etc.) or larger.
 - **Output:** Checkpoints and training logs written to `outputs/` in the example
-  directory. Metrics include policy gradient loss, KL divergence, mean teacher
-  delta, and advantage magnitude.
-- **Runtime:** Each training step takes approximately 30-90 seconds depending
-  on response length and GPU speed. The default 20-step smoke test completes in
-  under 30 minutes.
+  directory. Metrics include policy gradient loss, teacher delta, and gradient
+  norm.
+- **Scope:** This demo verifies that the Direct-OPD objective computes finite
+  loss, non-zero teacher delta, and stable gradients. It does **not** demonstrate
+  measurable held-out improvement — the 20-step smoke test is insufficient for
+  that. The paper's headline result (Qwen3-1.7B 48.3% → 58.3% on AIME 2024)
+  requires 300 steps, batch size 128, on 8×A100 GPUs.
 
 ## Quick Start
 
@@ -51,8 +55,9 @@ bash examples/generative/llm/direct_opd/build.sh
 # Run training (default 20 steps)
 bash examples/generative/llm/direct_opd/train.sh
 
-# Override config
-bash examples/generative/llm/direct_opd/train.sh --config config.yaml
+# Or via CVL CLI
+cvl run direct-opd build
+cvl run direct-opd train
 ```
 
 ## Models
@@ -66,6 +71,35 @@ bash examples/generative/llm/direct_opd/train.sh --config config.yaml
 The "weak-to-strong" aspect: the 1.5B teacher pair provides the training
 signal, while the 1.7B student is the target. The teacher is weaker in
 capacity but has learned useful policy shifts through RL on math tasks.
+
+## Smoke Test Metrics (20 Steps)
+
+From a verified run on RTX PRO 6000 Blackwell (GPU-dd55f371, 97887 MiB):
+
+| Metric | Value |
+|--------|-------|
+| Mean policy gradient loss | -0.049 |
+| Mean teacher delta | -2.23 |
+| Delta positive fraction | 0.31 |
+| Mean gradient norm | 19.1 (max 29.6) |
+| Mean response length | 509 tokens |
+| PyTorch allocator peak | 20.09 GiB |
+| nvidia-smi device peak | 23709 MiB (23.2 GiB) |
+| nvidia-smi process peak | 23686 MiB (23.1 GiB) |
+| Baseline / post-run | 15 MiB / 15 MiB (fully released) |
+| Step time (cached models) | ~4.4 s |
+| Total (20 steps) | ~89 s |
+
+The negative `mean_delta` indicates the post-RL teacher is generally less
+likely than the pre-RL reference for tokens the student (Qwen3-1.7B, a
+different architecture family) favors — expected cross-family behavior. The
+31% positive-delta fraction shows that roughly a third of the student's
+top-16 candidate tokens received a positive RL signal from the teacher,
+providing a meaningful training gradient.
+
+Full training log:
+[`train_log.jsonl`](https://huggingface.co/datasets/zzsi/cvl/blob/main/direct_opd/train_log.jsonl)
+| [`summary.json`](https://huggingface.co/datasets/zzsi/cvl/blob/main/direct_opd/summary.json)
 
 ## Configuration
 
@@ -95,7 +129,7 @@ The training log (`outputs/train_log.jsonl`) records per-step:
 - `delta_pos_frac` — fraction of top-K tokens with positive delta
 - `mean_adv` — mean weighted advantage
 - `grad_norm` — gradient norm (clipped to 1.0)
-- `gpu_mem_gb` — peak GPU memory usage
+- `gpu_mem_gb` — peak GPU memory usage per step
 
 ## Differences from Upstream
 

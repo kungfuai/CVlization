@@ -37,9 +37,13 @@ description: >
   reward RL. Uses per-token log-ratio between post-RL and pre-RL teacher
   checkpoints as dense implicit reward on student on-policy rollouts.
 verification:
-  last_verified: "2026-07-15"
+  status: PARTIAL
+  last_verified: "2026-07-20"
   last_verification_note: >
-    Verified on RTX PRO 6000 Blackwell (102 GB). 20-step smoke test completed
-    in 215s (~10.7s/step). Peak VRAM: 20.1 GB. All 3 models loaded in bf16
-    (Qwen3-1.7B student, JustRL-DeepSeek-1.5B teacher, DeepSeek-R1-Distill-Qwen-1.5B
-    teacher ref). Cache reuse verified on second run. Outputs saved to host.
+    PARTIAL: 20-step smoke test only (algorithm/objective execution demo).
+    RTX PRO 6000 Blackwell (GPU-dd55f371, 97887 MiB).
+    nvidia-smi device peak: 23709 MiB (23.2 GiB), process peak: 23686 MiB.
+    PyTorch allocator peak: 20.09 GiB. Baseline 15 MiB, post-run 15 MiB.
+    408 samples at 200ms polling. Cache reuse verified. CVL CLI verified.
+    Weak-to-strong quality improvement NOT verified — requires full training
+    (8xA100, 300 steps) plus benchmark evaluation (AIME/MATH).
