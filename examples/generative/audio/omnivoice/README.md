@@ -1,0 +1,187 @@
+# OmniVoice
+
+Massively multilingual zero-shot text-to-speech with voice cloning and voice
+design using k2-fsa OmniVoice 0.6B.
+
+## Model Overview
+
+- **Model**: [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice)
+- **Parameters**: 0.6B (Qwen3-0.6B-Base backbone)
+- **Sample rate**: 24 kHz
+- **Languages**: 646 per upstream (locally verified: English, Chinese; remaining 644 are upstream-claimed)
+- **Architecture**: Non-autoregressive diffusion language model
+- **Code license**: Apache-2.0
+- **Weight license**: CC-BY-NC (due to training-data constraints — not for commercial use)
+
+## Sample
+
+**Voice design** — `--instruct "female, british accent"`:
+
+> *"The quick brown fox jumps over the lazy dog. Testing OmniVoice voice design
+> capabilities."*
+
+Output (5.1 s, 24 kHz):
+[voice_design_output.wav](https://huggingface.co/datasets/zzsi/cvl/resolve/main/omnivoice/voice_design_output.wav)
+
+**Voice cloning** — same speaker, new text:
+
+> *"Good morning everyone. Today we will discuss the latest developments in
+> multilingual speech synthesis technology."*
+
+Output (5.8 s, 24 kHz):
+[voice_clone_output.wav](https://huggingface.co/datasets/zzsi/cvl/resolve/main/omnivoice/voice_clone_output.wav)
+
+**Chinese (Mandarin)** — `--instruct "female, moderate pitch"`:
+
+> *"你好，欢迎使用语音合成技术。今天天气非常好。"*
+
+Output (4.3 s, 24 kHz):
+[voice_design_zh.wav](https://huggingface.co/datasets/zzsi/cvl/resolve/main/omnivoice/voice_design_zh.wav)
+
+Verification metrics and artifact hashes:
+[verification_metrics.json](https://huggingface.co/datasets/zzsi/cvl/resolve/main/omnivoice/verification_metrics.json)
+
+## What to Expect
+
+- **First run**: downloads ~3.1 GB of model weights; voice cloning without
+  `--ref-text` also downloads Whisper (~1.6 GB) for auto-transcription.
+  All weights are cached in `~/.cache/huggingface/` afterward.
+- **Inference**: generates a single WAV from a text prompt
+- **Output**: saved to your working directory as `speech.wav` (24 kHz mono WAV)
+- **Runtime**: ~5–15 s per utterance on a modern GPU (32 diffusion steps);
+  ~3 s with `--num-step 16`
+
+### VRAM Usage
+
+Measured with `monitor_vram.sh` (PR #248), 150 ms polling, float16 precision,
+32 diffusion steps, on NVIDIA RTX PRO 6000 Blackwell Max-Q
+(GPU-dd55f371, 97887 MiB total):
+
+| Mode | Device Peak | Process Peak | Samples | Baseline | Post-Run |
+|------|-------------|--------------|---------|----------|----------|
+| Voice design | 2841 MiB (2.77 GiB) | 2818 MiB (2.75 GiB) | 41 | 15 MiB | 15 MiB |
+| Voice cloning | 4683 MiB (4.57 GiB) | 4660 MiB (4.55 GiB) | 44 | 15 MiB | 15 MiB |
+
+Voice cloning peaks higher because it loads Whisper large-v3-turbo (~1.6 GB)
+for auto-transcription when `--ref-text` is omitted. Providing `--ref-text`
+skips Whisper and should yield VRAM closer to the voice-design peak.
+
+## Requirements
+
+- NVIDIA GPU with 5 GB+ VRAM (or CPU, much slower)
+- Docker with NVIDIA Container Toolkit
+- ~10 GB disk space (image + cached model weights)
+
+## Quick Start
+
+```bash
+# Build the Docker image
+./build.sh
+
+# Voice design — no reference audio needed
+./predict.sh --text "Hello world!" --instruct "female, british accent"
+
+# Voice cloning — uses canonical reference audio from zzsi/cvl
+./predict.sh --text "Hello world!"
+
+# Voice cloning — with your own reference audio
+./predict.sh --text "Hello world!" --ref-audio my_voice.wav --ref-text "Transcript of my voice."
+
+# Run smoke tests
+./test.sh
+```
+
+### Using the CVL CLI
+
+From any directory (outside the example folder):
+
+```bash
+# Show example metadata
+cvl info omnivoice
+
+# Voice design via cvl run
+cvl run omnivoice predict -- --text "Hello world!" --instruct "female, british accent" --output designed.wav
+
+# Voice cloning (canonical reference audio)
+cvl run omnivoice predict -- --text "Hello world!" --output cloned.wav
+```
+
+Outputs are written to the current working directory.
+
+## Usage
+
+### Voice Design (no reference audio)
+
+Generate speech with designed voice attributes:
+
+```bash
+./predict.sh \
+  --text "The quick brown fox jumps over the lazy dog." \
+  --instruct "male, low pitch, american accent" \
+  --output designed.wav
+```
+
+Supported attributes (comma-separated):
+- **Gender**: male, female
+- **Age**: child, teenager, young adult, middle-aged, elderly
+- **Pitch**: very low, low, moderate pitch, high, very high
+- **Style**: whisper
+- **Accents**: american accent, british accent, australian accent, canadian accent,
+  indian accent, japanese accent, korean accent, chinese accent, portuguese accent,
+  russian accent
+
+### Voice Cloning (with reference audio)
+
+Clone a voice from a 3–10 second reference clip:
+
+```bash
+./predict.sh \
+  --text "This text will be spoken in the cloned voice." \
+  --ref-audio reference.wav \
+  --ref-text "Transcript of the reference audio." \
+  --output cloned.wav
+```
+
+Providing `--ref-text` avoids downloading the Whisper ASR model (~1.6 GB) for
+auto-transcription.
+
+### From Text File
+
+```bash
+./predict.sh --input article.txt --instruct "female, high pitch" --output article.wav
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--text` | Text to synthesize (direct) | *(demo sentence)* |
+| `--input` | Path to text file | — |
+| `--output` | Output WAV file path | `speech.wav` |
+| `--ref-audio` | Reference audio for voice cloning | — |
+| `--ref-text` | Transcript of reference audio | — |
+| `--instruct` | Voice design attributes | — |
+| `--num-step` | Diffusion steps (higher = better) | `32` |
+| `--speed` | Speech speed factor | `1.0` |
+| `--verbose` | Enable verbose logging | — |
+
+## License Notice
+
+The OmniVoice **code** is released under Apache-2.0. The **pretrained model
+weights** are licensed CC-BY-NC (non-commercial) because the training data
+(Emilia dataset) carries that restriction. If you need weights for commercial
+use, you must retrain on a permissively licensed dataset.
+
+## Limitations
+
+- Cross-lingual accent: cloning a voice in a language different from the
+  reference may carry the reference language's accent
+- Very long inputs may need chunking for stable output
+- Voice cloning quality degrades with noisy or very short reference audio
+- 24 kHz output (not 44.1/48 kHz studio quality)
+
+## References
+
+- Model card: https://huggingface.co/k2-fsa/OmniVoice
+- GitHub: https://github.com/k2-fsa/OmniVoice
+- Paper: https://arxiv.org/abs/2604.00688
