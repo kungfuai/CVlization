@@ -13,11 +13,31 @@ structure the model learns without any labelled data.
 
 ```bash
 # Build
-./build.sh          # or: cvl run lingbot_vision build
+./build.sh          # or: cvl run perception/vision_pretraining/lingbot_vision build
 
-# Run (uses bundled sample images on first run)
-./predict.sh        # or: cvl run lingbot_vision predict
+# Run (downloads sample images on first run)
+CVL_ENABLE_GPU=1 ./predict.sh
+# or: CVL_ENABLE_GPU=1 cvl run perception/vision_pretraining/lingbot_vision predict
 ```
+
+## Sample outputs
+
+Canonical inputs and outputs are hosted at
+[`zzsi/cvl/lingbot_vision/`](https://huggingface.co/datasets/zzsi/cvl/tree/main/lingbot_vision).
+
+**Indoor scene** -- PCA features segment the room into distinct regions (wall,
+window, desk, monitor) with visible colour transitions at object boundaries:
+
+| Input | PCA Features |
+|-------|-------------|
+| ![sample_indoor](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_vision/sample_indoor.jpg) | *(see panel below)* |
+
+![indoor panel](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_vision/sample_indoor_panel.png)
+
+**Person scene** -- the backbone separates the person from the sky, with
+distinct feature clusters for skin, clothing, hair, and background foliage:
+
+![scene panel](https://huggingface.co/datasets/zzsi/cvl/resolve/main/lingbot_vision/sample_scene_panel.png)
 
 ## What it does
 
@@ -62,23 +82,25 @@ Results are written to `outputs/` (or the directory specified by `--output`).
 ## Custom images
 
 ```bash
-./predict.sh --input /path/to/my/images --output /path/to/results
+CVL_ENABLE_GPU=1 ./predict.sh --input /path/to/my/images --output /path/to/results
 ```
 
 ## Requirements
 
 - Docker with NVIDIA GPU support (or CPU-only with `--device cpu`)
-- ~2 GB VRAM for ViT-Large at 512px
-- ~8 GB VRAM for ViT-Giant at 512px
+- ~2 GB VRAM for ViT-Large at 512px (measured: 1862 MiB process peak)
 
 ## Model variants
 
-| Variant | Backbone | Embed dim | HuggingFace |
-|---------|----------|-----------|-------------|
-| small | ViT-S/16 | 384 | `robbyant/lingbot-vision-vit-small` |
-| base | ViT-B/16 | 768 | `robbyant/lingbot-vision-vit-base` |
-| large | ViT-L/16 | 1024 | `robbyant/lingbot-vision-vit-large` |
-| giant | ViT-g/16 (1.1B) | 1536 | `robbyant/lingbot-vision-vit-giant` |
+Only **ViT-Large** is verified. Other variants are available via `--variant`
+but have not been tested; VRAM and output quality may differ.
+
+| Variant | Backbone | Embed dim | HuggingFace | Status |
+|---------|----------|-----------|-------------|--------|
+| small | ViT-S/16 | 384 | `robbyant/lingbot-vision-vit-small` | untested |
+| base | ViT-B/16 | 768 | `robbyant/lingbot-vision-vit-base` | untested |
+| **large** | ViT-L/16 | 1024 | `robbyant/lingbot-vision-vit-large` | **verified** |
+| giant | ViT-g/16 (1.1B) | 1536 | `robbyant/lingbot-vision-vit-giant` | untested |
 
 ## References
 

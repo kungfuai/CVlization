@@ -30,9 +30,8 @@ from cvlization.paths import resolve_input_path, resolve_output_path
 DEFAULT_INPUT = "data/images"
 HF_REPO_ID = "zzsi/cvl"
 HF_SAMPLE_FILES = [
-    # Reuse images already hosted in zzsi/cvl under other example prefixes.
-    ("dust3r/desk_view1.jpg", "sample_indoor.jpg"),
-    ("samples/pose_estimation/dwpose/human.png", "sample_scene.png"),
+    ("lingbot_vision/sample_indoor.jpg", "sample_indoor.jpg"),
+    ("lingbot_vision/sample_scene.png", "sample_scene.png"),
 ]
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}

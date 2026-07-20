@@ -1,5 +1,5 @@
 name: lingbot_vision
-capability: perception/depth_estimation
+capability: perception/vision_pretraining
 modalities:
   - vision
 stability: experimental
@@ -21,7 +21,7 @@ tags:
   - lingbot-vision
   - dense-spatial-perception
   - vision-pretraining
-  - depth-estimation
+  - ssl
   - vit
   - pca
   - self-supervised
@@ -32,7 +32,8 @@ frameworks:
 description: |
   LingBot-Vision dense spatial perception backbone. Extracts boundary-aware
   patch features via a ViT pretrained with masked boundary modelling, and
-  visualises them with PCA projection to RGB.
+  visualises them with PCA projection to RGB. Only ViT-L (large) is verified;
+  small, base, and giant variants are available but untested.
 datasets: []
 image: lingbot-vision
 model_source: robbyant/lingbot-vision-vit-large
@@ -40,5 +41,5 @@ license: Apache-2.0
 repository: https://github.com/Robbyant/lingbot-vision
 verification:
   status: PARTIAL
-  last_verified: "2026-07-14"
-  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 on RTX PRO 6000 Blackwell. ViT-L PCA feature extraction on 2 images (indoor scene, person portrait). Peak VRAM ~1.9 GB. Model cached in ~/.cache/huggingface, second run reuses without re-download. Sample images lazy-downloaded from zzsi/cvl. CVL CLI (cvl info/run) verified from external cwd. PARTIAL: sample images reuse existing zzsi/cvl prefixes (no HF write token for dedicated lingbot_vision/ prefix)."
+  last_verified: "2026-07-20"
+  last_verification_note: "PyTorch 2.9.1+CUDA 12.8 on NVIDIA RTX PRO 6000 Blackwell Max-Q (GPU-dd55f371-5b6e-3708-2aa5-34ef3e875ee0, 97887 MiB). ViT-L PCA feature extraction on 2 canonical images. Device peak 1885 MiB, process peak 1862 MiB (29 samples at 150ms). Baseline 15 MiB, release to 15 MiB. Model cached in ~/.cache/huggingface. Canonical inputs and panels uploaded to zzsi/cvl/lingbot_vision/. CVL CLI verified. PARTIAL: only ViT-L tested; S/B/G untested."
