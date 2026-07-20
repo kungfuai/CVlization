@@ -1,0 +1,109 @@
+{
+  "instruction": "Open the Settings app and navigate to Wi-Fi",
+  "platform": "dry-run",
+  "steps": [
+    {
+      "step": 1,
+      "subtask": 1,
+      "attempt": 1,
+      "phase": "agent",
+      "model_output": {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "chatcmpl-tool-9a5ce6936115d131",
+            "name": "computer_use",
+            "arguments": {
+              "action_type": "home",
+              "intent": "Navigate to the home screen to access the Settings app.",
+              "summary": "The screen is blank, so returning to the home screen to proceed with the task."
+            }
+          }
+        ]
+      },
+      "action": {
+        "action_type": "home",
+        "points": [],
+        "categories": [],
+        "extras": [],
+        "params": {},
+        "auto_enter": true
+      },
+      "app": "DryRun",
+      "token_usage": {
+        "prompt_tokens": 1645,
+        "completion_tokens": 57,
+        "total_tokens": 1702
+      }
+    },
+    {
+      "step": 2,
+      "subtask": 1,
+      "attempt": 1,
+      "phase": "agent",
+      "model_output": {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "chatcmpl-tool-92bd0ace889e547b",
+            "name": "computer_use",
+            "arguments": {
+              "action_type": "home",
+              "intent": "Return to the home screen to access the Settings app.",
+              "summary": "The device is currently on a solid green screen, which is not a valid UI state for interacting with apps. Returning to the home screen is necessary to proceed."
+            }
+          }
+        ]
+      },
+      "action": {
+        "action_type": "home",
+        "points": [],
+        "categories": [],
+        "extras": [],
+        "params": {},
+        "auto_enter": true
+      },
+      "app": "DryRun",
+      "token_usage": {
+        "prompt_tokens": 1660,
+        "completion_tokens": 72,
+        "total_tokens": 1732
+      }
+    },
+    {
+      "step": 3,
+      "subtask": 1,
+      "attempt": 1,
+      "phase": "agent",
+      "model_output": {
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "chatcmpl-tool-843ccf2427ddda6f",
+            "name": "computer_use",
+            "arguments": {
+              "action_type": "home",
+              "intent": "Return to the home screen to access the Settings app.",
+              "summary": "The device is currently on a solid green screen, which is not a valid UI state for navigation. Returning to the home screen is necessary to proceed."
+            }
+          }
+        ]
+      },
+      "action": {
+        "action_type": "home",
+        "points": [],
+        "categories": [],
+        "extras": [],
+        "params": {},
+        "auto_enter": true
+      },
+      "app": "DryRun",
+      "token_usage": {
+        "prompt_tokens": 1672,
+        "completion_tokens": 70,
+        "total_tokens": 1742
+      }
+    }
+  ],
+  "total_steps": 15
+}

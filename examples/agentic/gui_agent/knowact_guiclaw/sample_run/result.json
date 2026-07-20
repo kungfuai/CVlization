@@ -1,0 +1,20 @@
+{
+  "task": "Open the Settings app and navigate to Wi-Fi",
+  "backend": "dry-run",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "max_steps": 5,
+  "result": {
+    "exit_code": 1,
+    "parsed": {
+      "success": false,
+      "steps_taken": 15,
+      "error": "max_steps_exceeded"
+    },
+    "token_usage": {
+      "prompt_tokens": 25035,
+      "completion_tokens": 1022,
+      "total_tokens": 26057
+    },
+    "duration_s": 40.2
+  }
+}

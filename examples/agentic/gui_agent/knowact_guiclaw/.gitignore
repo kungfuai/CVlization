@@ -1,0 +1,9 @@
+knowact_guiclaw_output/
+outputs/
+latest_run/
+memory_snapshot/
+*.log
+*.png
+*.jpg
+.cache/
+__pycache__/
