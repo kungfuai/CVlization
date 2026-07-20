@@ -1,0 +1,44 @@
+{
+  "query": "For each AI research lab profiled in the SearchOS demo corpus — Nimbus Labs, Orchard AI, Basilisk Research, and Tidewater Institute — find its founding year, headquarters city, and flagship open model. Present the results as a table with a citation for every cell.",
+  "mode": "offline",
+  "search_backend": "local-corpus (corpus.json)",
+  "provider": "openai",
+  "model": "gpt-4.1",
+  "verdict": "COMPLETE",
+  "coverage_score": 1.0,
+  "evidence_count": 28,
+  "total_steps": 45,
+  "elapsed_s": 85.8,
+  "token_usage": {
+    "prompt_tokens": 445393,
+    "completion_tokens": 12673,
+    "total_tokens": 458066,
+    "cached_prompt_tokens": 295040,
+    "llm_calls": 84,
+    "cache_hit_calls": 58,
+    "cache_hit_rate": 0.7438,
+    "by_role": {
+      "orchestrator": {
+        "prompt_tokens": 242111,
+        "completion_tokens": 2975,
+        "cached_prompt_tokens": 192768,
+        "llm_calls": 23,
+        "cache_hit_calls": 23
+      },
+      "sub_agent": {
+        "prompt_tokens": 154581,
+        "completion_tokens": 6394,
+        "cached_prompt_tokens": 102272,
+        "llm_calls": 39,
+        "cache_hit_calls": 35
+      },
+      "extraction": {
+        "prompt_tokens": 48701,
+        "completion_tokens": 3304,
+        "cached_prompt_tokens": 0,
+        "llm_calls": 22,
+        "cache_hit_calls": 0
+      }
+    }
+  }
+}

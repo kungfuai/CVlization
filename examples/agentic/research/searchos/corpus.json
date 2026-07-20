@@ -1,0 +1,60 @@
+{
+  "description": "Self-contained synthetic corpus for the SearchOS offline demo. Every fact the demo query asks for lives in exactly one of these pages, so a correct run must actually find + extract + cite them rather than lean on the model's world knowledge. The entities are fictional on purpose. URLs use the reserved .example TLD (RFC 2606) and are never fetched over the network: offline mode serves every page open from the local corpus. SearchOS's evidence extraction only attributes sources with http(s) URLs, so a custom scheme like corpus:// would silently strip citations.",
+  "documents": [
+    {
+      "url": "https://ai-labs-directory.example/labs-index",
+      "title": "Open-Source AI Research Labs — Directory",
+      "content": "A curated directory of independent open-source AI research labs. Profiles in this directory: Nimbus Labs (weather-scale forecasting models), Orchard AI (small on-device language models), Basilisk Research (long-context retrieval), and Tidewater Institute (oceanographic simulation). Each lab has a dedicated profile page with its founding year, headquarters city, and flagship open model."
+    },
+    {
+      "url": "https://nimbus-labs.example/about",
+      "title": "About Nimbus Labs",
+      "content": "Nimbus Labs is an independent research lab focused on weather-scale forecasting. Nimbus Labs was founded in 2019 by a group of atmospheric scientists. The lab operates as a non-profit and releases all of its models under the Apache-2.0 license."
+    },
+    {
+      "url": "https://nimbus-labs.example/contact",
+      "title": "Nimbus Labs — Contact & Location",
+      "content": "Nimbus Labs is headquartered in Reykjavik, Iceland, where it co-locates with a geothermal-powered data center. Visitors can reach the Reykjavik office by appointment only."
+    },
+    {
+      "url": "https://nimbus-labs.example/models",
+      "title": "Nimbus Labs — Models",
+      "content": "The flagship model from Nimbus Labs is StormCast-3, a medium-range global forecasting model. StormCast-3 predicts atmospheric variables up to 14 days ahead and is the lab's headline open release."
+    },
+    {
+      "url": "https://orchard-ai.example/about",
+      "title": "Orchard AI — Overview",
+      "content": "Orchard AI builds small, efficient on-device language models. Orchard AI was founded in 2021 and is headquartered in Lisbon, Portugal. The team's mission is to run capable assistants entirely offline on phones and laptops."
+    },
+    {
+      "url": "https://orchard-ai.example/flagship",
+      "title": "Orchard AI — Flagship Model",
+      "content": "Orchard AI's flagship model is Pippin-1B, a 1-billion-parameter language model tuned for on-device use. Pippin-1B runs comfortably within 2 GB of RAM and is Orchard AI's most widely downloaded release."
+    },
+    {
+      "url": "https://basilisk-research.example/home",
+      "title": "Basilisk Research",
+      "content": "Basilisk Research is a lab specializing in long-context retrieval and memory systems. The organization was founded in 2018. Its offices are in Tallinn, Estonia."
+    },
+    {
+      "url": "https://basilisk-research.example/gaze",
+      "title": "Basilisk Research — The Gaze Model",
+      "content": "Basilisk Research's flagship open model is Gaze-XL, a retrieval-augmented model with a one-million-token context window. Gaze-XL is the lab's primary open-weights release."
+    },
+    {
+      "url": "https://tidewater-institute.example/profile",
+      "title": "Tidewater Institute — Profile",
+      "content": "The Tidewater Institute is a research institute working on oceanographic simulation and coastal modeling. Tidewater Institute was founded in 2016 and is based in Hobart, Australia."
+    },
+    {
+      "url": "https://tidewater-institute.example/ebb",
+      "title": "Tidewater Institute — Ebb Simulator",
+      "content": "Tidewater Institute's flagship model is Ebb-Sim, an open ocean-current simulator used for coastal flooding forecasts. Ebb-Sim is the institute's headline open-source release."
+    },
+    {
+      "url": "https://open-model-blog.example/2026-model-roundup",
+      "title": "2026 Open Model Roundup (distractor)",
+      "content": "A general roundup of open models released in 2026 across many labs. This page mentions StormCast-3, Pippin-1B, Gaze-XL, and Ebb-Sim in passing but does not give founding years or headquarters. Use the individual lab profile pages for authoritative details."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+# The Docker image installs SearchOS (and its full dependency tree) directly
+# from a pinned upstream commit — see Dockerfile. This file documents the one
+# top-level dependency for reference / non-Docker use.
+#
+#   pip install "searchos[tavily] @ git+https://github.com/antins-labs/SearchOS.git@361373bfc7196697a9bcd4731dfc34880790f4aa"
+#
+# SearchOS pulls langchain / langgraph / deepagents / openai / langchain-openai /
+# langchain-anthropic / pydantic / tiktoken / aiohttp / lxml, etc. (all pure-Python
+# / wheels — no torch, no CUDA).
+searchos[tavily] @ git+https://github.com/antins-labs/SearchOS.git@361373bfc7196697a9bcd4731dfc34880790f4aa

@@ -1,0 +1,27 @@
+ANCHORED   | Nimbus Labs · founding_year = '2019' ← https://nimbus-labs.example/about
+ANCHORED   | Nimbus Labs · founding_year_citation = 'https://nimbus-labs.example/about' ← https://nimbus-labs.example/about
+ANCHORED   | Nimbus Labs · headquarters_city = 'Reykjavik' ← https://nimbus-labs.example/contact
+ANCHORED   | Nimbus Labs · headquarters_city_citation = 'https://nimbus-labs.example/contact' ← https://nimbus-labs.example/contact
+ANCHORED   | Nimbus Labs · flagship_open_model = 'StormCast-3' ← https://nimbus-labs.example/models
+ANCHORED   | Nimbus Labs · flagship_open_model_citation = 'https://nimbus-labs.example/models' ← https://nimbus-labs.example/models
+ANCHORED   | Orchard AI · founding_year = '2021' ← https://orchard-ai.example/about
+ANCHORED   | Orchard AI · founding_year_citation = 'https://orchard-ai.example/about' ← https://orchard-ai.example/about
+ANCHORED   | Orchard AI · headquarters_city = 'Lisbon' ← https://orchard-ai.example/about
+ANCHORED   | Orchard AI · headquarters_city_citation = 'https://orchard-ai.example/about' ← https://orchard-ai.example/about
+ANCHORED   | Orchard AI · flagship_open_model = 'Pippin-1B' ← https://orchard-ai.example/flagship
+ANCHORED   | Orchard AI · flagship_open_model_citation = 'https://orchard-ai.example/flagship' ← https://orchard-ai.example/flagship
+ANCHORED   | Basilisk Research · founding_year = '2018' ← https://basilisk-research.example/home
+ANCHORED   | Basilisk Research · founding_year_citation = 'https://basilisk-research.example/home' ← https://basilisk-research.example/home
+ANCHORED   | Basilisk Research · headquarters_city = 'Tallinn' ← https://basilisk-research.example/home
+ANCHORED   | Basilisk Research · headquarters_city_citation = 'https://basilisk-research.example/home' ← https://basilisk-research.example/home
+ANCHORED   | Basilisk Research · flagship_open_model = 'Gaze-XL' ← https://basilisk-research.example/gaze
+ANCHORED   | Basilisk Research · flagship_open_model_citation = 'https://basilisk-research.example/gaze' ← https://basilisk-research.example/gaze
+ANCHORED   | Tidewater Institute · founding_year = '2016' ← https://tidewater-institute.example/profile
+ANCHORED   | Tidewater Institute · founding_year_citation = 'https://tidewater-institute.example/profile' ← https://tidewater-institute.example/profile
+ANCHORED   | Tidewater Institute · headquarters_city = 'Hobart' ← https://tidewater-institute.example/profile
+ANCHORED   | Tidewater Institute · headquarters_city_citation = 'https://tidewater-institute.example/profile' ← https://tidewater-institute.example/profile
+ANCHORED   | Tidewater Institute · flagship_open_model = 'Ebb-Sim' ← https://tidewater-institute.example/ebb
+ANCHORED   | Tidewater Institute · flagship_open_model_citation = 'https://tidewater-institute.example/ebb' ← https://tidewater-institute.example/ebb
+
+anchored=24  unresolved=0  missing=0  identity=4
+GROUNDING GATE: PASS (strict: every filled non-identity cell is page-anchored, coverage complete)
